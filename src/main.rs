@@ -4,14 +4,25 @@
 
 extern crate rlibc;
 
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::lib::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
 mod arch;
+mod board;
 mod driver;
+mod kernel;
 mod lib;
 mod panic;
 
-use arch::PAGE_SIZE;
-// use core::ptr;
-// use spin::Once;
+use kernel::mem_init;
 
 #[no_mangle]
 static mut cpu: u32 = 1;
@@ -26,6 +37,7 @@ pub extern "C" fn init() {
     //     crate::driver::uart::putc(*byte);
     // }
     println!("Welcome to Sybilla Hypervisor!");
+    mem_init();
 
     loop {}
 }
