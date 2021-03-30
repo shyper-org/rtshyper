@@ -1,0 +1,141 @@
+.section .text.boot
+.global _start
+_start:
+    mrs x0, mpidr_el1
+    and x0, x0, #7
+
+2:  /*
+     * only cluster 1 cpu 0,1,2,3 reach here
+     * x0 holds core_id (indexed from zero)
+     */
+
+    // disable cache and MMU
+    mrs x1, sctlr_el2
+    bic x1, x1, #0x7
+    msr sctlr_el2, x1
+
+    mov x19, x0 // save core_id
+
+    // cache_invalidate(0): clear dl1$
+    mov x0, #0
+    bl  cache_invalidate
+
+    // if (core_id == 0) cache_invalidate(2): clear l2$
+    cbnz x19, 3f
+    mov x0, #2
+    bl  cache_invalidate
+
+3:
+    mov x0, x19 // restore core_id
+    ic  iallu // clear icache
+
+    // setup stack sp per core
+    adrp x1, boot_stack_top
+
+    mov sp, x1
+
+    cbnz x0, 4f
+
+    adrp x0, lvl1_page_table
+    bl  pt_populate
+
+    adrp x0, lvl1_page_table
+    bl  mmu_init
+
+    adr x0, _bss_begin
+    adr x1, _bss_end
+    sub x2, x1, x0
+    mov x1, xzr
+    bl  memset
+
+    ldr x4, =_barrier
+    mov x5, #1
+    str x5, [x4]
+    sev
+    b   5f
+
+4:
+    wfe
+    ldr x4, =_barrier
+    cmp x4, #1
+    blt 4b
+
+5:
+    // Trap nothing from EL1 to El2
+    mov x3, xzr
+    msr cptr_el2, x3
+
+    ldr x0, =(0x80080019)
+    msr hcr_el2, x0
+
+    mov x1, 1
+    msr spsel, x1
+    ldr x1, =cpu
+    add x1, x1, #(0x4000 + (4096 * 4))
+    sub	x1, x1, #0x110
+    mov sp, x1
+
+    ldr x1, =vectors
+    msr vbar_el2, x1
+
+
+    mov x0, x19
+    ldr x1, =init
+
+    ldr x2, =(0x30c51835)
+    msr sctlr_el2, x2
+
+	tlbi	alle2
+	dsb	nsh
+	isb
+
+    br  x1
+
+
+
+/*
+ * snipet from "Application Note Bare-metal Boot Code for ARMv8-A
+ * Processors - Version 1.0"
+ *
+ * x0 - cache level to be invalidated (0 - dl1$, 1 - il1$, 2 - l2$)
+ */
+cache_invalidate:
+	msr csselr_el1, x0
+	mrs x4, ccsidr_el1 // read cache size id.
+	and x1, x4, #0x7
+	add x1, x1, #0x4 // x1 = cache line size.
+	ldr x3, =0x7fff
+	and x2, x3, x4, lsr #13 // x2 = cache set number – 1.
+	ldr x3, =0x3ff
+	and x3, x3, x4, lsr #3 // x3 = cache associativity number – 1.
+	clz w4, w3 // x4 = way position in the cisw instruction.
+	mov x5, #0 // x5 = way counter way_loop.
+way_loop:
+	mov x6, #0 // x6 = set counter set_loop.
+set_loop:
+	lsl x7, x5, x4
+	orr x7, x0, x7 // set way.
+	lsl x8, x6, x1
+	orr x7, x7, x8 // set set.
+	dc cisw, x7 // clean and invalidate cache line.
+	add x6, x6, #1 // increment set counter.
+	cmp x6, x2 // last set reached yet?
+	ble set_loop // if not, iterate set_loop,
+	add x5, x5, #1 // else, next way.
+	cmp x5, x3 // last way reached yet?
+	ble way_loop // if not, iterate way_loop
+	ret
+
+
+.section .data.boot
+.align 12
+boot_stack:
+    .space 4096
+boot_stack_top:
+
+lvl1_page_table:
+    .space 4096
+
+.align 3
+_barrier:
+    .quad 0
