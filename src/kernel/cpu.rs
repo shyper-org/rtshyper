@@ -1,9 +1,17 @@
 use spin::Mutex;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::arch::pt_map_banked_cpu;
-
+use crate::arch::{pt_map_banked_cpu, PTE_PER_PAGE};
 
 pub const CPU_MASTER: usize = 0;
+
+#[repr(C)]
+#[repr(align(4096))]
+#[derive(Copy, Clone)]
+pub struct CpuPt {
+    pub lvl1: [usize; PTE_PER_PAGE],
+    pub lvl2: [usize; PTE_PER_PAGE],
+    pub lvl3: [usize; PTE_PER_PAGE],
+}
 
 #[derive(Copy, Clone)]
 pub enum CpuState {
@@ -18,6 +26,8 @@ pub struct Cpu {
     pub id: usize,
     pub assigned: bool,
     pub cpu_state: CpuState,
+
+    pub cpu_pt: Option<CpuPt>
     // TODO
 }
 
@@ -27,6 +37,8 @@ impl Cpu {
             id: 0,
             assigned: false,
             cpu_state: CpuState::CpuInv,
+
+            cpu_pt: None,
         }
     }
 }
@@ -37,7 +49,10 @@ static CPU: Cpu = Cpu {
     id: 0,
     assigned: false,
     cpu_state: CpuState::CpuInv,
+
+    cpu_pt: None,
 };
+
 
 pub fn cpu_init() {
     // println!("{:x}", CPU as usize);
