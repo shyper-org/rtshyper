@@ -48,8 +48,9 @@ register_bitfields! {u64,
             RO_ELx_EL0 = 0b11
         ],
         AttrIndx OFFSET(2) NUMBITS(3) [
-            NORMAL = 0b000,
-            DEVICE = 0b001
+            Attr0 = 0b000,
+            Attr1 = 0b001,
+            Attr2 = 0b010
         ],
         TYPE     OFFSET(1) NUMBITS(1) [
             Block = 0,
@@ -75,9 +76,9 @@ impl BlockDescriptor {
                 + PageDescriptorS1::TYPE::Block
                 + PageDescriptorS1::VALID::True
                 + if device {
-                    PageDescriptorS1::AttrIndx::DEVICE + PageDescriptorS1::SH::OuterShareable
+                    PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
                 } else {
-                    PageDescriptorS1::AttrIndx::NORMAL + PageDescriptorS1::SH::InnerShareable
+                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::InnerShareable
                 })
             .value,
         )
@@ -93,13 +94,25 @@ pub struct PageTables {
     lvl1: [BlockDescriptor; ENTRY_PER_PAGE],
 }
 
+use crate::board::PLAT_DESC;
+const LVL1_SHIFT: usize = 30;
+const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
+
 #[no_mangle]
 #[link_section = ".text.boot"]
 pub unsafe extern "C" fn pt_populate(pt: &mut PageTables) {
-    pt.lvl1[0] = BlockDescriptor::new(0, true);
-    pt.lvl1[1] = BlockDescriptor::new(0x40000000, false);
-    pt.lvl1[2] = BlockDescriptor::new(0x80000000, false);
-    for i in 3..ENTRY_PER_PAGE {
+    for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
+        let output_addr = i << LVL1_SHIFT;
+        if output_addr >= PLAT_DESC.mem_desc.base {
+            pt.lvl1[i] = BlockDescriptor::new(output_addr, false);
+        } else {
+            pt.lvl1[i] = BlockDescriptor::new(output_addr, true);
+        }
+    }
+    // pt.lvl1[0] = BlockDescriptor::new(0, true);
+    // pt.lvl1[1] = BlockDescriptor::new(0x40000000, false);
+    // pt.lvl1[2] = BlockDescriptor::new(0x80000000, false);
+    for i in PLATFORM_PHYSICAL_LIMIT_GB..ENTRY_PER_PAGE {
         pt.lvl1[i] = BlockDescriptor::invalid();
     }
 }
@@ -110,9 +123,11 @@ pub unsafe extern "C" fn mmu_init(pt: &PageTables) {
     use cortex_a::regs::*;
     // use cortex_a::*;
     MAIR_EL2.write(
-        MAIR_EL2::Attr0_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
-            + MAIR_EL2::Attr0_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
-            + MAIR_EL2::Attr1_Device::nonGathering_nonReordering_noEarlyWriteAck,
+        MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
+            + MAIR_EL2::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
+            + MAIR_EL2::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
+            + MAIR_EL2::Attr2_Normal_Outer::NonCacheable
+            + MAIR_EL2::Attr2_Normal_Inner::NonCacheable,
     );
     TTBR0_EL2.set(&pt.lvl1 as *const _ as u64);
 

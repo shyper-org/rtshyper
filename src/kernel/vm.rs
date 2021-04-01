@@ -36,43 +36,41 @@ pub struct Vm {
     id: usize,
     pt_dir: usize,
     mem_region_num: usize,
-    pa_region: [VmPa; VM_MEM_REGION_MAX],
+    pa_region: Option<[VmPa; VM_MEM_REGION_MAX]>,
 
     // image config
     entry_point: u64,
 
     // vcpu config
-    vcpu_list: [Vcpu; PLATFORM_VCPU_NUM_MAX],
+    vcpu_list: Option<[Vcpu; PLATFORM_VCPU_NUM_MAX]>,
     cpu_num: u64,
     ncpu: u64,
 
     // interrupt
     intc_dev_id: u64,
-    int_bitmap: BitMap<BitAlloc256>
-    
-    // TODO emul devs
+    int_bitmap: Option<BitMap<BitAlloc256>>, // TODO emul devs
 }
 
 impl Vm {
-    pub fn default() -> Vm {
+    pub const fn default() -> Vm {
         Vm {
             id: 0,
             pt_dir: 0,
             mem_region_num: 0,
-            pa_region: [VmPa::default(); VM_MEM_REGION_MAX],
+            pa_region: None,
             entry_point: 0,
-            vcpu_list: [Vcpu::default(); PLATFORM_VCPU_NUM_MAX],
+            vcpu_list: None,
             cpu_num: 0,
             ncpu: 0,
 
             intc_dev_id: 0,
-            int_bitmap: BitAlloc4K::default()
+            int_bitmap: None,
         }
-
     }
 }
 
 // static VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
-lazy_static! {
-    pub static ref VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
-}
+// lazy_static! {
+//     pub static ref VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
+// }
+pub static VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);

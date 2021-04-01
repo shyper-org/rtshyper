@@ -13,7 +13,7 @@ pub struct MemRegion {
 }
 
 impl MemRegion {
-    pub fn new() -> MemRegion {
+    pub const fn new() -> MemRegion {
         MemRegion {
             idx: 0,
             base: 0,
@@ -58,17 +58,18 @@ lazy_static! {
         map: BitAlloc256::default(),
         region: MemRegion::new(),
     });
-    
-    pub static ref VMREGION: Mutex<VmRegion> = Mutex::new(VmRegion {
-        region: Vec::<MemRegion>::new(),
-    });
-}
+} 
+
+pub static VMREGION: Mutex<VmRegion> = Mutex::new(VmRegion {
+    region: Vec::<MemRegion>::new(),
+});
 
 pub fn bits_to_pages(bits: usize) -> usize {
-    use crate::lib::round_up;
     use crate::arch::PAGE_SIZE;
+    use crate::lib::round_up;
     round_up(bits, PAGE_SIZE)
 }
+
 // pub fn heap_size_to_bitmap_pages(bits: usize) -> usize {
 //     use crate::lib::round_up;
 //     // round_up(round_up(bits, ))

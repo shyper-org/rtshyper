@@ -32,6 +32,7 @@ mod panic;
 
 use kernel::mem_init;
 use mm::heap;
+use spin::Mutex;
 // use lib::{BitAlloc, BitAlloc256};
 
 // #[no_mangle]
@@ -39,6 +40,7 @@ use mm::heap;
 
 #[no_mangle]
 pub extern "C" fn init() {
+    // println!("core id {}", core_id);
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {
@@ -51,7 +53,3 @@ pub extern "C" fn init() {
 
     loop {}
 }
-
-#[no_mangle]
-#[link_section = ".text.boot"]
-pub extern "C" fn cpu_map_self() {}

@@ -65,6 +65,10 @@ _start:
     mov x3, xzr
     msr cptr_el2, x3
 
+    mov x0, x19
+    bl  cpu_map_self
+    msr ttbr0_el2, x0
+
     ldr x0, =(0x80080019)
     msr hcr_el2, x0
 
@@ -91,9 +95,7 @@ _start:
 	isb
 
     br  x1
-
-
-
+    
 /*
  * snipet from "Application Note Bare-metal Boot Code for ARMv8-A
  * Processors - Version 1.0"
