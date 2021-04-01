@@ -70,7 +70,7 @@ _start:
 
     mov x1, 1
     msr spsel, x1
-    ldr x1, =cpu
+    ldr x1, =CPU
     add x1, x1, #(0x4000 + (4096 * 4))
     sub	x1, x1, #0x110
     mov sp, x1
@@ -78,9 +78,10 @@ _start:
     ldr x1, =vectors
     msr vbar_el2, x1
 
-
+ 
     mov x0, x19
     ldr x1, =init
+
 
     ldr x2, =(0x30c51835)
     msr sctlr_el2, x2

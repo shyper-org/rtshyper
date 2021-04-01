@@ -1,70 +1,71 @@
-pub const TIMER_FREQUENCY: u64 = 62500000;
+pub const TIMER_FREQUENCY: usize = 62500000;
 
-pub const UART_0_ADDR: u64 = 0x9000000;
-pub const UART_1_ADDR: u64 = 0x9100000;
-pub const UART_2_ADDR: u64 = 0x9110000;
+pub const UART_0_ADDR: usize = 0x9000000;
+pub const UART_1_ADDR: usize = 0x9100000;
+pub const UART_2_ADDR: usize = 0x9110000;
 
-pub const UART_1_INT: u64 = 42;
-pub const UART_2_INT: u64 = 43;
+pub const UART_1_INT: usize = 42;
+pub const UART_2_INT: usize = 43;
 
-pub const PLATFORM_GICD_BASE: u64 = 0x08000000;
-pub const PLATFORM_GICC_BASE: u64 = 0x08010000;
-pub const PLATFORM_GICH_BASE: u64 = 0x08030000;
-pub const PLATFORM_GICV_BASE: u64 = 0x08040000;
+pub const PLATFORM_GICD_BASE: usize = 0x08000000;
+pub const PLATFORM_GICC_BASE: usize = 0x08010000;
+pub const PLATFORM_GICH_BASE: usize = 0x08030000;
+pub const PLATFORM_GICV_BASE: usize = 0x08040000;
 
-pub const DISK_PARTITION_0_START: u64 = 0;
-pub const DISK_PARTITION_1_START: u64 = 2097152;
-pub const DISK_PARTITION_2_START: u64 = 10289152;
+pub const DISK_PARTITION_0_START: usize = 0;
+pub const DISK_PARTITION_1_START: usize = 2097152;
+pub const DISK_PARTITION_2_START: usize = 10289152;
 
-pub const DISK_PARTITION_TOTAL_SIZE: u64 = 18481152;
-pub const DISK_PARTITION_0_SIZE: u64 = 524288;
-pub const DISK_PARTITION_1_SIZE: u64 = 8192000;
-pub const DISK_PARTITION_2_SIZE: u64 = 8192000;
+pub const DISK_PARTITION_TOTAL_SIZE: usize = 18481152;
+pub const DISK_PARTITION_0_SIZE: usize = 524288;
+pub const DISK_PARTITION_1_SIZE: usize = 8192000;
+pub const DISK_PARTITION_2_SIZE: usize = 8192000;
 
-const CPU_NUM_MAX: usize = 8;
-const REGION_NUM_MAX: usize = 4;
+pub const PLATFORM_CPU_NUM_MAX: usize = 8;
+pub const TOTAL_MEM_REGION_MAX: usize = 16;
+pub const PLATFORM_VCPU_NUM_MAX: usize = 8;
 
 // TODO: move these core name to device
 const ARM_CORTEX_A57: u8 = 0;
 const ARM_NVIDIA_DENVER: u8 = 0;
 
 #[repr(C)]
-struct PlatMemRegion {
-    base: u64,
-    size: u64,
+pub struct PlatMemRegion {
+    pub base: usize,
+    pub size: usize,
 }
 
 #[repr(C)]
 pub struct PlatMemoryConfig {
-    region_num: u64,
-    base: u64,
-    regions: [PlatMemRegion; REGION_NUM_MAX],
+    pub region_num: usize,
+    pub base: usize,
+    pub regions: [PlatMemRegion; TOTAL_MEM_REGION_MAX],
 }
 
 #[repr(C)]
 pub struct PlatCpuConfig {
-    num: u64,
-    name: [u8; CPU_NUM_MAX],
-    mpidr_list: [u64; CPU_NUM_MAX],
+    pub num: usize,
+    pub name: [u8; PLATFORM_CPU_NUM_MAX],
+    pub mpidr_list: [usize; PLATFORM_CPU_NUM_MAX],
 }
 
 use crate::arch::GicDesc;
 
 #[repr(C)]
 pub struct ArchDesc {
-    gic_desc: GicDesc,
+    pub gic_desc: GicDesc,
 }
 
 #[repr(C)]
 pub struct PlatformConfig {
-    cpu_desc: PlatCpuConfig,
-    mem_desc: PlatMemoryConfig,
-    uart_base: u64,
-    arch_desc: ArchDesc,
+    pub cpu_desc: PlatCpuConfig,
+    pub mem_desc: PlatMemoryConfig,
+    pub uart_base: usize,
+    pub arch_desc: ArchDesc,
 }
 
 // holy shit, need to recode later
-pub const PLAT_DESC: PlatformConfig = PlatformConfig {
+pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
         num: 8,
         mpidr_list: [0, 1, 2, 3, 4, 5, 6, 7],
@@ -81,6 +82,18 @@ pub const PLAT_DESC: PlatformConfig = PlatformConfig {
                 base: 0x50000000,
                 size: 0x1f0000000,
             },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
             PlatMemRegion { base: 0, size: 0 },
             PlatMemRegion { base: 0, size: 0 },
         ],

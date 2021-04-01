@@ -3,6 +3,15 @@
 version = 3
 
 [[package]]
+name = "buddy_system_allocator"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ab399d7f0b5ad02bbd9ffee6ff1844b84c3c336e0831f167e105ea866a2564"
+dependencies = [
+ "spin 0.7.1",
+]
+
+[[package]]
 name = "cortex-a"
 version = "5.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -48,6 +57,7 @@ checksum = "fc874b127765f014d792f16763a81245ab80500e2ad921ed4ee9e82481ee08fe"
 name = "rust_hypervisor"
 version = "0.1.0"
 dependencies = [
+ "buddy_system_allocator",
  "cortex-a",
  "lazy_static",
  "register 0.5.1",
@@ -67,6 +77,12 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spin"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13287b4da9d1207a4f4929ac390916d64eacfe236a487e9a9f5b3be392be5162"
 
 [[package]]
 name = "tock-registers"

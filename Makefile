@@ -4,7 +4,7 @@ build:
 	aarch64-linux-gnu-objdump -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
 
 run:
-	qemu-system-aarch64 \
+	/usr/share/qemu/bin/qemu-system-aarch64 \
 		-machine virt,virtualization=on,gic-version=2\
 		-m 8g \
 		-cpu cortex-a57 \

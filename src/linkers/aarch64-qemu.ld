@@ -1,7 +1,7 @@
 ENTRY(_start)
 SECTIONS
 {
-    . = 0x40080000;
+    . = 0x43000000;
 
 	_image_start = ABSOLUTE(.);
 
@@ -23,7 +23,6 @@ SECTIONS
         *(.data*)
     }
 
-    _image_end = ABSOLUTE(.);
 
     _bss_begin = .;
     .bss : {
@@ -31,6 +30,9 @@ SECTIONS
     }
     _bss_end = .;
 
+    . = 0x43109000;
+    _image_end = ABSOLUTE(.);
+    
     . = 0x400000000;
 
     .cpu_private (NOLOAD) : ALIGN(4096) {

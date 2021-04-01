@@ -1,7 +1,14 @@
 #![no_std]
 #![no_main]
 #![feature(global_asm)]
+#![feature(core_intrinsics)]
+#![feature(default_alloc_error_handler)]
+#![feature(alloc_error_handler)]
+#![feature(const_fn)]
 
+#[macro_use]
+extern crate lazy_static;
+extern crate alloc;
 extern crate rlibc;
 
 #[macro_export]
@@ -20,14 +27,15 @@ mod board;
 mod driver;
 mod kernel;
 mod lib;
+mod mm;
 mod panic;
 
 use kernel::mem_init;
+use mm::heap;
+// use lib::{BitAlloc, BitAlloc256};
 
-#[no_mangle]
-static mut cpu: u32 = 1;
-#[no_mangle]
-static mut vectors: u32 = 1;
+// #[no_mangle]
+// static mut cpu: u32 = 1;
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -36,7 +44,9 @@ pub extern "C" fn init() {
     // for byte in out_str {
     //     crate::driver::uart::putc(*byte);
     // }
+    // panic!("lalal");
     println!("Welcome to Sybilla Hypervisor!");
+    heap::init();
     mem_init();
 
     loop {}
