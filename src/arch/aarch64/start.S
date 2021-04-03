@@ -1,4 +1,5 @@
 .section .text.boot
+
 .global _start
 _start:
     mrs x0, mpidr_el1
@@ -31,16 +32,16 @@ _start:
 
     // setup stack sp per core
     adrp x1, boot_stack_top
+    mov x2, (4096 * 2)
+    mul x3, x0, x2
+    sub x1, x1, x3
 
     mov sp, x1
 
-    cbnz x0, 4f
+    cbnz x0, 5f
 
     adrp x0, lvl1_page_table
     bl  pt_populate
-
-    adrp x0, lvl1_page_table
-    bl  mmu_init
 
     adr x0, _bss_begin
     adr x1, _bss_end
@@ -48,22 +49,13 @@ _start:
     mov x1, xzr
     bl  memset
 
-    ldr x4, =_barrier
-    mov x5, #1
-    str x5, [x4]
-    sev
-    b   5f
-
-4:
-    wfe
-    ldr x4, =_barrier
-    cmp x4, #1
-    blt 4b
-
 5:
     // Trap nothing from EL1 to El2
     mov x3, xzr
     msr cptr_el2, x3
+
+    adrp x0, lvl1_page_table
+    bl  mmu_init
 
     mov x0, x19
     bl  cpu_map_self
@@ -131,11 +123,13 @@ set_loop:
 
 
 .section .data.boot
-.align 12
 boot_stack:
-    .space 4096
+    .align 12
+    .space 4096 * 16
 boot_stack_top:
 
+.align 12
+.global lvl1_page_table
 lvl1_page_table:
     .space 4096
 

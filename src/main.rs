@@ -4,6 +4,7 @@
 #![feature(core_intrinsics)]
 #![feature(default_alloc_error_handler)]
 #![feature(alloc_error_handler)]
+#![feature(llvm_asm)]
 #![feature(const_fn)]
 
 #[macro_use]
@@ -30,6 +31,7 @@ mod lib;
 mod mm;
 mod panic;
 
+use kernel::cpu_init;
 use kernel::mem_init;
 use mm::heap;
 use spin::Mutex;
@@ -39,17 +41,19 @@ use spin::Mutex;
 // static mut cpu: u32 = 1;
 
 #[no_mangle]
-pub extern "C" fn init() {
+pub extern "C" fn init(cpu_id: usize) {
     // println!("core id {}", core_id);
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {
     //     crate::driver::uart::putc(*byte);
     // }
-    // panic!("lalal");
-    println!("Welcome to Sybilla Hypervisor!");
-    heap::init();
-    mem_init();
+    if cpu_id == 0 {
+        println!("Welcome to Sybilla Hypervisor!");
+        heap::init();
+        mem_init();
+    }
+    cpu_init();
 
     loop {}
 }

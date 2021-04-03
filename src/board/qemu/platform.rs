@@ -1,3 +1,5 @@
+pub const KERNEL_ENTRY: usize = 0x43000000;
+
 pub const TIMER_FREQUENCY: usize = 62500000;
 
 pub const UART_0_ADDR: usize = 0x9000000;
@@ -110,3 +112,17 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         },
     },
 };
+
+fn platform_cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
+    use crate::arch::power_arch_cpu_on;
+    power_arch_cpu_on(arch_core_id, entry, ctx);
+}
+
+pub fn platform_power_on_secondary_cores() {
+    for i in 1..PLAT_DESC.cpu_desc.num {
+        platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], KERNEL_ENTRY, 0);
+    }
+}
+
+// TODO
+pub fn power_arch_init() {}
