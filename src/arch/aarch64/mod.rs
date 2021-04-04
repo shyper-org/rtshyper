@@ -6,6 +6,8 @@ mod page_table;
 mod platform;
 mod psci;
 mod smc;
+mod interrupt;
+mod gic;
 
 pub use self::context_frame::*;
 pub use self::exception::*;
@@ -14,3 +16,5 @@ pub use self::page_table::*;
 pub use self::platform::*;
 pub use self::psci::*;
 pub use self::smc::*;
+pub use self::interrupt::*;
+pub use self::gic::*;

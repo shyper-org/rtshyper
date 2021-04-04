@@ -52,7 +52,7 @@ impl Cpu {
 
 #[no_mangle]
 #[link_section = ".cpu_private"]
-static mut CPU: Cpu = Cpu {
+pub static mut CPU: Cpu = Cpu {
     id: 0,
     assigned: false,
     cpu_state: CpuState::CpuInv,
@@ -65,8 +65,18 @@ static mut CPU: Cpu = Cpu {
     stack: [0; CPU_STACK_SIZE],
 };
 
+pub fn cpu_id() -> usize {
+    unsafe { CPU.id }
+}
+
+pub fn set_cpu_state(state: CpuState) {
+    unsafe {
+        CPU.cpu_state = state;
+    }
+}
+
 pub fn cpu_init() {
-    let cpu_id = unsafe { CPU.id };
+    let cpu_id = cpu_id();
     // println!("cpu id {}", cpu_id);
     if cpu_id == 0 {
         use crate::board::{platform_power_on_secondary_cores, power_arch_init};
@@ -74,9 +84,7 @@ pub fn cpu_init() {
         power_arch_init();
     }
 
-    unsafe {
-        CPU.cpu_state = CpuState::CpuIdle;
-    }
+    set_cpu_state(CpuState::CpuIdle);
     println!("Core {} init ok", cpu_id);
 
     use crate::lib::barrier;

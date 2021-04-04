@@ -17,7 +17,7 @@ version = "5.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ecefc30975eb87afc5a810d4b2305c0ec29e607ea97e51b2ecd80766e9268d28"
 dependencies = [
- "register 1.0.2",
+ "register",
 ]
 
 [[package]]
@@ -30,12 +30,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "register"
-version = "0.5.1"
+name = "lock_api"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deaba5b0e477d21f61a57504bb5cef4a1e86de30300b457d38971c1cfc98b815"
+checksum = "5a3c91c24eae6777794bb1997ad98bbb87daf92890acab859f7eaa4320333176"
 dependencies = [
- "tock-registers 0.5.0",
+ "scopeguard",
 ]
 
 [[package]]
@@ -44,7 +44,7 @@ version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4a247de29ab7cc8f5006cfe775c4a81c704f9914c5e2a79696862e643135433"
 dependencies = [
- "tock-registers 0.6.0",
+ "tock-registers",
 ]
 
 [[package]]
@@ -60,17 +60,17 @@ dependencies = [
  "buddy_system_allocator",
  "cortex-a",
  "lazy_static",
- "register 0.5.1",
+ "register",
  "rlibc",
- "spin 0.4.10",
+ "spin 0.9.0",
  "volatile",
 ]
 
 [[package]]
-name = "spin"
-version = "0.4.10"
+name = "scopeguard"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceac490aa12c567115b40b7b7fceca03a6c9d53d5defea066123debc83c5dc1f"
+checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
 name = "spin"
@@ -85,10 +85,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13287b4da9d1207a4f4929ac390916d64eacfe236a487e9a9f5b3be392be5162"
 
 [[package]]
-name = "tock-registers"
-version = "0.5.0"
+name = "spin"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70323afdb8082186c0986da0e10f6e4ed103d681c921c00597e98d9806dac20f"
+checksum = "b87bbf98cb81332a56c1ee8929845836f85e8ddd693157c30d76660196014478"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "tock-registers"
@@ -98,6 +101,6 @@ checksum = "f521a79accce68c417c9c77ce22108056b626126da1932f7e2e9b5bbffee0cea"
 
 [[package]]
 name = "volatile"
-version = "0.2.7"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6b06ad3ed06fef1713569d547cdbdb439eafed76341820fb0e0344f29a41945"
+checksum = "e4c2dbd44eb8b53973357e6e207e370f0c1059990df850aca1eca8947cf464f0"

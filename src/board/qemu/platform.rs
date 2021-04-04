@@ -126,3 +126,11 @@ pub fn platform_power_on_secondary_cores() {
 
 // TODO
 pub fn power_arch_init() {}
+
+pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
+    cpuid
+}
+
+pub fn platform_cpuif_to_cpuid(cpuif: usize) -> usize {
+    cpuif
+}

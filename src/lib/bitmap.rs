@@ -5,7 +5,7 @@
 
 // type BitMap([Bitmap])
 
-pub trait BitAlloc: Default {
+pub trait BitAlloc {
     // The bitmap has a total of CAP bits, numbered from 0 to CAP-1 inclusively.
     const CAP: usize;
 
@@ -40,11 +40,18 @@ pub type BitAlloc16M = BitMap<BitAlloc1M>;
 pub type BitAlloc256M = BitMap<BitAlloc16M>;
 
 #[repr(C)]
-#[derive(Default)]
 #[derive(Copy, Clone)]
 pub struct BitMap<T: BitAlloc> {
     // bitset: u16,
     map: [T; 16],
+}
+
+impl<T: BitAlloc> BitMap<T> {
+    pub const fn default() -> BitMap::<T> {
+        BitMap::<T> {
+            map: [T::DEFAULT; 16]
+        }
+    } 
 }
 
 impl<T: BitAlloc> BitAlloc for BitMap<T> {
@@ -74,9 +81,14 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
 }
 
 #[repr(C)]
-#[derive(Default)]
 #[derive(Copy, Clone)]
 pub struct BitAlloc16(u16);
+
+impl BitAlloc16 {
+    pub const fn default() -> BitAlloc16 {
+        BitAlloc16(0)
+    }
+}
 
 impl BitAlloc for BitAlloc16 {
     const CAP: usize = 16;
