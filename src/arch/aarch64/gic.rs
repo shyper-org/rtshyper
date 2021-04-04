@@ -260,8 +260,9 @@ pub fn gich_lrs_num() -> usize {
 
 #[inline(always)]
 pub fn gic_max_spi() -> usize {
-    // TODO
-    32
+    let typer = GICD.TYPER.get();
+    let value = typer & 0b11111;
+    (32 * value + 1) as usize
 }
 
 pub fn gic_glb_init() {
