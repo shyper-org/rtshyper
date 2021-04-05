@@ -32,6 +32,7 @@ mod mm;
 mod panic;
 
 use kernel::cpu_init;
+use kernel::interrupt_init;
 use kernel::mem_init;
 use mm::heap;
 use spin::Mutex;
@@ -54,6 +55,7 @@ pub extern "C" fn init(cpu_id: usize) {
         mem_init();
     }
     cpu_init();
+    interrupt_init();
 
     loop {}
 }

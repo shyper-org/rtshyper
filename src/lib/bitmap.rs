@@ -47,11 +47,11 @@ pub struct BitMap<T: BitAlloc> {
 }
 
 impl<T: BitAlloc> BitMap<T> {
-    pub const fn default() -> BitMap::<T> {
+    pub const fn default() -> BitMap<T> {
         BitMap::<T> {
-            map: [T::DEFAULT; 16]
+            map: [T::DEFAULT; 16],
         }
-    } 
+    }
 }
 
 impl<T: BitAlloc> BitAlloc for BitMap<T> {
