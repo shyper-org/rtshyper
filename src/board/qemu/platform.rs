@@ -127,6 +127,10 @@ pub fn platform_power_on_secondary_cores() {
 // TODO: ipi register
 pub fn power_arch_init() {}
 
+pub fn platform_blk_init() {
+    println!("Platform block driver init ok");
+}
+
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
     cpuid
 }

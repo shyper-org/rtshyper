@@ -1,3 +1,6 @@
+disk = /home/ohmr/work/hypervisor/disk-img
+
+
 build:
 	RUSTFLAGS="-C llvm-args=-global-isel=false" \
 	cargo build -Z build-std=core,alloc --target aarch64.json
@@ -6,6 +9,7 @@ build:
 run:
 	/usr/share/qemu/bin/qemu-system-aarch64 \
 		-machine virt,virtualization=on,gic-version=2\
+		-drive file=${disk}/disk.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0 \
 		-m 8g \
 		-cpu cortex-a57 \
 		-smp 8 \

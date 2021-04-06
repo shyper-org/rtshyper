@@ -31,16 +31,15 @@ pub fn timer_arch_disable_irq() {
 pub fn timer_arch_get_frequency() -> usize {
     let freq;
     unsafe {
-        llvm_asm!("mrs $0, CNTP_CTL_EL0" : "=r"(freq) ::: "volatile");
+        llvm_asm!("mrs $0, CNTFRQ_EL0" : "=r"(freq) ::: "volatile");
         llvm_asm!("isb");
     };
-
     freq
 }
 
 pub fn timer_arch_init() {
     let mut freq_lock = TIMER_FREQ.lock();
-    let mut slice_lock = TIMER_FREQ.lock();
+    let mut slice_lock = TIMER_SLICE.lock();
     *freq_lock = timer_arch_get_frequency();
     *slice_lock = (*freq_lock) / 100;
 

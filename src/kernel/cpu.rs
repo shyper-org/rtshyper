@@ -29,6 +29,7 @@ pub struct Cpu {
     pub assigned: bool,
     pub cpu_state: CpuState,
 
+    pub current_irq: u64,
     pub cpu_pt: CpuPt, // TODO
     pub stack: [u8; CPU_STACK_SIZE],
 }
@@ -40,6 +41,7 @@ impl Cpu {
             assigned: false,
             cpu_state: CpuState::CpuInv,
 
+            current_irq: 0,
             cpu_pt: CpuPt {
                 lvl1: [0; PTE_PER_PAGE],
                 lvl2: [0; PTE_PER_PAGE],
@@ -57,6 +59,7 @@ pub static mut CPU: Cpu = Cpu {
     assigned: false,
     cpu_state: CpuState::CpuInv,
 
+    current_irq: 0,
     cpu_pt: CpuPt {
         lvl1: [0; PTE_PER_PAGE],
         lvl2: [0; PTE_PER_PAGE],

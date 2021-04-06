@@ -23,6 +23,7 @@ pub fn timer_init() {
     crate::arch::timer_arch_init();
     timer_enable(false);
 
+    crate::lib::barrier();
     if cpu_id() == 0 {
         crate::kernel::interrupt_reserve_int(
             INTERRUPT_IRQ_HYPERVISOR_TIMER,
@@ -51,7 +52,7 @@ fn timer_irq_handler(arg: usize, src: usize) {
 
     let mut num_of_period = 1;
 
-    // TODO: vcpu_pool
+    // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
 
     timer_arch_set(num_of_period);
     timer_arch_enable_irq();

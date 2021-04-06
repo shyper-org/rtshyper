@@ -25,12 +25,14 @@ macro_rules! println {
 
 mod arch;
 mod board;
+mod device;
 mod driver;
 mod kernel;
 mod lib;
 mod mm;
 mod panic;
 
+use board::platform_blk_init;
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap;
 use spin::Mutex;
@@ -52,6 +54,11 @@ pub extern "C" fn init(cpu_id: usize) {
     cpu_init();
     interrupt_init();
     timer_init();
+
+    if cpu_id == 0 {
+        platform_blk_init();
+        // TODO: fs init
+    }
 
     loop {}
 }
