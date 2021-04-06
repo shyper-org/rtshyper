@@ -32,7 +32,7 @@ impl InterruptHandler {
     }
 }
 
-fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
+pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
     if int_id < INTERRUPT_NUM_MAX {
         let mut irq_handler_lock = INTERRUPT_HANDLERS.lock();
         let mut hyper_bitmap_lock = INTERRUPT_HYPER_BITMAP.lock();
@@ -41,18 +41,15 @@ fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
         use crate::lib::{BitAlloc16, BitAlloc256, BitAlloc4K, BitMap};
         (*hyper_bitmap_lock).set(int_id);
         (*glb_bitmap_lock).set(int_id);
-        drop(irq_handler_lock);
-        drop(hyper_bitmap_lock);
-        drop(glb_bitmap_lock);
     }
 }
 
-fn interrupt_cpu_enable(int_id: usize, en: bool) {
+pub fn interrupt_cpu_enable(int_id: usize, en: bool) {
     use crate::arch::interrupt_arch_enable;
     interrupt_arch_enable(int_id, en);
 }
 
-// TODO
+// TODO: add handler
 fn ipi_irq_handler() {}
 
 pub fn interrupt_init() {
@@ -60,9 +57,7 @@ pub fn interrupt_init() {
     interrupt_arch_init();
 
     let cpu_id = super::cpu_id();
-    println!("cpu id is {}", cpu_id);
     if cpu_id == 0 {
-        // TODO: change handler
         interrupt_reserve_int(
             INTERRUPT_IRQ_IPI,
             InterruptHandler::IpiIrqHandler(ipi_irq_handler),

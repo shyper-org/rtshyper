@@ -31,15 +31,10 @@ mod lib;
 mod mm;
 mod panic;
 
-use kernel::cpu_init;
-use kernel::interrupt_init;
-use kernel::mem_init;
+use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap;
 use spin::Mutex;
 // use lib::{BitAlloc, BitAlloc256};
-
-// #[no_mangle]
-// static mut cpu: u32 = 1;
 
 #[no_mangle]
 pub extern "C" fn init(cpu_id: usize) {
@@ -56,6 +51,7 @@ pub extern "C" fn init(cpu_id: usize) {
     }
     cpu_init();
     interrupt_init();
+    timer_init();
 
     loop {}
 }

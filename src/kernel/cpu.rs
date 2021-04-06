@@ -112,7 +112,5 @@ pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
 
     let lvl1_addr = pt_map_banked_cpu(cpu);
 
-    drop(cpu_lock);
-
     lvl1_addr
 }

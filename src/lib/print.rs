@@ -18,5 +18,4 @@ pub fn _print(args: Arguments) {
     // use core::fmt::Write;
     let mut lock = WRITER.lock();
     lock.write_fmt(args).unwrap();
-    drop(lock);
 }

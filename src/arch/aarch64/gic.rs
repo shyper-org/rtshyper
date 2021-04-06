@@ -247,10 +247,9 @@ impl GicHypervisorInterface {
 }
 
 // use crate::board::{PLATFORM_GICC_BASE, PLATFORM_GICD_BASE};
-pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE | 0xFFFF_FF80_0000_0000);
-pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE | 0xFFFF_FF80_0000_0000);
-pub static GICH: GicHypervisorInterface =
-    GicHypervisorInterface::new(PLATFORM_GICH_BASE | 0xFFFF_FF80_0000_0000);
+pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE);
+pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE);
+pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(PLATFORM_GICH_BASE);
 
 #[inline(always)]
 pub fn gich_lrs_num() -> usize {

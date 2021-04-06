@@ -124,7 +124,7 @@ pub fn platform_power_on_secondary_cores() {
     }
 }
 
-// TODO
+// TODO: ipi register
 pub fn power_arch_init() {}
 
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {

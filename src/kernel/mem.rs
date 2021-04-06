@@ -74,7 +74,6 @@ fn mem_vm_region_init() {
 
         let mut vm_region_lock = VMREGION.lock();
         (*vm_region_lock).push(mem_region);
-        drop(vm_region_lock);
     }
 
     println!(
