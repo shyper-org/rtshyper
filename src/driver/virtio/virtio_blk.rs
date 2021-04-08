@@ -1,6 +1,3 @@
-const VIRTIO_MMIO_BASE: usize = 0x0a003000;
-const QUEUE_SIZE: usize = 8;
-
 // use crate::device::*;
 use super::blk::*;
 use super::mmio::*;
@@ -10,6 +7,10 @@ use crate::arch::PAGE_SIZE;
 use register::mmio::*;
 use register::*;
 use spin::Mutex;
+
+const VIRTIO_MMIO_BASE: usize = 0x0a003000;
+const QUEUE_SIZE: usize = 8;
+const VIRTIO_F_VERSION_1: u32 = 32;
 
 #[repr(C)]
 #[repr(align(4096))]
@@ -194,15 +195,19 @@ pub fn virtio_blk_init() {
     status |= VIRTIO_CONFIG_S_DRIVER as u32;
     mmio.Status.set(status);
 
-    let mut feature = mmio.DeviceFeatures.get();
-    feature &= !(1 << VIRTIO_BLK_F_RO);
-    feature &= !(1 << VIRTIO_BLK_F_SCSI);
-    feature &= !(1 << VIRTIO_BLK_F_CONFIG_WCE);
-    feature &= !(1 << VIRTIO_BLK_F_MQ);
-    feature &= !(1 << VIRTIO_F_ANY_LAYOUT);
-    feature &= !(1 << VIRTIO_RING_F_EVENT_IDX);
-    feature &= !(1 << VIRTIO_RING_F_INDIRECT_DESC);
-    mmio.DriverFeatures.set(feature);
+    let feature: u64 = 1 << VIRTIO_F_VERSION_1;
+    // let mut feature = mmio.DeviceFeatures.get();
+    // feature &= !(1 << VIRTIO_BLK_F_RO);
+    // feature &= !(1 << VIRTIO_BLK_F_SCSI);
+    // feature &= !(1 << VIRTIO_BLK_F_CONFIG_WCE);
+    // feature &= !(1 << VIRTIO_BLK_F_MQ);
+    // feature &= !(1 << VIRTIO_F_ANY_LAYOUT);
+    // feature &= !(1 << VIRTIO_RING_F_EVENT_IDX);
+    // feature &= !(1 << VIRTIO_RING_F_INDIRECT_DESC);
+    mmio.DriverFeaturesSel.set(0);
+    mmio.DriverFeatures.set(feature as u32);
+    mmio.DriverFeaturesSel.set(1);
+    mmio.DriverFeatures.set((feature >> 32) as u32);
 
     status |= VIRTIO_CONFIG_S_FEATURES_OK as u32;
     mmio.Status.set(status);

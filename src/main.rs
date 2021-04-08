@@ -25,15 +25,19 @@ macro_rules! println {
 
 mod arch;
 mod board;
+mod config;
 mod device;
 mod driver;
 mod kernel;
 mod lib;
 mod mm;
 mod panic;
+mod vmm;
 
 use board::platform_blk_init;
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
+use lib::fs_init;
+use vmm::vmm_init;
 use mm::heap;
 use spin::Mutex;
 // use lib::{BitAlloc, BitAlloc256};
@@ -57,8 +61,11 @@ pub extern "C" fn init(cpu_id: usize) {
 
     if cpu_id == 0 {
         platform_blk_init();
-        // TODO: fs init
+        // TODO: check fs
+        fs_init();
     }
+
+    vmm_init();
 
     loop {}
 }

@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "bitflags"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
+
+[[package]]
 name = "buddy_system_allocator"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12,12 +18,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+
+[[package]]
+name = "cfg-if"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "core_io"
+version = "0.1.20210325"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97f8932064288cc79feb4d343a399d353a6f6f001e586ece47fe518a9e8507df"
+dependencies = [
+ "rustc_version",
+]
+
+[[package]]
 name = "cortex-a"
 version = "5.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ecefc30975eb87afc5a810d4b2305c0ec29e607ea97e51b2ecd80766e9268d28"
 dependencies = [
  "register",
+]
+
+[[package]]
+name = "fatfs"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e18f80a87439240dac45d927fd8f8081b6f1e34c03e97271189fa8a8c2e96c8f"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "core_io",
+ "log",
 ]
 
 [[package]]
@@ -36,6 +75,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a3c91c24eae6777794bb1997ad98bbb87daf92890acab859f7eaa4320333176"
 dependencies = [
  "scopeguard",
+]
+
+[[package]]
+name = "log"
+version = "0.4.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -58,7 +106,9 @@ name = "rust_hypervisor"
 version = "0.1.0"
 dependencies = [
  "buddy_system_allocator",
+ "core_io",
  "cortex-a",
+ "fatfs",
  "lazy_static",
  "register",
  "rlibc",
@@ -67,10 +117,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_version"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5f5376ea5e30ce23c03eb77cbe4962b988deead10910c372b226388b594c084"
+dependencies = [
+ "semver",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "semver"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4f410fedcf71af0345d7607d246e7ad15faaadd49d240ee3b24e5dc21a820ac"
 
 [[package]]
 name = "spin"

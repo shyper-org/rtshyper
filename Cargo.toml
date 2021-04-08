@@ -19,7 +19,8 @@ rlibc = "1.0.0"
 register = "1.0.2"
 cortex-a = "5.1.6"
 buddy_system_allocator = "0.7.0"
-
+fatfs = { version = "0.3.5", features = ["core_io", "alloc"], default-features = false }
+core_io = "0.1"
 
 [dependencies.lazy_static]
 version = "1.0"

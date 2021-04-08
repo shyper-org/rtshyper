@@ -43,8 +43,8 @@ _start:
     adrp x0, lvl1_page_table
     bl  pt_populate
 
-    adr x0, _bss_begin
-    adr x1, _bss_end
+    ldr x0, =_bss_begin
+    ldr x1, =_bss_end
     sub x2, x1, x0
     mov x1, xzr
     bl  memset
