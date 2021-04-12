@@ -2,6 +2,7 @@ use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::lib::*;
+use alloc::sync::Arc;
 use spin::Mutex;
 
 pub const VM_NUM_MAX: usize = 8;
@@ -29,32 +30,37 @@ impl VmPa {
     }
 }
 
+use crate::config::VmConfigEntry;
+
 #[repr(align(4096))]
-#[derive(Copy, Clone)]
+// #[derive(Copy, Clone)]
 pub struct Vm {
+    pub id: usize,
+    pub config: Option<Arc<VmConfigEntry>>,
+
     // memory config
-    id: usize,
-    pt_dir: usize,
-    mem_region_num: usize,
-    pa_region: Option<[VmPa; VM_MEM_REGION_MAX]>,
+    pub pt_dir: usize,
+    pub mem_region_num: usize,
+    pub pa_region: Option<[VmPa; VM_MEM_REGION_MAX]>,
 
     // image config
-    entry_point: u64,
+    pub entry_point: u64,
 
     // vcpu config
-    vcpu_list: Option<[Vcpu; PLATFORM_VCPU_NUM_MAX]>,
-    cpu_num: u64,
-    ncpu: u64,
+    pub vcpu_list: Option<[Vcpu; PLATFORM_VCPU_NUM_MAX]>,
+    pub cpu_num: u64,
+    pub ncpu: u64,
 
     // interrupt
-    intc_dev_id: u64,
-    int_bitmap: Option<BitMap<BitAlloc256>>, // TODO emul devs
+    pub intc_dev_id: u64,
+    pub int_bitmap: Option<BitMap<BitAlloc256>>, // TODO emul devs
 }
 
 impl Vm {
     pub const fn default() -> Vm {
         Vm {
             id: 0,
+            config: None,
             pt_dir: 0,
             mem_region_num: 0,
             pa_region: None,
@@ -73,4 +79,4 @@ impl Vm {
 // lazy_static! {
 //     pub static ref VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
 // }
-pub static VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
+pub static VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(),Vm::default(),Vm::default(),Vm::default(),Vm::default(),Vm::default(),Vm::default(),Vm::default()]);

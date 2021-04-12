@@ -7,14 +7,19 @@ use crate::kernel::VM_NUM_MAX;
 use alloc::vec::Vec;
 use spin::Mutex;
 
+ 
 pub enum VmType {
     VmTOs = 0,
     VmTBma = 1,
 }
 
+ 
 pub struct VmEmulatedDeviceConfig {}
+
+ 
 pub struct VmPassthroughDeviceConfig {}
 
+ 
 pub struct VmRegion {
     ipa_start: usize,
     length: usize,
@@ -29,6 +34,7 @@ impl VmRegion {
     }
 }
 
+ 
 pub struct VmMemoryConfig {
     num: u32,
     region: Option<Vec<VmRegion>>,
@@ -43,6 +49,7 @@ impl VmMemoryConfig {
     }
 }
 
+ 
 pub struct VmImageConfig {
     kernel_name: Option<&'static str>,
     kernel_load_ipa: usize,
@@ -67,6 +74,7 @@ impl VmImageConfig {
     }
 }
 
+ 
 pub struct VmCpuConfig {
     num: usize,
     allocate_bitmap: u32,
@@ -83,6 +91,7 @@ impl VmCpuConfig {
     }
 }
 
+ 
 pub struct VmConfigEntry {
     pub name: Option<&'static str>,
     pub os_type: VmType,
@@ -110,7 +119,7 @@ impl VmConfigEntry {
 pub struct VmConfigTable {
     pub name: Option<&'static str>,
     pub vm_num: usize,
-    pub entries: Vec<VmConfigEntry>,
+    pub entries: Vec<Arc<VmConfigEntry>>,
 }
 
 impl VmConfigTable {
@@ -123,10 +132,18 @@ impl VmConfigTable {
     }
 }
 
-pub static DEF_VM_CONFIG_TABLE: Mutex<VmConfigTable> = Mutex::new(VmConfigTable::default());
+// use alloc::sync::Arc;
+// pub static DEF_VM_CONFIG_TABLE: Arc<Mutex<VmConfigTable>> =
+//     Arc::new(Mutex::new(VmConfigTable::default()));
+use alloc::sync::Arc;
+
+lazy_static! {
+    pub static ref DEF_VM_CONFIG_TABLE: Mutex<VmConfigTable> = Mutex::new(VmConfigTable::default());
+}
 
 pub fn config_init() {
-    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
+    // let vm_config_arc = DEF_VM_CONFIG_TABLE.clone();
+    let mut vm_config = DEF_VM_CONFIG_TABLE.lock(); 
     vm_config.name = Some("qemu-default");
     vm_config.vm_num = 1;
 
@@ -141,7 +158,7 @@ pub fn config_init() {
         length: 0x80000000,
     });
 
-    vm_config.entries.push(VmConfigEntry {
+    vm_config.entries.push(Arc::new(VmConfigEntry {
         name: Some("supervisor"),
         os_type: VmType::VmTOs,
         memory: VmMemoryConfig {
@@ -164,5 +181,5 @@ pub fn config_init() {
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
-    });
+    }));
 }

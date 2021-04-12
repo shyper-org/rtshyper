@@ -10,8 +10,7 @@ pub struct Vcpu {
     id: usize,
     phys_id: usize,
     state: VcpuState,
-
-    // TODO
+    // TODO: VCPU
 }
 
 impl Vcpu {
