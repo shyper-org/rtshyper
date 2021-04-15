@@ -10,6 +10,7 @@ mod psci;
 mod regs;
 mod smc;
 mod timer;
+mod vcpu;
 mod vgic;
 
 pub use self::context_frame::*;
@@ -23,4 +24,5 @@ pub use self::psci::*;
 pub use self::regs::*;
 pub use self::smc::*;
 pub use self::timer::*;
+pub use self::vcpu::*;
 pub use self::vgic::*;

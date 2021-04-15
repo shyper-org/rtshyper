@@ -13,3 +13,4 @@ pub use self::mem::*;
 pub use self::mmio::*;
 pub use self::timer::*;
 pub use self::vm::*;
+pub use self::vcpu::*;

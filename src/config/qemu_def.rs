@@ -7,19 +7,15 @@ use crate::kernel::VM_NUM_MAX;
 use alloc::vec::Vec;
 use spin::Mutex;
 
- 
 pub enum VmType {
     VmTOs = 0,
     VmTBma = 1,
 }
 
- 
 pub struct VmEmulatedDeviceConfig {}
 
- 
 pub struct VmPassthroughDeviceConfig {}
 
- 
 pub struct VmRegion {
     ipa_start: usize,
     length: usize,
@@ -34,7 +30,6 @@ impl VmRegion {
     }
 }
 
- 
 pub struct VmMemoryConfig {
     num: u32,
     region: Option<Vec<VmRegion>>,
@@ -49,7 +44,6 @@ impl VmMemoryConfig {
     }
 }
 
- 
 pub struct VmImageConfig {
     kernel_name: Option<&'static str>,
     kernel_load_ipa: usize,
@@ -74,11 +68,10 @@ impl VmImageConfig {
     }
 }
 
- 
 pub struct VmCpuConfig {
-    num: usize,
-    allocate_bitmap: u32,
-    master: i32,
+    pub num: usize,
+    pub allocate_bitmap: u32,
+    pub master: i32,
 }
 
 impl VmCpuConfig {
@@ -91,7 +84,6 @@ impl VmCpuConfig {
     }
 }
 
- 
 pub struct VmConfigEntry {
     pub name: Option<&'static str>,
     pub os_type: VmType,
@@ -143,7 +135,7 @@ lazy_static! {
 
 pub fn config_init() {
     // let vm_config_arc = DEF_VM_CONFIG_TABLE.clone();
-    let mut vm_config = DEF_VM_CONFIG_TABLE.lock(); 
+    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("qemu-default");
     vm_config.vm_num = 1;
 

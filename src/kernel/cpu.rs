@@ -3,7 +3,7 @@ use crate::board::PLATFORM_CPU_NUM_MAX;
 use spin::Mutex;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 4;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 32;
 
 #[repr(C)]
 #[repr(align(4096))]
