@@ -1,4 +1,5 @@
 use core::fmt::Formatter;
+use cortex_a::regs::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -26,15 +27,13 @@ impl core::fmt::Display for Aarch64ContextFrame {
 
 impl crate::arch::traits::ContextFrameTrait for Aarch64ContextFrame {
     fn new(pc: usize, sp: usize, arg: usize, privileged: bool) -> Self {
-        use cortex_a::regs::*;
         let mut r = Aarch64ContextFrame {
             gpr: [0; 31],
-            spsr: (if privileged {
-                SPSR_EL1::M::EL1t
-            } else {
-                SPSR_EL1::M::EL0t
-            } + SPSR_EL1::I::Unmasked
-                + SPSR_EL1::F::Masked)
+            spsr: (SPSR_EL1::M::EL1h
+                + SPSR_EL1::I::Masked
+                + SPSR_EL1::F::Masked
+                + SPSR_EL1::A::Masked
+                + SPSR_EL1::D::Masked)
                 .value as u64,
             elr: pc as u64,
             sp: sp as u64,
@@ -72,7 +71,12 @@ impl Aarch64ContextFrame {
     pub fn default() -> Aarch64ContextFrame {
         Aarch64ContextFrame {
             gpr: [0; 31],
-            spsr: 0,
+            spsr: (SPSR_EL1::M::EL1h
+                + SPSR_EL1::I::Masked
+                + SPSR_EL1::F::Masked
+                + SPSR_EL1::A::Masked
+                + SPSR_EL1::D::Masked)
+                .value as u64,
             elr: 0,
             sp: 0,
         }

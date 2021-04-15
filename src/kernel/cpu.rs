@@ -1,9 +1,13 @@
 use crate::arch::{pt_map_banked_cpu, PAGE_SIZE, PTE_PER_PAGE};
 use crate::board::PLATFORM_CPU_NUM_MAX;
+use crate::kernel::{Vcpu, VcpuPool, VcpuState};
+use alloc::boxed::Box;
+// use core::ops::{Deref, DerefMut};
+use alloc::sync::Arc;
 use spin::Mutex;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 32;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
 
 #[repr(C)]
 #[repr(align(4096))]
@@ -21,13 +25,19 @@ pub enum CpuState {
     CpuRun = 2,
 }
 
+// struct CpuSelf {}
+
+// impl Deref<Cpu> for CpuSelf {}
+
 #[repr(C)]
 #[repr(align(4096))]
-#[derive(Copy, Clone)]
+// #[derive(Clone)]
 pub struct Cpu {
     pub id: usize,
     pub assigned: bool,
     pub cpu_state: CpuState,
+    pub active_vcpu: Option<Arc<Mutex<Vcpu>>>,
+    pub vcpu_pool: Option<Box<VcpuPool>>,
 
     pub current_irq: u64,
     pub cpu_pt: CpuPt, // TODO
@@ -40,7 +50,8 @@ impl Cpu {
             id: 0,
             assigned: false,
             cpu_state: CpuState::CpuInv,
-
+            active_vcpu: None,
+            vcpu_pool: None,
             current_irq: 0,
             cpu_pt: CpuPt {
                 lvl1: [0; PTE_PER_PAGE],
@@ -58,7 +69,8 @@ pub static mut CPU: Cpu = Cpu {
     id: 0,
     assigned: false,
     cpu_state: CpuState::CpuInv,
-
+    active_vcpu: None,
+    vcpu_pool: None,
     current_irq: 0,
     cpu_pt: CpuPt {
         lvl1: [0; PTE_PER_PAGE],
@@ -68,8 +80,32 @@ pub static mut CPU: Cpu = Cpu {
     stack: [0; CPU_STACK_SIZE],
 };
 
+// set/get CPU
 pub fn cpu_id() -> usize {
     unsafe { CPU.id }
+}
+
+pub fn cpu_assigned() -> bool {
+    unsafe { CPU.assigned }
+}
+
+pub fn cpu_vcpu_pool_size() -> usize {
+    unsafe {
+        let vcpu_pool = CPU.vcpu_pool.as_ref().unwrap();
+        vcpu_pool.content.len()
+    }
+}
+
+pub fn set_cpu_assign(assigned: bool) {
+    unsafe {
+        CPU.assigned = assigned;
+    }
+}
+
+pub fn set_cpu_vcpu_pool(pool: Box<VcpuPool>) {
+    unsafe {
+        CPU.vcpu_pool = Some(pool);
+    }
 }
 
 pub fn set_cpu_state(state: CpuState) {
@@ -77,6 +113,20 @@ pub fn set_cpu_state(state: CpuState) {
         CPU.cpu_state = state;
     }
 }
+
+pub fn set_active_vcpu(idx: usize) {
+    unsafe {
+        let vcpu_pool = CPU.vcpu_pool.as_mut().unwrap();
+        let vcpu = vcpu_pool.content[idx].vcpu.clone();
+        vcpu_pool.active_idx = idx;
+
+        let mut vcpu_inner = vcpu.lock();
+        vcpu_inner.state = VcpuState::VcpuAct;
+        drop(vcpu_inner);
+        CPU.active_vcpu = Some(vcpu);
+    }
+}
+// end set/get CPU
 
 pub fn cpu_init() {
     let cpu_id = cpu_id();
@@ -100,8 +150,16 @@ pub fn cpu_init() {
     }
 }
 
-static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> =
-    Mutex::new([Cpu::default(); PLATFORM_CPU_NUM_MAX]);
+static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
+    Cpu::default(),
+    Cpu::default(),
+    Cpu::default(),
+    Cpu::default(),
+    Cpu::default(),
+    Cpu::default(),
+    Cpu::default(),
+    Cpu::default(),
+]);
 
 // static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [Cpu::default(); PLATFORM_CPU_NUM_MAX];
 

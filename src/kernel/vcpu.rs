@@ -14,7 +14,7 @@ pub struct Vcpu {
     pub id: usize,
     pub phys_id: usize,
     pub state: VcpuState,
-    pub vm: Option<Arc<Mutex<VmInner>>>,
+    pub vm: Option<Vm>,
     pub vcpu_ctx: Aarch64ContextFrame,
     pub vm_ctx: VmContext,
 }
@@ -29,6 +29,12 @@ impl Vcpu {
             vcpu_ctx: Aarch64ContextFrame::default(),
             vm_ctx: VmContext::default(),
         }
+    }
+
+    pub fn vm_id(&self) -> usize {
+        let vm = self.vm.as_ref().unwrap();
+        let id = vm.inner().lock().id;
+        id
     }
 }
 
@@ -48,8 +54,8 @@ pub fn vcpu_alloc() -> Option<Arc<Mutex<Vcpu>>> {
 
 pub fn vcpu_init(vm: &Vm, vcpu: &mut Vcpu, vcpu_id: usize) {
     vcpu.id = vcpu_id;
-    vcpu.vm = Some(vm.inner());
+    vcpu.vm = Some(vm.clone());
     // TODO: vcpu.vm
     vcpu.phys_id = 0;
-    // crate::arch::vcpu_arch_init(vm, vcpu);
+    crate::arch::vcpu_arch_init(vm, vcpu);
 }

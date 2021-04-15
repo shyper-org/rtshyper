@@ -41,6 +41,35 @@ impl HeapRegion {
     pub fn region_init(&mut self, idx: usize, base: usize, size: usize, free: usize, last: usize) {
         self.region.init(idx, base, size, free, last);
     }
+
+    pub fn alloc_page(&mut self) -> usize {
+        let mut bit: usize = self.region.size;
+
+        if self.map.get(self.region.last) == 0 {
+            bit = self.region.last;
+        } else {
+            for i in 0..(self.region.size - self.region.last) {
+                if self.map.get(i) == 0 {
+                    bit = i;
+                    break;
+                }
+            }
+        }
+
+        if bit == self.region.size {
+            return 0;
+        }
+
+        if bit < self.region.size - 1 {
+            self.region.last = bit + 1;
+        } else {
+            // TODO
+            self.region.last = 0;
+        }
+        self.region.free -= 1;
+        // TODO
+        0
+    }
 }
 
 pub struct VmRegion {
@@ -58,7 +87,7 @@ lazy_static! {
         map: BitAlloc256::default(),
         region: MemRegion::new(),
     });
-} 
+}
 
 pub static VMREGION: Mutex<VmRegion> = Mutex::new(VmRegion {
     region: Vec::<MemRegion>::new(),

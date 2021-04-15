@@ -84,3 +84,22 @@ fn mem_vm_region_init() {
     );
     println!("Memory VM regions init ok!");
 }
+
+pub enum AllocError {
+    AllocZeroPage,
+    FreePage,
+}
+
+pub fn mem_heap_alloc(page_num: usize, aligned: bool) -> Result<usize, AllocError> {
+    let mut found = false;
+    if page_num == 0 {
+        return Err(AllocError::AllocZeroPage);
+    }
+
+    let mut heap = HEAPREGION.lock();
+    if (page_num > heap.region.free) {
+        found = false;
+    }
+
+    Ok(0)
+}

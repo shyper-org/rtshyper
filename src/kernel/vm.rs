@@ -7,11 +7,31 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 pub const VM_NUM_MAX: usize = 8;
+pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+    Mutex::new(VmInterface::default()),
+];
 
 enum VmState {
     VmInv = 0,
     VmPending = 1,
     VmActive = 2,
+}
+
+pub struct VmInterface {
+    pub master_vcpu_id: usize,
+}
+
+impl VmInterface {
+    const fn default() -> VmInterface {
+        VmInterface { master_vcpu_id: 0 }
+    }
 }
 
 pub struct VmPa {
@@ -42,7 +62,6 @@ impl Vm {
     pub fn inner(&self) -> Arc<Mutex<VmInner>> {
         self.inner.clone()
     }
-    
     pub fn default() -> Vm {
         Vm {
             inner: Arc::new(Mutex::new(VmInner::default())),
@@ -51,10 +70,19 @@ impl Vm {
 
     pub fn new(id: usize) -> Vm {
         Vm {
-            inner: Arc::new(Mutex::new(VmInner::new(id)))
+            inner: Arc::new(Mutex::new(VmInner::new(id))),
         }
     }
- }
+
+    pub fn set_ncpu(&self, ncpu: usize) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.ncpu = ncpu;
+    }
+    pub fn set_cpu_num(&self, cpu_num: usize) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.cpu_num = cpu_num;
+    }
+}
 
 #[repr(align(4096))]
 pub struct VmInner {
@@ -67,15 +95,15 @@ pub struct VmInner {
     pub pa_region: Option<[VmPa; VM_MEM_REGION_MAX]>,
 
     // image config
-    pub entry_point: u64,
+    pub entry_point: usize,
 
     // vcpu config
     pub vcpu_list: Vec<Arc<Mutex<Vcpu>>>,
-    pub cpu_num: u64,
-    pub ncpu: u64,
+    pub cpu_num: usize,
+    pub ncpu: usize,
 
     // interrupt
-    pub intc_dev_id: u64,
+    pub intc_dev_id: usize,
     pub int_bitmap: Option<BitMap<BitAlloc256>>, // TODO emul devs
 }
 

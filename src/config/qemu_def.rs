@@ -17,8 +17,8 @@ pub struct VmEmulatedDeviceConfig {}
 pub struct VmPassthroughDeviceConfig {}
 
 pub struct VmRegion {
-    ipa_start: usize,
-    length: usize,
+    pub ipa_start: usize,
+    pub length: usize,
 }
 
 impl VmRegion {
@@ -31,8 +31,8 @@ impl VmRegion {
 }
 
 pub struct VmMemoryConfig {
-    num: u32,
-    region: Option<Vec<VmRegion>>,
+    pub num: u32,
+    pub region: Option<Vec<VmRegion>>,
 }
 
 impl VmMemoryConfig {
@@ -45,13 +45,13 @@ impl VmMemoryConfig {
 }
 
 pub struct VmImageConfig {
-    kernel_name: Option<&'static str>,
-    kernel_load_ipa: usize,
-    kernel_entry_point: usize,
-    device_tree_filename: Option<&'static str>,
-    device_tree_load_ipa: usize,
-    ramdisk_filename: Option<&'static str>,
-    ramdisk_load_ipa: usize,
+    pub kernel_name: Option<&'static str>,
+    pub kernel_load_ipa: usize,
+    pub kernel_entry_point: usize,
+    pub device_tree_filename: Option<&'static str>,
+    pub device_tree_load_ipa: usize,
+    pub ramdisk_filename: Option<&'static str>,
+    pub ramdisk_load_ipa: usize,
 }
 
 impl VmImageConfig {
