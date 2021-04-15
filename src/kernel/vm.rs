@@ -18,7 +18,7 @@ pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
 ];
 
-enum VmState {
+pub enum VmState {
     VmInv = 0,
     VmPending = 1,
     VmActive = 2,
@@ -26,11 +26,15 @@ enum VmState {
 
 pub struct VmInterface {
     pub master_vcpu_id: usize,
+    pub state: VmState,
 }
 
 impl VmInterface {
     const fn default() -> VmInterface {
-        VmInterface { master_vcpu_id: 0 }
+        VmInterface {
+            master_vcpu_id: 0,
+            state: VmState::VmPending,
+        }
     }
 }
 
@@ -62,6 +66,7 @@ impl Vm {
     pub fn inner(&self) -> Arc<Mutex<VmInner>> {
         self.inner.clone()
     }
+
     pub fn default() -> Vm {
         Vm {
             inner: Arc::new(Mutex::new(VmInner::default())),
@@ -78,9 +83,15 @@ impl Vm {
         let mut vm_inner = self.inner.lock();
         vm_inner.ncpu = ncpu;
     }
+
     pub fn set_cpu_num(&self, cpu_num: usize) {
         let mut vm_inner = self.inner.lock();
         vm_inner.cpu_num = cpu_num;
+    }
+
+    pub fn vm_id(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.id
     }
 }
 

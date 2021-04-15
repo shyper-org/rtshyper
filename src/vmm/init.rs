@@ -11,6 +11,11 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
+use crate::config::VmMemoryConfig;
+fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) {
+    // TODO
+}
+
 use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::kernel::Vcpu;
 fn vmm_init_cpu(config: &VmCpuConfig, vm_arc: &Vm) -> bool {
@@ -55,6 +60,20 @@ impl VmAssignment {
             cpu_num: 0,
             cpus: 0,
         }
+    }
+}
+
+use crate::config::VmConfigEntry;
+use crate::kernel::VM_NUM_MAX;
+fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
+    let cpu_id = cpu_id();
+
+    if cpu_id == 0 {
+        if vm.vm_id() >= VM_NUM_MAX {
+            panic!("vmm_setup_config: out of vm");
+        }
+        // TODO: vmm_init_memory
+        // TODO: vmm_init_image
     }
 }
 
@@ -196,8 +215,21 @@ pub fn vmm_init() {
 
     barrier();
 
-    // TODO vmm_assign_vcpu
     vmm_assign_vcpu();
+    let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
+    let vm_num = vm_cfg_table.vm_num;
+
+    for i in 0..vm_num {
+        let config = vm_cfg_table.entries[i].clone();
+        let mut vm_list = VM_LIST.lock();
+        let vm = vm_list[i].clone();
+
+        // TODO: vmm_setup_config
+        vmm_setup_config(config, vm);
+
+        // TODO: vmm_setup_contact_config
+    }
+    drop(vm_cfg_table);
 
     if cpu_id() == 0 {
         println!("Sybilla Hypervisor init ok\n\nStart booting VMs ...");

@@ -124,9 +124,6 @@ impl VmConfigTable {
     }
 }
 
-// use alloc::sync::Arc;
-// pub static DEF_VM_CONFIG_TABLE: Arc<Mutex<VmConfigTable>> =
-//     Arc::new(Mutex::new(VmConfigTable::default()));
 use alloc::sync::Arc;
 
 lazy_static! {
@@ -134,7 +131,6 @@ lazy_static! {
 }
 
 pub fn config_init() {
-    // let vm_config_arc = DEF_VM_CONFIG_TABLE.clone();
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("qemu-default");
     vm_config.vm_num = 1;
