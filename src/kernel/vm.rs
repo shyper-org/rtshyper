@@ -95,13 +95,14 @@ impl Vm {
     }
 }
 
+use crate::arch::PageTable;
 #[repr(align(4096))]
 pub struct VmInner {
     pub id: usize,
     pub config: Option<Arc<VmConfigEntry>>,
 
     // memory config
-    pub pt_dir: usize,
+    pub pt: Option<PageTable>,
     pub mem_region_num: usize,
     pub pa_region: Option<[VmPa; VM_MEM_REGION_MAX]>,
 
@@ -123,7 +124,7 @@ impl VmInner {
         VmInner {
             id: 0,
             config: None,
-            pt_dir: 0,
+            pt: None,
             mem_region_num: 0,
             pa_region: None,
             entry_point: 0,
@@ -140,7 +141,7 @@ impl VmInner {
         VmInner {
             id,
             config: None,
-            pt_dir: 0,
+            pt: None,
             mem_region_num: 0,
             pa_region: None,
             entry_point: 0,

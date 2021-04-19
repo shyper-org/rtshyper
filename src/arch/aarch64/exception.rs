@@ -23,7 +23,7 @@ unsafe extern "C" fn current_el_sp0_serror() {
 unsafe extern "C" fn current_el_spx_synchronous() {
     panic!(
         "current_elx_synchronous {:016x}",
-        cortex_a::regs::ELR_EL1.get()
+        cortex_a::regs::ELR_EL2.get()
     );
 }
 

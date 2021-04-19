@@ -10,3 +10,14 @@ pub trait ContextFrameTrait {
     fn set_argument(&mut self, arg: usize);
     fn gpr(&self, index: usize) -> usize;
 }
+
+pub trait ArchPageTableEntryTrait {
+    fn from_pte(value: usize) -> Self;
+    fn from_pa(pa: usize) -> Self;
+    fn to_pte(&self) -> usize;
+    fn to_pa(&self) -> usize;
+    fn valid(&self) -> bool;
+    fn entry(&self, index: usize) -> Self;
+    fn set_entry(&self, index: usize, value: Self);
+    fn make_table(frame_pa: usize) -> Self;
+}

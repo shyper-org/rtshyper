@@ -67,7 +67,7 @@ _start:
     mov x1, 1
     msr spsel, x1
     ldr x1, =CPU
-    add x1, x1, #(0x4000 + (4096 * 32))
+    add x1, x1, #(0x4000 + (4096 * 128))
     sub	x1, x1, #0x110
     mov sp, x1
 

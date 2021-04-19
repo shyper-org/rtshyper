@@ -37,9 +37,9 @@ mod vmm;
 use board::platform_blk_init;
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use lib::fs_init;
-use vmm::vmm_init;
-use mm::heap;
+use mm::heap_init;
 use spin::Mutex;
+use vmm::vmm_init;
 // use lib::{BitAlloc, BitAlloc256};
 
 #[no_mangle]
@@ -52,7 +52,7 @@ pub extern "C" fn init(cpu_id: usize) {
     // }
     if cpu_id == 0 {
         println!("Welcome to Sybilla Hypervisor!");
-        heap::init();
+        heap_init();
         mem_init();
     }
     cpu_init();

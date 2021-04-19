@@ -1,19 +1,81 @@
-use crate::config::VmCpuConfig;
-use crate::config::DEF_VM_CONFIG_TABLE;
+use crate::arch::PageTable;
+use crate::arch::PTE_S2_NORMAL;
+use crate::config::{VmCpuConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
 use crate::kernel::VM_LIST;
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, CPU,
 };
-use crate::kernel::{vcpu_pool_append, vcpu_pool_init};
+use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{Vm, VmInner};
 use crate::lib::barrier;
+use crate::mm::PageFrame;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::config::VmMemoryConfig;
-fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) {
-    // TODO
+fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
+    let result = mem_page_alloc();
+    let mut vm_id = 0;
+
+    if let Ok(pt_dir_frame) = result {
+        let vm_inner_lock = vm.inner();
+        let mut vm_inner = vm_inner_lock.lock();
+
+        vm_id = vm_inner.id;
+        vm_inner.pt = Some(PageTable::new(pt_dir_frame));
+        vm_inner.mem_region_num = config.num as usize;
+    } else {
+        println!("vmm_init_memory: page alloc failed");
+        return false;
+    }
+
+    for i in 0..config.num as usize {
+        let vm_region = &config.region.as_ref().unwrap()[i];
+        let pa = mem_vm_region_alloc(vm_region.length);
+
+        if pa == 0 {
+            println!("vmm_init_memory: vm memory region is not large enough");
+            return false;
+        }
+
+        println!(
+            "VM {} memory region: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>",
+            vm_id, vm_region.ipa_start, pa, vm_region.length
+        );
+
+        // TODO
+        let vm_inner_lock = vm.inner();
+        let mut vm_inner = vm_inner_lock.lock();
+
+        match &vm_inner.pt {
+            Some(pt) => pt.pt_map_range(vm_region.ipa_start, vm_region.length, pa, PTE_S2_NORMAL),
+            None => {
+                println!("vmm_inner_memory: VM page table is null!");
+                return false;
+            }
+        }
+
+        if vm_inner.pa_region.is_none() {
+            use crate::kernel::{VmPa, VM_MEM_REGION_MAX};
+            let mut pa_region = [
+                VmPa::default(),
+                VmPa::default(),
+                VmPa::default(),
+                VmPa::default(),
+            ];
+            pa_region[i].pa_start = pa;
+            pa_region[i].pa_length = vm_region.length;
+            pa_region[i].offset = vm_region.ipa_start as isize - pa as isize;
+            vm_inner.pa_region = Some(pa_region);
+        } else {
+            let pa_region = vm_inner.pa_region.as_mut().unwrap();
+            pa_region[i].pa_start = pa;
+            pa_region[i].pa_length = vm_region.length;
+            pa_region[i].offset = vm_region.ipa_start as isize - pa as isize;
+        }
+    }
+
+    true
 }
 
 use crate::board::PLATFORM_VCPU_NUM_MAX;
@@ -73,6 +135,8 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
             panic!("vmm_setup_config: out of vm");
         }
         // TODO: vmm_init_memory
+        vmm_init_memory(&config.memory, vm.clone());
+
         // TODO: vmm_init_image
     }
 }
@@ -214,7 +278,6 @@ pub fn vmm_init() {
     }
 
     barrier();
-
     vmm_assign_vcpu();
     let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
     let vm_num = vm_cfg_table.vm_num;

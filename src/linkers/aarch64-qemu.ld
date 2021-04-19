@@ -30,7 +30,6 @@ SECTIONS
     }
     _bss_end = .;
 
-    . = 0x43109000;
     _image_end = ABSOLUTE(.);
     
     . = 0x400000000;

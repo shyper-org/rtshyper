@@ -23,13 +23,14 @@ fn mem_heap_region_init() {
     }
 
     let base = round_up((_image_end as usize), PAGE_SIZE);
-    let size = (PLAT_DESC.mem_desc.regions[0].size as usize
-        - (base - PLAT_DESC.mem_desc.base as usize))
-        / PAGE_SIZE;
+    let size = round_up(
+        (PLAT_DESC.mem_desc.regions[0].size as usize - (base - PLAT_DESC.mem_desc.base as usize)),
+        PAGE_SIZE,
+    ) / PAGE_SIZE;
 
-    println!("init memory, please waiting...");
+    println!("init memory, please waiting... base is {:x}", base);
     unsafe {
-        // rlibc::memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
+        rlibc::memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
         // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
     }
 
@@ -87,19 +88,44 @@ fn mem_vm_region_init() {
 
 pub enum AllocError {
     AllocZeroPage,
-    FreePage,
+    OutOfFrame,
 }
 
-pub fn mem_heap_alloc(page_num: usize, aligned: bool) -> Result<usize, AllocError> {
+use self::AllocError::*;
+use crate::mm::PageFrame;
+
+pub fn mem_heap_alloc(page_num: usize, aligned: bool) -> Result<PageFrame, AllocError> {
     let mut found = false;
     if page_num == 0 {
-        return Err(AllocError::AllocZeroPage);
+        return Err(AllocZeroPage);
     }
 
     let mut heap = HEAPREGION.lock();
     if (page_num > heap.region.free) {
-        found = false;
+        return Err(OutOfFrame);
     }
 
-    Ok(0)
+    if page_num == 1 {
+        return heap.alloc_page();
+    }
+
+    heap.alloc_pages(page_num)
+}
+
+pub fn mem_page_alloc() -> Result<PageFrame, AllocError> {
+    mem_heap_alloc(1, false)
+}
+
+pub fn mem_vm_region_alloc(size: usize) -> usize {
+    let mut vm_region = VMREGION.lock();
+    for i in 0..vm_region.region.len() {
+        if vm_region.region[i].free >= size / PAGE_SIZE {
+            let start_addr = vm_region.region[i].base + vm_region.region[i].last * PAGE_SIZE;
+            vm_region.region[i].last += size / PAGE_SIZE;
+            vm_region.region[i].free -= size / PAGE_SIZE;
+            return start_addr;
+        }
+    }
+
+    0
 }

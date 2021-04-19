@@ -1,5 +1,9 @@
-use crate::lib::{BitAlloc, BitAlloc16, BitAlloc256, BitMap};
+use super::AllocError;
+use crate::arch::PAGE_SIZE;
+use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
+use crate::mm::PageFrame;
 use alloc::vec::Vec;
+use rlibc::memset;
 use spin::{Mutex, Once};
 
 const TOTAL_MEM_REGION_MAX: usize = 16;
@@ -33,7 +37,7 @@ impl MemRegion {
 }
 
 pub struct HeapRegion {
-    pub map: BitMap<BitAlloc16>,
+    pub map: BitMap<BitAlloc256>,
     pub region: MemRegion,
 }
 
@@ -42,13 +46,13 @@ impl HeapRegion {
         self.region.init(idx, base, size, free, last);
     }
 
-    pub fn alloc_page(&mut self) -> usize {
+    pub fn alloc_page(&mut self) -> Result<PageFrame, AllocError> {
         let mut bit: usize = self.region.size;
 
         if self.map.get(self.region.last) == 0 {
             bit = self.region.last;
         } else {
-            for i in 0..(self.region.size - self.region.last) {
+            for i in 0..self.region.size {
                 if self.map.get(i) == 0 {
                     bit = i;
                     break;
@@ -57,23 +61,74 @@ impl HeapRegion {
         }
 
         if bit == self.region.size {
-            return 0;
+            println!(
+                "alloc_page: allocate {} pages failed (heap_base 0x{:x} remain {} total {})",
+                1, self.region.base, self.region.free, self.region.size
+            );
+            return Err(AllocError::OutOfFrame);
         }
 
         if bit < self.region.size - 1 {
             self.region.last = bit + 1;
         } else {
-            // TODO
             self.region.last = 0;
         }
+        self.map.set(bit);
         self.region.free -= 1;
-        // TODO
-        0
+
+        let addr = self.region.base + bit * PAGE_SIZE;
+        // println!("alloc page addr 0x{:x}", addr);
+        unsafe {
+            memset(addr as *mut u8, 0, PAGE_SIZE);
+        }
+        return Ok(PageFrame::new(addr));
+    }
+
+    pub fn alloc_pages(&mut self, size: usize) -> Result<PageFrame, AllocError> {
+        let mut bit: usize = self.region.size;
+        let mut count: usize = 0;
+        for i in 0..self.region.size {
+            if count >= size {
+                bit = i - count;
+                break;
+            }
+
+            if self.map.get(i) == 0 {
+                count += 1;
+            } else {
+                count = 0;
+            }
+        }
+
+        if bit == self.region.size {
+            println!(
+                "alloc_page: allocate {} pages failed (heap_base 0x{:x} remain {} total {})",
+                size, self.region.base, self.region.free, self.region.size
+            );
+            return Err(AllocError::OutOfFrame);
+        }
+
+        for i in bit..bit + size {
+            self.map.set(i);
+        }
+        self.region.free -= size;
+        if bit + size < self.region.size {
+            self.region.last = bit + size;
+        } else {
+            self.region.last = 0;
+        }
+
+        let addr = self.region.base + (bit + size) * PAGE_SIZE;
+        println!("alloc pages addr {}", addr);
+        unsafe {
+            memset(addr as *mut u8, 0, size * PAGE_SIZE);
+        }
+        return Ok(PageFrame::new(addr));
     }
 }
 
 pub struct VmRegion {
-    region: Vec<MemRegion>,
+    pub region: Vec<MemRegion>,
 }
 
 impl VmRegion {
@@ -84,7 +139,7 @@ impl VmRegion {
 
 lazy_static! {
     pub static ref HEAPREGION: Mutex<HeapRegion> = Mutex::new(HeapRegion {
-        map: BitAlloc256::default(),
+        map: BitAlloc4K::default(),
         region: MemRegion::new(),
     });
 }
