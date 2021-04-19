@@ -28,9 +28,9 @@ fn mem_heap_region_init() {
         PAGE_SIZE,
     ) / PAGE_SIZE;
 
-    println!("init memory, please waiting... base is {:x}", base);
+    println!("init memory, please waiting...");
     unsafe {
-        rlibc::memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
+        // rlibc::memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
         // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
     }
 

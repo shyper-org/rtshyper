@@ -89,9 +89,19 @@ impl Vm {
         vm_inner.cpu_num = cpu_num;
     }
 
+    pub fn set_entry_point(&self, entry_point: usize) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.entry_point = entry_point;
+    }
+
     pub fn vm_id(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.id
+    }
+
+    pub fn config(&self) -> Arc<VmConfigEntry> {
+        let vm_inner = self.inner.lock();
+        vm_inner.config.as_ref().unwrap().clone()
     }
 }
 

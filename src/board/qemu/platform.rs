@@ -129,6 +129,7 @@ pub fn power_arch_init() {}
 
 pub fn platform_blk_init() {
     println!("Platform block driver init ok");
+    crate::driver::virtio_blk_init();
 }
 
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {

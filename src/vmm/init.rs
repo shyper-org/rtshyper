@@ -1,6 +1,6 @@
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
-use crate::config::{VmCpuConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
+use crate::config::{VmCpuConfig, VmMemoryConfig, VmImageConfig, DEF_VM_CONFIG_TABLE};
 use crate::kernel::VM_LIST;
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, CPU,
@@ -43,7 +43,6 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
             vm_id, vm_region.ipa_start, pa, vm_region.length
         );
 
-        // TODO
         let vm_inner_lock = vm.inner();
         let mut vm_inner = vm_inner_lock.lock();
 
@@ -74,6 +73,47 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
             pa_region[i].offset = vm_region.ipa_start as isize - pa as isize;
         }
     }
+
+    true
+}
+
+fn vmm_load_image(filename: &str, load_ipa: usize, vm: Vm) {
+    use crate::lib::{fs_read_to_mem, fs_file_size};
+    println!("filename: {}, load_ipa 0x{:x}", filename, load_ipa);
+    let size = fs_file_size(filename);
+    if size == 0 {
+        println!("vmm_load_image: file {:#} is not exist", filename);
+    }
+    println!("file size is {}", size);
+    let config = vm.config();
+    for i in 0..config.memory.num {
+        let region = config.memory.region.as_ref().unwrap();
+        if load_ipa < region[i as usize].ipa_start  
+            || load_ipa + size > region[i as usize].ipa_start + region[i as usize].length {
+            continue;
+        }
+
+        // TODO: vmm_load_image
+    }
+}
+
+fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
+    if config.kernel_name.is_none() {
+        println!("vmm_init_image: filename is missed");
+        return false;
+    }
+
+    if config.kernel_load_ipa == 0 {
+        println!("vmm_init_image: kernel load ipa is null");
+        return false;
+    }
+
+    vm.set_entry_point(config.kernel_entry_point);
+    // TODO: vmm_load_image
+    vmm_load_image(config.kernel_name.unwrap(), config.kernel_load_ipa, vm.clone());
+
+    // PLATFORM QEMU
+    // END PLATFORM
 
     true
 }
@@ -134,10 +174,13 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         if vm.vm_id() >= VM_NUM_MAX {
             panic!("vmm_setup_config: out of vm");
         }
-        // TODO: vmm_init_memory
-        vmm_init_memory(&config.memory, vm.clone());
+        if !vmm_init_memory(&config.memory, vm.clone()) {
+            panic!("vmm_setup_config: vmm_init_memory failed");
+        }
 
-        // TODO: vmm_init_image
+        if !vmm_init_image(&config.image, vm.clone()) {
+            panic!("vmm_setup_config: vmm_init_image failed");
+        }
     }
 }
 

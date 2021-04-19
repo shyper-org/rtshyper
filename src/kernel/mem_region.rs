@@ -1,6 +1,6 @@
 use super::AllocError;
 use crate::arch::PAGE_SIZE;
-use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
+use crate::lib::{BitAlloc, BitAlloc64K, BitAlloc4K, BitMap};
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
 use rlibc::memset;
@@ -37,7 +37,7 @@ impl MemRegion {
 }
 
 pub struct HeapRegion {
-    pub map: BitMap<BitAlloc256>,
+    pub map: BitMap<BitAlloc4K>,
     pub region: MemRegion,
 }
 
@@ -139,7 +139,7 @@ impl VmRegion {
 
 lazy_static! {
     pub static ref HEAPREGION: Mutex<HeapRegion> = Mutex::new(HeapRegion {
-        map: BitAlloc4K::default(),
+        map: BitAlloc64K::default(),
         region: MemRegion::new(),
     });
 }
