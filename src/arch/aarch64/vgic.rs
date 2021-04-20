@@ -1,6 +1,7 @@
 use super::gic::*;
 use crate::kernel::Vcpu;
 use crate::kernel::Vm;
+use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -122,6 +123,8 @@ pub fn emu_intc_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     true
 }
 
+fn vgic_ipi_handler(msg: &IpiMessage) {}
+
 use crate::device::EmuDevs;
 pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     let vgic_cpu_num = vm.config().cpu.num;
@@ -159,5 +162,10 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
 
     vm.set_emu_devs(emu_dev_id, EmuDevs::Vgic(vgic.clone()));
 
-    // TODO: ipi register
+    if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
+        panic!(
+            "emu_intc_init: failed to register ipi {}",
+            IpiType::IpiTIntc as usize
+        )
+    }
 }

@@ -1,5 +1,6 @@
 mod cpu;
 mod interrupt;
+mod ipi;
 mod mem;
 mod mem_region;
 mod mmio;
@@ -10,6 +11,7 @@ mod vm;
 
 pub use self::cpu::*;
 pub use self::interrupt::*;
+pub use self::ipi::*;
 pub use self::mem::*;
 pub use self::mem_region::*;
 pub use self::mmio::*;
