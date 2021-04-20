@@ -1,6 +1,6 @@
 use super::AllocError;
 use crate::arch::PAGE_SIZE;
-use crate::lib::{BitAlloc, BitAlloc64K, BitAlloc4K, BitMap};
+use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
 use rlibc::memset;
@@ -125,6 +125,24 @@ impl HeapRegion {
         }
         return Ok(PageFrame::new(addr));
     }
+
+    pub fn free_page(&mut self, base: usize) -> bool {
+        use crate::lib::range_in_range;
+        if !range_in_range(base, PAGE_SIZE, self.region.base, self.region.size) {
+            println!(
+                "free_page: out of range (addr 0x{:x} page num {} heap base 0x{:x} heap size {})",
+                base, 1, self.region.base, self.region.size
+            );
+            return false;
+        }
+
+        let page_idx = (base - self.region.base) / PAGE_SIZE;
+        self.map.clear(page_idx);
+
+        self.region.free += 1;
+        self.region.last = page_idx;
+        return true;
+    }
 }
 
 pub struct VmRegion {
@@ -154,7 +172,8 @@ pub fn bits_to_pages(bits: usize) -> usize {
     round_up(bits, PAGE_SIZE)
 }
 
-// pub fn heap_size_to_bitmap_pages(bits: usize) -> usize {
-//     use crate::lib::round_up;
-//     // round_up(round_up(bits, ))
-// }
+pub fn pa_in_heap_region(pa: usize) -> bool {
+    let heap_region = HEAPREGION.lock();
+    pa > heap_region.region.base
+        && pa < (heap_region.region.base * PAGE_SIZE + heap_region.region.size)
+}

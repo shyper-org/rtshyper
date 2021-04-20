@@ -38,8 +38,9 @@ impl PageFrame {
   }
 }
 
+use crate::kernel::mem_pages_free;
 impl Drop for PageFrame {
   fn drop(&mut self) {
-    // println!("drop frame {:016x}", self.pa);
+    mem_pages_free(self.pa, 1);
   }
 }

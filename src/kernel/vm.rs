@@ -103,6 +103,11 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.config.as_ref().unwrap().clone()
     }
+
+    pub fn pa_start(&self, idx: usize) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.pa_region.as_ref().unwrap()[idx].pa_start
+    }
 }
 
 use crate::arch::PageTable;

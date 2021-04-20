@@ -116,6 +116,19 @@ pub fn mem_page_alloc() -> Result<PageFrame, AllocError> {
     mem_heap_alloc(1, false)
 }
 
+pub fn mem_pages_free(addr: usize, page_num: usize) -> bool {
+    if page_num == 1 {
+        let mut heap = HEAPREGION.lock();
+        return heap.free_page(addr);
+    } else {
+        println!(
+            "mem_pages_free: multiple pages free occured at address 0x{:x}, {} pages",
+            addr, page_num
+        );
+        return false;
+    }
+}
+
 pub fn mem_vm_region_alloc(size: usize) -> usize {
     let mut vm_region = VMREGION.lock();
     for i in 0..vm_region.region.len() {

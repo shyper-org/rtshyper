@@ -88,11 +88,15 @@ fn vmm_load_image(filename: &str, load_ipa: usize, vm: Vm) {
     let config = vm.config();
     for i in 0..config.memory.num {
         let region = config.memory.region.as_ref().unwrap();
-        if load_ipa < region[i as usize].ipa_start  
-            || load_ipa + size > region[i as usize].ipa_start + region[i as usize].length {
+        let idx = i as usize;
+        if load_ipa < region[idx].ipa_start  
+            || load_ipa + size > region[idx].ipa_start + region[idx].length {
             continue;
         }
 
+        let offset = load_ipa - region[idx].ipa_start;
+        println!("VM {} loads image: name=<{}>, ipa=<0x{:x}>, pa=<0x{:x}>, size=<{}K>",
+            vm.vm_id(), filename, load_ipa, vm.pa_start(idx) + offset, size / 1024);
         // TODO: vmm_load_image
     }
 }
