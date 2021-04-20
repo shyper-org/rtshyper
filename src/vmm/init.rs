@@ -1,6 +1,6 @@
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
-use crate::config::{VmCpuConfig, VmMemoryConfig, VmImageConfig, DEF_VM_CONFIG_TABLE};
+use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
 use crate::kernel::VM_LIST;
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, CPU,
@@ -78,27 +78,41 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
 }
 
 fn vmm_load_image(filename: &str, load_ipa: usize, vm: Vm) {
-    use crate::lib::{fs_read_to_mem, fs_file_size};
-    println!("filename: {}, load_ipa 0x{:x}", filename, load_ipa);
+    use crate::lib::{fs_file_size, fs_read_to_mem};
+    // println!("filename: {}, load_ipa 0x{:x}", filename, load_ipa);
     let size = fs_file_size(filename);
     if size == 0 {
         println!("vmm_load_image: file {:#} is not exist", filename);
     }
-    println!("file size is {}", size);
+    // println!("file size is {}", size);
     let config = vm.config();
     for i in 0..config.memory.num {
-        let region = config.memory.region.as_ref().unwrap();
         let idx = i as usize;
-        if load_ipa < region[idx].ipa_start  
-            || load_ipa + size > region[idx].ipa_start + region[idx].length {
+        let region = config.memory.region.as_ref().unwrap();
+        if load_ipa < region[idx].ipa_start
+            || load_ipa + size > region[idx].ipa_start + region[idx].length
+        {
             continue;
         }
 
         let offset = load_ipa - region[idx].ipa_start;
-        println!("VM {} loads image: name=<{}>, ipa=<0x{:x}>, pa=<0x{:x}>, size=<{}K>",
-            vm.vm_id(), filename, load_ipa, vm.pa_start(idx) + offset, size / 1024);
-        // TODO: vmm_load_image
+        println!(
+            "VM {} loads image: name=<{}>, ipa=<0x{:x}>, pa=<0x{:x}>, size=<{}K>",
+            vm.vm_id(),
+            filename,
+            load_ipa,
+            vm.pa_start(idx) + offset,
+            size / 1024
+        );
+
+        if !crate::lib::fs_read_to_mem(filename, unsafe {
+            core::slice::from_raw_parts_mut((vm.pa_start(idx) + offset) as *mut _, size)
+        }) {
+            panic!("vmm_load_image: failed to load image to memory");
+        }
+        return;
     }
+    panic!("vmm_load_image: Image config conflicts with memory config");
 }
 
 fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
@@ -113,12 +127,46 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     vm.set_entry_point(config.kernel_entry_point);
-    // TODO: vmm_load_image
-    vmm_load_image(config.kernel_name.unwrap(), config.kernel_load_ipa, vm.clone());
+    vmm_load_image(
+        config.kernel_name.unwrap(),
+        config.kernel_load_ipa,
+        vm.clone(),
+    );
 
-    // PLATFORM QEMU
-    // END PLATFORM
+    match &vm.config().os_type {
+        crate::config::VmType::VmTBma => return true,
+        _ => {}
+    }
 
+    if config.device_tree_load_ipa != 0 {
+        // PLATFORM QEMU
+        vmm_load_image(
+            config.device_tree_filename.unwrap(),
+            config.device_tree_load_ipa,
+            vm.clone(),
+        );
+        // END PLATFORM
+    } else {
+        println!(
+            "VM {} id {} device tree not found",
+            vm.vm_id(),
+            vm.config().name.unwrap()
+        );
+    }
+
+    if config.ramdisk_load_ipa != 0 {
+        vmm_load_image(
+            config.ramdisk_filename.unwrap(),
+            config.ramdisk_load_ipa,
+            vm.clone(),
+        );
+    } else {
+        println!(
+            "VM {} id {} ramdisk not found",
+            vm.vm_id(),
+            vm.config().name.unwrap()
+        );
+    }
     true
 }
 
@@ -185,6 +233,14 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         if !vmm_init_image(&config.image, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_image failed");
         }
+    }
+
+    // barrier
+
+    if cpu_id == 0 {
+        // TODO init device
+
+        println!("VM {} id {} init ok", vm.vm_id(), vm.config().name.unwrap());
     }
 }
 
