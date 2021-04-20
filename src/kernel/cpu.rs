@@ -89,6 +89,10 @@ pub fn cpu_assigned() -> bool {
     unsafe { CPU.assigned }
 }
 
+pub fn active_vcpu() -> Arc<Mutex<Vcpu>> {
+    unsafe { CPU.active_vcpu.as_ref().unwrap().clone() }
+}
+
 pub fn cpu_vcpu_pool_size() -> usize {
     unsafe {
         let vcpu_pool = CPU.vcpu_pool.as_ref().unwrap();

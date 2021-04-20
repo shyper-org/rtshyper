@@ -14,6 +14,6 @@ pub fn range_in_range(base1: usize, size1: usize, base2: usize, size2: usize) ->
 }
 
 #[inline(always)]
-pub fn in_range(addr: usize, base: usize, size: usize) {
-    range_in_range(addr, 0, base, size);
+pub fn in_range(addr: usize, base: usize, size: usize) -> bool {
+    range_in_range(addr, 0, base, size)
 }

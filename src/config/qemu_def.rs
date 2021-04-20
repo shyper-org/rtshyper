@@ -7,14 +7,32 @@ use crate::kernel::VM_NUM_MAX;
 use alloc::vec::Vec;
 use spin::Mutex;
 
+use crate::board::*;
+
 pub enum VmType {
     VmTOs = 0,
     VmTBma = 1,
 }
 
-pub struct VmEmulatedDeviceConfig {}
+use crate::device::EmuDeviceType;
 
-pub struct VmPassthroughDeviceConfig {}
+pub struct VmEmulatedDeviceConfig {
+    pub name: Option<&'static str>,
+    pub base_ipa: usize,
+    pub length: usize,
+    pub irq_id: usize,
+    pub cfg_list: Vec<usize>,
+    pub emu_type: EmuDeviceType,
+}
+
+pub struct VmPassthroughDeviceConfig {
+    pub name: Option<&'static str>,
+    pub base_pa: usize,
+    pub base_ipa: usize,
+    pub length: usize,
+    pub dma: bool,
+    pub irq_list: Vec<usize>,
+}
 
 pub struct VmRegion {
     pub ipa_start: usize,
@@ -135,17 +153,68 @@ pub fn config_init() {
     vm_config.name = Some("qemu-default");
     vm_config.vm_num = 1;
 
-    // vm0
+    // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-    emu_dev_config.push(VmEmulatedDeviceConfig {});
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("vgicd"),
+        base_ipa: 0x8000000,
+        length: 0x1000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTGicd,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio-blk0"),
+        base_ipa: 0xa000000,
+        length: 0x1000,
+        irq_id: 32 + 0x10,
+        cfg_list: vec![DISK_PARTITION_1_SIZE, DISK_PARTITION_1_START],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("shyper"),
+    //     base_ipa: 0,
+    //     length: 0,
+    //     irq_id: 32 + 0x20,
+    //     cfg_list: Vec::new(),
+    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
+    // });
+
+    // vm0 passthrough
     let mut pt_dev_config: Vec<VmPassthroughDeviceConfig> = Vec::new();
-    pt_dev_config.push(VmPassthroughDeviceConfig {});
+    pt_dev_config.push(VmPassthroughDeviceConfig {
+        name: Some("serial0"),
+        base_pa: UART_1_ADDR,
+        base_ipa: 0x9000000,
+        length: 0x1000,
+        dma: false,
+        irq_list: vec![27, UART_1_INT],
+    });
+    pt_dev_config.push(VmPassthroughDeviceConfig {
+        name: Some("gicc"),
+        base_pa: PLATFORM_GICV_BASE,
+        base_ipa: 0x8010000,
+        length: 0x2000,
+        dma: false,
+        irq_list: Vec::new(),
+    });
+    pt_dev_config.push(VmPassthroughDeviceConfig {
+        name: Some("nic"),
+        base_pa: 0x0a003000,
+        base_ipa: 0x0a003000,
+        length: 0x1000,
+        dma: false,
+        irq_list: vec![32 + 0x2e],
+    });
+
+    // vm0 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
     vm_region.push(VmRegion {
         ipa_start: 0x50000000,
         length: 0x80000000,
     });
 
+    // vm0 config
     vm_config.entries.push(Arc::new(VmConfigEntry {
         name: Some("supervisor"),
         os_type: VmType::VmTOs,

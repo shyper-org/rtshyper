@@ -201,20 +201,50 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm_arc: &Vm) -> bool {
     true
 }
 
-struct VmAssignment {
-    has_master: bool,
-    cpu_num: usize,
-    cpus: usize,
-}
-
-impl VmAssignment {
-    fn default() -> VmAssignment {
-        VmAssignment {
-            has_master: false,
-            cpu_num: 0,
-            cpus: 0,
-        }
+use crate::arch::emu_intc_handler;
+use crate::config::VmEmulatedDeviceConfig;
+use crate::device::emu_register_dev;
+use crate::device::EmuDeviceType::*;
+fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm) -> bool {
+    if config.is_none() {
+        println!(
+            "vmm_init_emulated_device: VM {} emu config is NULL",
+            vm.vm_id()
+        );
+        return true;
     }
+
+    for (idx, emu_dev) in config.as_ref().unwrap().iter().enumerate() {
+        let mut dev_name = "";
+        match emu_dev.emu_type {
+            EmuDeviceTGicd => {
+                dev_name = "interrupt controller";
+                emu_register_dev(
+                    vm.vm_id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_intc_handler,
+                );
+            }
+            EmuDeviceTVirtioBlk => {
+                dev_name = "virtio block";
+            }
+            _ => {
+                println!("vmm_init_emulated_device: unknown emulated device");
+                return false;
+            }
+        }
+        println!(
+            "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
+            vm.vm_id(),
+            idx,
+            dev_name,
+            emu_dev.base_ipa
+        );
+    }
+
+    true
 }
 
 use crate::config::VmConfigEntry;
@@ -239,8 +269,26 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
 
     if cpu_id == 0 {
         // TODO init device
-
+        if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
+            panic!("vmm_setup_config: vmm_init_emulated_device failed");
+        }
         println!("VM {} id {} init ok", vm.vm_id(), vm.config().name.unwrap());
+    }
+}
+
+struct VmAssignment {
+    has_master: bool,
+    cpu_num: usize,
+    cpus: usize,
+}
+
+impl VmAssignment {
+    fn default() -> VmAssignment {
+        VmAssignment {
+            has_master: false,
+            cpu_num: 0,
+            cpus: 0,
+        }
     }
 }
 
