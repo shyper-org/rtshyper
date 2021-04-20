@@ -1,9 +1,17 @@
 use crate::lib::in_range;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
 pub const EMU_DEV_NUM_MAX: usize = 32;
 pub static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
+
+use crate::arch::Vgic;
+pub enum EmuDevs {
+    Vgic(Arc<Vgic>),
+    VirtioBlk,
+    None,
+}
 
 pub struct EmuContext {
     address: usize,

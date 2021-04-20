@@ -1,6 +1,7 @@
 use crate::board::{
     PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE, PLATFORM_GICV_BASE,
 };
+use crate::kernel::INTERRUPT_NUM_MAX;
 use register::mmio::*;
 use register::*;
 use spin::Mutex;
@@ -16,9 +17,10 @@ const GICC_CTLR_EOImodeNS_BIT: usize = 1 << 9;
 const GICH_HCR_LRENPIE_BIT: usize = 1 << 2;
 
 const GIC_INTS_MAX: usize = 1024;
-const GIC_SGIS_NUM: usize = 16;
+pub const GIC_SGIS_NUM: usize = 16;
 const GIC_PPIS_NUM: usize = 16;
-const GIC_PRIVINT_NUM: usize = GIC_SGIS_NUM + GIC_PPIS_NUM;
+pub const GIC_PRIVINT_NUM: usize = GIC_SGIS_NUM + GIC_PPIS_NUM;
+pub const GIC_SPI_MAX: usize = INTERRUPT_NUM_MAX - GIC_PRIVINT_NUM;
 
 const GIC_INT_REGS_NUM: usize = GIC_INTS_MAX / 32;
 const GIC_PRIO_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
@@ -27,9 +29,20 @@ const GIC_CONFIG_REGS_NUM: usize = GIC_INTS_MAX * 2 / 32;
 const GIC_SEC_REGS_NUM: usize = GIC_INTS_MAX * 2 / 32;
 const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
 
-const GIC_LIST_REGS_NUM: usize = 64;
+pub const GIC_LIST_REGS_NUM: usize = 64;
+
+pub const GICD_TYPER_CPUNUM_OFF: usize = 5;
+pub const GICD_TYPER_CPUNUM_LEN: usize = 3;
+pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
 
 static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
+
+pub enum IrqState {
+    IrqSInactive,
+    IrqSPend,
+    IrqSActive,
+    IrqSPendActive,
+}
 
 register_structs! {
     #[allow(non_snake_case)]
@@ -142,6 +155,14 @@ impl GicDistributor {
         let value = (prev & !mask) | (((trgt as u32) << off) & mask);
         self.ITARGETSR[idx].set(value);
     }
+
+    pub fn typer(&self) -> u32 {
+        self.TYPER.get()
+    }
+
+    pub fn iidr(&self) -> u32 {
+        self.IIDR.get()
+    }
 }
 
 register_structs! {
@@ -225,6 +246,7 @@ register_structs! {
         (0x1000 => @END),
     }
 }
+
 pub struct GicHypervisorInterface {
     base_addr: usize,
 }

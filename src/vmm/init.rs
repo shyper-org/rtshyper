@@ -201,7 +201,7 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm_arc: &Vm) -> bool {
     true
 }
 
-use crate::arch::emu_intc_handler;
+use crate::arch::{emu_intc_handler, emu_intc_init};
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::emu_register_dev;
 use crate::device::EmuDeviceType::*;
@@ -226,6 +226,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                     emu_dev.length,
                     emu_intc_handler,
                 );
+                emu_intc_init(vm.clone(), idx);
             }
             EmuDeviceTVirtioBlk => {
                 dev_name = "virtio block";

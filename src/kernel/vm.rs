@@ -94,6 +94,29 @@ impl Vm {
         vm_inner.entry_point = entry_point;
     }
 
+    pub fn set_emu_devs(&self, idx: usize, emu: EmuDevs) {
+        let mut vm_inner = self.inner.lock();
+        if idx < vm_inner.emu_devs.len() {
+            if let EmuDevs::None = vm_inner.emu_devs[idx] {
+                println!("set_emu_devs: cover a None emu dev");
+                vm_inner.emu_devs[idx] = emu;
+                return;
+            } else {
+                panic!("set_emu_devs: set an exsit emu dev");
+            }
+        }
+        while idx > vm_inner.emu_devs.len() {
+            println!("set_emu_devs: push a None emu dev");
+            vm_inner.emu_devs.push(EmuDevs::None);
+        }
+        vm_inner.emu_devs.push(emu);
+    }
+
+    pub fn cpu_num(&self) -> usize {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.cpu_num
+    }
+
     pub fn vm_id(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.id
@@ -108,9 +131,15 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.pa_region.as_ref().unwrap()[idx].pa_start
     }
+
+    pub fn vcpu(&self, idx: usize) -> Arc<Mutex<Vcpu>> {
+        let vm_inner = self.inner.lock();
+        vm_inner.vcpu_list[idx].clone()
+    }
 }
 
 use crate::arch::PageTable;
+use crate::device::EmuDevs;
 #[repr(align(4096))]
 pub struct VmInner {
     pub id: usize,
@@ -131,7 +160,10 @@ pub struct VmInner {
 
     // interrupt
     pub intc_dev_id: usize,
-    pub int_bitmap: Option<BitMap<BitAlloc256>>, // TODO emul devs
+    pub int_bitmap: Option<BitMap<BitAlloc256>>,
+
+    // emul devs
+    pub emu_devs: Vec<EmuDevs>,
 }
 
 impl VmInner {
@@ -149,6 +181,7 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: None,
+            emu_devs: Vec::new(),
         }
     }
 
@@ -166,6 +199,7 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: None,
+            emu_devs: Vec::new(),
         }
     }
 }
