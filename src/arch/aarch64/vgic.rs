@@ -1,4 +1,5 @@
 use super::gic::*;
+use crate::board::platform_cpuid_to_cpuif;
 use crate::kernel::InitcEvent;
 use crate::kernel::Vcpu;
 use crate::kernel::Vm;
@@ -6,7 +7,7 @@ use crate::kernel::{active_vcpu, active_vm, cpu_id};
 use crate::kernel::{
     ipi_intra_broadcast_msg, ipi_register, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType,
 };
-use crate::lib::bit_extract;
+use crate::lib::{bit_extract, bit_get, bit_set};
 use crate::{arch::GICH, kernel::IpiInitcMessage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -40,6 +41,16 @@ impl VgicInt {
     fn set_lr(&self, lr: u16) {
         let mut vgic_int = self.inner.lock();
         vgic_int.lr = lr;
+    }
+
+    fn set_targets(&self, targets: u8) {
+        let mut vgic_int = self.inner.lock();
+        vgic_int.targets = targets;
+    }
+
+    fn set_prio(&self, prio: u8) {
+        let mut vgic_int = self.inner.lock();
+        vgic_int.prio = prio;
     }
 
     fn set_in_lr(&self, in_lr: bool) {
@@ -635,7 +646,87 @@ impl Vgic {
         prio &= 0xf0; // gic-400 only allows 4 priority bits in non-secure state
 
         if let Some(interrupt) = interrupt_option {
-            // TODO: set_prio
+            if vgic_int_get_owner(vcpu_arc.clone(), interrupt.clone()) {
+                if interrupt.prio() != prio {
+                    self.remove_lr(vcpu_arc.clone(), interrupt.clone());
+                    let prev_prio = interrupt.prio();
+                    interrupt.set_prio(prio);
+                    if prio <= prev_prio {
+                        self.route(vcpu_arc.clone(), interrupt.clone());
+                    }
+                    if interrupt.hw() {
+                        GICD.set_prio(interrupt.id() as usize, prio);
+                    }
+                }
+                vgic_int_yield_owner(vcpu_arc.clone(), interrupt.clone());
+            } else {
+                let vcpu = vcpu_arc.lock();
+                let vm_id = vcpu.vm_id();
+                drop(vcpu);
+
+                let m = IpiInitcMessage {
+                    event: InitcEvent::VgicdSetPrio,
+                    vm_id,
+                    int_id: interrupt.id(),
+                    val: prio,
+                };
+                if !ipi_send_msg(
+                    interrupt.owner_phys_id(),
+                    IpiType::IpiTIntc,
+                    IpiInnerMsg::Initc(m),
+                ) {
+                    println!(
+                        "set_prio: Failed to send ipi message, target {} type {}",
+                        interrupt.owner_phys_id(),
+                        0
+                    );
+                }
+            }
+        }
+    }
+
+    fn set_trgt(&self, vcpu_arc: Arc<Mutex<Vcpu>>, int_id: usize, trgt: u8) {
+        let interrupt_option = self.get_int(active_vcpu(), bit_extract(int_id, 0, 10));
+        if let Some(interrupt) = interrupt_option {
+            if vgic_int_get_owner(vcpu_arc.clone(), interrupt.clone()) {
+                if interrupt.targets() != trgt {
+                    interrupt.set_targets(trgt);
+                    let mut ptrgt = 0;
+                    for cpuid in 0..8 {
+                        if bit_get(trgt as usize, cpuid) != 0 {
+                            ptrgt = bit_set(ptrgt, platform_cpuid_to_cpuif(cpuid))
+                        }
+                    }
+                    if interrupt.hw() {
+                        GICD.set_trgt(interrupt.id() as usize, ptrgt as u8);
+                    }
+                    if vgic_get_state(interrupt.clone()) != 0 {
+                        self.route(vcpu_arc.clone(), interrupt.clone());
+                    }
+                }
+                vgic_int_yield_owner(vcpu_arc.clone(), interrupt.clone());
+            } else {
+                let vcpu = vcpu_arc.lock();
+                let vm_id = vcpu.vm_id();
+                drop(vcpu);
+                let m = IpiInitcMessage {
+                    event: InitcEvent::VgicdSetTrgt,
+                    vm_id,
+                    int_id: interrupt.id(),
+                    val: trgt,
+                };
+                if !ipi_send_msg(
+                    interrupt.owner_phys_id(),
+                    IpiType::IpiTIntc,
+                    IpiInnerMsg::Initc(m),
+                ) {
+                    println!(
+                        "set_trgt: Failed to send ipi message, target {} type {}",
+                        interrupt.owner_phys_id(),
+                        0
+                    );
+                }
+            }
         }
     }
 }
@@ -792,9 +883,23 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
                 vgic.set_pend(active_vcpu(), int_id as usize, val != 0);
             }
             InitcEvent::VgicdSetPrio => {
-                // vgic.set_prio();
+                vgic.set_prio(active_vcpu(), int_id as usize, val);
             }
-            // TODO: initc event
+            InitcEvent::VgicdSetTrgt => {
+                vgic.set_trgt(active_vcpu(), int_id as usize, val);
+            }
+            InitcEvent::VgicdRoute => {
+                let interrupt_option =
+                    vgic.get_int(active_vcpu(), bit_extract(int_id as usize, 0, 10));
+                if let Some(interrupt) = interrupt_option {
+                    if vgic_int_get_owner(active_vcpu(), interrupt.clone()) {
+                        if (interrupt.targets() & (1 << cpu_id())) != 0 {
+                            vgic.add_lr(active_vcpu(), interrupt.clone());
+                        }
+                        vgic_int_yield_owner(active_vcpu(), interrupt.clone());
+                    }
+                }
+            }
             _ => {
                 println!("vgic_ipi_handler: core {} received unknown event", cpu_id())
             }

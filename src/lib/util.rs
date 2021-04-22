@@ -22,3 +22,13 @@ pub fn in_range(addr: usize, base: usize, size: usize) -> bool {
 pub fn bit_extract(bits: usize, off: usize, len: usize) -> usize {
     (bits >> off) & ((1 << len) - 1)
 }
+
+#[inline(always)]
+pub fn bit_get(bits: usize, off: usize) -> usize {
+    bits & (1 << off)
+}
+
+#[inline(always)]
+pub fn bit_set(bits: usize, off: usize) -> usize {
+    bits | (1 << off)
+}
