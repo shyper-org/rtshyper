@@ -219,6 +219,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
         match emu_dev.emu_type {
             EmuDeviceTGicd => {
                 dev_name = "interrupt controller";
+                vm.set_intc_dev_id(idx);
                 emu_register_dev(
                     vm.vm_id(),
                     idx,

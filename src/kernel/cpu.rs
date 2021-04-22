@@ -1,8 +1,10 @@
 use crate::arch::{pt_map_banked_cpu, PAGE_SIZE, PTE_PER_PAGE};
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{Vcpu, VcpuPool, VcpuState};
+use crate::kernel::{Vcpu, VcpuPool, VcpuState, Vm};
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 // use core::ops::{Deref, DerefMut};
+use crate::kernel::IpiMessage;
 use alloc::sync::Arc;
 use spin::Mutex;
 
@@ -23,6 +25,35 @@ pub enum CpuState {
     CpuInv = 0,
     CpuIdle = 1,
     CpuRun = 2,
+}
+
+pub struct CpuIf {
+    pub msg_queue: Vec<IpiMessage>,
+}
+
+impl CpuIf {
+    pub fn default() -> CpuIf {
+        CpuIf {
+            msg_queue: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, ipi_msg: IpiMessage) {
+        self.msg_queue.push(ipi_msg);
+    }
+
+    pub fn pop(&mut self) -> Option<IpiMessage> {
+        self.msg_queue.pop()
+    }
+}
+
+pub static CPU_IF_LIST: Mutex<Vec<CpuIf>> = Mutex::new(Vec::new());
+
+fn cpu_if_init() {
+    let mut cpu_if_list = CPU_IF_LIST.lock();
+    for i in 0..PLATFORM_CPU_NUM_MAX {
+        cpu_if_list.push(CpuIf::default());
+    }
 }
 
 // struct CpuSelf {}
@@ -93,6 +124,18 @@ pub fn active_vcpu() -> Arc<Mutex<Vcpu>> {
     unsafe { CPU.active_vcpu.as_ref().unwrap().clone() }
 }
 
+pub fn active_vcpu_id() -> usize {
+    let active_vcpu_lock = active_vcpu();
+    let active_vcpu = active_vcpu_lock.lock();
+    active_vcpu.id
+}
+
+pub fn active_vm() -> Vm {
+    let active_vcpu_lock = active_vcpu();
+    let active_vcpu = active_vcpu_lock.lock();
+    active_vcpu.vm.as_ref().unwrap().clone()
+}
+
 pub fn cpu_vcpu_pool_size() -> usize {
     unsafe {
         let vcpu_pool = CPU.vcpu_pool.as_ref().unwrap();
@@ -139,6 +182,7 @@ pub fn cpu_init() {
         use crate::board::{platform_power_on_secondary_cores, power_arch_init};
         platform_power_on_secondary_cores();
         power_arch_init();
+        cpu_if_init();
     }
 
     set_cpu_state(CpuState::CpuIdle);

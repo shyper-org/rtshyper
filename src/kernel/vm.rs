@@ -62,6 +62,7 @@ pub struct Vm {
     pub inner: Arc<Mutex<VmInner>>,
 }
 
+use crate::arch::Vgic;
 impl Vm {
     pub fn inner(&self) -> Arc<Mutex<VmInner>> {
         self.inner.clone()
@@ -112,8 +113,13 @@ impl Vm {
         vm_inner.emu_devs.push(emu);
     }
 
-    pub fn cpu_num(&self) -> usize {
+    pub fn set_intc_dev_id(&self, intc_dev_id: usize) {
         let mut vm_inner = self.inner.lock();
+        vm_inner.intc_dev_id = intc_dev_id;
+    }
+
+    pub fn cpu_num(&self) -> usize {
+        let vm_inner = self.inner.lock();
         vm_inner.cpu_num
     }
 
@@ -135,6 +141,18 @@ impl Vm {
     pub fn vcpu(&self, idx: usize) -> Arc<Mutex<Vcpu>> {
         let vm_inner = self.inner.lock();
         vm_inner.vcpu_list[idx].clone()
+    }
+
+    pub fn vgic(&self) -> Arc<Vgic> {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
+            EmuDevs::Vgic(vgic) => {
+                return vgic.clone();
+            }
+            _ => {
+                panic!("cannot find vgic");
+            }
+        }
     }
 }
 

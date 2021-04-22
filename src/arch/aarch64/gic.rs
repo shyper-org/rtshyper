@@ -1,6 +1,7 @@
 use crate::board::{
     PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE, PLATFORM_GICV_BASE,
 };
+use crate::kernel::cpu_id;
 use crate::kernel::INTERRUPT_NUM_MAX;
 use register::mmio::*;
 use register::*;
@@ -16,9 +17,9 @@ const GICC_CTLR_EOImodeNS_BIT: usize = 1 << 9;
 // GICH BITS
 const GICH_HCR_LRENPIE_BIT: usize = 1 << 2;
 
-const GIC_INTS_MAX: usize = 1024;
 pub const GIC_SGIS_NUM: usize = 16;
 const GIC_PPIS_NUM: usize = 16;
+pub const GIC_INTS_MAX: usize = INTERRUPT_NUM_MAX;
 pub const GIC_PRIVINT_NUM: usize = GIC_SGIS_NUM + GIC_PPIS_NUM;
 pub const GIC_SPI_MAX: usize = INTERRUPT_NUM_MAX - GIC_PRIVINT_NUM;
 
@@ -35,13 +36,34 @@ pub const GICD_TYPER_CPUNUM_OFF: usize = 5;
 pub const GICD_TYPER_CPUNUM_LEN: usize = 3;
 pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
 
-static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
+pub static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
 
 pub enum IrqState {
     IrqSInactive,
     IrqSPend,
     IrqSActive,
     IrqSPendActive,
+}
+
+impl IrqState {
+    pub fn num_to_state(num: usize) -> IrqState {
+        match num {
+            0 => IrqState::IrqSInactive,
+            1 => IrqState::IrqSPend,
+            2 => IrqState::IrqSActive,
+            3 => IrqState::IrqSPendActive,
+            _ => panic!("num_to_state: illegal irq state"),
+        }
+    }
+
+    pub fn to_num(&self) -> usize {
+        match self {
+            IrqState::IrqSInactive => 0,
+            IrqState::IrqSPend => 1,
+            IrqState::IrqSActive => 2,
+            IrqState::IrqSPendActive => 3,
+        }
+    }
 }
 
 register_structs! {
@@ -163,6 +185,58 @@ impl GicDistributor {
     pub fn iidr(&self) -> u32 {
         self.IIDR.get()
     }
+
+    pub fn state(&self, int_id: usize) -> usize {
+        let reg_ind = int_id / 32;
+        let mask = 1 << int_id % 32;
+        let pend = if (self.ISPENDR[reg_ind].get() & mask) != 0 {
+            1
+        } else {
+            0
+        };
+        let act = if (self.ISACTIVER[reg_ind].get() & mask) != 0 {
+            2
+        } else {
+            0
+        };
+
+        return pend | act;
+    }
+
+    pub fn set_state(&self, int_id: usize, state: usize) {
+        self.set_act(int_id, (state & 2) != 0);
+        self.set_pend(int_id, (state & 1) != 0);
+    }
+
+    fn set_act(&self, int_id: usize, act: bool) {
+        let reg_ind = int_id / 32;
+        let mask = 1 << int_id % 32;
+        if act {
+            self.ISACTIVER[reg_ind].set(mask);
+        } else {
+            self.ICACTIVER[reg_ind].set(mask);
+        }
+    }
+
+    fn set_pend(&self, int_id: usize, pend: bool) {
+        if gic_is_sgi(int_id) {
+            let off = (int_id % 4) * 8;
+            let reg_ind = int_id / 4;
+            if pend {
+                self.SPENDSGIR[reg_ind].set(1 << (off + cpu_id()));
+            } else {
+                self.CPENDSGIR[reg_ind].set(0b11111111 << off);
+            }
+        } else {
+            let reg_ind = int_id / 32;
+            let mask = 1 << int_id % 32;
+            if pend {
+                self.SPENDSGIR[reg_ind].set(mask);
+            } else {
+                self.CPENDSGIR[reg_ind].set(mask);
+            }
+        }
+    }
 }
 
 register_structs! {
@@ -266,6 +340,26 @@ impl GicHypervisorInterface {
     pub fn ptr(&self) -> *const GicHypervisorInterfaceBlock {
         self.base_addr as *const GicHypervisorInterfaceBlock
     }
+
+    pub fn hcr(&self) -> u32 {
+        self.HCR.get()
+    }
+
+    pub fn set_hcr(&self, hcr: u32) {
+        self.HCR.set(hcr);
+    }
+
+    pub fn elsr(&self, elsr_idx: usize) -> u32 {
+        self.EISR[elsr_idx].get()
+    }
+
+    pub fn lr(&self, lr_idx: usize) -> u32 {
+        self.LR[lr_idx].get()
+    }
+
+    pub fn set_lr(&self, lr_idx: usize, val: u32) {
+        self.LR[lr_idx].set(val)
+    }
 }
 
 // use crate::board::{PLATFORM_GICC_BASE, PLATFORM_GICD_BASE};
@@ -287,9 +381,10 @@ pub fn gic_max_spi() -> usize {
 }
 
 pub fn gic_glb_init() {
-    let mut lock = GIC_LRS_NUM.lock();
-    *lock = gich_lrs_num();
-    drop(lock);
+    let mut gic_lrs = GIC_LRS_NUM.lock();
+    *gic_lrs = gich_lrs_num();
+    // println!("gic lrs is {}", *gic_lrs);
+    drop(gic_lrs);
 
     GICD.global_init();
 }
@@ -297,4 +392,12 @@ pub fn gic_glb_init() {
 pub fn gic_cpu_init() {
     GICD.cpu_init();
     GICC.init();
+}
+
+pub fn gic_is_priv(int_id: usize) -> bool {
+    int_id < GIC_PRIVINT_NUM
+}
+
+pub fn gic_is_sgi(int_id: usize) -> bool {
+    int_id < GIC_SGIS_NUM
 }

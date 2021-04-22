@@ -1,11 +1,24 @@
+use crate::kernel::{cpu_id, CPU_IF_LIST};
 use alloc::vec::Vec;
 use spin::Mutex;
 
-struct IpiInitcMessage {
-    event: u32,
-    vm_id: usize,
-    int_id: u16,
-    val: u8,
+pub enum InitcEvent {
+    VgicdGichEn,
+    VgicdSetEn,
+    VgicdSetAct,
+    VgicdSetPend,
+    VgicdSetPrio,
+    VgicdSetTrgt,
+    VgicdSetCfg,
+    VgicdRoute,
+    None,
+}
+
+pub struct IpiInitcMessage {
+    pub event: InitcEvent,
+    pub vm_id: usize,
+    pub int_id: u16,
+    pub val: u8,
 }
 
 #[derive(Copy, Clone)]
@@ -44,7 +57,21 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
-    // TODO: ipi irq handler
+    let cpu_id = cpu_id();
+    let mut cpu_if_list = CPU_IF_LIST.lock();
+    let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
+    let mut ipi_handler_list = IPI_HANDLER_LIST.lock();
+
+    while !msg.is_none() {
+        let ipi_msg = msg.unwrap();
+        let ipi_type = ipi_msg.ipi_type as usize;
+        if ipi_handler_list.len() <= ipi_type {
+            println!("illegal ipi type {}", ipi_type)
+        } else {
+            (ipi_handler_list[ipi_type].handler)(&ipi_msg);
+        }
+        msg = cpu_if_list[cpu_id].pop();
+    }
 }
 
 pub fn ipi_register(ipi_type: IpiType, handler: ipi_handler) -> bool {
