@@ -1,7 +1,11 @@
-use crate::kernel::{cpu_id, CPU_IF_LIST};
+use crate::kernel::{cpu_id, CPU_IF_LIST, interrupt_cpu_ipi_send};
 use alloc::vec::Vec;
 use spin::Mutex;
+use super::Vm;
+use crate::board::PLAT_DESC;
+use crate::arch::INTERRUPT_IRQ_IPI;
 
+#[derive(Copy, Clone)]
 pub enum InitcEvent {
     VgicdGichEn,
     VgicdSetEn,
@@ -14,6 +18,8 @@ pub enum InitcEvent {
     None,
 }
 
+
+#[derive(Copy, Clone)]
 pub struct IpiInitcMessage {
     pub event: InitcEvent,
     pub vm_id: usize,
@@ -30,6 +36,7 @@ pub enum IpiType {
     IpiTHvc = 4,
 }
 
+#[derive(Copy, Clone)]
 pub enum IpiInnerMsg {
     Initc(IpiInitcMessage),
     None,
@@ -85,5 +92,43 @@ pub fn ipi_register(ipi_type: IpiType, handler: ipi_handler) -> bool {
     }
 
     ipi_handler_list.push(IpiHandler::new(handler, ipi_type));
+    true
+}
+
+fn ipi_send(target_id: usize, msg: IpiMessage) -> bool{
+    if target_id >= PLAT_DESC.cpu_desc.num {
+        println!("ipi_send: core {} not exist", target_id);
+        return false;
+    }
+
+    let mut cpu_if_list = CPU_IF_LIST.lock();
+    cpu_if_list[target_id].msg_queue.push(msg);
+    interrupt_cpu_ipi_send(target_id, INTERRUPT_IRQ_IPI);
+
+    true
+}
+
+pub fn ipi_send_msg(target_id: usize, ipi_type: IpiType, msg: IpiInnerMsg) -> bool {
+    let msg = IpiMessage {
+        ipi_type,
+        ipi_message: msg
+    };
+    ipi_send(target_id, msg)
+}
+
+pub fn ipi_intra_broadcast_msg(vm: Vm, ipi_type: IpiType, msg: IpiInnerMsg) -> bool {
+    let mut i = 0;
+    let mut n = 0;
+    while n < (vm.cpu_num() - 1) {
+        if ((1 << i) & vm.ncpu()) != 0 && i != cpu_id() {
+            n += 1;
+            if !ipi_send_msg(i, ipi_type, msg) {
+                println!("ipi_intra_broadcast_msg: Failed to send ipi request, cpu {} type {}", i, ipi_type as usize);
+                return false;
+            }
+        }
+
+        i += 1;
+    }
     true
 }

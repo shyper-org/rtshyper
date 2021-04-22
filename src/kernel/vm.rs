@@ -154,6 +154,12 @@ impl Vm {
             }
         }
     }
+
+    pub fn ncpu(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.ncpu
+    }
+
 }
 
 use crate::arch::PageTable;

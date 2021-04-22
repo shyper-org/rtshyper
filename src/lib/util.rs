@@ -17,3 +17,8 @@ pub fn range_in_range(base1: usize, size1: usize, base2: usize, size2: usize) ->
 pub fn in_range(addr: usize, base: usize, size: usize) -> bool {
     range_in_range(addr, 0, base, size)
 }
+
+#[inline(always)]
+pub fn bit_extract(bits: usize, off: usize, len: usize) -> usize {
+    (bits >> off) & ((1 << len) - 1)
+}

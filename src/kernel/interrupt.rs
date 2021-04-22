@@ -1,5 +1,5 @@
 use crate::driver::putc;
-
+use crate::arch::interrupt_arch_ipi_send;
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
 
@@ -30,6 +30,10 @@ impl InterruptHandler {
             InterruptHandler::None => panic!("Call An Empty Interrupt Hanlder!"),
         }
     }
+}
+
+pub fn interrupt_cpu_ipi_send(target_cpu: usize, ipi_id: usize) {
+    interrupt_arch_ipi_send(target_cpu, ipi_id);
 }
 
 pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {

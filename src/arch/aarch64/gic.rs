@@ -22,6 +22,8 @@ const GIC_PPIS_NUM: usize = 16;
 pub const GIC_INTS_MAX: usize = INTERRUPT_NUM_MAX;
 pub const GIC_PRIVINT_NUM: usize = GIC_SGIS_NUM + GIC_PPIS_NUM;
 pub const GIC_SPI_MAX: usize = INTERRUPT_NUM_MAX - GIC_PRIVINT_NUM;
+pub const GIC_TARGET_BITS: usize = 8;
+pub const GIC_TARGETS_MAX: usize = GIC_TARGET_BITS;
 
 const GIC_INT_REGS_NUM: usize = GIC_INTS_MAX / 32;
 const GIC_PRIO_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
@@ -38,6 +40,7 @@ pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
 
 pub static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
 
+#[derive(Copy, Clone)]
 pub enum IrqState {
     IrqSInactive,
     IrqSPend,
@@ -146,6 +149,11 @@ impl GicDistributor {
         for i in 0..GIC_PRIVINT_NUM * 8 / 32 {
             self.IPRIORITYR[i].set(u32::MAX);
         }
+    }
+
+    pub fn send_sgi(&self, cpu_if: usize, sgi_num: usize) {
+        self.SGIR
+            .set(((1 << (16 + cpu_if)) | (sgi_num & 0b1111)) as u32);
     }
 
     pub fn set_enable(&self, int_id: usize, en: bool) {
