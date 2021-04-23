@@ -63,7 +63,6 @@ pub extern "C" fn init(cpu_id: usize) {
 
     if cpu_id == 0 {
         platform_blk_init();
-        // TODO: check fs
         fs_init();
     }
 

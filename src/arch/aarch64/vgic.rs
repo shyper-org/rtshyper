@@ -68,6 +68,11 @@ impl VgicInt {
         vgic_int.owner = owner;
     }
 
+    fn set_hw(&self, hw: bool) {
+        let mut vgic_int = self.inner.lock();
+        vgic_int.hw = hw;
+    }
+
     fn lr(&self) -> u16 {
         let vgic_int = self.inner.lock();
         vgic_int.lr
@@ -949,5 +954,29 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
             "emu_intc_init: failed to register ipi {}",
             IpiType::IpiTIntc as usize
         )
+    }
+}
+
+pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {
+    if int_id < GIC_SGIS_NUM {
+        return;
+    }
+
+    let vgic = vm.vgic();
+
+    if int_id < GIC_PRIVINT_NUM {
+        for i in 0..vm.cpu_num() {
+            let interrupt_option = vgic.get_int(vm.vcpu(i), int_id);
+            match interrupt_option {
+                Some(interrupt) => interrupt.set_hw(true),
+                None => {}
+            }
+        }
+    } else {
+        let interrupt_option = vgic.get_int(vm.vcpu(0), int_id);
+        match interrupt_option {
+            Some(interrupt) => interrupt.set_hw(true),
+            None => {}
+        }
     }
 }

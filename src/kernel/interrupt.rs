@@ -1,5 +1,6 @@
-use crate::driver::putc;
 use crate::arch::interrupt_arch_ipi_send;
+use crate::driver::putc;
+use crate::kernel::Vm;
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
 
@@ -43,8 +44,8 @@ pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
         let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
         irq_handler_lock[int_id] = handler;
         use crate::lib::{BitAlloc16, BitAlloc256, BitAlloc4K, BitMap};
-        (*hyper_bitmap_lock).set(int_id);
-        (*glb_bitmap_lock).set(int_id);
+        hyper_bitmap_lock.set(int_id);
+        glb_bitmap_lock.set(int_id);
     }
 }
 
@@ -68,4 +69,23 @@ pub fn interrupt_init() {
         );
     }
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
+}
+
+use crate::arch::{interrupt_arch_vm_register, GIC_PRIVINT_NUM};
+pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
+    println!("VM {} register interrupt {}", vm.vm_id(), id);
+    let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
+    if glb_bitmap_lock.get(id) != 0 && id > GIC_PRIVINT_NUM {
+        println!(
+            "interrupt_vm_register: VM {} interrupts conflict, id = {}",
+            vm.vm_id(),
+            id
+        );
+        return false;
+    }
+
+    interrupt_arch_vm_register(vm.clone(), id);
+    vm.set_int_bit_map(id);
+    glb_bitmap_lock.set(id);
+    true
 }

@@ -249,6 +249,50 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
     true
 }
 
+use crate::arch::PTE_S2_DEVICE;
+use crate::config::VmPassthroughDeviceConfig;
+use crate::kernel::interrupt_vm_register;
+fn vmm_init_passthrough_device(config: &Option<Vec<VmPassthroughDeviceConfig>>, vm: Vm) -> bool {
+    match config {
+        Some(cfg) => {
+            for i in 0..cfg.len() {
+                vm.pt_map_range(
+                    cfg[i].base_ipa,
+                    cfg[i].length,
+                    cfg[i].base_pa,
+                    PTE_S2_DEVICE,
+                );
+
+                println!(
+                    "VM {} registers passthrough device: id=<{}>, name=\"{}\", ipa=<0x{:x}>, pa=<0x{:x}>, int_num=<{}>",
+                    vm.vm_id(),
+                    i,
+                    cfg[i].name.unwrap(),
+                    cfg[i].base_ipa,
+                    cfg[i].base_pa,
+                    cfg[i].irq_list.len()
+                );
+
+                for irq in &cfg[i].irq_list {
+                    if !interrupt_vm_register(vm.clone(), *irq) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        None => {
+            println!(
+                "vmm_init_passthrough_device: VM {} emu config is NULL",
+                vm.vm_id()
+            );
+            return true;
+        }
+    }
+
+    true
+}
+
 use crate::config::VmConfigEntry;
 use crate::kernel::VM_NUM_MAX;
 fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
@@ -273,6 +317,9 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         // TODO init device
         if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_emulated_device failed");
+        }
+        if !vmm_init_passthrough_device(&config.vm_pt_dev_confg, vm.clone()) {
+            panic!("vmm_setup_config: vmm_init_passthrough_device failed");
         }
         println!("VM {} id {} init ok", vm.vm_id(), vm.config().name.unwrap());
     }

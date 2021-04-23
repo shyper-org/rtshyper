@@ -29,6 +29,8 @@ pub const PTE_S1_FIELD_SH_INNER_SHAREABLE: usize = 0b11 << 8;
 
 pub const PTE_S1_FIELD_AF: usize = 1 << 10;
 
+pub const PTE_S2_FIELD_MEM_ATTR_DEVICE_NGNRNE: usize = 0;
+
 pub const PTE_S2_FIELD_MEM_ATTR_NORMAL_OUTER_WRITE_BACK_CACHEABLE: usize = 0b11 << 4;
 
 pub const PTE_S2_FIELD_MEM_ATTR_NORMAL_INNER_WRITE_BACK_CACHEABLE: usize = 0b11 << 2;
@@ -49,6 +51,11 @@ pub const PTE_S1_NORMAL: usize = pte_s1_field_attr_indx(1)
     | PTE_S1_FIELD_AP_RW_EL0_NONE
     | PTE_S1_FIELD_SH_OUTER_SHAREABLE
     | PTE_S1_FIELD_AF;
+
+pub const PTE_S2_DEVICE: usize = PTE_S2_FIELD_MEM_ATTR_DEVICE_NGNRNE
+    | PTE_S2_FIELD_AP_RW
+    | PTE_S2_FIELD_SH_OUTER_SHAREABLE
+    | PTE_S2_FIELD_AF;
 
 pub const PTE_S2_NORMAL: usize = PTE_S2_FIELD_MEM_ATTR_NORMAL_INNER_WRITE_BACK_CACHEABLE
     | PTE_S2_FIELD_MEM_ATTR_NORMAL_OUTER_WRITE_BACK_CACHEABLE
@@ -249,7 +256,7 @@ impl PageTable {
     }
 
     pub fn map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
-        let page_num = round_up(len, PAGE_SIZE);
+        let page_num = round_up(len, PAGE_SIZE) / PAGE_SIZE;
         for i in 0..page_num {
             self.map(ipa + i * PAGE_SIZE, pa + i * PAGE_SIZE, pte);
         }

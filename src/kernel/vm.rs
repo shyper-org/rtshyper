@@ -118,6 +118,31 @@ impl Vm {
         vm_inner.intc_dev_id = intc_dev_id;
     }
 
+    pub fn set_int_bit_map(&self, int_id: usize) {
+        let mut vm_inner = self.inner.lock();
+        // if vm_inner.int_bitmap.is_none() {
+        //     vm_inner.int_bitmap = Some(BitAlloc4K::default());
+        // }
+        match vm_inner.int_bitmap {
+            Some(mut bitmap) => {
+                bitmap.set(int_id);
+            }
+            None => {
+                panic!("vm {} bitmap is None", self.vm_id());
+            }
+        }
+    }
+
+    pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => pt.pt_map_range(ipa, len, pa, pte),
+            None => {
+                panic!("Vm::pt_map_range: vm pt is empty");
+            }
+        }
+    }
+
     pub fn cpu_num(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.cpu_num
@@ -159,7 +184,6 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.ncpu
     }
-
 }
 
 use crate::arch::PageTable;
@@ -204,7 +228,7 @@ impl VmInner {
             ncpu: 0,
 
             intc_dev_id: 0,
-            int_bitmap: None,
+            int_bitmap: Some(BitAlloc4K::default()),
             emu_devs: Vec::new(),
         }
     }
@@ -222,7 +246,7 @@ impl VmInner {
             ncpu: 0,
 
             intc_dev_id: 0,
-            int_bitmap: None,
+            int_bitmap: Some(BitAlloc4K::default()),
             emu_devs: Vec::new(),
         }
     }
