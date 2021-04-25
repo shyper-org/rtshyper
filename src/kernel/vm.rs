@@ -24,7 +24,7 @@ pub fn vm_if_list_set_type(vm_id: usize, vm_type: VmType) {
 }
 
 pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.vm_type
 }
 
@@ -98,6 +98,11 @@ impl Vm {
         }
     }
 
+    pub fn push_vcpu(&self, vcpu: Vcpu) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.vcpu_list.push(vcpu);
+    }
+
     pub fn set_ncpu(&self, ncpu: usize) {
         let mut vm_inner = self.inner.lock();
         vm_inner.ncpu = ncpu;
@@ -137,7 +142,7 @@ impl Vm {
     }
 
     pub fn set_int_bit_map(&self, int_id: usize) {
-        let mut vm_inner = self.inner.lock();
+        let vm_inner = self.inner.lock();
         // if vm_inner.int_bitmap.is_none() {
         //     vm_inner.int_bitmap = Some(BitAlloc4K::default());
         // }
@@ -191,7 +196,7 @@ impl Vm {
         vm_inner.pa_region.as_ref().unwrap()[idx].pa_start
     }
 
-    pub fn vcpu(&self, idx: usize) -> Arc<Mutex<Vcpu>> {
+    pub fn vcpu(&self, idx: usize) -> Vcpu {
         let vm_inner = self.inner.lock();
         vm_inner.vcpu_list[idx].clone()
     }
@@ -242,7 +247,7 @@ pub struct VmInner {
     pub entry_point: usize,
 
     // vcpu config
-    pub vcpu_list: Vec<Arc<Mutex<Vcpu>>>,
+    pub vcpu_list: Vec<Vcpu>,
     pub cpu_num: usize,
     pub ncpu: usize,
 

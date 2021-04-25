@@ -172,17 +172,12 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
 
 use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::kernel::Vcpu;
-fn vmm_init_cpu(config: &VmCpuConfig, vm_arc: &Vm) -> bool {
-    let vm_lock = vm_arc.inner();
-
+fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
     for i in 0..config.num {
         use crate::kernel::vcpu_alloc;
-        if let Some(vcpu_arc_mutex) = vcpu_alloc() {
-            let mut vm = vm_lock.lock();
-            let mut vcpu = vcpu_arc_mutex.lock();
-            vm.vcpu_list.push(vcpu_arc_mutex.clone());
-            drop(vm);
-            crate::kernel::vcpu_init(vm_arc, &mut *vcpu, i);
+        if let Some(vcpu) = vcpu_alloc() {
+            vm.push_vcpu(vcpu.clone());
+            vcpu.init(vm.clone(), i);
         } else {
             println!("failed to allocte vcpu");
             return false;
@@ -190,12 +185,13 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm_arc: &Vm) -> bool {
     }
 
     // remain to be init when assigning vcpu
-    let mut vm = vm_lock.lock();
-    vm.cpu_num = 0;
-    vm.ncpu = 0;
+    vm.set_cpu_num(0);
+    vm.set_ncpu(0);
     println!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<0b{:b}>",
-        vm.id, config.num, config.allocate_bitmap
+        vm.vm_id(),
+        config.num,
+        config.allocate_bitmap
     );
 
     true
@@ -380,9 +376,7 @@ fn vmm_assign_vcpu() {
                 || (!vm_assigned.has_master && vm_assigned.cpu_num == cfg_cpu_num - 1)
             {
                 let vcpu = vm_inner.vcpu_list[0].clone();
-                let vcpu_inner = vcpu.lock();
-                let vcpu_id = vcpu_inner.id;
-                drop(vcpu_inner);
+                let vcpu_id = vcpu.id();
 
                 if !vcpu_pool_append(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
@@ -407,9 +401,7 @@ fn vmm_assign_vcpu() {
                 }
 
                 let vcpu = vm_inner.vcpu_list[trgt_id].clone();
-                let vcpu_inner = vcpu.lock();
-                let vcpu_id = vcpu_inner.id;
-                drop(vcpu_inner);
+                let vcpu_id = vcpu.id();
 
                 if !vcpu_pool_append(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
@@ -429,9 +421,8 @@ fn vmm_assign_vcpu() {
     if cpu_assigned() {
         if let Some(vcpu_pool) = unsafe { &mut CPU.vcpu_pool } {
             for i in 0..vcpu_pool.content.len() {
-                let vcpu_arc = vcpu_pool.content[i].vcpu.clone();
-                let mut vcpu = vcpu_arc.lock();
-                vcpu.phys_id = cpu_id;
+                let vcpu = vcpu_pool.content[i].vcpu.clone();
+                vcpu.set_phys_id(cpu_id);
                 let vm_id = vcpu.vm_id();
 
                 let vm_assign_list = VM_ASSIGN.lock();
@@ -471,9 +462,11 @@ pub fn vmm_init() {
             let vm_type = vm.config.as_ref().unwrap().os_type;
             drop(vm);
 
-            if !vmm_init_cpu(&vm_cfg_table.entries[i].cpu, &vm_list[i]) {
+            println!("vmm_init_cpu");
+            if !vmm_init_cpu(&vm_cfg_table.entries[i].cpu, vm_list[i].clone()) {
                 println!("vmm_init: vmm_init_cpu failed");
             }
+            println!("finish vmm_init_cpu");
 
             use crate::kernel::vm_if_list_set_type;
             vm_if_list_set_type(i, vm_type);
@@ -510,7 +503,7 @@ pub fn vmm_boot() {
         if active_vcpu_id() == 0 {
             let vcpu_pool = cpu_vcpu_pool();
             for i in 0..cpu_vcpu_pool_size() {
-                let mut vcpu = vcpu_pool.content[i].vcpu.lock();
+                let vcpu = vcpu_pool.content[i].vcpu.clone();
                 // Before running, every vcpu need to reset context state
                 vcpu.reset_state();
             }

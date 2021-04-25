@@ -46,8 +46,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     let emu_devs_list = EMU_DEVS_LIST.lock();
 
     for emu_dev in &*emu_devs_list {
-        let active_vcpu_lock = crate::kernel::active_vcpu();
-        let active_vcpu = active_vcpu_lock.lock();
+        let active_vcpu = crate::kernel::active_vcpu().unwrap();
         if active_vcpu.vm_id() == emu_dev.vm_id && in_range(ipa, emu_dev.ipa, emu_dev.size - 1) {
             return (emu_dev.handler)(emu_dev.id, emu_ctx);
         }

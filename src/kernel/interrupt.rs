@@ -1,7 +1,7 @@
-use crate::arch::interrupt_arch_ipi_send;
+use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::driver::putc;
-use crate::kernel::ipi_irq_handler;
 use crate::kernel::Vm;
+use crate::kernel::{cpu_id, ipi_irq_handler};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
 
@@ -93,12 +93,23 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     true
 }
 
+fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
+    interrupt_arch_vm_inject(vm, id, source);
+}
+
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     use crate::kernel::active_vm;
-    // if active_vm().has_interrupt(int_id) {
-    //     // TODO: interrupt_handler
-    //     return false;
-    // } else
+    match active_vm() {
+        Ok(vm) => {
+            if vm.has_interrupt(int_id) {
+                // TODO: interrupt_handler
+                interrupt_vm_inject(vm.clone(), int_id, src);
+                return false;
+            }
+        }
+        Err(_) => {}
+    }
+
     if interrupt_is_reserved(int_id) {
         let mut irq_handler = INTERRUPT_HANDLERS.lock();
         match irq_handler[int_id] {
@@ -109,6 +120,13 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
             InterruptHandler::TimeIrqHandler(_) => {}
             InterruptHandler::None => {}
         }
+        return true;
+    } else {
+        println!(
+            "interrupt_handler: core {} receive unsupported int {}",
+            cpu_id(),
+            int_id
+        );
+        return false;
     }
-    true
 }

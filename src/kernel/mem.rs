@@ -95,7 +95,6 @@ use self::AllocError::*;
 use crate::mm::PageFrame;
 
 pub fn mem_heap_alloc(page_num: usize, aligned: bool) -> Result<PageFrame, AllocError> {
-    let mut found = false;
     if page_num == 0 {
         return Err(AllocZeroPage);
     }

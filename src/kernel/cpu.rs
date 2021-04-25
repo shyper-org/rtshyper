@@ -69,7 +69,7 @@ pub struct Cpu {
     pub id: usize,
     pub assigned: bool,
     pub cpu_state: CpuState,
-    pub active_vcpu: Option<Arc<Mutex<Vcpu>>>,
+    pub active_vcpu: Option<Vcpu>,
     pub ctx: Option<Arc<Mutex<ContextFrame>>>, // need rebuild
     pub vcpu_pool: Option<Box<VcpuPool>>,
 
@@ -131,20 +131,30 @@ pub fn cpu_assigned() -> bool {
     unsafe { CPU.assigned }
 }
 
-pub fn active_vcpu() -> Arc<Mutex<Vcpu>> {
-    unsafe { CPU.active_vcpu.as_ref().unwrap().clone() }
+pub fn active_vcpu() -> Result<Vcpu, ()> {
+    unsafe {
+        if CPU.active_vcpu.is_none() {
+            return Err(());
+        }
+        Ok(CPU.active_vcpu.as_ref().unwrap().clone())
+    }
 }
 
 pub fn active_vcpu_id() -> usize {
-    let active_vcpu_lock = active_vcpu();
-    let active_vcpu = active_vcpu_lock.lock();
-    active_vcpu.id
+    let active_vcpu = active_vcpu().unwrap();
+    active_vcpu.id()
 }
 
-pub fn active_vm() -> Vm {
-    let active_vcpu_lock = active_vcpu();
-    let active_vcpu = active_vcpu_lock.lock();
-    active_vcpu.vm.as_ref().unwrap().clone()
+pub fn active_vm() -> Result<Vm, ()> {
+    if active_vcpu().is_err() {
+        return Err(());
+    }
+    let active_vcpu = active_vcpu().unwrap();
+
+    match active_vcpu.vm() {
+        Ok(vm) => Ok(vm),
+        Err(_) => Err(()),
+    }
 }
 
 pub fn cpu_vcpu_pool_size() -> usize {
@@ -189,9 +199,7 @@ pub fn set_active_vcpu(idx: usize) {
         let vcpu = vcpu_pool.content[idx].vcpu.clone();
         vcpu_pool.active_idx = idx;
 
-        let mut vcpu_inner = vcpu.lock();
-        vcpu_inner.state = VcpuState::VcpuAct;
-        drop(vcpu_inner);
+        vcpu.set_state(VcpuState::VcpuAct);
         CPU.active_vcpu = Some(vcpu);
     }
 }

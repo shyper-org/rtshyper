@@ -7,7 +7,7 @@ use spin::Mutex;
 pub const VCPU_POOL_MAX: usize = 4;
 
 pub struct VcpuPoolContent {
-    pub vcpu: Arc<Mutex<Vcpu>>,
+    pub vcpu: Vcpu,
 }
 
 pub struct VcpuPool {
@@ -25,7 +25,7 @@ impl VcpuPool {
         }
     }
 
-    fn append_vcpu(&mut self, vcpu: Arc<Mutex<Vcpu>>) {
+    fn append_vcpu(&mut self, vcpu: Vcpu) {
         self.content.push(VcpuPoolContent { vcpu });
         self.running += 1;
     }
@@ -36,15 +36,13 @@ pub fn vcpu_pool_init() {
     set_cpu_vcpu_pool(Box::new(VcpuPool::default()));
 }
 
-pub fn vcpu_pool_append(vcpu: Arc<Mutex<Vcpu>>) -> bool {
+pub fn vcpu_pool_append(vcpu: Vcpu) -> bool {
     if let Some(vcpu_pool) = unsafe { &mut CPU.vcpu_pool } {
         if vcpu_pool.content.len() >= VCPU_POOL_MAX {
             println!("can't append more vcpu!");
             return false;
         }
-        let mut vcpu_lock = vcpu.lock();
-        vcpu_lock.state = VcpuState::VcpuPend;
-        drop(vcpu_lock);
+        vcpu.set_state(VcpuState::VcpuPend);
 
         vcpu_pool.append_vcpu(vcpu.clone());
     } else {

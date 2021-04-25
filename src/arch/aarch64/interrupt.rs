@@ -45,3 +45,8 @@ use super::vgic_set_hw_int;
 pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
     vgic_set_hw_int(vm.clone(), id);
 }
+
+pub fn interrupt_arch_vm_inject(vm: Vm, id: usize, source: usize) {
+    let vgic = vm.vgic();
+    vgic.inject(id, source);
+}

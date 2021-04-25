@@ -50,7 +50,7 @@ fn timer_irq_handler(arg: usize, src: usize) {
     use crate::arch::{timer_arch_disable_irq, timer_arch_enable_irq, timer_arch_set};
     timer_arch_disable_irq();
 
-    let mut num_of_period = 1;
+    let num_of_period = 1;
 
     // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
 
