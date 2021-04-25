@@ -18,15 +18,32 @@ pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
 ];
 
+pub fn vm_if_list_set_type(vm_id: usize, vm_type: VmType) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.vm_type = vm_type;
+}
+
+pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.vm_type
+}
+
 pub enum VmState {
     VmInv = 0,
     VmPending = 1,
     VmActive = 2,
 }
 
+#[derive(Clone, Copy)]
+pub enum VmType {
+    VmTOs = 0,
+    VmTBma = 1,
+}
+
 pub struct VmInterface {
     pub master_vcpu_id: usize,
     pub state: VmState,
+    pub vm_type: VmType,
 }
 
 impl VmInterface {
@@ -34,6 +51,7 @@ impl VmInterface {
         VmInterface {
             master_vcpu_id: 0,
             state: VmState::VmPending,
+            vm_type: VmType::VmTBma,
         }
     }
 }
@@ -143,6 +161,16 @@ impl Vm {
         }
     }
 
+    pub fn pt_dir(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => return pt.base_pa(),
+            None => {
+                panic!("Vm::pt_map_range: vm pt is empty");
+            }
+        }
+    }
+
     pub fn cpu_num(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.cpu_num
@@ -183,6 +211,18 @@ impl Vm {
     pub fn ncpu(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.ncpu
+    }
+
+    pub fn has_interrupt(&self, int_id: usize) -> bool {
+        let vm_inner = self.inner.lock();
+        match vm_inner.int_bitmap {
+            Some(mut bitmap) => {
+                return bitmap.get(int_id) != 0;
+            }
+            None => {
+                panic!("vm {} bitmap is None", self.vm_id());
+            }
+        }
     }
 }
 

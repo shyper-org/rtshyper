@@ -1,5 +1,6 @@
 use crate::arch::interrupt_arch_ipi_send;
 use crate::driver::putc;
+use crate::kernel::ipi_irq_handler;
 use crate::kernel::Vm;
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
@@ -49,13 +50,15 @@ pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
     }
 }
 
+fn interrupt_is_reserved(int_id: usize) -> bool {
+    let mut hyper_bitmap_lock = INTERRUPT_HYPER_BITMAP.lock();
+    hyper_bitmap_lock.get(int_id) != 0
+}
+
 pub fn interrupt_cpu_enable(int_id: usize, en: bool) {
     use crate::arch::interrupt_arch_enable;
     interrupt_arch_enable(int_id, en);
 }
-
-// TODO: add handler
-fn ipi_irq_handler() {}
 
 pub fn interrupt_init() {
     use crate::arch::interrupt_arch_init;
@@ -87,5 +90,25 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     interrupt_arch_vm_register(vm.clone(), id);
     vm.set_int_bit_map(id);
     glb_bitmap_lock.set(id);
+    true
+}
+
+pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
+    use crate::kernel::active_vm;
+    // if active_vm().has_interrupt(int_id) {
+    //     // TODO: interrupt_handler
+    //     return false;
+    // } else
+    if interrupt_is_reserved(int_id) {
+        let mut irq_handler = INTERRUPT_HANDLERS.lock();
+        match irq_handler[int_id] {
+            InterruptHandler::IpiIrqHandler(irq_handler) => {
+                irq_handler();
+            }
+            InterruptHandler::GicMaintenanceHandler(_) => {}
+            InterruptHandler::TimeIrqHandler(_) => {}
+            InterruptHandler::None => {}
+        }
+    }
     true
 }

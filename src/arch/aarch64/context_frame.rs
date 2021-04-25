@@ -197,4 +197,41 @@ impl VmContext {
             fpsimd: VmCtxFpsimd::default(),
         }
     }
+
+    pub fn ext_regs_store(&mut self) {
+        unsafe {
+            llvm_asm!("mrs $0, CNTVOFF_EL2" : "=r"(self.cntvoff_el2) ::: "volatile");
+            llvm_asm!("mrs $0, CNTP_CVAL_EL0" : "=r"(self.cntp_cval_el0) ::: "volatile");
+            llvm_asm!("mrs $0, CNTV_CVAL_EL0" : "=r"(self.cntv_cval_el0) ::: "volatile");
+            llvm_asm!("mrs $0, CNTKCTL_EL1" : "=r"(self.cntkctl_el1) ::: "volatile");
+            llvm_asm!("mrs $0, CNTP_CTL_EL0" : "=r"(self.cntp_ctl_el0) ::: "volatile");
+            llvm_asm!("mrs $0, SP_EL0" : "=r"(self.sp_el0) ::: "volatile");
+            llvm_asm!("mrs $0, SP_EL1" : "=r"(self.sp_el1) ::: "volatile");
+            llvm_asm!("mrs $0, ELR_EL1" : "=r"(self.elr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, SPSR_EL1" : "=r"(self.spsr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, SCTLR_EL1" : "=r"(self.sctlr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, CPACR_EL1" : "=r"(self.cpacr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, TTBR0_EL1" : "=r"(self.ttbr0_el1) ::: "volatile");
+            llvm_asm!("mrs $0, TTBR1_EL1" : "=r"(self.ttbr1_el1) ::: "volatile");
+            llvm_asm!("mrs $0, TCR_EL1" : "=r"(self.tcr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, ESR_EL1" : "=r"(self.esr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, FAR_EL1" : "=r"(self.far_el1) ::: "volatile");
+            llvm_asm!("mrs $0, PAR_EL1" : "=r"(self.par_el1) ::: "volatile");
+            llvm_asm!("mrs $0, MAIR_EL1" : "=r"(self.mair_el1) ::: "volatile");
+            llvm_asm!("mrs $0, AMAIR_EL1" : "=r"(self.amair_el1) ::: "volatile");
+            llvm_asm!("mrs $0, VBAR_EL1" : "=r"(self.vbar_el1) ::: "volatile");
+            llvm_asm!("mrs $0, CONTEXTIDR_EL1" : "=r"(self.contextidr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, TPIDR_EL0" : "=r"(self.tpidr_el0) ::: "volatile");
+            llvm_asm!("mrs $0, TPIDR_EL1" : "=r"(self.tpidr_el1) ::: "volatile");
+            llvm_asm!("mrs $0, TPIDRRO_EL0" : "=r"(self.tpidrro_el0) ::: "volatile");
+            llvm_asm!("mrs $0, HCR_EL2" : "=r"(self.hcr_el2) ::: "volatile");
+            llvm_asm!("mrs $0, CPTR_EL2" : "=r"(self.cptr_el2) ::: "volatile");
+            llvm_asm!("mrs $0, HSTR_EL2" : "=r"(self.hstr_el2) ::: "volatile");
+            llvm_asm!("mrs $0, FAR_EL2" : "=r"(self.far_el2) ::: "volatile");
+            llvm_asm!("mrs $0, HPFAR_EL2" : "=r"(self.hpfar_el2) ::: "volatile");
+            llvm_asm!("mrs $0, VPIDR_EL2" : "=r"(self.vpidr_el2) ::: "volatile");
+            llvm_asm!("mrs $0, VMPIDR_EL2" : "=r"(self.vmpidr_el2) ::: "volatile");
+            llvm_asm!("mrs $0, ACTLR_EL1" : "=r"(self.actlr_el1) ::: "volatile");
+        }
+    }
 }

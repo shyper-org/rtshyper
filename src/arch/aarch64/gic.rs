@@ -1,8 +1,9 @@
 use crate::board::{
     PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE, PLATFORM_GICV_BASE,
 };
-use crate::kernel::cpu_id;
 use crate::kernel::INTERRUPT_NUM_MAX;
+use crate::kernel::{cpu_current_irq, cpu_id, set_cpu_current_irq};
+use crate::lib::bit_extract;
 use register::mmio::*;
 use register::*;
 use spin::Mutex;
@@ -408,4 +409,24 @@ pub fn gic_is_priv(int_id: usize) -> bool {
 
 pub fn gic_is_sgi(int_id: usize) -> bool {
     int_id < GIC_SGIS_NUM
+}
+
+pub fn gicc_clear_current_irq(for_hypervisor: bool) {
+    let irq = cpu_current_irq() as u32;
+    if irq == 0 {
+        return;
+    }
+    GICC.EOIR.set(irq);
+    if for_hypervisor {
+        GICC.DIR.set(irq)
+    }
+    set_cpu_current_irq(0);
+}
+
+pub fn gicc_get_current_irq() -> (usize, usize) {
+    let iar = GICC.IAR.get();
+    set_cpu_current_irq(iar as usize);
+    let id = bit_extract(iar as usize, 0, 10);
+    let src = bit_extract(iar as usize, 10, 3);
+    (id, src)
 }

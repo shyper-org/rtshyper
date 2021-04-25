@@ -1,5 +1,5 @@
 use crate::arch::traits::ContextFrameTrait;
-use crate::config::VmType;
+use crate::kernel::VmType;
 use crate::kernel::{Vcpu, Vm};
 use spin::Mutex;
 

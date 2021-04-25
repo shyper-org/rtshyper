@@ -9,10 +9,7 @@ use spin::Mutex;
 
 use crate::board::*;
 
-pub enum VmType {
-    VmTOs = 0,
-    VmTBma = 1,
-}
+use crate::kernel::VmType;
 
 use crate::device::EmuDeviceType;
 

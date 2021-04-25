@@ -41,7 +41,7 @@ use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use lib::fs_init;
 use mm::heap_init;
 use spin::Mutex;
-use vmm::vmm_init;
+use vmm::{vmm_boot, vmm_init};
 // use lib::{BitAlloc, BitAlloc256};
 
 #[no_mangle]
@@ -67,6 +67,7 @@ pub extern "C" fn init(cpu_id: usize) {
     }
 
     vmm_init();
+    vmm_boot();
 
     loop {}
 }

@@ -4,6 +4,8 @@ use crate::kernel::{Vcpu, VcpuPool, VcpuState, Vm};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 // use core::ops::{Deref, DerefMut};
+use crate::arch::cpu_interrupt_unmask;
+use crate::arch::ContextFrame;
 use crate::kernel::IpiMessage;
 use alloc::sync::Arc;
 use spin::Mutex;
@@ -68,10 +70,11 @@ pub struct Cpu {
     pub assigned: bool,
     pub cpu_state: CpuState,
     pub active_vcpu: Option<Arc<Mutex<Vcpu>>>,
+    pub ctx: Option<Arc<Mutex<ContextFrame>>>, // need rebuild
     pub vcpu_pool: Option<Box<VcpuPool>>,
 
-    pub current_irq: u64,
-    pub cpu_pt: CpuPt, // TODO
+    pub current_irq: usize,
+    pub cpu_pt: CpuPt,
     pub stack: [u8; CPU_STACK_SIZE],
 }
 
@@ -82,6 +85,7 @@ impl Cpu {
             assigned: false,
             cpu_state: CpuState::CpuInv,
             active_vcpu: None,
+            ctx: None,
             vcpu_pool: None,
             current_irq: 0,
             cpu_pt: CpuPt {
@@ -90,6 +94,12 @@ impl Cpu {
                 lvl3: [0; PTE_PER_PAGE],
             },
             stack: [0; CPU_STACK_SIZE],
+        }
+    }
+
+    pub fn set_ctx(&mut self, ctx: *mut ContextFrame) {
+        unsafe {
+            self.ctx = Some(Arc::new(Mutex::new(*ctx)));
         }
     }
 }
@@ -101,6 +111,7 @@ pub static mut CPU: Cpu = Cpu {
     assigned: false,
     cpu_state: CpuState::CpuInv,
     active_vcpu: None,
+    ctx: None,
     vcpu_pool: None,
     current_irq: 0,
     cpu_pt: CpuPt {
@@ -143,6 +154,17 @@ pub fn cpu_vcpu_pool_size() -> usize {
     }
 }
 
+pub fn cpu_vcpu_pool() -> &'static Box<VcpuPool> {
+    unsafe {
+        let vcpu_pool = CPU.vcpu_pool.as_ref().unwrap();
+        vcpu_pool
+    }
+}
+
+pub fn cpu_current_irq() -> usize {
+    unsafe { CPU.current_irq }
+}
+
 pub fn set_cpu_assign(assigned: bool) {
     unsafe {
         CPU.assigned = assigned;
@@ -173,6 +195,12 @@ pub fn set_active_vcpu(idx: usize) {
         CPU.active_vcpu = Some(vcpu);
     }
 }
+
+pub fn set_cpu_current_irq(irq: usize) {
+    unsafe {
+        CPU.current_irq = irq;
+    }
+}
 // end set/get CPU
 
 pub fn cpu_init() {
@@ -195,6 +223,16 @@ pub fn cpu_init() {
     if cpu_id == 0 {
         println!("Bring up {} cores", PLAT_DESC.cpu_desc.num);
         println!("Cpu init ok");
+    }
+}
+
+pub fn cpu_idle() {
+    set_cpu_state(CpuState::CpuIdle);
+    cpu_interrupt_unmask();
+    loop {
+        unsafe {
+            llvm_asm!("wfi");
+        }
     }
 }
 

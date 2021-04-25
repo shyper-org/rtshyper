@@ -6,12 +6,12 @@ use spin::Mutex;
 
 pub const VCPU_POOL_MAX: usize = 4;
 
-pub struct VcpuContent {
+pub struct VcpuPoolContent {
     pub vcpu: Arc<Mutex<Vcpu>>,
 }
 
 pub struct VcpuPool {
-    pub content: Vec<VcpuContent>,
+    pub content: Vec<VcpuPoolContent>,
     pub active_idx: usize,
     pub running: usize,
 }
@@ -26,7 +26,7 @@ impl VcpuPool {
     }
 
     fn append_vcpu(&mut self, vcpu: Arc<Mutex<Vcpu>>) {
-        self.content.push(VcpuContent { vcpu });
+        self.content.push(VcpuPoolContent { vcpu });
         self.running += 1;
     }
 }

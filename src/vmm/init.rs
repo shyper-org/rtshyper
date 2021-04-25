@@ -134,7 +134,7 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     );
 
     match &vm.config().os_type {
-        crate::config::VmType::VmTBma => return true,
+        crate::kernel::VmType::VmTBma => return true,
         _ => {}
     }
 
@@ -280,7 +280,6 @@ fn vmm_init_passthrough_device(config: &Option<Vec<VmPassthroughDeviceConfig>>, 
                 }
             }
         }
-
         None => {
             println!(
                 "vmm_init_passthrough_device: VM {} emu config is NULL",
@@ -314,7 +313,6 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
     // barrier
 
     if cpu_id == 0 {
-        // TODO init device
         if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_emulated_device failed");
         }
@@ -470,9 +468,15 @@ pub fn vmm_init() {
             let mut vm = vm_arc.lock();
 
             vm.config = Some(vm_cfg_table.entries[i].clone());
+            let vm_type = vm.config.as_ref().unwrap().os_type;
             drop(vm);
 
-            vmm_init_cpu(&vm_cfg_table.entries[i].cpu, &vm_list[i]);
+            if !vmm_init_cpu(&vm_cfg_table.entries[i].cpu, &vm_list[i]) {
+                println!("vmm_init: vmm_init_cpu failed");
+            }
+
+            use crate::kernel::vm_if_list_set_type;
+            vm_if_list_set_type(i, vm_type);
         }
         drop(vm_cfg_table);
     }
@@ -487,7 +491,6 @@ pub fn vmm_init() {
         let mut vm_list = VM_LIST.lock();
         let vm = vm_list[i].clone();
 
-        // TODO: vmm_setup_config
         vmm_setup_config(config, vm);
 
         // TODO: vmm_setup_contact_config
@@ -499,4 +502,31 @@ pub fn vmm_init() {
     }
 
     barrier();
+}
+
+use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle};
+pub fn vmm_boot() {
+    if cpu_assigned() {
+        if active_vcpu_id() == 0 {
+            let vcpu_pool = cpu_vcpu_pool();
+            for i in 0..cpu_vcpu_pool_size() {
+                let mut vcpu = vcpu_pool.content[i].vcpu.lock();
+                // Before running, every vcpu need to reset context state
+                vcpu.reset_state();
+            }
+            // TODO: vcpu_run
+            // test
+            for i in 0..0x1000 {}
+            println!("send ipi");
+            crate::kernel::interrupt_cpu_ipi_send(4, 1);
+            // end test
+        } else {
+            // if the vcpu is not the master, just go idle and wait for wokening up
+            vcpu_idle();
+        }
+    } else {
+        // If there is no available vm(vcpu), just go idle
+        println!("Core {} idle", cpu_id());
+        vcpu_idle();
+    }
 }

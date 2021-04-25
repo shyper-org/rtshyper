@@ -329,7 +329,7 @@ impl Vgic {
     }
 
     fn add_lr(&self, vcpu_arc: Arc<Mutex<Vcpu>>, interrupt: VgicInt) -> bool {
-        if (!interrupt.enabled() || interrupt.in_lr()) {
+        if !interrupt.enabled() || interrupt.in_lr() {
             return false;
         }
 
@@ -427,24 +427,24 @@ impl Vgic {
         let mut lr = (int_id & 0b1111111111) | (((int_prio as usize >> 3) & 0b11111) << 23);
 
         if vgic_int_is_hw(interrupt.clone()) {
-            lr |= (1 << 31);
-            lr |= ((0b1111111111 & int_id) << 10);
+            lr |= 1 << 31;
+            lr |= (0b1111111111 & int_id) << 10;
             if state == 3 {
-                lr |= ((2 & 0b11) << 28);
+                lr |= (2 & 0b11) << 28;
             } else {
                 lr |= (state & 0b11) << 28;
             }
             if GICD.state(int_id) != 2 {
                 GICD.set_state(int_id, 2);
             }
-        } else if (int_id < GIC_SGIS_NUM) {
+        } else if int_id < GIC_SGIS_NUM {
             let mut cpu_priv = self.cpu_priv.lock();
             if (state & 2) != 0 {
                 lr |= ((cpu_priv[vcpu_id].sgis[int_id].act as usize) << 10) & (0b111 << 10);
                 lr |= (2 & 0b11) << 28;
             } else {
                 let mut idx = GIC_TARGETS_MAX - 1;
-                while idx >= 0 {
+                while idx as isize >= 0 {
                     if (cpu_priv[vcpu_id].sgis[int_id].pend & (1 << idx)) != 0 {
                         lr |= ((idx & 0b111) << 10);
                         cpu_priv[vcpu_id].sgis[int_id].pend &= !(1 << idx);

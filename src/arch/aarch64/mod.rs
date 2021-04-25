@@ -1,4 +1,5 @@
 mod context_frame;
+mod cpu;
 mod exception;
 mod gic;
 mod interface;
@@ -14,6 +15,7 @@ mod vcpu;
 mod vgic;
 
 pub use self::context_frame::*;
+pub use self::cpu::*;
 pub use self::exception::*;
 pub use self::gic::*;
 pub use self::interface::*;
