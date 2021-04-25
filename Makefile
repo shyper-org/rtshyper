@@ -16,6 +16,9 @@ run:
 		-nographic \
 		-kernel target/aarch64/debug/rust_hypervisor \
 		-global virtio-mmio.force-legacy=false
+		# -serial studio \
+		# -serial tcp:127.0.0.1:12345 \
+		# -display none
 
 gdb:
 	aarch64-linux-gnu-gdb -x gdb/aarch64.gdb

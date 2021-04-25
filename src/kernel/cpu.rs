@@ -145,6 +145,11 @@ pub fn active_vcpu_id() -> usize {
     active_vcpu.id()
 }
 
+pub fn active_vm_id() -> usize {
+    let vm = active_vm().unwrap();
+    vm.vm_id()
+}
+
 pub fn active_vm() -> Result<Vm, ()> {
     if active_vcpu().is_err() {
         return Err(());
@@ -208,6 +213,10 @@ pub fn set_cpu_current_irq(irq: usize) {
     unsafe {
         CPU.current_irq = irq;
     }
+}
+
+pub fn cpu_stack() -> usize {
+    unsafe { &(CPU.stack) as *const _ as usize }
 }
 // end set/get CPU
 

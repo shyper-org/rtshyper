@@ -497,7 +497,7 @@ pub fn vmm_init() {
     barrier();
 }
 
-use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle};
+use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle, vcpu_run};
 pub fn vmm_boot() {
     if cpu_assigned() {
         if active_vcpu_id() == 0 {
@@ -507,12 +507,13 @@ pub fn vmm_boot() {
                 // Before running, every vcpu need to reset context state
                 vcpu.reset_state();
             }
-            // TODO: vcpu_run
-            // test
-            for i in 0..0x1000 {}
-            println!("send ipi");
-            crate::kernel::interrupt_cpu_ipi_send(4, 1);
-            // end test
+            vcpu_run();
+
+            // // test
+            // for i in 0..0x1000 {}
+            // println!("send ipi");
+            // crate::kernel::interrupt_cpu_ipi_send(4, 1);
+            // // end test
         } else {
             // if the vcpu is not the master, just go idle and wait for wokening up
             vcpu_idle();

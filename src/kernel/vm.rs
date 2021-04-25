@@ -18,6 +18,11 @@ pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
 ];
 
+pub fn vm_if_list_set_state(vm_id: usize, vm_state: VmState) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.state = vm_state;
+}
+
 pub fn vm_if_list_set_type(vm_id: usize, vm_type: VmType) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.vm_type = vm_type;

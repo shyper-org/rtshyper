@@ -1,4 +1,4 @@
-use super::{Vm, VmInner, VmType};
+use super::{CpuState, Vm, VmInner, VmType};
 use crate::arch::{Aarch64ContextFrame, VmContext};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -84,6 +84,11 @@ impl Vcpu {
         let mut inner = self.inner.lock();
         inner.context_ext_regs_store();
     }
+
+    pub fn vcpu_ctx_addr(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.vcpu_ctx_addr()
+    }
 }
 
 pub struct VcpuInner {
@@ -105,6 +110,10 @@ impl VcpuInner {
             vcpu_ctx: Aarch64ContextFrame::default(),
             vm_ctx: VmContext::default(),
         }
+    }
+
+    fn vcpu_ctx_addr(&self) -> usize {
+        &(self.vcpu_ctx) as *const _ as usize
     }
 
     fn vm_id(&self) -> usize {
@@ -173,13 +182,41 @@ pub fn vcpu_alloc() -> Option<Vcpu> {
     Some(val.clone())
 }
 
-// pub fn vcpu_init(vm: &Vm, vcpu: &mut Vcpu, vcpu_id: usize) {
-//     vcpu.id = vcpu_id;
-//     vcpu.vm = Some(vm.clone());
-//     vcpu.phys_id = 0;
-//     crate::arch::vcpu_arch_init(vm, vcpu);
-// }
-
 pub fn vcpu_idle() {
     crate::kernel::cpu_idle();
+}
+
+use crate::kernel::vm_if_list_set_state;
+use crate::kernel::{
+    active_vcpu, active_vcpu_id, active_vm_id, cpu_id, cpu_stack, set_cpu_state, CPU_STACK_SIZE,
+};
+pub fn vcpu_run() {
+    println!(
+        "Core {} (vm {}, vcpu {}) start running",
+        cpu_id(),
+        active_vm_id(),
+        active_vcpu_id()
+    );
+
+    let sp = cpu_stack() + CPU_STACK_SIZE;
+    println!("cpu stack 0x{:x}", sp);
+    let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
+    println!("ctx addr 0x{:x}", ctx);
+
+    use core::mem::size_of;
+    use rlibc::memcpy;
+    let size = size_of::<Aarch64ContextFrame>();
+    unsafe {
+        memcpy((sp - size) as *mut u8, ctx as *mut u8, size);
+    }
+
+    set_cpu_state(CpuState::CpuRun);
+    vm_if_list_set_state(active_vm_id(), super::VmState::VmActive);
+    // TODO: vcpu_run
+    extern "C" {
+        fn context_vm_entry(ctx: usize) -> !;
+    }
+    unsafe {
+        context_vm_entry(sp - size);
+    }
 }

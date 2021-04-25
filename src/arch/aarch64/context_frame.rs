@@ -81,6 +81,10 @@ impl Aarch64ContextFrame {
             sp: 0,
         }
     }
+
+    pub fn elr(&self) -> usize {
+        self.elr as usize
+    }
 }
 
 #[repr(C)]
