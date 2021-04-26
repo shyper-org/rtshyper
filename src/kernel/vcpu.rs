@@ -3,6 +3,7 @@ use crate::arch::{Aarch64ContextFrame, VmContext};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
+use crate::arch::tlb_invalidate_guest_all;
 
 pub enum VcpuState {
     VcpuInv = 0,
@@ -136,13 +137,15 @@ impl VcpuInner {
             llvm_asm!("msr vtcr_el2, $0" :: "r"(0x8001355c as usize) :: "volatile");
         };
         let vttbr = (self.vm_id() << 48) | self.vm_pt_dir();
-        // println!("vttbr is {:x}", vttbr);
+        // println!("vttbr_el2 is {:x}", vttbr);
+        // println!("vttbr_el2 pt addr is {:x}", self.vm_pt_dir());
         unsafe {
             llvm_asm!("msr vttbr_el2, $0" :: "r"(vttbr) :: "volatile");
             llvm_asm!("isb");
         }
 
-        // TODO: tlb_invalidate_guest_all
+        tlb_invalidate_guest_all();
+
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
         vmpidr |= self.id;

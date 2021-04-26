@@ -82,9 +82,15 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     // TODO: cpu.ctx = ctx
     println!("exception class {}", exception_class());
     match exception_class() {
-        0x24 => {}
-        0x17 => {}
-        0x16 => {}
+        0x24 => {
+            unimplemented!();
+        }
+        0x17 => {
+            unimplemented!();
+        }
+        0x16 => {
+            unimplemented!();
+        }
         _ => {
             panic!(
                 "core {} vm {}: handler not presents for EC_{} @ipa 0x{:x}, @pc 0x{:x}",

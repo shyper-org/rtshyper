@@ -13,6 +13,7 @@ mod smc;
 mod timer;
 mod vcpu;
 mod vgic;
+mod tlb;
 
 pub use self::context_frame::*;
 pub use self::cpu::*;
@@ -28,3 +29,4 @@ pub use self::smc::*;
 pub use self::timer::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
+pub use self::tlb::*;

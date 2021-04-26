@@ -2,10 +2,10 @@ use core::intrinsics::sinf64;
 
 use super::{round_down, round_up};
 use core_io as io;
+use fatfs::Dir;
 use io::prelude::*;
 use io::{Read, SeekFrom};
 use spin::Mutex;
-use fatfs::Dir;
 
 struct Disk {
     pointer: usize,
@@ -85,7 +85,7 @@ impl core_io::Seek for Disk {
 }
 
 // lazy_static! {
-    // static FS: Mutex<Option<fatfs::FileSystem<&mut Disk>>> = Mutex::new(None);
+// static FS: Mutex<Option<fatfs::FileSystem<&mut Disk>>> = Mutex::new(None);
 // }
 // static ROOT_DIR: Mutex<Option<Dir<Disk>>> = Mutex::new(None);
 
@@ -114,7 +114,9 @@ pub fn fs_init() {
             }
             println!("FAT file system init ok");
         }
-        Err(_) => {println!("err");}
+        Err(_) => {
+            println!("err");
+        }
     }
 }
 
@@ -130,7 +132,7 @@ pub fn fs_read_to_mem(filename: &str, buf: &mut [u8]) -> bool {
         Ok(mut file) => {
             file.read(buf);
             return true;
-        },
+        }
         Err(_) => {
             println!("read file {} failed!", filename);
             return false;
@@ -149,7 +151,7 @@ pub fn fs_file_size(filename: &str) -> usize {
     match file {
         Ok(mut file) => {
             return file.seek(SeekFrom::End(0)).unwrap() as usize;
-        },
+        }
         Err(_) => {
             return 0;
         }

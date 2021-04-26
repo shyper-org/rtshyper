@@ -78,7 +78,7 @@ impl BlockDescriptor {
                 + if device {
                     PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
                 } else {
-                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::InnerShareable
+                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::OuterShareable
                 })
             .value,
         )
@@ -103,10 +103,10 @@ const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 pub unsafe extern "C" fn pt_populate(pt: &mut PageTables) {
     for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
         let output_addr = i << LVL1_SHIFT;
-        if output_addr >= PLAT_DESC.mem_desc.base {
-            pt.lvl1[i] = BlockDescriptor::new(output_addr, false);
+        pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
+            BlockDescriptor::new(output_addr, false)
         } else {
-            pt.lvl1[i] = BlockDescriptor::new(output_addr, true);
+            BlockDescriptor::new(output_addr, true)
         }
     }
     // pt.lvl1[0] = BlockDescriptor::new(0, true);

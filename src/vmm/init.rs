@@ -410,7 +410,7 @@ fn vmm_assign_vcpu() {
                 vm_assigned.cpu_num += 1;
                 vm_assigned.cpus |= 1 << cpu_id;
                 println!(
-                    "* Core {} is assigned => vm {}, vcpu {}",
+                    "Core {} is assigned => vm {}, vcpu {}",
                     cpu_id, vm_id, vcpu_id
                 );
             }

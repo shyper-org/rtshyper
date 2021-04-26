@@ -119,7 +119,6 @@ impl HeapRegion {
         }
 
         let addr = self.region.base + (bit + size) * PAGE_SIZE;
-        println!("alloc pages addr {}", addr);
         unsafe {
             memset(addr as *mut u8, 0, size * PAGE_SIZE);
         }
