@@ -1,5 +1,5 @@
 use core::intrinsics::sinf64;
-
+use crate::arch::PAGE_SIZE;
 use super::{round_down, round_up};
 use core_io as io;
 use fatfs::Dir;
@@ -24,13 +24,13 @@ impl Disk {
 // TODO: add fatfs read
 impl core_io::Read for Disk {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        // println!("in read, buf len {}", buf.len());
         let sector = round_down(self.pointer, 512) / 512;
         let offset = self.pointer - round_down(self.pointer, 512);
         let count = round_up(offset + buf.len(), 512) / 512;
         assert!(count <= 8);
         let result = crate::kernel::mem_page_alloc();
         if let Ok(frame) = result {
+            // if count >= 4 {
             // println!(
             //     "read sector {} count {} offset {} buf.len {} pointer {}",
             //     sector,
@@ -39,6 +39,7 @@ impl core_io::Read for Disk {
             //     buf.len(),
             //     self.pointer
             // );
+            // }
             crate::driver::read(sector, count, frame.pa());
             for i in 0..buf.len() {
                 buf[i] = frame.as_slice()[offset + i];
@@ -55,7 +56,7 @@ impl core_io::Read for Disk {
 
 impl core_io::Write for Disk {
     fn flush(&mut self) -> io::Result<()> {
-        println!("in flush");
+        // println!("in flush");
         Ok(())
     }
 
@@ -104,14 +105,20 @@ pub fn fs_init() {
     let mut file = root_dir.open_file("hello.txt");
     match file {
         Ok(mut file) => {
-            let mut buf = [0u8; 13];
+            let mut buf = [0u8; 5000];
             // let len = file.seek(SeekFrom::End(0)).unwrap();
             file.read(&mut buf);
+            file.read(&mut buf[4096..]);
+            let mut idx = 0;
             for i in 0..buf.len() {
                 let val = buf[i as usize];
+                if val != 0 {
+                    idx += 1;
+                }
                 let tmp = char::from_u32(val as u32);
-                print!("{}", tmp.unwrap());
+                // print!("{}", tmp.unwrap());
             }
+            // println!("idx is {}", idx);
             println!("FAT file system init ok");
         }
         Err(_) => {
@@ -125,12 +132,20 @@ pub fn fs_read_to_mem(filename: &str, buf: &mut [u8]) -> bool {
         pointer: 0,
         size: 536870912,
     };
+    let count = round_up(buf.len(), PAGE_SIZE) / PAGE_SIZE;
+
     let mut fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
     let mut file = root_dir.open_file(filename);
     match file {
         Ok(mut file) => {
-            file.read(buf);
+            for i in 0..count {
+                if i + 1 != count {
+                    file.read(&mut buf[i * PAGE_SIZE..(i + 1) * PAGE_SIZE]);
+                } else {
+                    file.read(&mut buf[i * PAGE_SIZE..]);
+                }
+            }
             return true;
         }
         Err(_) => {
