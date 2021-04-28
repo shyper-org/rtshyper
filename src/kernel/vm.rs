@@ -1,6 +1,6 @@
 use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
-use crate::board::PLATFORM_VCPU_NUM_MAX;
+use crate::config::DEF_VM_CONFIG_TABLE;
 use crate::lib::*;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -233,6 +233,22 @@ impl Vm {
                 panic!("vm {} bitmap is None", self.vm_id());
             }
         }
+    }
+
+    pub fn emu_has_interrupt(&self, int_id: usize) -> bool {
+        let vm_config = DEF_VM_CONFIG_TABLE.lock();
+        let vm_id = self.vm_id();
+        match &vm_config.entries[vm_id].vm_emu_dev_confg {
+            Some(emu_devs) => {
+                for emu_dev in emu_devs {
+                    if int_id == emu_dev.irq_id {
+                        return true;
+                    }
+                }
+            }
+            None => return false,
+        }
+        false
     }
 }
 

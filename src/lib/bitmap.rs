@@ -103,7 +103,7 @@ impl BitAlloc for BitAlloc16 {
     }
 
     fn get(&mut self, idx: usize) -> usize {
-        if (self.0 & (1 << idx) != 0) {
+        if self.0 & (1 << idx) != 0 {
             1
         } else {
             0

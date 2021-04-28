@@ -14,12 +14,12 @@ pub enum EmuDevs {
 }
 
 pub struct EmuContext {
-    address: usize,
-    width: usize,
-    write: bool,
-    sign_ext: bool,
-    reg: usize,
-    reg_width: usize,
+    pub address: usize,
+    pub width: usize,
+    pub write: bool,
+    pub sign_ext: bool,
+    pub reg: usize,
+    pub reg_width: usize,
 }
 
 pub struct EmuDevEntry {

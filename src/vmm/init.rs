@@ -1,14 +1,13 @@
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
+use crate::kernel::Vm;
 use crate::kernel::VM_LIST;
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, CPU,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
-use crate::kernel::{Vm, VmInner};
 use crate::lib::barrier;
-use crate::mm::PageFrame;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -55,7 +54,7 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
         }
 
         if vm_inner.pa_region.is_none() {
-            use crate::kernel::{VmPa, VM_MEM_REGION_MAX};
+            use crate::kernel::VmPa;
             let mut pa_region = [
                 VmPa::default(),
                 VmPa::default(),
@@ -78,7 +77,7 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
 }
 
 fn vmm_load_image(filename: &str, load_ipa: usize, vm: Vm) {
-    use crate::lib::{fs_file_size, fs_read_to_mem};
+    use crate::lib::fs_file_size;
     // println!("filename: {}, load_ipa 0x{:x}", filename, load_ipa);
     let size = fs_file_size(filename);
     if size == 0 {
@@ -170,8 +169,6 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     true
 }
 
-use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::Vcpu;
 fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
     for i in 0..config.num {
         use crate::kernel::vcpu_alloc;
@@ -347,7 +344,7 @@ fn vmm_assign_vcpu() {
     let vm_num = def_vm_config.vm_num;
     drop(def_vm_config);
 
-    if (cpu_id == 0) {
+    if cpu_id == 0 {
         let mut vm_assign_list = VM_ASSIGN.lock();
         for i in 0..vm_num {
             vm_assign_list.push(Mutex::new(VmAssignment::default()));
@@ -426,7 +423,7 @@ fn vmm_assign_vcpu() {
                 let vm_id = vcpu.vm_id();
 
                 let vm_assign_list = VM_ASSIGN.lock();
-                let mut vm_assigned = vm_assign_list[vm_id].lock();
+                let vm_assigned = vm_assign_list[vm_id].lock();
                 let vm_list = VM_LIST.lock();
                 let vm = vm_list[vm_id].clone();
                 drop(vm_list);
@@ -446,7 +443,6 @@ pub fn vmm_init() {
     if cpu_id() == 0 {
         super::vmm_init_config();
 
-        use crate::config::{VmConfigTable, DEF_VM_CONFIG_TABLE};
         let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
         let vm_num = vm_cfg_table.vm_num;
 

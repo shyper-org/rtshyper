@@ -1,5 +1,3 @@
-use alloc::sync::Arc;
-
 use rlibc::memset;
 
 use crate::arch::PAGE_SIZE;

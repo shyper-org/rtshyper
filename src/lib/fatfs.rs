@@ -1,11 +1,8 @@
-use core::intrinsics::sinf64;
-use crate::arch::PAGE_SIZE;
 use super::{round_down, round_up};
+use crate::arch::PAGE_SIZE;
 use core_io as io;
-use fatfs::Dir;
 use io::prelude::*;
 use io::{Read, SeekFrom};
-use spin::Mutex;
 
 struct Disk {
     pointer: usize,
@@ -100,9 +97,9 @@ pub fn fs_init() {
     // let mut fs: io::Result<fatfs::FileSystem<&mut Disk>> =
     //     fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new());
 
-    let mut fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
+    let fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
-    let mut file = root_dir.open_file("hello.txt");
+    let file = root_dir.open_file("hello.txt");
     match file {
         Ok(mut file) => {
             let mut buf = [0u8; 5000];
@@ -134,9 +131,9 @@ pub fn fs_read_to_mem(filename: &str, buf: &mut [u8]) -> bool {
     };
     let count = round_up(buf.len(), PAGE_SIZE) / PAGE_SIZE;
 
-    let mut fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
+    let fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
-    let mut file = root_dir.open_file(filename);
+    let file = root_dir.open_file(filename);
     match file {
         Ok(mut file) => {
             for i in 0..count {
@@ -160,9 +157,9 @@ pub fn fs_file_size(filename: &str) -> usize {
         pointer: 0,
         size: 536870912,
     };
-    let mut fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
+    let fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
-    let mut file = root_dir.open_file(filename);
+    let file = root_dir.open_file(filename);
     match file {
         Ok(mut file) => {
             return file.seek(SeekFrom::End(0)).unwrap() as usize;

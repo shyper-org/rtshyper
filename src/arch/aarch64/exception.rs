@@ -1,5 +1,5 @@
-use crate::arch::smc_handler;
 use crate::arch::ContextFrame;
+use crate::arch::{data_abort_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
 use crate::kernel::{active_vm_id, cpu_id, set_cpu_ctx};
@@ -8,7 +8,7 @@ use cortex_a::{barrier, regs::*};
 global_asm!(include_str!("exception.S"));
 
 #[inline(always)]
-fn exception_esr() -> usize {
+pub fn exception_esr() -> usize {
     let mut esr = 0;
     unsafe {
         llvm_asm!("mrs $0, esr_el2" : "=r"(esr) ::: "volatile");
@@ -40,7 +40,7 @@ fn exception_hpfar() -> usize {
 }
 
 #[inline(always)]
-fn exception_fault_ipa() -> usize {
+pub fn exception_fault_ipa() -> usize {
     (exception_far() & 0xfff) | (exception_hpfar() << 8)
 }
 
@@ -50,8 +50,49 @@ fn exception_instruction_length() -> usize {
     (exception_esr() >> 25) & 1
 }
 
+#[inline(always)]
 pub fn exception_next_instruction_step() -> usize {
     2 + 2 * exception_instruction_length()
+}
+
+#[inline(always)]
+pub fn exception_iss() -> usize {
+    exception_esr() & ((1 << 25) - 1)
+}
+
+#[inline(always)]
+pub fn exception_data_abort_handleable() -> bool {
+    ((exception_iss() & (1 << 10)) | (exception_iss() & (1 << 24))) != 0
+}
+
+#[inline(always)]
+pub fn exception_data_abort_is_translate_fault() -> bool {
+    (exception_iss() & 0b111111 & (0xf << 2)) == 4
+}
+
+#[inline(always)]
+pub fn exception_data_abort_access_width() -> usize {
+    1 << ((exception_iss() >> 22) & 0b11)
+}
+
+#[inline(always)]
+pub fn exception_data_abort_access_is_write() -> bool {
+    (exception_iss() & (1 << 6)) != 0
+}
+
+#[inline(always)]
+pub fn exception_data_abort_access_reg() -> usize {
+    (exception_iss() >> 16) & 0b11111
+}
+
+#[inline(always)]
+pub fn exception_data_abort_access_reg_width() -> usize {
+    4 + 4 * ((exception_iss() >> 15) & 1)
+}
+
+#[inline(always)]
+pub fn exception_data_abort_access_is_sign_ext() -> bool {
+    ((exception_iss() >> 21) & 1) != 0
 }
 
 #[no_mangle]
@@ -92,10 +133,10 @@ unsafe extern "C" fn current_el_spx_serror() {
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     set_cpu_ctx(ctx);
 
-    println!("exception class {}", exception_class());
+    // println!("exception class {}", exception_class());
     match exception_class() {
         0x24 => {
-            unimplemented!();
+            data_abort_handler();
         }
         0x17 => {
             smc_handler();
