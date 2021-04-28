@@ -8,7 +8,6 @@ use crate::arch::cpu_interrupt_unmask;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 use crate::kernel::IpiMessage;
-use alloc::sync::Arc;
 use spin::Mutex;
 
 pub const CPU_MASTER: usize = 0;
@@ -207,6 +206,13 @@ pub fn active_vm() -> Result<Vm, ()> {
     match active_vcpu.vm() {
         Ok(vm) => Ok(vm),
         Err(_) => Err(()),
+    }
+}
+
+pub fn active_vm_ncpu() -> usize {
+    match active_vm() {
+        Ok(vm) => vm.ncpu(),
+        Err(_) => 0,
     }
 }
 

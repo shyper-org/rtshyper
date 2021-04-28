@@ -1,6 +1,4 @@
-use crate::board::{
-    PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE, PLATFORM_GICV_BASE,
-};
+use crate::board::{PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE};
 use crate::kernel::INTERRUPT_NUM_MAX;
 use crate::kernel::{cpu_current_irq, cpu_id, set_cpu_current_irq};
 use crate::lib::bit_extract;
@@ -25,6 +23,7 @@ pub const GIC_PRIVINT_NUM: usize = GIC_SGIS_NUM + GIC_PPIS_NUM;
 pub const GIC_SPI_MAX: usize = INTERRUPT_NUM_MAX - GIC_PRIVINT_NUM;
 pub const GIC_TARGET_BITS: usize = 8;
 pub const GIC_TARGETS_MAX: usize = GIC_TARGET_BITS;
+pub const GIC_CONFIG_BITS: usize = 2;
 
 const GIC_INT_REGS_NUM: usize = GIC_INTS_MAX / 32;
 const GIC_PRIO_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
@@ -187,31 +186,6 @@ impl GicDistributor {
         self.ITARGETSR[idx].set(value);
     }
 
-    pub fn typer(&self) -> u32 {
-        self.TYPER.get()
-    }
-
-    pub fn iidr(&self) -> u32 {
-        self.IIDR.get()
-    }
-
-    pub fn state(&self, int_id: usize) -> usize {
-        let reg_ind = int_id / 32;
-        let mask = 1 << int_id % 32;
-        let pend = if (self.ISPENDR[reg_ind].get() & mask) != 0 {
-            1
-        } else {
-            0
-        };
-        let act = if (self.ISACTIVER[reg_ind].get() & mask) != 0 {
-            2
-        } else {
-            0
-        };
-
-        return pend | act;
-    }
-
     pub fn set_state(&self, int_id: usize, state: usize) {
         self.set_act(int_id, (state & 2) != 0);
         self.set_pend(int_id, (state & 1) != 0);
@@ -245,6 +219,40 @@ impl GicDistributor {
                 self.CPENDSGIR[reg_ind].set(mask);
             }
         }
+    }
+
+    pub fn set_icfgr(&self, int_id: usize, cfg: u8) {
+        let reg_ind = (int_id * GIC_CONFIG_BITS) / 32;
+        let off = (int_id * GIC_CONFIG_BITS) % 32;
+        let mask = ((1 << GIC_CONFIG_BITS) - 1) << off;
+
+        let icfgr = self.ICFGR[reg_ind].get();
+        self.ICFGR[reg_ind].set((icfgr & !mask) | (((cfg as u32) << off) & mask));
+    }
+
+    pub fn typer(&self) -> u32 {
+        self.TYPER.get()
+    }
+
+    pub fn iidr(&self) -> u32 {
+        self.IIDR.get()
+    }
+
+    pub fn state(&self, int_id: usize) -> usize {
+        let reg_ind = int_id / 32;
+        let mask = 1 << int_id % 32;
+        let pend = if (self.ISPENDR[reg_ind].get() & mask) != 0 {
+            1
+        } else {
+            0
+        };
+        let act = if (self.ISACTIVER[reg_ind].get() & mask) != 0 {
+            2
+        } else {
+            0
+        };
+
+        return pend | act;
     }
 }
 

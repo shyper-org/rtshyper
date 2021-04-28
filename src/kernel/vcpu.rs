@@ -1,9 +1,9 @@
-use super::{CpuState, Vm, VmInner, VmType};
+use super::{CpuState, Vm, VmType};
+use crate::arch::tlb_invalidate_guest_all;
 use crate::arch::{Aarch64ContextFrame, VmContext};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
-use crate::arch::tlb_invalidate_guest_all;
 
 pub enum VcpuState {
     VcpuInv = 0,

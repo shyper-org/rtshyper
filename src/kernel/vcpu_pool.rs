@@ -1,6 +1,5 @@
 use crate::kernel::{Vcpu, VcpuState};
 use alloc::boxed::Box;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 pub const VCPU_POOL_MAX: usize = 4;

@@ -1,9 +1,5 @@
 // use crate::device::*;
-use super::blk::*;
-use super::mmio::*;
-use super::ring::*;
 use super::virtio::*;
-use crate::arch::PAGE_SIZE;
 use alloc::boxed::Box;
 use core::mem::size_of;
 use register::mmio::*;

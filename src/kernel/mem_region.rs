@@ -4,7 +4,7 @@ use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
 use rlibc::memset;
-use spin::{Mutex, Once};
+use spin::Mutex;
 
 const TOTAL_MEM_REGION_MAX: usize = 16;
 
@@ -166,7 +166,6 @@ pub static VMREGION: Mutex<VmRegion> = Mutex::new(VmRegion {
 });
 
 pub fn bits_to_pages(bits: usize) -> usize {
-    use crate::arch::PAGE_SIZE;
     use crate::lib::round_up;
     round_up(bits, PAGE_SIZE)
 }

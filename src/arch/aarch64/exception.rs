@@ -3,7 +3,7 @@ use crate::arch::{data_abort_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
 use crate::kernel::{active_vm_id, cpu_id, set_cpu_ctx};
-use cortex_a::{barrier, regs::*};
+use cortex_a::regs::*;
 
 global_asm!(include_str!("exception.S"));
 

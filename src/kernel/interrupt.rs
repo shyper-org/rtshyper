@@ -1,5 +1,4 @@
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
-use crate::driver::putc;
 use crate::kernel::Vm;
 use crate::kernel::{cpu_id, ipi_irq_handler};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
@@ -44,7 +43,6 @@ pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
         let mut hyper_bitmap_lock = INTERRUPT_HYPER_BITMAP.lock();
         let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
         irq_handler_lock[int_id] = handler;
-        use crate::lib::{BitAlloc16, BitAlloc256, BitAlloc4K, BitMap};
         hyper_bitmap_lock.set(int_id);
         glb_bitmap_lock.set(int_id);
     }

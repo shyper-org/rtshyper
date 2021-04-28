@@ -27,7 +27,7 @@ pub struct EmuDevEntry {
     id: usize,
     ipa: usize,
     size: usize,
-    handler: emu_dev_handler,
+    handler: EmuDevHandler,
 }
 
 pub enum EmuDeviceType {
@@ -38,7 +38,7 @@ pub enum EmuDeviceType {
     EmuDeviceTShyper,
 }
 
-pub type emu_dev_handler = fn(usize, &EmuContext) -> bool;
+pub type EmuDevHandler = fn(usize, &EmuContext) -> bool;
 
 // TO CHECK
 pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
@@ -63,7 +63,7 @@ pub fn emu_register_dev(
     dev_id: usize,
     address: usize,
     size: usize,
-    handler: emu_dev_handler,
+    handler: EmuDevHandler,
 ) {
     let mut emu_devs_list = EMU_DEVS_LIST.lock();
     if emu_devs_list.len() >= EMU_DEV_NUM_MAX {
@@ -74,7 +74,6 @@ pub fn emu_register_dev(
         if vm_id != emu_dev.vm_id {
             continue;
         }
-        use crate::lib::in_range;
         if in_range(address, emu_dev.ipa, emu_dev.size - 1)
             || in_range(emu_dev.ipa, address, size - 1)
         {

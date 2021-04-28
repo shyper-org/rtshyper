@@ -1,5 +1,3 @@
-use crate::arch::ContextFrame;
-
 pub trait ContextFrameTrait {
     fn new(pc: usize, sp: usize, arg: usize, privileged: bool) -> Self;
 

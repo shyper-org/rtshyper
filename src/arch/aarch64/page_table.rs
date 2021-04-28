@@ -1,7 +1,7 @@
 use super::{PAGE_SIZE, PTE_PER_PAGE};
 use crate::arch::ArchPageTableEntryTrait;
 use crate::arch::WORD_SIZE;
-use crate::kernel::{Cpu, CpuPt};
+use crate::kernel::Cpu;
 use crate::lib::round_up;
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
@@ -102,7 +102,6 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     cpu.cpu_pt.lvl1[pt_lvl1_idx(CPU_BANKED_ADDRESS)] = lvl2_addr | PTE_S1_NORMAL | PTE_TABLE;
     cpu.cpu_pt.lvl2[pt_lvl2_idx(CPU_BANKED_ADDRESS)] = lvl3_addr | PTE_S1_NORMAL | PTE_TABLE;
 
-    use crate::lib::round_up;
     use core::mem::size_of;
     let page_num = round_up(size_of::<Cpu>(), PAGE_SIZE) / PAGE_SIZE;
 

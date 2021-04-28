@@ -22,9 +22,9 @@ fn mem_heap_region_init() {
         println!("Platform has no memory region!");
     }
 
-    let base = round_up((_image_end as usize), PAGE_SIZE);
+    let base = round_up(_image_end as usize, PAGE_SIZE);
     let size = round_up(
-        (PLAT_DESC.mem_desc.regions[0].size as usize - (base - PLAT_DESC.mem_desc.base as usize)),
+        PLAT_DESC.mem_desc.regions[0].size as usize - (base - PLAT_DESC.mem_desc.base as usize),
         PAGE_SIZE,
     ) / PAGE_SIZE;
 
@@ -100,7 +100,7 @@ pub fn mem_heap_alloc(page_num: usize, aligned: bool) -> Result<PageFrame, Alloc
     }
 
     let mut heap = HEAPREGION.lock();
-    if (page_num > heap.region.free) {
+    if page_num > heap.region.free {
         return Err(OutOfFrame);
     }
 
