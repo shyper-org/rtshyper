@@ -25,7 +25,7 @@ impl core::fmt::Display for Aarch64ContextFrame {
     }
 }
 
-impl crate::arch::traits::ContextFrameTrait for Aarch64ContextFrame {
+impl crate::arch::ContextFrameTrait for Aarch64ContextFrame {
     fn new(pc: usize, sp: usize, arg: usize, privileged: bool) -> Self {
         let mut r = Aarch64ContextFrame {
             gpr: [0; 31],
@@ -60,6 +60,10 @@ impl crate::arch::traits::ContextFrameTrait for Aarch64ContextFrame {
 
     fn set_argument(&mut self, arg: usize) {
         self.gpr[0] = arg as u64;
+    }
+
+    fn set_gpr(&mut self, index: usize, val: usize) {
+        self.gpr[index] = val as u64;
     }
 
     fn gpr(&self, index: usize) -> usize {

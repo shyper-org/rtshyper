@@ -6,12 +6,14 @@ use alloc::vec::Vec;
 // use core::ops::{Deref, DerefMut};
 use crate::arch::cpu_interrupt_unmask;
 use crate::arch::ContextFrame;
+use crate::arch::ContextFrameTrait;
 use crate::kernel::IpiMessage;
 use alloc::sync::Arc;
 use spin::Mutex;
 
 pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
+pub const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C)]
 #[repr(align(4096))]
@@ -70,7 +72,7 @@ pub struct Cpu {
     pub assigned: bool,
     pub cpu_state: CpuState,
     pub active_vcpu: Option<Vcpu>,
-    pub ctx: Option<Arc<Mutex<ContextFrame>>>, // need rebuild
+    pub ctx: Option<usize>,
     pub vcpu_pool: Option<Box<VcpuPool>>,
 
     pub current_irq: usize,
@@ -98,8 +100,54 @@ impl Cpu {
     }
 
     pub fn set_ctx(&mut self, ctx: *mut ContextFrame) {
-        unsafe {
-            self.ctx = Some(Arc::new(Mutex::new(*ctx)));
+        self.ctx = Some(ctx as usize);
+    }
+
+    pub fn set_gpr(&self, idx: usize, val: usize) {
+        if idx >= CONTEXT_GPR_NUM {
+            return;
+        }
+        match self.ctx {
+            Some(ctx_addr) => {
+                let ctx = ctx_addr as *mut ContextFrame;
+                unsafe {
+                    (*ctx).set_gpr(idx, val);
+                }
+            }
+            None => {}
+        }
+    }
+
+    pub fn get_gpr(&self, idx: usize) -> usize {
+        if idx >= CONTEXT_GPR_NUM {
+            return 0;
+        }
+        match self.ctx {
+            Some(ctx_addr) => {
+                let ctx = ctx_addr as *mut ContextFrame;
+                unsafe { (*ctx).gpr(idx) }
+            }
+            None => 0,
+        }
+    }
+
+    pub fn get_elr(&self) -> usize {
+        match self.ctx {
+            Some(ctx_addr) => {
+                let ctx = ctx_addr as *mut ContextFrame;
+                unsafe { (*ctx).exception_pc() }
+            }
+            None => 0,
+        }
+    }
+
+    pub fn set_elr(&self, val: usize) {
+        match self.ctx {
+            Some(ctx_addr) => {
+                let ctx = ctx_addr as *mut ContextFrame;
+                unsafe { (*ctx).set_exception_pc(val) }
+            }
+            None => {}
         }
     }
 }
@@ -180,6 +228,14 @@ pub fn cpu_current_irq() -> usize {
     unsafe { CPU.current_irq }
 }
 
+pub fn context_get_gpr(idx: usize) -> usize {
+    unsafe { CPU.get_gpr(idx) }
+}
+
+pub fn get_cpu_ctx_elr() -> usize {
+    unsafe { CPU.get_elr() }
+}
+
 pub fn set_cpu_assign(assigned: bool) {
     unsafe {
         CPU.assigned = assigned;
@@ -212,6 +268,24 @@ pub fn set_active_vcpu(idx: usize) {
 pub fn set_cpu_current_irq(irq: usize) {
     unsafe {
         CPU.current_irq = irq;
+    }
+}
+
+pub fn set_cpu_ctx(ctx: *mut ContextFrame) {
+    unsafe {
+        CPU.set_ctx(ctx);
+    }
+}
+
+pub fn context_set_gpr(idx: usize, val: usize) {
+    unsafe {
+        CPU.set_gpr(idx, val);
+    }
+}
+
+pub fn set_cpu_ctx_elr(val: usize) {
+    unsafe {
+        CPU.set_elr(val);
     }
 }
 
@@ -263,8 +337,6 @@ static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
     Cpu::default(),
     Cpu::default(),
 ]);
-
-// static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [Cpu::default(); PLATFORM_CPU_NUM_MAX];
 
 #[no_mangle]
 #[link_section = ".text.boot"]

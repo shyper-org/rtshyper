@@ -1,7 +1,8 @@
+use crate::arch::smc_handler;
 use crate::arch::ContextFrame;
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
-use crate::kernel::{active_vm_id, cpu_id};
+use crate::kernel::{active_vm_id, cpu_id, set_cpu_ctx};
 use cortex_a::{barrier, regs::*};
 
 global_asm!(include_str!("exception.S"));
@@ -43,6 +44,16 @@ fn exception_fault_ipa() -> usize {
     (exception_far() & 0xfff) | (exception_hpfar() << 8)
 }
 
+/// \return 1 means 32-bit instruction, 0 means 16-bit instruction
+#[inline(always)]
+fn exception_instruction_length() -> usize {
+    (exception_esr() >> 25) & 1
+}
+
+pub fn exception_next_instruction_step() -> usize {
+    2 + 2 * exception_instruction_length()
+}
+
 #[no_mangle]
 unsafe extern "C" fn current_el_sp0_synchronous() {
     panic!("current_el_sp0_synchronous");
@@ -79,15 +90,15 @@ unsafe extern "C" fn current_el_spx_serror() {
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
-    // TODO: cpu.ctx = ctx
+    set_cpu_ctx(ctx);
+
     println!("exception class {}", exception_class());
     match exception_class() {
         0x24 => {
             unimplemented!();
         }
         0x17 => {
-            // TODO
-            unimplemented!();
+            smc_handler();
         }
         0x16 => {
             unimplemented!();
@@ -109,7 +120,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
 unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     let (id, src) = gicc_get_current_irq();
     println!("id {}, src {}", id, src);
-    // TODO: cpu.ctx = ctx
+    set_cpu_ctx(ctx);
 
     if id >= 1022 {
         return;

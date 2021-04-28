@@ -250,7 +250,6 @@ impl PageTable {
             "map_range_2mb: ipa {:x}, len {:x}, pa {:x}, pte 0b{:b}, page_num {:x}, size_2mb {:x}",
             ipa, len, pa, pte, page_num, size_2mb
         );
-        println!("self.dir.pa {:x}", self.directory.pa());
 
         for i in 0..page_num {
             self.map_2mb(ipa + i * size_2mb, pa + i * size_2mb, pte);
