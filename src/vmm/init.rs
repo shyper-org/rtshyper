@@ -477,7 +477,7 @@ pub fn vmm_init() {
 
     for i in 0..vm_num {
         let config = vm_cfg_table.entries[i].clone();
-        let mut vm_list = VM_LIST.lock();
+        let vm_list = VM_LIST.lock();
         let vm = vm_list[i].clone();
 
         vmm_setup_config(config, vm);

@@ -1,5 +1,4 @@
 use super::gic::*;
-use crate::board::platform_cpuid_to_cpuif;
 use crate::board::PLATFORM_GICD_BASE;
 use crate::device::EmuContext;
 use crate::kernel::InitcEvent;
@@ -13,6 +12,7 @@ use crate::kernel::{
 };
 use crate::lib::{bit_extract, bit_get, bit_set};
 use crate::{arch::GICH, kernel::IpiInitcMessage};
+use crate::{board::platform_cpuid_to_cpuif, kernel::active_vcpu_id};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -278,6 +278,25 @@ impl Vgic {
         }
     }
 
+    fn set_vgicd_ctlr(&self, ctlr: u32) {
+        let mut vgicd = self.vgicd.lock();
+        vgicd.ctlr = ctlr;
+    }
+
+    fn vgicd_ctlr(&self) -> u32 {
+        let mut vgicd = self.vgicd.lock();
+        vgicd.ctlr
+    }
+    fn vgicd_typer(&self) -> u32 {
+        let mut vgicd = self.vgicd.lock();
+        vgicd.typer
+    }
+
+    fn vgicd_iidr(&self) -> u32 {
+        let mut vgicd = self.vgicd.lock();
+        vgicd.iidr
+    }
+
     fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> VgicInt {
         let cpu_priv = self.cpu_priv.lock();
         cpu_priv[cpu_id].interrupts[idx].clone()
@@ -517,15 +536,16 @@ impl Vgic {
     }
 
     fn set_enable(&self, vcpu: Vcpu, int_id: usize, en: bool) {
+        // println!("DEBUG in vgic::set_enable");
         if int_id < GIC_SGIS_NUM {
             return;
         }
-        match self.get_int(vcpu.clone(), int_id) {
+        match self.get_int(active_vcpu().unwrap(), int_id) {
             Some(interrupt) => {
                 if vgic_int_get_owner(vcpu.clone(), interrupt.clone()) {
                     if interrupt.enabled() ^ en {
                         interrupt.set_enabled(en);
-                        if !en {
+                        if !interrupt.enabled() {
                             self.remove_lr(vcpu.clone(), interrupt.clone());
                         } else {
                             self.route(vcpu.clone(), interrupt.clone());
@@ -671,7 +691,7 @@ impl Vgic {
                     IpiInnerMsg::Initc(m),
                 ) {
                     println!(
-                        "set_prio: Failed to send ipi message, target {} type {}",
+                        "set_icfgr: Failed to send ipi message, target {} type {}",
                         interrupt.owner_phys_id(),
                         0
                     );
@@ -777,7 +797,13 @@ impl Vgic {
         }
     }
 
+    fn get_prio(&self, vcpu: Vcpu, int_id: usize) -> u8 {
+        let interrupt_option = self.get_int(vcpu.clone(), int_id);
+        return interrupt_option.unwrap().prio();
+    }
+
     fn set_trgt(&self, vcpu: Vcpu, int_id: usize, trgt: u8) {
+        // println!("DEBUG: set trgt");
         let interrupt_option = self.get_int(active_vcpu().unwrap(), bit_extract(int_id, 0, 10));
         if let Some(interrupt) = interrupt_option {
             if vgic_int_get_owner(vcpu.clone(), interrupt.clone()) {
@@ -820,6 +846,11 @@ impl Vgic {
         }
     }
 
+    fn get_trgt(&self, vcpu: Vcpu, int_id: usize) -> u8 {
+        let interrupt_option = self.get_int(vcpu.clone(), int_id);
+        return interrupt_option.unwrap().targets();
+    }
+
     pub fn inject(&self, id: usize, src: usize) {
         let vcpu = active_vcpu().unwrap();
         let interrupt_option = self.get_int(vcpu.clone(), bit_extract(id, 0, 10));
@@ -835,7 +866,54 @@ impl Vgic {
         }
     }
 
+    fn emu_ctrl_access(&self, emu_ctx: &EmuContext) {
+        if emu_ctx.write {
+            let prev_ctlr = self.vgicd_ctlr();
+            self.set_vgicd_ctlr(context_get_gpr(emu_ctx.reg) as u32 & 0x1);
+            if prev_ctlr ^ self.vgicd_ctlr() != 0 {
+                let enable = self.vgicd_ctlr() != 0;
+                let hcr = GICH.hcr();
+                if enable {
+                    GICH.set_hcr(hcr | 1);
+                } else {
+                    GICH.set_hcr(hcr & !1);
+                }
+
+                let m = IpiInitcMessage {
+                    event: InitcEvent::VgicdGichEn,
+                    vm_id: active_vm_id(),
+                    int_id: 0,
+                    val: enable as u8,
+                };
+                ipi_intra_broadcast_msg(
+                    active_vm().unwrap(),
+                    IpiType::IpiTIntc,
+                    IpiInnerMsg::Initc(m),
+                );
+            }
+        } else {
+            context_set_gpr(emu_ctx.reg, self.vgicd_ctlr() as usize);
+        }
+    }
+
+    fn emu_typer_access(&self, emu_ctx: &EmuContext) {
+        if !emu_ctx.write {
+            context_set_gpr(emu_ctx.reg, self.vgicd_typer() as usize);
+        } else {
+            println!("emu_typer_access: can't write to RO reg");
+        }
+    }
+
+    fn emu_iidr_access(&self, emu_ctx: &EmuContext) {
+        if !emu_ctx.write {
+            context_set_gpr(emu_ctx.reg, self.vgicd_iidr() as usize);
+        } else {
+            println!("emu_iidr_access: can't write to RO reg");
+        }
+    }
+
     fn emu_isenabler_access(&self, emu_ctx: &EmuContext) {
+        // println!("DEBUG: in emu_isenabler_access");
         let reg_idx = (emu_ctx.address & 0b1111111) / 4;
         let mut val = if emu_ctx.write {
             context_get_gpr(emu_ctx.reg)
@@ -941,6 +1019,7 @@ impl Vgic {
     }
 
     fn emu_activer_access(&self, emu_ctx: &EmuContext, set: bool) {
+        // println!("DEBUG: in emu_activer_access");
         let reg_idx = (emu_ctx.address & 0b1111111) / 4;
         let mut val = if emu_ctx.write {
             context_get_gpr(emu_ctx.reg)
@@ -1110,6 +1189,12 @@ impl Vgic {
         } else {
             0
         };
+        let vm = match active_vm() {
+            Ok(vm) => vm,
+            Err(()) => {
+                panic!("emu_icfgr_access: current vcpu.vm is none");
+            }
+        };
 
         if bit_extract(emu_ctx.address, 0, 12) == bit_extract(PLATFORM_GICD_BASE + 0x0f00, 0, 12) {
             if emu_ctx.write {
@@ -1117,7 +1202,9 @@ impl Vgic {
                 let mut trgtlist = 0;
                 match sgir_trglstflt {
                     0 => {
-                        // targlist =
+                        trgtlist =
+                            vgic_target_translate(vm.clone(), bit_extract(val, 16, 8) as u32, true)
+                                as usize;
                     }
                     1 => {
                         trgtlist = active_vm_ncpu() & !(1 << cpu_id());
@@ -1130,20 +1217,150 @@ impl Vgic {
                     }
                     _ => {}
                 }
+
+                for i in 0..8 {
+                    let m = IpiInitcMessage {
+                        event: InitcEvent::VgicdSetPend,
+                        vm_id: active_vm_id(),
+                        int_id: (bit_extract(val, 0, 8) | (active_vcpu_id() << 10)) as u16,
+                        val: true as u8,
+                    };
+                    if !ipi_send_msg(i, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
+                        println!(
+                            "emu_sgiregs_access: Failed to send ipi message, target {} type {}",
+                            i, 0
+                        );
+                    }
+                }
             }
         } else {
             // TODO: CPENDSGIR and SPENDSGIR access
         }
     }
+
+    fn emu_ipriorityr_access(&self, emu_ctx: &EmuContext) {
+        let mut val = if emu_ctx.write {
+            context_get_gpr(emu_ctx.reg)
+        } else {
+            0
+        };
+        let first_int = (8 / GIC_PRIO_BITS) * bit_extract(emu_ctx.address, 0, 9);
+        let vm_id = active_vm_id();
+        let vm = match active_vm() {
+            Ok(vm) => vm,
+            Err(()) => {
+                panic!("emu_isenabler_access: current vcpu.vm is none");
+            }
+        };
+        let mut vm_has_interrupt_flag = false;
+
+        for i in 0..emu_ctx.width {
+            if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+                vm_has_interrupt_flag = true;
+                break;
+            }
+        }
+        if first_int >= 16 && !vm_has_interrupt_flag {
+            println!(
+                "emu_ipriorityr_access: vm[{}] does not have interrupt {}",
+                vm_id, first_int
+            );
+            return;
+        }
+
+        if emu_ctx.write {
+            for i in 0..emu_ctx.width {
+                self.set_prio(
+                    active_vcpu().unwrap(),
+                    first_int + i,
+                    bit_extract(val, GIC_PRIO_BITS * i, GIC_PRIO_BITS) as u8,
+                );
+            }
+        } else {
+            for i in 0..emu_ctx.width {
+                val |= (self.get_prio(active_vcpu().unwrap(), first_int + i) as usize)
+                    << (GIC_PRIO_BITS * i);
+            }
+            context_set_gpr(emu_ctx.reg, val);
+        }
+    }
+
+    fn emu_itargetr_access(&self, emu_ctx: &EmuContext) {
+        let mut val = if emu_ctx.write {
+            context_get_gpr(emu_ctx.reg)
+        } else {
+            0
+        };
+        let first_int = (8 / GIC_TARGET_BITS) * bit_extract(emu_ctx.address, 0, 9);
+        let vm_id = active_vm_id();
+        let vm = match active_vm() {
+            Ok(vm) => vm,
+            Err(()) => {
+                panic!("emu_itargetr_access: current vcpu.vm is none");
+            }
+        };
+        let mut vm_has_interrupt_flag = false;
+
+        for i in 0..emu_ctx.width {
+            if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+                vm_has_interrupt_flag = true;
+                break;
+            }
+        }
+        if first_int >= 16 && !vm_has_interrupt_flag {
+            println!(
+                "emu_itargetr_access: vm[{}] does not have interrupt {}",
+                vm_id, first_int
+            );
+            return;
+        }
+
+        if emu_ctx.write {
+            // println!("write");
+            val = vgic_target_translate(active_vm().unwrap(), val as u32, true) as usize;
+            for i in 0..emu_ctx.width {
+                self.set_trgt(
+                    active_vcpu().unwrap(),
+                    first_int + i,
+                    bit_extract(val, GIC_TARGET_BITS * i, GIC_TARGET_BITS) as u8,
+                );
+            }
+        } else {
+            // println!("read, first_int {}, width {}", first_int, emu_ctx.width);
+            for i in 0..emu_ctx.width {
+                println!("{}", self.get_trgt(active_vcpu().unwrap(), first_int + i));
+                val |= ((self.get_trgt(active_vcpu().unwrap(), first_int + i) as usize)
+                    << (GIC_TARGET_BITS * i));
+            }
+            // println!("after read val {}", val);
+            val = vgic_target_translate(active_vm().unwrap(), val as u32, false) as usize;
+            context_set_gpr(emu_ctx.reg, val);
+        }
+    }
 }
 
-// TODO: vgic_target_translate
-fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) {
-    let mut to = 0;
-    unimplemented!();
+fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) -> u32 {
+    // println!("in vgic_target_translate");
+    let mut to = [0; 4];
+    let mut from = [0; 4];
     for i in 0..4 {
-        let from = trgt >> (8 * i);
+        from[i] = (trgt >> (8 * i)) & 0xff;
+        to[i] = if v2p {
+            vm.vcpu_to_pcpu_mask(from[i] as usize, 8) as u32
+        } else {
+            vm.pcpu_to_vcpu_mask(from[i] as usize, 8) as u32
+        };
     }
+
+    println!(
+        "finish vgic_target_translate: from {:x} to {:x}",
+        trgt,
+        (to[0] & 0xff) | ((to[1] & 0xff) << 8) | ((to[2] & 0xff) << 16) | ((to[3] & 0xff) << 24)
+    );
+    return (to[0] & 0xff)
+        | ((to[1] & 0xff) << 8)
+        | ((to[2] & 0xff) << 16)
+        | ((to[3] & 0xff) << 24);
 }
 
 fn vgic_owns(vcpu: Vcpu, interrupt: VgicInt) -> bool {
@@ -1266,6 +1483,10 @@ pub fn emu_intc_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     };
     let vgic = vm.vgic();
     let vgicd_offset_prefix = (offset & 0xf80) >> 7;
+    println!(
+        "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
+        vgicd_offset_prefix, offset
+    );
     match vgicd_offset_prefix {
         VGICD_REG_OFFSET_PREFIX_CTLR
         | VGICD_REG_OFFSET_PREFIX_ISENABLER
@@ -1321,18 +1542,41 @@ pub fn emu_intc_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
             vgic.emu_icfgr_access(emu_ctx);
         }
         VGICD_REG_OFFSET_PREFIX_SGIR => {
-            // TODO:
+            vgic.emu_sgiregs_access(emu_ctx);
         }
-        // TODO
         _ => {
-            unimplemented!();
+            match offset {
+                // VGICD_REG_OFFSET(CTLR)
+                0 => {
+                    vgic.emu_ctrl_access(emu_ctx);
+                }
+                // VGICD_REG_OFFSET(TYPER)
+                0x004 => {
+                    vgic.emu_typer_access(emu_ctx);
+                }
+                // VGICD_REG_OFFSET(IIDR)
+                0x008 => {
+                    vgic.emu_iidr_access(emu_ctx);
+                }
+                _ => {
+                    if !emu_ctx.write {
+                        context_set_gpr(emu_ctx.reg, 0);
+                    }
+                }
+            }
+            if offset >= 0x400 && offset < 0x800 {
+                vgic.emu_ipriorityr_access(emu_ctx);
+            } else if offset >= 0x800 && offset < 0xc00 {
+                vgic.emu_itargetr_access(emu_ctx);
+            }
         }
     }
+    println!("finish emu_intc_handler");
     true
 }
 
 fn vgic_ipi_handler(msg: &IpiMessage) {
-    println!("DEBUG: vgic ipi handler");
+    // println!("DEBUG: vgic ipi handler");
     let mut vm_id = 0;
     let mut int_id = 0;
     let mut val = 0;
@@ -1430,7 +1674,7 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
             cpu_priv.interrupts.push(VgicInt::priv_new(
                 int_idx,
                 vcpu.clone(),
-                phys_id,
+                1 << phys_id,
                 int_idx < GIC_SGIS_NUM,
             ));
         }

@@ -66,7 +66,7 @@ pub fn ipi_irq_handler() {
     let cpu_id = cpu_id();
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
-    let mut ipi_handler_list = IPI_HANDLER_LIST.lock();
+    let ipi_handler_list = IPI_HANDLER_LIST.lock();
 
     while !msg.is_none() {
         let ipi_msg = msg.unwrap();

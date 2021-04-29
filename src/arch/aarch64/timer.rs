@@ -28,6 +28,15 @@ pub fn timer_arch_disable_irq() {
     };
 }
 
+pub fn timer_arch_get_counter() -> usize {
+    let cnt;
+    unsafe {
+        llvm_asm!("mrs $0, CNTPCT_EL0" : "=r"(cnt) ::: "volatile");
+        llvm_asm!("isb");
+    };
+    cnt
+}
+
 pub fn timer_arch_get_frequency() -> usize {
     let freq;
     unsafe {

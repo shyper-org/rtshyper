@@ -250,6 +250,47 @@ impl Vm {
         }
         false
     }
+
+    pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
+        let vm_inner = self.inner.lock();
+        if vcpuid < vm_inner.cpu_num {
+            return Ok(vm_inner.vcpu_list[vcpuid].phys_id());
+        } else {
+            return Err(());
+        }
+    }
+
+    pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
+        let vm_inner = self.inner.lock();
+        for vcpuid in 0..vm_inner.cpu_num {
+            if vm_inner.vcpu_list[vcpuid].phys_id() == pcpuid {
+                return Ok(vcpuid);
+            }
+        }
+        return Err(());
+    }
+
+    pub fn vcpu_to_pcpu_mask(&self, mask: usize, len: usize) -> usize {
+        let mut pmask = 0;
+        for i in 0..len {
+            let shift = self.vcpuid_to_pcpuid(i);
+            if mask & (1 << i) != 0 && !shift.is_err() {
+                pmask |= (1 << shift.unwrap());
+            }
+        }
+        return pmask;
+    }
+
+    pub fn pcpu_to_vcpu_mask(&self, mask: usize, len: usize) -> usize {
+        let mut pmask = 0;
+        for i in 0..len {
+            let shift = self.vcpuid_to_pcpuid(i);
+            if mask & (1 << i) != 0 && !shift.is_err() {
+                pmask |= (1 << shift.unwrap());
+            }
+        }
+        return pmask;
+    }
 }
 
 use crate::arch::PageTable;

@@ -21,6 +21,7 @@ const GIC_PPIS_NUM: usize = 16;
 pub const GIC_INTS_MAX: usize = INTERRUPT_NUM_MAX;
 pub const GIC_PRIVINT_NUM: usize = GIC_SGIS_NUM + GIC_PPIS_NUM;
 pub const GIC_SPI_MAX: usize = INTERRUPT_NUM_MAX - GIC_PRIVINT_NUM;
+pub const GIC_PRIO_BITS: usize = 8;
 pub const GIC_TARGET_BITS: usize = 8;
 pub const GIC_TARGETS_MAX: usize = GIC_TARGET_BITS;
 pub const GIC_CONFIG_BITS: usize = 2;
@@ -39,6 +40,8 @@ pub const GICD_TYPER_CPUNUM_LEN: usize = 3;
 pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
 
 pub static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
+
+static GICD_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Copy, Clone)]
 pub enum IrqState {
@@ -159,21 +162,26 @@ impl GicDistributor {
     pub fn set_enable(&self, int_id: usize, en: bool) {
         let idx = int_id / 32;
         let bit = 1 << (int_id % 32);
+
+        let lock = GICD_LOCK.lock();
         if en {
             self.ISENABLER[idx].set(bit);
         } else {
             self.ICENABLER[idx].set(bit);
         }
+        drop(lock);
     }
 
     pub fn set_prio(&self, int_id: usize, prio: u8) {
-        let idx = int_id * 8 / 32;
+        let idx = (int_id * 8) / 32;
         let off = (int_id * 8) % 32;
         let mask: u32 = 0b11111111 << off;
 
+        let lock = GICD_LOCK.lock();
         let prev = self.IPRIORITYR[idx].get();
         let value = (prev & !mask) | (((prio as u32) << off) & mask);
         self.IPRIORITYR[idx].set(value);
+        drop(lock);
     }
 
     pub fn set_trgt(&self, int_id: usize, trgt: u8) {
@@ -181,9 +189,12 @@ impl GicDistributor {
         let off = (int_id * 8) % 32;
         let mask: u32 = 0b11111111 << off;
 
+        let lock = GICD_LOCK.lock();
         let prev = self.ITARGETSR[idx].get();
         let value = (prev & !mask) | (((trgt as u32) << off) & mask);
+        println!("idx {}, val {:x}", idx, value);
         self.ITARGETSR[idx].set(value);
+        drop(lock);
     }
 
     pub fn set_state(&self, int_id: usize, state: usize) {
@@ -194,14 +205,18 @@ impl GicDistributor {
     fn set_act(&self, int_id: usize, act: bool) {
         let reg_ind = int_id / 32;
         let mask = 1 << int_id % 32;
+
+        let lock = GICD_LOCK.lock();
         if act {
             self.ISACTIVER[reg_ind].set(mask);
         } else {
             self.ICACTIVER[reg_ind].set(mask);
         }
+        drop(lock);
     }
 
     fn set_pend(&self, int_id: usize, pend: bool) {
+        let lock = GICD_LOCK.lock();
         if gic_is_sgi(int_id) {
             let off = (int_id % 4) * 8;
             let reg_ind = int_id / 4;
@@ -214,20 +229,24 @@ impl GicDistributor {
             let reg_ind = int_id / 32;
             let mask = 1 << int_id % 32;
             if pend {
-                self.SPENDSGIR[reg_ind].set(mask);
+                self.ISPENDR[reg_ind].set(mask);
             } else {
-                self.CPENDSGIR[reg_ind].set(mask);
+                self.ICPENDR[reg_ind].set(mask);
             }
         }
+
+        drop(lock);
     }
 
     pub fn set_icfgr(&self, int_id: usize, cfg: u8) {
+        let lock = GICD_LOCK.lock();
         let reg_ind = (int_id * GIC_CONFIG_BITS) / 32;
         let off = (int_id * GIC_CONFIG_BITS) % 32;
         let mask = ((1 << GIC_CONFIG_BITS) - 1) << off;
 
         let icfgr = self.ICFGR[reg_ind].get();
         self.ICFGR[reg_ind].set((icfgr & !mask) | (((cfg as u32) << off) & mask));
+        drop(lock);
     }
 
     pub fn typer(&self) -> u32 {
@@ -241,6 +260,8 @@ impl GicDistributor {
     pub fn state(&self, int_id: usize) -> usize {
         let reg_ind = int_id / 32;
         let mask = 1 << int_id % 32;
+
+        let lock = GICD_LOCK.lock();
         let pend = if (self.ISPENDR[reg_ind].get() & mask) != 0 {
             1
         } else {
@@ -251,7 +272,7 @@ impl GicDistributor {
         } else {
             0
         };
-
+        drop(lock);
         return pend | act;
     }
 }

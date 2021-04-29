@@ -68,6 +68,7 @@ pub fn interrupt_init() {
             INTERRUPT_IRQ_IPI,
             InterruptHandler::IpiIrqHandler(ipi_irq_handler),
         );
+        println!("Interrupt init ok");
     }
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
@@ -109,7 +110,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     }
 
     if interrupt_is_reserved(int_id) {
-        let mut irq_handler = INTERRUPT_HANDLERS.lock();
+        let irq_handler = INTERRUPT_HANDLERS.lock();
         match irq_handler[int_id] {
             InterruptHandler::IpiIrqHandler(irq_handler) => {
                 irq_handler();

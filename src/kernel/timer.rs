@@ -34,6 +34,7 @@ pub fn timer_init() {
             crate::arch::timer_arch_get_frequency()
         );
         println!("Timer init ok");
+        // timer_enable(true);
     }
 }
 
@@ -47,10 +48,18 @@ fn timer_enable(val: bool) {
 }
 
 fn timer_irq_handler(arg: usize, src: usize) {
-    use crate::arch::{timer_arch_disable_irq, timer_arch_enable_irq, timer_arch_set};
+    use crate::arch::{
+        timer_arch_disable_irq, timer_arch_enable_irq, timer_arch_get_counter, timer_arch_set,
+    };
+    println!(
+        "timer_irq_handler: core {} count 0x{:x}",
+        cpu_id(),
+        timer_arch_get_counter()
+    );
+
     timer_arch_disable_irq();
 
-    let num_of_period = 1;
+    let num_of_period = 100;
 
     // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
 
