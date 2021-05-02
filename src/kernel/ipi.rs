@@ -63,6 +63,7 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
+    // println!("ipi_irq_handler");
     let cpu_id = cpu_id();
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();

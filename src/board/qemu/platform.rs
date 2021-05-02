@@ -69,7 +69,7 @@ pub struct PlatformConfig {
 // holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
-        num: 8,
+        num: 1,
         mpidr_list: [0, 1, 2, 3, 4, 5, 6, 7],
         name: [ARM_CORTEX_A57; 8],
     },
@@ -124,8 +124,11 @@ pub fn platform_power_on_secondary_cores() {
     }
 }
 
-// TODO: ipi register
-pub fn power_arch_init() {}
+pub fn power_arch_init() {
+    use crate::arch::psci_ipi_handler;
+    use crate::kernel::{ipi_register, IpiType};
+    ipi_register(IpiType::IpiTPower, psci_ipi_handler);
+}
 
 pub fn platform_blk_init() {
     println!("Platform block driver init ok");

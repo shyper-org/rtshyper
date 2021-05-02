@@ -102,6 +102,10 @@ impl Cpu {
         self.ctx = Some(ctx as usize);
     }
 
+    pub fn clear_ctx(&mut self) {
+        self.ctx = None;
+    }
+
     pub fn set_gpr(&self, idx: usize, val: usize) {
         if idx >= CONTEXT_GPR_NUM {
             return;
@@ -280,6 +284,12 @@ pub fn set_cpu_current_irq(irq: usize) {
 pub fn set_cpu_ctx(ctx: *mut ContextFrame) {
     unsafe {
         CPU.set_ctx(ctx);
+    }
+}
+
+pub fn clear_cpu_ctx() {
+    unsafe {
+        CPU.clear_ctx();
     }
 }
 

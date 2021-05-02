@@ -384,7 +384,7 @@ fn vmm_assign_vcpu() {
 
                 vm_assigned.has_master = true;
                 vm_assigned.cpu_num += 1;
-                vm_assigned.cpus |= 1 << cpu_id;
+                vm_assigned.cpus |= (1 << cpu_id);
                 set_cpu_assign(true);
                 println!(
                     "* Core {} is assigned => vm {}, vcpu {}",

@@ -3,21 +3,21 @@ use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::kernel::{cpu_id, InterruptHandler};
 use spin::Mutex;
 
-#[derive(Copy, Clone)]
-struct Timer(bool);
+// #[derive(Copy, Clone)]
+// struct Timer(bool);
 
-impl Timer {
-    const fn default() -> Timer {
-        Timer(false)
-    }
+// impl Timer {
+//     const fn default() -> Timer {
+//         Timer(false)
+//     }
 
-    fn set(&mut self, val: bool) {
-        self.0 = val;
-    }
-}
+//     fn set(&mut self, val: bool) {
+//         self.0 = val;
+//     }
+// }
 
-static TIMER_LIST: Mutex<[Timer; PLATFORM_CPU_NUM_MAX]> =
-    Mutex::new([Timer::default(); PLATFORM_CPU_NUM_MAX]);
+// static TIMER_LIST: Mutex<[Timer; PLATFORM_CPU_NUM_MAX]> =
+//     Mutex::new([Timer::default(); PLATFORM_CPU_NUM_MAX]);
 
 pub fn timer_init() {
     crate::arch::timer_arch_init();
@@ -34,11 +34,10 @@ pub fn timer_init() {
             crate::arch::timer_arch_get_frequency()
         );
         println!("Timer init ok");
-        // timer_enable(true);
     }
 }
 
-fn timer_enable(val: bool) {
+pub fn timer_enable(val: bool) {
     println!(
         "Core {} {} EL2 timer",
         cpu_id(),
@@ -56,7 +55,6 @@ fn timer_irq_handler(arg: usize, src: usize) {
         cpu_id(),
         timer_arch_get_counter()
     );
-
     timer_arch_disable_irq();
 
     let num_of_period = 100;

@@ -35,3 +35,8 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
 
     true
 }
+
+use crate::kernel::IpiMessage;
+pub fn psci_ipi_handler(msg: &IpiMessage) {
+    unimplemented!();
+}

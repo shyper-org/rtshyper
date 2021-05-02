@@ -2,7 +2,7 @@ use crate::arch::ContextFrame;
 use crate::arch::{data_abort_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
-use crate::kernel::{active_vm_id, cpu_id, set_cpu_ctx};
+use crate::kernel::{active_vm_id, clear_cpu_ctx, cpu_id, set_cpu_ctx};
 use cortex_a::regs::*;
 
 global_asm!(include_str!("exception.S"));
@@ -102,7 +102,8 @@ unsafe extern "C" fn current_el_sp0_synchronous() {
 
 #[no_mangle]
 unsafe extern "C" fn current_el_sp0_irq(ctx: *mut ContextFrame) {
-    lower_aarch64_irq(ctx);
+    // lower_aarch64_irq(ctx);
+    panic!("current_el_sp0_irq");
 }
 
 #[no_mangle]
@@ -121,6 +122,7 @@ unsafe extern "C" fn current_el_spx_synchronous() {
 
 #[no_mangle]
 unsafe extern "C" fn current_el_spx_irq(ctx: *mut ContextFrame) {
+    // println!("current_el_spx_irq");
     lower_aarch64_irq(ctx);
 }
 
@@ -155,24 +157,26 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             );
         }
     }
+    clear_cpu_ctx();
 }
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
-    let (id, src) = gicc_get_current_irq();
-    println!("id {}, src {}", id, src);
+    // println!("lower_aarch64_irq");
     set_cpu_ctx(ctx);
+    let (id, src) = gicc_get_current_irq();
 
     if id >= 1022 {
         return;
     }
     let handled_by_hypervisor = interrupt_handler(id, src);
     gicc_clear_current_irq(handled_by_hypervisor);
+    clear_cpu_ctx();
 }
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_serror(ctx: *mut ContextFrame) {
-    panic!("TODO: lower aarch64 serror");
+    panic!("lower aarch64 serror");
 }
 
 // pub fn exception_init() {

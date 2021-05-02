@@ -54,6 +54,6 @@ pub fn timer_arch_init() {
 
     unsafe {
         llvm_asm!("msr CNTHP_CTL_EL2, $0" :: "r"(0x3 & (1 | !CTL_IMASK)) :: "volatile");
-        llvm_asm!("msr CNTHP_TVAL_EL2, $0" :: "r"((*slice_lock) * 10) :: "volatile");
+        llvm_asm!("msr CNTHP_TVAL_EL2, $0" :: "r"(*slice_lock * 10) :: "volatile");
     }
 }

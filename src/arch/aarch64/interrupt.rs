@@ -30,9 +30,18 @@ pub fn interrupt_arch_init() {
 
 pub fn interrupt_arch_enable(int_id: usize, en: bool) {
     let cpu_id = crate::kernel::cpu_id();
-    GICD.set_enable(int_id, en);
-    GICD.set_prio(int_id, 0x7f);
-    GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(cpu_id));
+    // println!(
+    //     "interrupt_arch_enable: cpu_id {}, int_id {}, en {}",
+    //     cpu_id, int_id, en
+    // );
+    if en {
+        GICD.set_prio(int_id, 0x7f);
+        GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(cpu_id));
+
+        GICD.set_enable(int_id, en);
+    } else {
+        GICD.set_enable(int_id, en);
+    }
 }
 
 pub fn interrupt_arch_ipi_send(cpu_id: usize, ipi_id: usize) {
