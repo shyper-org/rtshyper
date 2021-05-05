@@ -147,18 +147,16 @@ impl Vm {
     }
 
     pub fn set_int_bit_map(&self, int_id: usize) {
-        let vm_inner = self.inner.lock();
-        // if vm_inner.int_bitmap.is_none() {
-        //     vm_inner.int_bitmap = Some(BitAlloc4K::default());
+        let mut vm_inner = self.inner.lock();
+        vm_inner.int_bitmap.as_mut().unwrap().set(int_id);
+        // match vm_inner.int_bitmap {
+        //     Some(mut bitmap) => {
+        //         bitmap.set(int_id);
+        //     }
+        //     None => {
+        //         panic!("vm {} bitmap is None", self.vm_id());
+        //     }
         // }
-        match vm_inner.int_bitmap {
-            Some(mut bitmap) => {
-                bitmap.set(int_id);
-            }
-            None => {
-                panic!("vm {} bitmap is None", self.vm_id());
-            }
-        }
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
@@ -224,15 +222,19 @@ impl Vm {
     }
 
     pub fn has_interrupt(&self, int_id: usize) -> bool {
-        let vm_inner = self.inner.lock();
-        match vm_inner.int_bitmap {
-            Some(mut bitmap) => {
-                return bitmap.get(int_id) != 0;
-            }
-            None => {
-                panic!("vm {} bitmap is None", self.vm_id());
-            }
-        }
+        let mut vm_inner = self.inner.lock();
+        vm_inner.int_bitmap.as_mut().unwrap().get(int_id) != 0
+        // match vm_inner.int_bitmap {
+        //     Some(mut bitmap) => {
+        //         if int_id == 27 {
+        //             println!("bitmap 27 is {}", bitmap.get(int_id));
+        //         }
+        //         return bitmap.get(int_id) != 0;
+        //     }
+        //     None => {
+        //         panic!("vm {} bitmap is None", self.vm_id());
+        //     }
+        // }
     }
 
     pub fn emu_has_interrupt(&self, int_id: usize) -> bool {

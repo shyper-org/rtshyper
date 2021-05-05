@@ -81,7 +81,7 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+// #[derive(Copy, Clone)]
 pub struct BitAlloc16(u16);
 
 impl BitAlloc16 {

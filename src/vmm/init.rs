@@ -458,11 +458,9 @@ pub fn vmm_init() {
             let vm_type = vm.config.as_ref().unwrap().os_type;
             drop(vm);
 
-            println!("vmm_init_cpu");
             if !vmm_init_cpu(&vm_cfg_table.entries[i].cpu, vm_list[i].clone()) {
                 println!("vmm_init: vmm_init_cpu failed");
             }
-            println!("finish vmm_init_cpu");
 
             use crate::kernel::vm_if_list_set_type;
             vm_if_list_set_type(i, vm_type);

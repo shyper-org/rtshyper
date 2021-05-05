@@ -536,7 +536,7 @@ impl Vgic {
     }
 
     fn set_enable(&self, vcpu: Vcpu, int_id: usize, en: bool) {
-        // println!("DEBUG in vgic::set_enable");
+        println!("DEBUG in vgic::set_enable");
         if int_id < GIC_SGIS_NUM {
             return;
         }
@@ -606,7 +606,7 @@ impl Vgic {
                 let state = interrupt.state().to_num();
                 if interrupt.hw() {
                     let vgic_int_id = interrupt.id() as usize;
-                    GICD.set_state(vgic_int_id, if state == 1 { 2 } else { 1 })
+                    GICD.set_state(vgic_int_id, if state == 1 { 2 } else { state })
                 }
                 self.route(vcpu.clone(), interrupt.clone());
                 vgic_int_yield_owner(vcpu.clone(), interrupt.clone());
@@ -645,7 +645,7 @@ impl Vgic {
                 let state = interrupt.state().to_num();
                 if interrupt.hw() {
                     let vgic_int_id = interrupt.id() as usize;
-                    GICD.set_state(vgic_int_id, if state == 1 { 2 } else { 1 })
+                    GICD.set_state(vgic_int_id, if state == 1 { 2 } else { state })
                 }
                 self.route(vcpu.clone(), interrupt.clone());
                 vgic_int_yield_owner(vcpu.clone(), interrupt.clone());
@@ -756,7 +756,7 @@ impl Vgic {
     }
 
     fn set_prio(&self, vcpu: Vcpu, int_id: usize, mut prio: u8) {
-        let interrupt_option = self.get_int(active_vcpu().unwrap(), bit_extract(int_id, 0, 10));
+        let interrupt_option = self.get_int(active_vcpu().unwrap(), int_id);
         prio &= 0xf0; // gic-400 only allows 4 priority bits in non-secure state
 
         if let Some(interrupt) = interrupt_option {
@@ -804,7 +804,7 @@ impl Vgic {
 
     fn set_trgt(&self, vcpu: Vcpu, int_id: usize, trgt: u8) {
         // println!("DEBUG: set trgt");
-        let interrupt_option = self.get_int(active_vcpu().unwrap(), bit_extract(int_id, 0, 10));
+        let interrupt_option = self.get_int(active_vcpu().unwrap(), int_id);
         if let Some(interrupt) = interrupt_option {
             if vgic_int_get_owner(vcpu.clone(), interrupt.clone()) {
                 if interrupt.targets() != trgt {
@@ -1249,7 +1249,7 @@ impl Vgic {
         let vm = match active_vm() {
             Ok(vm) => vm,
             Err(()) => {
-                panic!("emu_isenabler_access: current vcpu.vm is none");
+                panic!("emu_ipriorityr_access: current vcpu.vm is none");
             }
         };
         let mut vm_has_interrupt_flag = false;
