@@ -431,6 +431,10 @@ impl GicHypervisorInterface {
         self.LR[lr_idx].get()
     }
 
+    pub fn misr(&self) -> u32 {
+        self.MISR.get()
+    }
+
     pub fn set_lr(&self, lr_idx: usize, val: u32) {
         self.LR[lr_idx].set(val)
     }

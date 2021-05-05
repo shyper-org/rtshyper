@@ -116,8 +116,8 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
             InterruptHandler::IpiIrqHandler(irq_handler) => {
                 irq_handler();
             }
-            InterruptHandler::GicMaintenanceHandler(_) => {
-                unimplemented!();
+            InterruptHandler::GicMaintenanceHandler(maintenace_handler) => {
+                maintenace_handler(int_id, src);
             }
             InterruptHandler::TimeIrqHandler(timer_irq_handler) => {
                 timer_irq_handler(int_id, src);

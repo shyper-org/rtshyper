@@ -287,6 +287,7 @@ impl Vgic {
         let mut vgicd = self.vgicd.lock();
         vgicd.ctlr
     }
+
     fn vgicd_typer(&self) -> u32 {
         let mut vgicd = self.vgicd.lock();
         vgicd.typer
@@ -536,7 +537,7 @@ impl Vgic {
     }
 
     fn set_enable(&self, vcpu: Vcpu, int_id: usize, en: bool) {
-        println!("DEBUG in vgic::set_enable");
+        // println!("DEBUG in vgic::set_enable");
         if int_id < GIC_SGIS_NUM {
             return;
         }
@@ -1337,6 +1338,18 @@ impl Vgic {
             context_set_gpr(emu_ctx.reg, val);
         }
     }
+
+    fn handle_trapped_eoir(&self, vcpu: Vcpu) {
+        unimplemented!();
+    }
+
+    fn refill_lrs(&self, vcpu: Vcpu) {
+        unimplemented!();
+    }
+
+    fn eoir_highest_spilled_active(&self, vcpu: Vcpu) {
+        unimplemented!();
+    }
 }
 
 fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) -> u32 {
@@ -1456,6 +1469,33 @@ fn vgic_int_get_owner(vcpu: Vcpu, interrupt: VgicInt) -> bool {
 
 pub fn gic_maintenance_handler(arg: usize, source: usize) {
     // TODO
+    println!("arg {}, src {}", arg, source);
+    let misr = GICH.misr();
+    let vm = match active_vm() {
+        Ok(vm) => vm,
+        Err(()) => {
+            panic!("gic_maintenance_handler: current vcpu.vm is none");
+        }
+    };
+    let vgic = vm.vgic();
+
+    if misr & 1 != 0 {
+        vgic.handle_trapped_eoir(active_vcpu().unwrap());
+    }
+
+    if misr & (1 << 3) != 0 {
+        vgic.refill_lrs(active_vcpu().unwrap());
+    }
+
+    if misr & (1 << 2) != 0 {
+        let mut hcr = GICH.hcr();
+        while hcr & (0b11111 << 27) != 0 {
+            vgic.eoir_highest_spilled_active(active_vcpu().unwrap());
+            hcr -= (1 << 27);
+            GICH.set_hcr(hcr);
+        }
+    }
+
     unimplemented!();
 }
 
