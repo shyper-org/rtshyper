@@ -35,6 +35,7 @@ pub struct VmRegion {
 }
 
 impl VmRegion {
+    #[allow(dead_code)]
     const fn default() -> VmRegion {
         VmRegion {
             ipa_start: 0,
@@ -49,6 +50,7 @@ pub struct VmMemoryConfig {
 }
 
 impl VmMemoryConfig {
+    #[allow(dead_code)]
     const fn default() -> VmMemoryConfig {
         VmMemoryConfig {
             num: 0,
@@ -68,6 +70,7 @@ pub struct VmImageConfig {
 }
 
 impl VmImageConfig {
+    #[allow(dead_code)]
     const fn default() -> VmImageConfig {
         VmImageConfig {
             kernel_name: None,
@@ -88,6 +91,7 @@ pub struct VmCpuConfig {
 }
 
 impl VmCpuConfig {
+    #[allow(dead_code)]
     const fn default() -> VmCpuConfig {
         VmCpuConfig {
             num: 0,
@@ -108,6 +112,7 @@ pub struct VmConfigEntry {
 }
 
 impl VmConfigEntry {
+    #[allow(dead_code)]
     const fn default() -> VmConfigEntry {
         VmConfigEntry {
             name: None,

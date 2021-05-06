@@ -10,7 +10,7 @@ use crate::kernel::{
 use crate::kernel::{
     ipi_intra_broadcast_msg, ipi_register, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType,
 };
-use crate::lib::{bit_extract, bit_get, bit_set};
+use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth};
 use crate::{arch::GICH, kernel::IpiInitcMessage};
 use crate::{board::platform_cpuid_to_cpuif, kernel::active_vcpu_id};
 use alloc::sync::Arc;
@@ -284,17 +284,17 @@ impl Vgic {
     }
 
     fn vgicd_ctlr(&self) -> u32 {
-        let mut vgicd = self.vgicd.lock();
+        let vgicd = self.vgicd.lock();
         vgicd.ctlr
     }
 
     fn vgicd_typer(&self) -> u32 {
-        let mut vgicd = self.vgicd.lock();
+        let vgicd = self.vgicd.lock();
         vgicd.typer
     }
 
     fn vgicd_iidr(&self) -> u32 {
-        let mut vgicd = self.vgicd.lock();
+        let vgicd = self.vgicd.lock();
         vgicd.iidr
     }
 
@@ -1220,17 +1220,19 @@ impl Vgic {
                 }
 
                 for i in 0..8 {
-                    let m = IpiInitcMessage {
-                        event: InitcEvent::VgicdSetPend,
-                        vm_id: active_vm_id(),
-                        int_id: (bit_extract(val, 0, 8) | (active_vcpu_id() << 10)) as u16,
-                        val: true as u8,
-                    };
-                    if !ipi_send_msg(i, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
-                        println!(
-                            "emu_sgiregs_access: Failed to send ipi message, target {} type {}",
-                            i, 0
-                        );
+                    if trgtlist & (1 << i) != 0 {
+                        let m = IpiInitcMessage {
+                            event: InitcEvent::VgicdSetPend,
+                            vm_id: active_vm_id(),
+                            int_id: (bit_extract(val, 0, 8) | (active_vcpu_id() << 10)) as u16,
+                            val: true as u8,
+                        };
+                        if !ipi_send_msg(i, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
+                            println!(
+                                "emu_sgiregs_access: Failed to send ipi message, target {} type {}",
+                                i, 0
+                            );
+                        }
                     }
                 }
             }
@@ -1330,8 +1332,8 @@ impl Vgic {
             // println!("read, first_int {}, width {}", first_int, emu_ctx.width);
             for i in 0..emu_ctx.width {
                 println!("{}", self.get_trgt(active_vcpu().unwrap(), first_int + i));
-                val |= ((self.get_trgt(active_vcpu().unwrap(), first_int + i) as usize)
-                    << (GIC_TARGET_BITS * i));
+                val |= (self.get_trgt(active_vcpu().unwrap(), first_int + i) as usize)
+                    << (GIC_TARGET_BITS * i);
             }
             // println!("after read val {}", val);
             val = vgic_target_translate(active_vm().unwrap(), val as u32, false) as usize;
@@ -1340,15 +1342,167 @@ impl Vgic {
     }
 
     fn handle_trapped_eoir(&self, vcpu: Vcpu) {
-        unimplemented!();
+        let gic_lrs = GIC_LRS_NUM.lock();
+        let mut lr_idx_opt = bitmap_find_nth(
+            GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
+            0,
+            *gic_lrs,
+            1,
+            true,
+        );
+
+        while lr_idx_opt.is_some() {
+            let lr_idx = lr_idx_opt.unwrap();
+            let lr_val = GICH.lr(lr_idx) as usize;
+            GICH.set_lr(lr_idx, 0);
+
+            match self.get_int(vcpu.clone(), bit_extract(lr_val, 0, 10)) {
+                Some(interrupt) => {
+                    interrupt.set_in_lr(false);
+                    if (interrupt.id() as usize) < GIC_SGIS_NUM {
+                        self.add_lr(vcpu.clone(), interrupt.clone());
+                    } else {
+                        vgic_int_yield_owner(vcpu.clone(), interrupt.clone());
+                    }
+                }
+                None => {
+                    unimplemented!();
+                }
+            }
+            lr_idx_opt = bitmap_find_nth(
+                GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
+                0,
+                *gic_lrs,
+                1,
+                true,
+            );
+        }
     }
 
     fn refill_lrs(&self, vcpu: Vcpu) {
-        unimplemented!();
+        let gic_lrs = GIC_LRS_NUM.lock();
+        let mut has_pending = false;
+        for i in 0..*gic_lrs {
+            let lr = GICH.lr(i) as usize;
+            if bit_extract(lr, 28, 2) & 1 != 0 {
+                has_pending = true;
+            }
+        }
+
+        let mut lr_idx_opt = bitmap_find_nth(
+            GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
+            0,
+            *gic_lrs,
+            1,
+            true,
+        );
+        let mut interrupt_opt: Option<VgicInt> = None;
+        while lr_idx_opt.is_some() {
+            let lr_idx = lr_idx_opt.unwrap();
+            let mut state = 0;
+
+            for i in 0..gic_max_spi() {
+                let mut temp_int_opt = self.get_int(active_vcpu().unwrap(), i);
+
+                match temp_int_opt {
+                    Some(ref temp_int) => {
+                        if vgic_int_get_owner(active_vcpu().unwrap(), temp_int.clone()) {
+                            let temp_state = vgic_get_state(temp_int.clone());
+                            let cpu_is_target = self.get_trgt(active_vcpu().unwrap(), i) & (1 << cpu_id()) != 0;
+                            if cpu_is_target && temp_state != 0 && !temp_int.in_lr() {
+                                match interrupt_opt {
+                                    Some(ref interrupt) => {
+                                        if (!has_pending && ((temp_state & 1 != 0) && ((state & 2 != 0) || ((state & 1 != 0) && temp_int.prio() < interrupt.prio())))) || (has_pending && ((temp_state & 2 != 0) && (state & 1 != 0))) || (has_pending && temp_int.prio() < interrupt.prio()) {
+                                            let aux = interrupt.clone();
+                                            interrupt_opt = Some(temp_int.clone());
+        
+                                            state = vgic_get_state(temp_int.clone());
+                                            temp_int_opt = Some(aux.clone());
+                                        }
+                                    },
+                                    None => {
+                                        interrupt_opt = Some(temp_int.clone());
+                                        state = vgic_get_state(temp_int.clone());
+                                        temp_int_opt = None;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    None => {
+                        println!("refill_lrs: get empty temp interrupt");
+                    }
+                }
+                
+                if let Some(ref temp_int) = temp_int_opt {
+                    vgic_int_yield_owner(active_vcpu().unwrap(), temp_int.clone());
+                }
+            }
+
+            if let Some(ref interrupt) = interrupt_opt {
+                self.write_lr(active_vcpu().unwrap(), interrupt.clone(), lr_idx);
+                if state & 1 != 0{
+                    has_pending = true;
+                }
+            } else {
+                GICH.set_hcr(!(1 << 3));
+                break;
+            }
+
+            lr_idx_opt = bitmap_find_nth(
+                GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
+                0,
+                *gic_lrs,
+                1,
+                true,
+            );
+        }
     }
 
     fn eoir_highest_spilled_active(&self, vcpu: Vcpu) {
-        unimplemented!();
+        let mut interrupt_opt: Option<VgicInt> = None;
+        for i in 0..gic_max_spi() {
+            let mut temp_int_opt = self.get_int(vcpu.clone(), i);
+
+            match temp_int_opt {
+                Some(ref temp_int) => {
+                    if vgic_int_get_owner(vcpu.clone(), temp_int.clone()) && (temp_int.state().to_num() & 2 != 0) {
+                        match interrupt_opt {
+                            Some(ref interrupt) => {
+                                if interrupt.prio() < temp_int.prio() {
+                                    let aux = interrupt.clone();
+                                    interrupt_opt = Some(temp_int.clone());
+                                    temp_int_opt = Some(aux.clone());
+                                }
+                            },
+                            None => {
+                                interrupt_opt = Some(temp_int.clone());
+                                temp_int_opt = None;
+                            }
+                        }
+                    }
+
+                    if let Some(ref temp_int) = temp_int_opt {
+                        vgic_int_yield_owner(vcpu.clone(), temp_int.clone());
+                    }
+                }
+                None => {
+                    println!("refill_lrs: get empty temp interrupt");
+                }
+            }
+        }
+
+        if let Some(ref interrupt) = interrupt_opt {
+            let state = interrupt.state().to_num();
+            interrupt.set_state(IrqState::num_to_state(state & !2));
+            if vgic_int_is_hw(interrupt.clone()) {
+                GICD.set_act(interrupt.id() as usize, false);
+            } else {
+                if interrupt.state().to_num() & 1 != 0 {
+                    self.add_lr(vcpu.clone(), interrupt.clone());
+                }
+            }
+        }
     }
 }
 
@@ -1491,12 +1645,10 @@ pub fn gic_maintenance_handler(arg: usize, source: usize) {
         let mut hcr = GICH.hcr();
         while hcr & (0b11111 << 27) != 0 {
             vgic.eoir_highest_spilled_active(active_vcpu().unwrap());
-            hcr -= (1 << 27);
+            hcr -= 1 << 27;
             GICH.set_hcr(hcr);
         }
     }
-
-    unimplemented!();
 }
 
 const VGICD_REG_OFFSET_PREFIX_CTLR: usize = 0x0; // same as TYPER & IIDR

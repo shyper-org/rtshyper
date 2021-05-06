@@ -120,10 +120,12 @@ impl GicDistributor {
         self.base_addr as *const GicDistributorBlock
     }
 
+    #[allow(dead_code)]
     pub fn is_enabler(&self, idx: usize) -> u32 {
         self.ISENABLER[idx].get()
     }
 
+    #[allow(dead_code)]
     pub fn ic_enabler(&self, idx: usize) -> u32 {
         self.ICENABLER[idx].get()
     }
@@ -173,6 +175,7 @@ impl GicDistributor {
             .set(((1 << (16 + cpu_if)) | (sgi_num & 0b1111)) as u32);
     }
 
+    #[allow(dead_code)]
     pub fn prio(&self, int_id: usize) -> usize {
         let idx = (int_id * 8) / 32;
         let off = (int_id * 8) % 32;
@@ -191,6 +194,7 @@ impl GicDistributor {
         drop(lock);
     }
 
+    #[allow(dead_code)]
     pub fn trgt(&self, int_id: usize) -> usize {
         let idx = (int_id * 8) / 32;
         let off = (int_id * 8) % 32;
@@ -247,7 +251,7 @@ impl GicDistributor {
         drop(lock);
     }
 
-    fn set_act(&self, int_id: usize, act: bool) {
+    pub fn set_act(&self, int_id: usize, act: bool) {
         let reg_ind = int_id / 32;
         let mask = 1 << int_id % 32;
 
@@ -369,6 +373,7 @@ impl GicCpuInterface {
         GICH.HCR.set(hcr_prev | GICH_HCR_LRENPIE_BIT as u32);
     }
 
+    #[allow(dead_code)]
     pub fn set_dir(&self, dir: u32) {
         self.DIR.set(dir);
     }
@@ -425,6 +430,10 @@ impl GicHypervisorInterface {
 
     pub fn elsr(&self, elsr_idx: usize) -> u32 {
         self.EISR[elsr_idx].get()
+    }
+
+    pub fn eisr(&self, eisr_idx: usize) -> u32 {
+        self.EISR[eisr_idx].get()
     }
 
     pub fn lr(&self, lr_idx: usize) -> u32 {

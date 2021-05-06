@@ -1,7 +1,6 @@
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
-use crate::board::PLATFORM_CPU_NUM_MAX;
+// use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::kernel::{cpu_id, InterruptHandler};
-use spin::Mutex;
 
 // #[derive(Copy, Clone)]
 // struct Timer(bool);

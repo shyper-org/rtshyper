@@ -91,6 +91,7 @@ impl Vm {
         self.inner.clone()
     }
 
+    #[allow(dead_code)]
     pub fn default() -> Vm {
         Vm {
             inner: Arc::new(Mutex::new(VmInner::default())),
@@ -261,7 +262,8 @@ impl Vm {
             return Err(());
         }
     }
-
+    
+    #[allow(dead_code)]
     pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
         let vm_inner = self.inner.lock();
         for vcpuid in 0..vm_inner.cpu_num {
@@ -277,7 +279,7 @@ impl Vm {
         for i in 0..len {
             let shift = self.vcpuid_to_pcpuid(i);
             if mask & (1 << i) != 0 && !shift.is_err() {
-                pmask |= (1 << shift.unwrap());
+                pmask |= 1 << shift.unwrap();
             }
         }
         return pmask;
@@ -288,7 +290,7 @@ impl Vm {
         for i in 0..len {
             let shift = self.vcpuid_to_pcpuid(i);
             if mask & (1 << i) != 0 && !shift.is_err() {
-                pmask |= (1 << shift.unwrap());
+                pmask |= 1 << shift.unwrap();
             }
         }
         return pmask;

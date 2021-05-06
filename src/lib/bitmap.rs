@@ -85,6 +85,7 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
 pub struct BitAlloc16(u16);
 
 impl BitAlloc16 {
+    #[allow(dead_code)]
     pub const fn default() -> BitAlloc16 {
         BitAlloc16(0)
     }

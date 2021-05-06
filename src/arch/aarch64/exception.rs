@@ -9,7 +9,7 @@ global_asm!(include_str!("exception.S"));
 
 #[inline(always)]
 pub fn exception_esr() -> usize {
-    let mut esr = 0;
+    let esr;
     unsafe {
         llvm_asm!("mrs $0, esr_el2" : "=r"(esr) ::: "volatile");
     }
@@ -32,7 +32,7 @@ fn exception_far() -> usize {
 
 #[inline(always)]
 fn exception_hpfar() -> usize {
-    let mut hpfar = 0;
+    let hpfar;
     unsafe {
         llvm_asm!("mrs $0, hpfar_el2" : "=r"(hpfar) ::: "volatile");
     }

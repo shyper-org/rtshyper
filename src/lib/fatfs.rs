@@ -10,6 +10,7 @@ struct Disk {
 }
 
 impl Disk {
+    #[allow(dead_code)]
     const fn default() -> Disk {
         Disk {
             pointer: 0,

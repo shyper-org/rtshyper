@@ -23,6 +23,7 @@ pub enum InterruptHandler {
 }
 
 impl InterruptHandler {
+    #[allow(dead_code)]
     pub fn call(&self, arg0: usize, arg1: usize) {
         match self {
             InterruptHandler::IpiIrqHandler(irq_handler) => irq_handler(),

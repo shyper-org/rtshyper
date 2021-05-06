@@ -41,6 +41,7 @@ impl CpuIf {
         }
     }
 
+    #[allow(dead_code)]
     pub fn push(&mut self, ipi_msg: IpiMessage) {
         self.msg_queue.push(ipi_msg);
     }

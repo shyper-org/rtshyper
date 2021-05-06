@@ -17,6 +17,7 @@ impl PageFrame {
     self.pa
   }
 
+  #[allow(dead_code)]
   pub fn zero(&self) {
     unsafe {
       memset(self.pa as *mut u8, 0, PAGE_SIZE);
@@ -28,7 +29,8 @@ impl PageFrame {
       core::slice::from_raw_parts(self.pa as *const T, PAGE_SIZE / core::mem::size_of::<T>())
     }
   }
-
+  
+  #[allow(dead_code)]
   pub fn as_mut_slice<T>(&self) -> &'static mut [T] {
     unsafe {
       core::slice::from_raw_parts_mut(self.pa as *mut T, PAGE_SIZE / core::mem::size_of::<T>())

@@ -66,11 +66,13 @@ impl Vcpu {
         inner.vm_id()
     }
 
+    #[allow(dead_code)]
     pub fn vm_pt_dir(&self) -> usize {
         let inner = self.inner.lock();
         inner.vm_pt_dir()
     }
 
+    #[allow(dead_code)]
     pub fn arch_reset(&self) {
         let inner = self.inner.lock();
         inner.arch_reset();
@@ -81,6 +83,7 @@ impl Vcpu {
         inner.reset_state();
     }
 
+    #[allow(dead_code)]
     pub fn context_ext_regs_store(&self) {
         let mut inner = self.inner.lock();
         inner.context_ext_regs_store();

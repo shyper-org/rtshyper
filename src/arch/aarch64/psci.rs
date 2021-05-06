@@ -18,7 +18,7 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
         "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
         fid, x1, x2, x3
     );
-    let mut r: usize = usize::MAX;
+    let r;
     match fid {
         PSCI_VERSION => {
             r = smc_call(PSCI_VERSION, 0, 0, 0);
