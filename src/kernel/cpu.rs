@@ -55,7 +55,7 @@ pub static CPU_IF_LIST: Mutex<Vec<CpuIf>> = Mutex::new(Vec::new());
 
 fn cpu_if_init() {
     let mut cpu_if_list = CPU_IF_LIST.lock();
-    for i in 0..PLATFORM_CPU_NUM_MAX {
+    for _ in 0..PLATFORM_CPU_NUM_MAX {
         cpu_if_list.push(CpuIf::default());
     }
 }

@@ -45,7 +45,7 @@ pub fn timer_enable(val: bool) {
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
 }
 
-fn timer_irq_handler(arg: usize, src: usize) {
+fn timer_irq_handler(arg: usize, _: usize) {
     use crate::arch::{
         timer_arch_disable_irq, timer_arch_enable_irq, timer_arch_get_counter, timer_arch_set,
     };

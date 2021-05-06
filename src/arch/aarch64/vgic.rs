@@ -407,9 +407,9 @@ impl Vgic {
             }
 
             if let Some(idx) = lr_ind {
-                let spilled_int = self.get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111);
-                self.remove_lr(vcpu.clone(), interrupt.clone());
-                vgic_int_yield_owner(vcpu.clone(), interrupt.clone());
+                let spilled_int = self.get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111).unwrap();
+                self.remove_lr(vcpu.clone(), spilled_int.clone());
+                vgic_int_yield_owner(vcpu.clone(), spilled_int.clone());
             }
         }
 
@@ -852,7 +852,7 @@ impl Vgic {
         return interrupt_option.unwrap().targets();
     }
 
-    pub fn inject(&self, id: usize, src: usize) {
+    pub fn inject(&self, id: usize, _src: usize) {
         let vcpu = active_vcpu().unwrap();
         let interrupt_option = self.get_int(vcpu.clone(), bit_extract(id, 0, 10));
         if let Some(interrupt) = interrupt_option {

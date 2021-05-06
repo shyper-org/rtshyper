@@ -346,7 +346,7 @@ fn vmm_assign_vcpu() {
 
     if cpu_id == 0 {
         let mut vm_assign_list = VM_ASSIGN.lock();
-        for i in 0..vm_num {
+        for _ in 0..vm_num {
             vm_assign_list.push(Mutex::new(VmAssignment::default()));
         }
     }

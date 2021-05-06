@@ -113,10 +113,10 @@ pub fn fs_init() {
                 if val != 0 {
                     idx += 1;
                 }
-                let tmp = char::from_u32(val as u32);
+                // let tmp = char::from_u32(val as u32);
                 // print!("{}", tmp.unwrap());
             }
-            // println!("idx is {}", idx);
+            println!("idx is {}", idx);
             println!("FAT file system init ok");
         }
         Err(_) => {
