@@ -23,7 +23,7 @@ fn exception_class() -> usize {
 
 #[inline(always)]
 fn exception_far() -> usize {
-    let mut far = 0;
+    let far;
     unsafe {
         llvm_asm!("mrs $0, far_el2" : "=r"(far) ::: "volatile");
     }
@@ -101,7 +101,7 @@ unsafe extern "C" fn current_el_sp0_synchronous() {
 }
 
 #[no_mangle]
-unsafe extern "C" fn current_el_sp0_irq(ctx: *mut ContextFrame) {
+unsafe extern "C" fn current_el_sp0_irq() {
     // lower_aarch64_irq(ctx);
     panic!("current_el_sp0_irq");
 }
@@ -175,7 +175,7 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
 }
 
 #[no_mangle]
-unsafe extern "C" fn lower_aarch64_serror(ctx: *mut ContextFrame) {
+unsafe extern "C" fn lower_aarch64_serror() {
     panic!("lower aarch64 serror");
 }
 

@@ -366,6 +366,12 @@ impl Vgic {
 
         let gic_lrs_num = GIC_LRS_NUM.lock();
         let mut lr_ind = None;
+        // for i in 0..4 {
+        //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+        // }
+        // println!("elsr[0] {:x}", GICH.elsr(0));
+        // println!("elsr[1] {:x}", GICH.elsr(1));
+        // println!("hcr 0x{:x}", GICH.hcr());
         for i in 0..*gic_lrs_num {
             if (GICH.elsr(i / 32) & (1 << i % 32)) != 0 {
                 lr_ind = Some(i);
@@ -407,7 +413,9 @@ impl Vgic {
             }
 
             if let Some(idx) = lr_ind {
-                let spilled_int = self.get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111).unwrap();
+                let spilled_int = self
+                    .get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111)
+                    .unwrap();
                 self.remove_lr(vcpu.clone(), spilled_int.clone());
                 vgic_int_yield_owner(vcpu.clone(), spilled_int.clone());
             }
@@ -417,6 +425,7 @@ impl Vgic {
             self.write_lr(vcpu.clone(), interrupt.clone(), idx);
             return true;
         } else {
+            // println!("turn on maintenance");
             // turn on maintenance interrupts
             if vgic_get_state(interrupt.clone()) & 1 != 0 {
                 let hcr = GICH.hcr();
@@ -1402,24 +1411,32 @@ impl Vgic {
             let mut state = 0;
 
             for i in 0..gic_max_spi() {
-                let mut temp_int_opt = self.get_int(active_vcpu().unwrap(), i);
+                let mut temp_int_opt = self.get_int(vcpu.clone(), i);
 
                 match temp_int_opt {
                     Some(ref temp_int) => {
-                        if vgic_int_get_owner(active_vcpu().unwrap(), temp_int.clone()) {
+                        if vgic_int_get_owner(vcpu.clone(), temp_int.clone()) {
                             let temp_state = vgic_get_state(temp_int.clone());
-                            let cpu_is_target = self.get_trgt(active_vcpu().unwrap(), i) & (1 << cpu_id()) != 0;
+                            let cpu_is_target =
+                                self.get_trgt(vcpu.clone(), i) & (1 << cpu_id()) != 0;
                             if cpu_is_target && temp_state != 0 && !temp_int.in_lr() {
                                 match interrupt_opt {
                                     Some(ref interrupt) => {
-                                        if (!has_pending && ((temp_state & 1 != 0) && ((state & 2 != 0) || ((state & 1 != 0) && temp_int.prio() < interrupt.prio())))) || (has_pending && ((temp_state & 2 != 0) && (state & 1 != 0))) || (has_pending && temp_int.prio() < interrupt.prio()) {
+                                        if (!has_pending
+                                            && ((temp_state & 1 != 0)
+                                                && ((state & 2 != 0)
+                                                    || ((state & 1 != 0)
+                                                        && temp_int.prio() < interrupt.prio()))))
+                                            || (has_pending
+                                                && ((temp_state & 2 != 0) && (state & 1 != 0)))
+                                            || (has_pending && temp_int.prio() < interrupt.prio())
+                                        {
                                             let aux = interrupt.clone();
                                             interrupt_opt = Some(temp_int.clone());
-        
                                             state = vgic_get_state(temp_int.clone());
                                             temp_int_opt = Some(aux.clone());
                                         }
-                                    },
+                                    }
                                     None => {
                                         interrupt_opt = Some(temp_int.clone());
                                         state = vgic_get_state(temp_int.clone());
@@ -1428,20 +1445,19 @@ impl Vgic {
                                 }
                             }
                         }
-                    },
+                    }
                     None => {
                         println!("refill_lrs: get empty temp interrupt");
                     }
                 }
-                
                 if let Some(ref temp_int) = temp_int_opt {
-                    vgic_int_yield_owner(active_vcpu().unwrap(), temp_int.clone());
+                    vgic_int_yield_owner(vcpu.clone(), temp_int.clone());
                 }
             }
 
             if let Some(ref interrupt) = interrupt_opt {
-                self.write_lr(active_vcpu().unwrap(), interrupt.clone(), lr_idx);
-                if state & 1 != 0{
+                self.write_lr(vcpu.clone(), interrupt.clone(), lr_idx);
+                if state & 1 != 0 {
                     has_pending = true;
                 }
             } else {
@@ -1466,7 +1482,9 @@ impl Vgic {
 
             match temp_int_opt {
                 Some(ref temp_int) => {
-                    if vgic_int_get_owner(vcpu.clone(), temp_int.clone()) && (temp_int.state().to_num() & 2 != 0) {
+                    if vgic_int_get_owner(vcpu.clone(), temp_int.clone())
+                        && (temp_int.state().to_num() & 2 != 0)
+                    {
                         match interrupt_opt {
                             Some(ref interrupt) => {
                                 if interrupt.prio() < temp_int.prio() {
@@ -1474,7 +1492,7 @@ impl Vgic {
                                     interrupt_opt = Some(temp_int.clone());
                                     temp_int_opt = Some(aux.clone());
                                 }
-                            },
+                            }
                             None => {
                                 interrupt_opt = Some(temp_int.clone());
                                 temp_int_opt = None;
@@ -1623,7 +1641,11 @@ fn vgic_int_get_owner(vcpu: Vcpu, interrupt: VgicInt) -> bool {
 
 pub fn gic_maintenance_handler(arg: usize, source: usize) {
     // TODO
-    println!("arg {}, src {}", arg, source);
+    // println!("gic_maintenance_handler: arg {}, src {}", arg, source);
+    // for i in 0..4 {
+    //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+    // }
+
     let misr = GICH.misr();
     let vm = match active_vm() {
         Ok(vm) => vm,
@@ -1661,7 +1683,7 @@ const VGICD_REG_OFFSET_PREFIX_ICACTIVER: usize = 0x7;
 const VGICD_REG_OFFSET_PREFIX_ICFGR: usize = 0x18;
 const VGICD_REG_OFFSET_PREFIX_SGIR: usize = 0x1e;
 
-pub fn emu_intc_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
+pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     let offset = emu_ctx.address & 0xfff;
     if emu_ctx.width > 4 {
         return false;
@@ -1675,10 +1697,10 @@ pub fn emu_intc_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     };
     let vgic = vm.vgic();
     let vgicd_offset_prefix = (offset & 0xf80) >> 7;
-    println!(
-        "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
-        vgicd_offset_prefix, offset
-    );
+    // println!(
+    //     "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
+    //     vgicd_offset_prefix, offset
+    // );
     match vgicd_offset_prefix {
         VGICD_REG_OFFSET_PREFIX_CTLR
         | VGICD_REG_OFFSET_PREFIX_ISENABLER
@@ -1763,15 +1785,15 @@ pub fn emu_intc_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
             }
         }
     }
-    println!("finish emu_intc_handler");
+    // println!("finish emu_intc_handler");
     true
 }
 
 fn vgic_ipi_handler(msg: &IpiMessage) {
     // println!("DEBUG: vgic ipi handler");
-    let mut vm_id = 0;
-    let mut int_id = 0;
-    let mut val = 0;
+    let vm_id;
+    let int_id;
+    let val;
     match &msg.ipi_message {
         IpiInnerMsg::Initc(intc) => {
             vm_id = intc.vm_id;

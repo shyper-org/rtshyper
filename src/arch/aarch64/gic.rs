@@ -429,7 +429,7 @@ impl GicHypervisorInterface {
     }
 
     pub fn elsr(&self, elsr_idx: usize) -> u32 {
-        self.EISR[elsr_idx].get()
+        self.ELSR[elsr_idx].get()
     }
 
     pub fn eisr(&self, eisr_idx: usize) -> u32 {

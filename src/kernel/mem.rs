@@ -94,7 +94,7 @@ pub enum AllocError {
 use self::AllocError::*;
 use crate::mm::PageFrame;
 
-pub fn mem_heap_alloc(page_num: usize, aligned: bool) -> Result<PageFrame, AllocError> {
+pub fn mem_heap_alloc(page_num: usize, _aligned: bool) -> Result<PageFrame, AllocError> {
     if page_num == 0 {
         return Err(AllocZeroPage);
     }

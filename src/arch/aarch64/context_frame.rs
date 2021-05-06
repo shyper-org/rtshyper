@@ -26,7 +26,7 @@ impl core::fmt::Display for Aarch64ContextFrame {
 }
 
 impl crate::arch::ContextFrameTrait for Aarch64ContextFrame {
-    fn new(pc: usize, sp: usize, arg: usize, privileged: bool) -> Self {
+    fn new(pc: usize, sp: usize, arg: usize) -> Self {
         let mut r = Aarch64ContextFrame {
             gpr: [0; 31],
             spsr: (SPSR_EL1::M::EL1h

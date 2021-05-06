@@ -98,7 +98,7 @@ fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
 }
 
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
-    println!("interrupt_handler: int_id {}", int_id);
+    // println!("interrupt_handler: int_id {}", int_id);
     use crate::kernel::active_vm;
     match active_vm() {
         Ok(vm) => {
@@ -111,7 +111,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     }
 
     if interrupt_is_reserved(int_id) {
-        println!("is reserved");
+        // println!("is reserved");
         let irq_handler = INTERRUPT_HANDLERS.lock();
         match irq_handler[int_id] {
             InterruptHandler::IpiIrqHandler(irq_handler) => {

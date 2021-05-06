@@ -14,7 +14,7 @@ use spin::Mutex;
 
 fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
     let result = mem_page_alloc();
-    let mut vm_id = 0;
+    let vm_id;
 
     if let Ok(pt_dir_frame) = result {
         let vm_inner_lock = vm.inner();
@@ -208,7 +208,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
     }
 
     for (idx, emu_dev) in config.as_ref().unwrap().iter().enumerate() {
-        let mut dev_name = "";
+        let dev_name;
         match emu_dev.emu_type {
             EmuDeviceTGicd => {
                 dev_name = "interrupt controller";
