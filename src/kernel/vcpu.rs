@@ -1,6 +1,6 @@
 use super::{CpuState, Vm, VmType};
 use crate::arch::tlb_invalidate_guest_all;
-use crate::arch::{Aarch64ContextFrame, VmContext};
+use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -93,6 +93,16 @@ impl Vcpu {
         let inner = self.inner.lock();
         inner.vcpu_ctx_addr()
     }
+
+    pub fn set_elr(&self, elr: usize) {
+        let mut inner = self.inner.lock();
+        inner.set_elr(elr);
+    }
+
+    pub fn set_gpr(&self, idx: usize, val: usize) {
+        let mut inner = self.inner.lock();
+        inner.set_gpr(idx, val);
+    }
 }
 
 pub struct VcpuInner {
@@ -171,6 +181,14 @@ impl VcpuInner {
 
     fn context_ext_regs_store(&mut self) {
         self.vm_ctx.ext_regs_store();
+    }
+
+    fn set_elr(&mut self, elr: usize) {
+        self.vcpu_ctx.set_exception_pc(elr);
+    }
+
+    fn set_gpr(&mut self, idx: usize, val: usize) {
+        self.vcpu_ctx.set_gpr(idx, val);
     }
 }
 

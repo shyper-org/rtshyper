@@ -19,11 +19,25 @@ pub enum InitcEvent {
 }
 
 #[derive(Copy, Clone)]
+pub enum PowerEvent {
+    PsciIpiCpuOn,
+    PsciIpiCpuOff,
+    PsciIpiCpuReset,
+}
+
+#[derive(Copy, Clone)]
 pub struct IpiInitcMessage {
     pub event: InitcEvent,
     pub vm_id: usize,
     pub int_id: u16,
     pub val: u8,
+}
+
+#[derive(Copy, Clone)]
+pub struct IpiPowerMessage {
+    pub event: PowerEvent,
+    pub entry: usize,
+    pub context: usize,
 }
 
 #[derive(Copy, Clone)]
@@ -38,6 +52,7 @@ pub enum IpiType {
 #[derive(Copy, Clone)]
 pub enum IpiInnerMsg {
     Initc(IpiInitcMessage),
+    Power(IpiPowerMessage),
     None,
 }
 

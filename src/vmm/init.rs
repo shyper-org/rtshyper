@@ -196,8 +196,8 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
 
 use crate::arch::{emu_intc_handler, emu_intc_init};
 use crate::config::VmEmulatedDeviceConfig;
-use crate::device::emu_register_dev;
 use crate::device::EmuDeviceType::*;
+use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm) -> bool {
     if config.is_none() {
         println!(
@@ -224,6 +224,16 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             }
             EmuDeviceTVirtioBlk => {
                 dev_name = "virtio block";
+                emu_register_dev(
+                    vm.vm_id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_virtio_mmio_handler,
+                );
+                if !emu_virtio_mmio_init(vm.clone(), idx) {
+                    return false;
+                }
             }
             _ => {
                 println!("vmm_init_emulated_device: unknown emulated device");
