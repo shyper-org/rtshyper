@@ -1340,7 +1340,7 @@ impl Vgic {
         } else {
             // println!("read, first_int {}, width {}", first_int, emu_ctx.width);
             for i in 0..emu_ctx.width {
-                println!("{}", self.get_trgt(active_vcpu().unwrap(), first_int + i));
+                // println!("{}", self.get_trgt(active_vcpu().unwrap(), first_int + i));
                 val |= (self.get_trgt(active_vcpu().unwrap(), first_int + i) as usize)
                     << (GIC_TARGET_BITS * i);
             }
@@ -1537,11 +1537,11 @@ fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) -> u32 {
         };
     }
 
-    println!(
-        "finish vgic_target_translate: from {:x} to {:x}",
-        trgt,
-        (to[0] & 0xff) | ((to[1] & 0xff) << 8) | ((to[2] & 0xff) << 16) | ((to[3] & 0xff) << 24)
-    );
+    // println!(
+    //     "finish vgic_target_translate: from {:x} to {:x}",
+    //     trgt,
+    //     (to[0] & 0xff) | ((to[1] & 0xff) << 8) | ((to[2] & 0xff) << 16) | ((to[3] & 0xff) << 24)
+    // );
     return (to[0] & 0xff)
         | ((to[1] & 0xff) << 8)
         | ((to[2] & 0xff) << 16)

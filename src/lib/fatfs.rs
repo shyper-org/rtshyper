@@ -26,6 +26,12 @@ impl core_io::Read for Disk {
         let offset = self.pointer - round_down(self.pointer, 512);
         let count = round_up(offset + buf.len(), 512) / 512;
         assert!(count <= 8);
+        if buf.len() == PAGE_SIZE {
+            let addr = buf.as_ptr() as usize;
+            crate::driver::read(sector, count, addr);
+            return Ok(buf.len());
+        }
+
         let result = crate::kernel::mem_page_alloc();
         if let Ok(frame) = result {
             // if count >= 4 {
