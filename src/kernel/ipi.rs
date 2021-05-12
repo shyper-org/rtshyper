@@ -5,7 +5,7 @@ use crate::kernel::{cpu_id, interrupt_cpu_ipi_send, CPU_IF_LIST};
 use alloc::vec::Vec;
 use spin::Mutex;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
     VgicdGichEn,
     VgicdSetEn,
