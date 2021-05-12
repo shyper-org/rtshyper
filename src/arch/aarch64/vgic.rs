@@ -1790,7 +1790,7 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
 }
 
 fn vgic_ipi_handler(msg: &IpiMessage) {
-    // println!("DEBUG: vgic ipi handler");
+    println!("DEBUG: vgic ipi handler");
     let vm_id;
     let int_id;
     let val;

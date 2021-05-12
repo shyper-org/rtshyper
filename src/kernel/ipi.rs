@@ -90,6 +90,7 @@ pub fn ipi_irq_handler() {
         if ipi_handler_list.len() <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
+            println!("ipi type is {}", ipi_type);
             (ipi_handler_list[ipi_type].handler)(&ipi_msg);
         }
         msg = cpu_if_list[cpu_id].pop();
@@ -106,7 +107,11 @@ pub fn ipi_register(ipi_type: IpiType, handler: ipi_handler) -> bool {
         }
     }
 
-    ipi_handler_list.push(IpiHandler::new(handler, ipi_type));
+    while (ipi_type as usize) >= ipi_handler_list.len() {
+        ipi_handler_list.push(IpiHandler::new(handler, ipi_type));
+    }
+    ipi_handler_list[ipi_type as usize] = IpiHandler::new(handler, ipi_type);
+    // ipi_handler_list.push(IpiHandler::new(handler, ipi_type));
     true
 }
 

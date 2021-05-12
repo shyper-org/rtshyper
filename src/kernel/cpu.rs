@@ -288,6 +288,10 @@ pub fn set_cpu_ctx(ctx: *mut ContextFrame) {
     }
 }
 
+pub fn cpu_ctx() -> Option<usize> {
+    unsafe { CPU.ctx }
+}
+
 pub fn clear_cpu_ctx() {
     unsafe {
         CPU.clear_ctx();

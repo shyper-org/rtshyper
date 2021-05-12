@@ -1,5 +1,10 @@
 use super::smc::smc_call;
+use crate::arch::Aarch64ContextFrame;
 use crate::kernel::context_set_gpr;
+use crate::kernel::{
+    active_vcpu, active_vcpu_id, active_vm_id, cpu_ctx, cpu_id, set_cpu_assign, set_cpu_ctx,
+    set_cpu_state, CpuState,
+};
 
 pub const PSCI_VERSION: usize = 0x84000000;
 pub const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
@@ -30,6 +35,7 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             r = psci_guest_cpu_on(x1, x2, x3);
         }
         _ => {
+            unimplemented!();
             return false;
         }
     }
@@ -39,7 +45,6 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     true
 }
 
-use crate::kernel::{active_vcpu, set_cpu_assign, set_cpu_ctx, set_cpu_state, CpuState};
 fn psci_vcpu_on(entry: usize, ctx: usize) {
     set_cpu_assign(true);
     set_cpu_state(CpuState::CpuRun);
@@ -48,14 +53,39 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
     vcpu.set_elr(entry);
 
     vcpu.reset_state();
-    set_cpu_ctx(vcpu.vcpu_ctx_addr() as *mut _);
+    match cpu_ctx() {
+        Some(ctx) => {
+            use core::mem::size_of;
+            use rlibc::memcpy;
+            let size = size_of::<Aarch64ContextFrame>();
+            unsafe {
+                memcpy(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
+            }
+            println!("cpu_ctx {:x}", cpu_ctx().unwrap());
+        }
+        None => {
+            panic!("psci_vcpu_on: cpu_ctx is NULL");
+        }
+    }
 }
 
 use crate::kernel::IpiMessage;
 pub fn psci_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::Power(power_msg) => match power_msg.event {
-            PowerEvent::PsciIpiCpuOn => {}
+            PowerEvent::PsciIpiCpuOn => {
+                println!(
+                    "Core {} (vm {}, vcpu {}) is woke up",
+                    cpu_id(),
+                    active_vm_id(),
+                    active_vcpu_id()
+                );
+                println!(
+                    "entry {:x}, context {:x}",
+                    power_msg.entry, power_msg.context
+                );
+                psci_vcpu_on(power_msg.entry, power_msg.context);
+            }
             PowerEvent::PsciIpiCpuOff => {
                 unimplemented!();
             }
@@ -64,7 +94,10 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
             }
         },
         _ => {
-            unimplemented!();
+            panic!(
+                "psci_ipi_handler: cpu{} receive illegal psci ipi type",
+                cpu_id()
+            );
         }
     }
 }
@@ -92,8 +125,10 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         IpiType::IpiTPower,
         IpiInnerMsg::Power(m),
     ) {
-        return (usize::MAX - 1);
+        println!("psci_guest_cpu_on: fail to send msg");
+        return usize::MAX - 1;
     }
+    // println!("success send msg to cpu {}", physical_linear_id.unwrap());
 
     0
 }
