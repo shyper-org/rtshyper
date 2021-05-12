@@ -325,7 +325,7 @@ register_structs! {
     (0x002c => reserved_0),
     (0x00d0 => APR: [ReadWrite<u32>; 4]),    // Active Priorities Register
     (0x00e0 => NSAPR: [ReadWrite<u32>; 4]),  // Non-secure Active Priorities Register
-    (0x00ed => reserved_1),
+    (0x00f0 => reserved_1),
     (0x00fc => IIDR: ReadOnly<u32>),    // CPU Interface Identification Register
     (0x00fd => reserved_2),
     (0x1000 => DIR: WriteOnly<u32>),    // Deactivate Interrupt Register

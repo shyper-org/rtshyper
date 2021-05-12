@@ -90,7 +90,7 @@ pub fn ipi_irq_handler() {
         if ipi_handler_list.len() <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
-            println!("ipi type is {}", ipi_type);
+            // println!("ipi type is {}", ipi_type);
             (ipi_handler_list[ipi_type].handler)(&ipi_msg);
         }
         msg = cpu_if_list[cpu_id].pop();

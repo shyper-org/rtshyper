@@ -19,10 +19,10 @@ pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
 }
 
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
-    println!(
-        "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
-        fid, x1, x2, x3
-    );
+    // println!(
+    //     "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
+    //     fid, x1, x2, x3
+    // );
     let r;
     match fid {
         PSCI_VERSION => {

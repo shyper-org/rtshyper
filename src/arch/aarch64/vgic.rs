@@ -303,6 +303,11 @@ impl Vgic {
         cpu_priv[cpu_id].interrupts[idx].clone()
     }
 
+    fn cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize) -> u16 {
+        let cpu_priv = self.cpu_priv.lock();
+        cpu_priv[cpu_id].curr_lrs[idx]
+    }
+
     fn vgicd_interrupt(&self, idx: usize) -> VgicInt {
         let vgicd = self.vgicd.lock();
         vgicd.interrupts[idx].clone()
@@ -361,8 +366,10 @@ impl Vgic {
 
     fn add_lr(&self, vcpu: Vcpu, interrupt: VgicInt) -> bool {
         if !interrupt.enabled() || interrupt.in_lr() {
+            // println!("interrupt illegal");
             return false;
         }
+        // println!("add_lr: interrupt {}", interrupt.id());
 
         let gic_lrs_num = GIC_LRS_NUM.lock();
         let mut lr_ind = None;
@@ -437,14 +444,13 @@ impl Vgic {
     }
 
     fn write_lr(&self, vcpu: Vcpu, interrupt: VgicInt, lr_ind: usize) {
-        let cpu_priv = self.cpu_priv.lock();
+        // println!("write lr");
 
         let vcpu_id = vcpu.id();
         let int_id = interrupt.id() as usize;
         let int_prio = interrupt.prio();
 
-        let prev_int_id = cpu_priv[vcpu_id].curr_lrs[lr_ind] as usize;
-        drop(cpu_priv);
+        let prev_int_id = self.cpu_priv_curr_lrs(vcpu_id, lr_ind) as usize;
         if prev_int_id != int_id {
             let prev_interrupt_option = self.get_int(vcpu.clone(), prev_int_id);
             if let Some(prev_interrupt) = prev_interrupt_option {
@@ -744,6 +750,7 @@ impl Vgic {
 
             if (pendstate ^ new_pendstate) != 0 {
                 cpu_priv[vcpu_id].sgis[vgic_int_id].pend = new_pendstate;
+                drop(cpu_priv);
                 let state = interrupt.state().to_num();
                 if new_pendstate != 0 {
                     interrupt.set_state(IrqState::num_to_state(state | 1));
@@ -751,10 +758,10 @@ impl Vgic {
                     interrupt.set_state(IrqState::num_to_state(state & !1));
                 }
                 match interrupt.state() {
-                    IrqState::IrqSInactive => {
+                    IrqState::IrqSInactive => {}
+                    _ => {
                         self.add_lr(vcpu.clone(), interrupt.clone());
                     }
-                    _ => {}
                 }
             }
         } else {
@@ -1790,7 +1797,6 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
 }
 
 fn vgic_ipi_handler(msg: &IpiMessage) {
-    println!("DEBUG: vgic ipi handler");
     let vm_id;
     let int_id;
     let val;
@@ -1805,6 +1811,13 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
             return;
         }
     }
+    println!(
+        "vgic_ipi_handler: core {} receive vgic_ipi, vm_id {}, int_id {}, val 0x{:x}",
+        cpu_id(),
+        vm_id,
+        int_id,
+        val
+    );
 
     let vm = match crate::kernel::active_vm() {
         Err(_) => {
@@ -1838,6 +1851,7 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
             }
             InitcEvent::VgicdSetPend => {
                 vgic.set_pend(active_vcpu().unwrap(), int_id as usize, val != 0);
+                println!("finish set pend");
             }
             InitcEvent::VgicdSetPrio => {
                 vgic.set_prio(active_vcpu().unwrap(), int_id as usize, val);
