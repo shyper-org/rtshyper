@@ -32,6 +32,14 @@ impl Vcpu {
         crate::arch::vcpu_arch_init(vm.clone(), self.clone());
     }
 
+    pub fn ptr_eq(&self, vcpu: Vcpu) -> bool {
+        Arc::ptr_eq(&self.inner, &vcpu.inner())
+    }
+
+    pub fn inner(&self) -> Arc<Mutex<VcpuInner>> {
+        self.inner().clone()
+    }
+
     pub fn set_phys_id(&self, phys_id: usize) {
         let mut inner = self.inner.lock();
         inner.phys_id = phys_id;
@@ -132,8 +140,7 @@ impl VcpuInner {
 
     fn vm_id(&self) -> usize {
         let vm = self.vm.as_ref().unwrap();
-        let id = vm.inner().lock().id;
-        id
+        vm.vm_id()
     }
 
     fn vm_pt_dir(&self) -> usize {

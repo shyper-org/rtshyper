@@ -129,7 +129,14 @@ impl VgicInt {
 
     fn owner(&self) -> Option<Vcpu> {
         let vgic_int = self.inner.lock();
-        vgic_int.owner.clone()
+        match &vgic_int.owner {
+            Some(vcpu) => {
+                return Some(vcpu.clone());
+            }
+            None => {
+                return None;
+            }
+        }
     }
 
     fn owner_phys_id(&self) -> usize {
@@ -423,15 +430,15 @@ impl Vgic {
             // println!("interrupt illegal");
             return false;
         }
-        if interrupt.id() != 27 {
-            // for i in 0..4 {
-            //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
-            // }
-            // println!("elsr[0] {:x}", GICH.elsr(0));
-            // println!("elsr[1] {:x}", GICH.elsr(1));
-            println!("hcr 0x{:x}", GICH.hcr());
-            println!("add_lr: interrupt {}", interrupt.id());
-        }
+        // if interrupt.id() != 27 {
+        // for i in 0..4 {
+        //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+        // }
+        // println!("elsr[0] {:x}", GICH.elsr(0));
+        // println!("elsr[1] {:x}", GICH.elsr(1));
+        // println!("hcr 0x{:x}", GICH.hcr());
+        // println!("add_lr: interrupt {}", interrupt.id());
+        // }
 
         let gic_lrs_num = GIC_LRS_NUM.lock();
         let mut lr_ind = None;
@@ -501,9 +508,9 @@ impl Vgic {
     }
 
     fn write_lr(&self, vcpu: Vcpu, interrupt: VgicInt, lr_ind: usize) {
-        // if interrupt.id() != 27 {
-        //     println!("write lr: int_id {}, lr_ind {}", interrupt.id(), lr_ind);
-        // }
+        if interrupt.id() != 27 {
+            // println!("write lr: int_id {}, lr_ind {}", interrupt.id(), lr_ind);
+        }
 
         let vcpu_id = vcpu.id();
         let int_id = interrupt.id() as usize;
@@ -513,6 +520,12 @@ impl Vgic {
         if prev_int_id != int_id {
             let prev_interrupt_option = self.get_int(vcpu.clone(), prev_int_id);
             if let Some(prev_interrupt) = prev_interrupt_option {
+                // println!(
+                //     "write_lr: vcpu_id {}, int_id {}, prev_id {}",
+                //     vcpu_id,
+                //     prev_interrupt.id(),
+                //     prev_int_id
+                // );
                 if vgic_owns(vcpu.clone(), prev_interrupt.clone()) {
                     if prev_interrupt.lr() == lr_ind as u16 && prev_interrupt.in_lr() {
                         prev_interrupt.set_in_lr(false);
@@ -1629,14 +1642,26 @@ fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) -> u32 {
 }
 
 fn vgic_owns(vcpu: Vcpu, interrupt: VgicInt) -> bool {
+    if gic_is_priv(interrupt.id() as usize) {
+        return true;
+    }
+    if interrupt.owner().is_none() {
+        return false;
+    }
+
+    let tmp = interrupt.owner().unwrap();
     let owner_vcpu_id = interrupt.owner_id();
-    let owner_vm_id = interrupt.owner_vm_id();
+    let owner_pcpu_id = interrupt.owner_phys_id();
+    // let owner_vm_id = interrupt.owner_vm_id();
+    // println!("3: owner_vm_id {}", owner_vm_id);
 
     let vcpu_id = vcpu.id();
-    let vcpu_vm_id = vcpu.vm_id();
+    let pcpu_id = vcpu.phys_id();
+    // let vcpu_vm_id = vcpu.vm_id();
 
-    return (owner_vcpu_id == vcpu_id && owner_vm_id == vcpu_vm_id)
-        || gic_is_priv(interrupt.id() as usize);
+    // println!("return vgic_owns: vcpu_vm_id {}", vcpu_vm_id);
+    // return (owner_vcpu_id == vcpu_id && owner_vm_id == vcpu_vm_id);
+    return (owner_vcpu_id == vcpu_id && owner_pcpu_id == pcpu_id);
 }
 
 fn vgic_get_state(interrupt: VgicInt) -> usize {

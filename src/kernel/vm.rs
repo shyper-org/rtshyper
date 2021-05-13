@@ -262,7 +262,7 @@ impl Vm {
             return Err(());
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
         let vm_inner = self.inner.lock();
