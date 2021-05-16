@@ -79,7 +79,7 @@ impl VmPa {
 
 use crate::config::VmConfigEntry;
 
-#[repr(align(4096))]
+// #[repr(align(4096))]
 #[derive(Clone)]
 pub struct Vm {
     pub inner: Arc<Mutex<VmInner>>,

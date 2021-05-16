@@ -809,6 +809,7 @@ impl Vgic {
     }
 
     fn sgi_set_pend(&self, vcpu: Vcpu, int_id: usize, pend: bool) {
+        // let begin = time_current_us();
         if bit_extract(int_id, 0, 10) > GIC_SGIS_NUM {
             return;
         }
@@ -855,6 +856,8 @@ impl Vgic {
                 bit_extract(int_id, 0, 10)
             );
         }
+        // let end = time_current_us();
+        // println!("sgi_set_pend[{}]", end - begin);
     }
 
     fn set_prio(&self, vcpu: Vcpu, int_id: usize, mut prio: u8) {
@@ -1025,8 +1028,8 @@ impl Vgic {
         let first_int = reg_idx * 32;
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_isenabler_access: current vcpu.vm is none");
             }
         };
@@ -1072,8 +1075,8 @@ impl Vgic {
         let first_int = reg_idx * 32;
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_pendr_access: current vcpu.vm is none");
             }
         };
@@ -1131,8 +1134,8 @@ impl Vgic {
         let first_int = reg_idx * 32;
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_activer_access: current vcpu.vm is none");
             }
         };
@@ -1189,8 +1192,8 @@ impl Vgic {
         let first_int = reg_idx * 32;
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_activer_access: current vcpu.vm is none");
             }
         };
@@ -1238,8 +1241,8 @@ impl Vgic {
         let first_int = (32 / GIC_CONFIG_BITS) * bit_extract(emu_ctx.address, 0, 9) / 4;
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_icfgr_access: current vcpu.vm is none");
             }
         };
@@ -1292,8 +1295,8 @@ impl Vgic {
             0
         };
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_icfgr_access: current vcpu.vm is none");
             }
         };
@@ -1351,8 +1354,8 @@ impl Vgic {
         let first_int = (8 / GIC_PRIO_BITS) * bit_extract(emu_ctx.address, 0, 9);
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_ipriorityr_access: current vcpu.vm is none");
             }
         };
@@ -1398,8 +1401,8 @@ impl Vgic {
         let first_int = (8 / GIC_TARGET_BITS) * bit_extract(emu_ctx.address, 0, 9);
         let vm_id = active_vm_id();
         let vm = match active_vm() {
-            Ok(vm) => vm,
-            Err(()) => {
+            Some(vm) => vm,
+            None => {
                 panic!("emu_itargetr_access: current vcpu.vm is none");
             }
         };
@@ -1751,8 +1754,8 @@ pub fn gic_maintenance_handler(arg: usize, source: usize) {
 
     let misr = GICH.misr();
     let vm = match active_vm() {
-        Ok(vm) => vm,
-        Err(()) => {
+        Some(vm) => vm,
+        None => {
             panic!("gic_maintenance_handler: current vcpu.vm is none");
         }
     };
@@ -1793,10 +1796,10 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     }
 
     let vm = match crate::kernel::active_vm() {
-        Err(_) => {
+        None => {
             panic!("emu_intc_handler: vm is None");
         }
-        Ok(x) => x,
+        Some(x) => x,
     };
     let vgic = vm.vgic();
     let vgicd_offset_prefix = (offset & 0xf80) >> 7;
@@ -1892,6 +1895,7 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     true
 }
 
+use crate::lib::time_current_us;
 fn vgic_ipi_handler(msg: &IpiMessage) {
     let vm_id;
     let int_id;
@@ -1909,11 +1913,12 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
     }
 
     let vm = match crate::kernel::active_vm() {
-        Err(_) => {
+        None => {
             panic!("vgic_ipi_handler: vm is None");
         }
-        Ok(x) => x,
+        Some(x) => x,
     };
+    // let vm = active_vm().unwrap();
     let vgic = vm.vgic();
 
     if vm_id as usize != vm.vm_id() {
@@ -1924,7 +1929,6 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
         );
         return;
     }
-
     if let IpiInnerMsg::Initc(intc) = &msg.ipi_message {
         // println!(
         //     "vgic_ipi_handler: core {} receive vgic_ipi, event {:?}, vm_id {}, int_id {}, val 0x{:x}",
@@ -1973,6 +1977,18 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
             }
         }
     }
+    // println!(
+    //     "vgic_ipi_handler[{}] stage0[{}] stage1[{}] stage2[{}] stage3[{}]: core {} receive vgic_ipi, vm_id {}, int_id {}, val 0x{:x}",
+    //     end - begin,
+    //     stage1 - stage0,
+    //     stage2 - stage1,
+    //     stage3 - stage2,
+    //     end - stage3,
+    //     cpu_id(),
+    //     vm_id,
+    //     int_id,
+    //     val
+    // );
 }
 
 use crate::device::EmuDevs;

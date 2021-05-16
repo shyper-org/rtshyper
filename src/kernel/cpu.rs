@@ -183,12 +183,13 @@ pub fn cpu_assigned() -> bool {
     unsafe { CPU.assigned }
 }
 
-pub fn active_vcpu() -> Result<Vcpu, ()> {
+pub fn active_vcpu() -> Option<Vcpu> {
     unsafe {
-        if CPU.active_vcpu.is_none() {
-            return Err(());
-        }
-        Ok(CPU.active_vcpu.as_ref().unwrap().clone())
+        CPU.active_vcpu.clone()
+        // if CPU.active_vcpu.is_none() {
+        //     return Err(());
+        // }
+        // Ok(CPU.active_vcpu.as_ref().unwrap().clone())
     }
 }
 
@@ -202,22 +203,38 @@ pub fn active_vm_id() -> usize {
     vm.vm_id()
 }
 
-pub fn active_vm() -> Result<Vm, ()> {
-    if active_vcpu().is_err() {
-        return Err(());
+use crate::lib::time_current_us;
+pub fn active_vm() -> Option<Vm> {
+    match active_vcpu() {
+        None => {
+            return None;
+        }
+        Some(active_vcpu) => {
+            return active_vcpu.vm();
+        }
     }
-    let active_vcpu = active_vcpu().unwrap();
+    // return active_vcpu().unwrap().vm();
+    // if active_vcpu().is_err() {
+    //     return Err(());
+    // }
+    // let active_vcpu = active_vcpu().unwrap();
 
-    match active_vcpu.vm() {
-        Ok(vm) => Ok(vm),
-        Err(_) => Err(()),
-    }
+    // let time1 = time_current_us();
+    // return active_vcpu.vm();
+    // match active_vcpu.vm() {
+    //     Ok(vm) => {
+    //         let time2 = time_current_us();
+    //         println!("stage0[{}] stage1[{}]", time1 - time0, time2 - time1);
+    //         return Ok(vm.clone());
+    //     }
+    //     Err(_) => Err(()),
+    // }
 }
 
 pub fn active_vm_ncpu() -> usize {
     match active_vm() {
-        Ok(vm) => vm.ncpu(),
-        Err(_) => 0,
+        Some(vm) => vm.ncpu(),
+        None => 0,
     }
 }
 

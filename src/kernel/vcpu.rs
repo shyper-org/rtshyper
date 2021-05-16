@@ -55,13 +55,19 @@ impl Vcpu {
         inner.id
     }
 
-    pub fn vm(&self) -> Result<Vm, ()> {
+    pub fn vm(&self) -> Option<Vm> {
         let inner = self.inner.lock();
-        if inner.vm.is_none() {
-            Err(())
-        } else {
-            Ok(inner.vm.as_ref().unwrap().clone())
+        // inner.vm.clone()
+        match &inner.vm {
+            None => None,
+            Some(vm) => Some(vm.clone()),
         }
+        // if inner.vm.is_none() {
+        //     None
+        // } else {
+        //     inner.vm.clone()
+        //     // Some(inner.vm.as_ref().unwrap().clone())
+        // }
     }
 
     pub fn phys_id(&self) -> usize {

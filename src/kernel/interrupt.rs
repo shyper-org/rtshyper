@@ -101,13 +101,13 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     // println!("interrupt_handler: int_id {}", int_id);
     use crate::kernel::active_vm;
     match active_vm() {
-        Ok(vm) => {
+        Some(vm) => {
             if vm.has_interrupt(int_id) {
                 interrupt_vm_inject(vm.clone(), int_id, src);
                 return false;
             }
         }
-        Err(_) => {}
+        None => {}
     }
 
     if interrupt_is_reserved(int_id) {
