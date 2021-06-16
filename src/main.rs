@@ -43,16 +43,25 @@ use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
 // use lib::{BitAlloc, BitAlloc256};
 
+extern "C" {
+    fn tegra_emmc_blk_read(sector: usize, count: usize, buf: *mut u8);
+    fn tegra_emmc_blk_write(sector: usize, count: usize, buf: *const u8);
+}
+
 #[no_mangle]
-pub extern "C" fn init(cpu_id: usize) {
+pub unsafe fn init(cpu_id: usize) {
     // println!("core id {}", core_id);
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {
     //     crate::driver::uart::putc(*byte);
     // }
+    tegra_emmc_blk_read(0, 0, 0 as *mut _);
     if cpu_id == 0 {
-        println!("Welcome to Sybilla Hypervisor!");
+        #[cfg(feature = "tx2")]
+        println!("Welcome to TX2 Sybilla Hypervisor!");
+        #[cfg(feature = "qemu")]
+        println!("Welcome to Qemu Sybilla Hypervisor!");
         heap_init();
         mem_init();
     }

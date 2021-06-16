@@ -232,8 +232,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0x53000000,
         },
         cpu: VmCpuConfig {
-            num: 2,
-            allocate_bitmap: 0b0011,
+            num: 1,
+            allocate_bitmap: 0b0001,
             master: 0,
         },
         vm_emu_dev_confg: Some(emu_dev_config),

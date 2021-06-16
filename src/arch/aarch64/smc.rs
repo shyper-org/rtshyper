@@ -1,5 +1,5 @@
 #[no_mangle]
-pub fn smc_call(x0: usize, x1: usize, x2: usize, x3: usize) -> usize {
+pub fn smc_call(x0: usize, x1: usize, x2: usize, x3: usize) -> (usize, usize, usize, usize) {
     let r;
     unsafe {
         llvm_asm!("smc #0"
@@ -8,5 +8,5 @@ pub fn smc_call(x0: usize, x1: usize, x2: usize, x3: usize) -> usize {
         : "memory"
         : "volatile");
     }
-    r
+    (r, x1, x2, x3)
 }

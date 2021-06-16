@@ -138,13 +138,20 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     if config.device_tree_load_ipa != 0 {
-        // PLATFORM QEMU
+        // PLATFORM
+        #[cfg(feature = "qemu")]
         vmm_load_image(
             config.device_tree_filename.unwrap(),
             config.device_tree_load_ipa,
             vm.clone(),
         );
-        // END PLATFORM
+        // END QEMU
+        #[cfg(feature = "tx2")]
+        {
+            let offset = config.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
+            rlibc::memcpy(vm.pa_start(0) + offset, (0x80000000 + vm.vm_id() * 0x1000000), 128 * PAGE_SIZE);
+        }
+        // END TX2
     } else {
         println!(
             "VM {} id {} device tree not found",

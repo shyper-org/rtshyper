@@ -174,6 +174,12 @@ impl VcpuInner {
 
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
+
+        #[cfg(feature = "tx2")]
+        if vm_id() == 0 {
+            vmpidr |= 0x100;
+        }
+
         vmpidr |= self.id;
         unsafe {
             llvm_asm!("msr vmpidr_el2, $0" :: "r"(vmpidr) :: "volatile");

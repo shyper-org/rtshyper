@@ -23,53 +23,15 @@ pub const DISK_PARTITION_0_SIZE: usize = 524288;
 pub const DISK_PARTITION_1_SIZE: usize = 8192000;
 pub const DISK_PARTITION_2_SIZE: usize = 8192000;
 
-pub const PLATFORM_CPU_NUM_MAX: usize = 8;
-pub const TOTAL_MEM_REGION_MAX: usize = 16;
-pub const PLATFORM_VCPU_NUM_MAX: usize = 8;
-
 // TODO: move these core name to device
-const ARM_CORTEX_A57: u8 = 0;
-const ARM_NVIDIA_DENVER: u8 = 0;
-
-#[repr(C)]
-pub struct PlatMemRegion {
-    pub base: usize,
-    pub size: usize,
-}
-
-#[repr(C)]
-pub struct PlatMemoryConfig {
-    pub region_num: usize,
-    pub base: usize,
-    pub regions: [PlatMemRegion; TOTAL_MEM_REGION_MAX],
-}
-
-#[repr(C)]
-pub struct PlatCpuConfig {
-    pub num: usize,
-    pub name: [u8; PLATFORM_CPU_NUM_MAX],
-    pub mpidr_list: [usize; PLATFORM_CPU_NUM_MAX],
-}
-
 use crate::arch::GicDesc;
-
-#[repr(C)]
-pub struct ArchDesc {
-    pub gic_desc: GicDesc,
-}
-
-#[repr(C)]
-pub struct PlatformConfig {
-    pub cpu_desc: PlatCpuConfig,
-    pub mem_desc: PlatMemoryConfig,
-    pub uart_base: usize,
-    pub arch_desc: ArchDesc,
-}
+use crate::board::{ArchDesc, PlatCpuConfig, PlatMemRegion, PlatMemoryConfig, PlatformConfig};
+use crate::device::ARM_CORTEX_A57;
 
 // holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
-        num: 8,
+        num: 2,
         mpidr_list: [0, 1, 2, 3, 4, 5, 6, 7],
         name: [ARM_CORTEX_A57; 8],
     },

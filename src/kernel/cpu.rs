@@ -334,7 +334,7 @@ pub fn cpu_stack() -> usize {
 
 pub fn cpu_init() {
     let cpu_id = cpu_id();
-    // println!("cpu id {}", cpu_id);
+    println!("cpu id {}", cpu_id);
     if cpu_id == 0 {
         use crate::board::{platform_power_on_secondary_cores, power_arch_init};
         platform_power_on_secondary_cores();

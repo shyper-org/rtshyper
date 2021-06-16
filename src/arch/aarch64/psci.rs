@@ -11,11 +11,14 @@ pub const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
 pub const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
 pub const PSCI_CPU_OFF: usize = 0xc4000002;
 pub const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
+#[cfg(feature = "tx2")]
+const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
 
 pub const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
-    smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx)
+    println!("power_arch_cpu_on");
+    smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0
 }
 
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
@@ -26,13 +29,20 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     let r;
     match fid {
         PSCI_VERSION => {
-            r = smc_call(PSCI_VERSION, 0, 0, 0);
+            r = smc_call(PSCI_VERSION, 0, 0, 0).0;
         }
         PSCI_MIG_INFO_TYPE => {
             r = PSCI_TOS_NOT_PRESENT_MP;
         }
         PSCI_CPU_ON_AARCH64 => {
             r = psci_guest_cpu_on(x1, x2, x3);
+        }
+        #[cfg(feature = "tx2")]
+        TEGRA_SIP_GET_ACTMON_CLK_COUNTERS => {
+            let result = smc_call(fid, x1, x2, x3);
+            r = result.0;
+            context_set_gpr(1, result.1);
+            context_set_gpr(2, result.2);
         }
         _ => {
             unimplemented!();
@@ -110,9 +120,16 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
 
     if vcpu_id >= vm.cpu_num() || physical_linear_id.is_err() {
         println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
-        return (usize::MAX - 1);
+        return usize::MAX - 1;
     }
-    // TODO: TX2
+    #[cfg(feature = "tx2")]
+    {
+        let cluster = (mpidr >> 8) & 0xff;
+        if vm.vm_id() == 0 && cluster != 1 {
+            println!("psci_guest_cpu_on: L4T only support cluster #1");
+            return usize::MAX - 1;
+        }
+    }
 
     let m = IpiPowerMessage {
         event: PowerEvent::PsciIpiCpuOn,

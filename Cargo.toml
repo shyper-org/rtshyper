@@ -3,6 +3,7 @@ name = "rust_hypervisor"
 version = "0.1.0"
 authors = ["Siran Li <953760237@qq.com>"]
 edition = "2018"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,3 +26,7 @@ core_io = "0.1"
 [dependencies.lazy_static]
 version = "1.0"
 features = ["spin_no_std"]
+
+[features]
+tx2 = []
+qemu = []
