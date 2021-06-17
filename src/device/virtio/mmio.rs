@@ -2,9 +2,13 @@
 // pub const VIRTIO_MMIO_VERSION: usize = 0x004;
 // pub const VIRTIO_MMIO_DEVICE_ID: usize = 0x008;
 // pub const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
+use crate::config::VmEmulatedDeviceConfig;
 use crate::device::EmuContext;
+use crate::device::VirtDev;
 use crate::kernel::Vm;
 use spin::Mutex;
+
+pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
 
 #[repr(C)]
 struct VirtMmioRegs {
@@ -42,11 +46,11 @@ impl VirtMmioRegs {
         }
     }
 
-    pub fn init(&mut self, id: u32) {
+    pub fn init(&mut self, id: VirtioDeviceType) {
         self.magic = 0x74726976;
         self.version = 0x2;
         self.vendor_id = 0x8888;
-        self.device_id = id;
+        self.device_id = id as u32;
         self.dev_feature = 0;
         self.drv_feature = 0;
         self.q_sel = 0;
@@ -64,9 +68,14 @@ impl VirtioMmio {
         }
     }
 
-    pub fn mmio_reg_init(&self, dev_id: u32) {
+    pub fn mmio_reg_init(&self, dev_type: VirtioDeviceType) {
         let mut inner = self.inner.lock();
-        inner.reg_init(dev_id);
+        inner.reg_init(dev_type);
+    }
+
+    pub fn dev_init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
+        let inner = self.inner.lock();
+        inner.dev.init(dev_type, config);
     }
 }
 
@@ -76,6 +85,7 @@ struct VirtioMmioInner {
     driver_status: usize,
     regs: VirtMmioRegs,
     vq_num: usize,
+    dev: VirtDev,
 }
 
 impl VirtioMmioInner {
@@ -86,23 +96,26 @@ impl VirtioMmioInner {
             driver_status: 0,
             regs: VirtMmioRegs::default(),
             vq_num: 0,
+            dev: VirtDev::default(),
         }
     }
 
-    pub fn reg_init(&mut self, dev_id: u32) {
-        self.regs.init(dev_id);
+    pub fn reg_init(&mut self, dev_type: VirtioDeviceType) {
+        self.regs.init(dev_type);
     }
 }
 
+use crate::device::VirtioDeviceType;
 pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
     // unimplemented!();
-    let mut virt_dev_type: u32 = 0;
-    match &vm.config().vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].emu_type {
+    let mut virt_dev_type: VirtioDeviceType = VirtioDeviceType::None;
+    let vm_cfg = vm.config();
+    match vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].emu_type {
         crate::device::EmuDeviceType::EmuDeviceTVirtioBlk => {
-            virt_dev_type = 2;
+            virt_dev_type = VirtioDeviceType::Block;
         }
         crate::device::EmuDeviceType::EmuDeviceTVirtioNet => {
-            virt_dev_type = 1;
+            virt_dev_type = VirtioDeviceType::Net;
         }
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
@@ -112,6 +125,10 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
     let mmio = VirtioMmio::new(emu_dev_id);
 
     mmio.mmio_reg_init(virt_dev_type);
+    mmio.dev_init(
+        virt_dev_type,
+        &vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id],
+    );
     true
 }
 

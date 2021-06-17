@@ -115,6 +115,10 @@ pub fn mem_page_alloc() -> Result<PageFrame, AllocError> {
     mem_heap_alloc(1, false)
 }
 
+pub fn mem_pages_alloc(page_num: usize) -> Result<PageFrame, AllocError> {
+    mem_heap_alloc(page_num, false)
+}
+
 pub fn mem_pages_free(addr: usize, page_num: usize) -> bool {
     if page_num == 1 {
         let mut heap = HEAPREGION.lock();
