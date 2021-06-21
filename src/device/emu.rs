@@ -8,9 +8,11 @@ pub static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
 
 use crate::arch::Vgic;
 use crate::device::VirtioMmio;
+
+#[derive(Clone)]
 pub enum EmuDevs {
     Vgic(Arc<Vgic>),
-    VirtioBlk(Arc<VirtioMmio>),
+    VirtioBlk(VirtioMmio),
     None,
 }
 

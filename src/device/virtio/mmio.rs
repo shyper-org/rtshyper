@@ -5,10 +5,23 @@
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::EmuContext;
 use crate::device::VirtDev;
+use crate::device::{VirtioQueue, Virtq};
+use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
+use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
 use crate::kernel::Vm;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
+
+pub const VIRTIO_MMIO_GUEST_FEATURES_SEL: usize = 0x024;
+pub const VIRTIO_MMIO_QUEUE_NOTIFY: usize = 0x050;
+pub const VIRTIO_MMIO_INTERRUPT_STATUS: usize = 0x060;
+pub const VIRTIO_MMIO_INTERRUPT_ACK: usize = 0x064;
+pub const VIRTIO_MMIO_STATUS: usize = 0x070;
+
+pub const VIRTIO_MMIO_INT_VRING: usize = 1 << 0;
 
 #[repr(C)]
 struct VirtMmioRegs {
@@ -57,14 +70,47 @@ impl VirtMmioRegs {
     }
 }
 
+#[derive(Clone)]
 pub struct VirtioMmio {
-    inner: Mutex<VirtioMmioInner>,
+    inner: Arc<Mutex<VirtioMmioInner>>,
+}
+
+impl VirtioQueue for VirtioMmio {
+    fn virtio_queue_init(&self, dev_type: VirtioDeviceType) {
+        let mut inner = self.inner.lock();
+        match dev_type {
+            VirtioDeviceType::Block => {
+                self.set_q_num_max(VIRTQUEUE_BLK_MAX_SIZE as u32);
+                inner.vq.push(Virtq::default());
+                inner.vq[0].reset(0);
+                use crate::device::virtio_blk_notify_handler;
+                inner.vq[0].set_notify_handler(virtio_blk_notify_handler);
+            }
+            VirtioDeviceType::Net => {
+                self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
+                for i in 0..2 {
+                    inner.vq.push(Virtq::default());
+                    inner.vq[i].reset(i);
+                    // TODO: queue_notify_handler;
+                }
+                unimplemented!();
+            }
+            VirtioDeviceType::None => {
+                panic!("virtio_queue_init: unknown emulated device type");
+            }
+        }
+    }
+
+    fn virtio_queue_reset(&self, index: usize) {
+        let mut inner = self.inner.lock();
+        inner.vq[index].reset(index);
+    }
 }
 
 impl VirtioMmio {
     pub fn new(id: usize) -> VirtioMmio {
         VirtioMmio {
-            inner: Mutex::new(VirtioMmioInner::new(id)),
+            inner: Arc::new(Mutex::new(VirtioMmioInner::new(id))),
         }
     }
 
@@ -77,6 +123,39 @@ impl VirtioMmio {
         let inner = self.inner.lock();
         inner.dev.init(dev_type, config);
     }
+
+    pub fn set_irt_stat(&self, irt_stat: u32) {
+        let mut inner = self.inner.lock();
+        inner.regs.irt_stat = irt_stat;
+    }
+
+    pub fn set_irt_ack(&self, irt_ack: u32) {
+        let mut inner = self.inner.lock();
+        inner.regs.irt_ack = irt_ack;
+    }
+
+    pub fn set_q_num_max(&self, q_num_max: u32) {
+        let mut inner = self.inner.lock();
+        inner.regs.q_num_max = q_num_max;
+    }
+
+    pub fn q_sel(&self) -> u32 {
+        let inner = self.inner.lock();
+        inner.regs.q_sel
+    }
+
+    pub fn irt_stat(&self) -> u32 {
+        let inner = self.inner.lock();
+        inner.regs.irt_stat
+    }
+
+    pub fn notify_handler(&self, idx: usize) -> bool {
+        let inner = self.inner.lock();
+        if idx >= inner.vq.len() {
+            return false;
+        }
+        return inner.vq[idx].call_notify_handler(self.clone());
+    }
 }
 
 struct VirtioMmioInner {
@@ -84,8 +163,9 @@ struct VirtioMmioInner {
     driver_features: usize,
     driver_status: usize,
     regs: VirtMmioRegs,
-    vq_num: usize,
     dev: VirtDev,
+
+    vq: Vec<Virtq>,
 }
 
 impl VirtioMmioInner {
@@ -95,17 +175,17 @@ impl VirtioMmioInner {
             driver_features: 0,
             driver_status: 0,
             regs: VirtMmioRegs::default(),
-            vq_num: 0,
             dev: VirtDev::default(),
+            vq: Vec::new(),
         }
     }
 
-    pub fn reg_init(&mut self, dev_type: VirtioDeviceType) {
+    fn reg_init(&mut self, dev_type: VirtioDeviceType) {
         self.regs.init(dev_type);
     }
 }
 
-use crate::device::VirtioDeviceType;
+use crate::device::{EmuDevs, VirtioDeviceType};
 pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
     // unimplemented!();
     let mut virt_dev_type: VirtioDeviceType = VirtioDeviceType::None;
@@ -123,15 +203,55 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
         }
     }
     let mmio = VirtioMmio::new(emu_dev_id);
+    vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioBlk(mmio.clone()));
 
     mmio.mmio_reg_init(virt_dev_type);
     mmio.dev_init(
         virt_dev_type,
         &vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id],
     );
+    // no need to set vm_if_list
+    // TODO: virtio_queue_init()
+    mmio.virtio_queue_init(virt_dev_type);
+
     true
 }
 
+use crate::kernel::active_vm;
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
+    use crate::kernel::{context_get_gpr, context_set_gpr};
+    let vm = match active_vm() {
+        Some(vm) => vm,
+        None => {
+            panic!("emu_virtio_mmio_handler: current vcpu.vm is none");
+        }
+    };
+
+    let mmio = match vm.emu_dev(emu_dev_id) {
+        EmuDevs::VirtioBlk(blk) => blk,
+        _ => {
+            panic!("emu_virtio_mmio_handler: illegal mmio dev type")
+        }
+    };
+
+    let addr = emu_ctx.address;
+    let offset = addr - vm.config().vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].base_ipa;
+    let write = emu_ctx.write;
+
+    if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
+        mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
+        let q_sel = mmio.q_sel();
+        if !mmio.notify_handler(q_sel as usize) {
+            println!("Failed to handle virtio mmio request!");
+        }
+    } else if offset == VIRTIO_MMIO_INTERRUPT_STATUS && !write {
+        context_set_gpr(emu_ctx.reg, mmio.irt_stat() as usize);
+    } else if offset == VIRTIO_MMIO_INTERRUPT_ACK && write {
+        mmio.set_irt_ack(context_get_gpr(emu_ctx.reg));
+    } else if (VIRTIO_MMIO_MAGIC_VALUE <= offset && offset <= VIRTIO_MMIO_GUEST_FEATURES_SEL)
+        || offset == VIRTIO_MMIO_STATUS
+    {
+        // TODO: virtio_mmio_prologue_access(mmio, emu_ctx, offset, write);
+    }
     unimplemented!();
 }

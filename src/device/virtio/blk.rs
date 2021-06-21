@@ -3,10 +3,14 @@ use alloc::sync::Arc;
 use spin::Mutex;
 
 use alloc::vec::Vec;
-pub const BLOCKIF_IOV_MAX: usize = 64;
+
+pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
+pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
+
 /* VIRTIO_BLK_FEATURES*/
 pub const VIRTIO_BLK_F_SIZE_MAX: usize = 1 << 1;
 pub const VIRTIO_BLK_F_SEG_MAX: usize = 1 << 2;
+pub const BLOCKIF_IOV_MAX: usize = 64;
 
 struct BlkGeometry {
     cylinders: u16,
@@ -155,4 +159,9 @@ impl VirtioBlkReqInner {
     pub fn set_size(&mut self, size: usize) {
         self.region.size = size;
     }
+}
+
+use crate::device::{VirtioMmio, Virtq};
+pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
+    false
 }

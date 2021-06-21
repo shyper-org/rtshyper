@@ -217,6 +217,11 @@ impl Vm {
         }
     }
 
+    pub fn emu_dev(&self, dev_id: usize) -> EmuDevs {
+        let vm_inner = self.inner.lock();
+        vm_inner.emu_devs[dev_id].clone()
+    }
+
     pub fn ncpu(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.ncpu
