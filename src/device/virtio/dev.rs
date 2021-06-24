@@ -46,6 +46,16 @@ impl VirtDev {
         let mut inner = self.inner.lock();
         inner.init(dev_type, config);
     }
+
+    pub fn features(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.features
+    }
+
+    pub fn set_activated(&self, activated: bool) {
+        let mut inner = self.inner.lock();
+        inner.activated = activated;
+    }
 }
 
 pub struct VirtDevInner {

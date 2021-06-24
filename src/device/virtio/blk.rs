@@ -163,5 +163,10 @@ impl VirtioBlkReqInner {
 
 use crate::device::{VirtioMmio, Virtq};
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
+    if vq.ready() == 0 {
+        println!("Virt_queue is not ready!");
+        return false;
+    }
+    unimplemented!();
     false
 }

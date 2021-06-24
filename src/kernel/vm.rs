@@ -1,6 +1,8 @@
+use super::active_vm;
 use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
 use crate::config::DEF_VM_CONFIG_TABLE;
+use crate::kernel::active_vm_id;
 use crate::lib::*;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -200,6 +202,21 @@ impl Vm {
         vm_inner.pa_region.as_ref().unwrap()[idx].pa_start
     }
 
+    pub fn pa_length(&self, idx: usize) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.pa_region.as_ref().unwrap()[idx].pa_length
+    }
+
+    pub fn pa_offset(&self, idx: usize) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.pa_region.as_ref().unwrap()[idx].offset as usize
+    }
+
+    pub fn mem_region_num(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.mem_region_num
+    }
+
     pub fn vcpu(&self, idx: usize) -> Vcpu {
         let vm_inner = self.inner.lock();
         vm_inner.vcpu_list[idx].clone()
@@ -383,3 +400,25 @@ impl VmInner {
 //     Vm::default(),
 // ]);
 pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
+
+pub fn vm_ipa2pa(ipa: usize) -> usize {
+    let vm = match active_vm() {
+        Some(vm) => vm,
+        None => {
+            panic!("vm_ipa2pa: current vcpu.vm is none");
+        }
+    };
+
+    if ipa == 0 {
+        return 0;
+    }
+
+    for i in 0..vm.mem_region_num() {
+        if in_range(ipa - vm.pa_offset(i), vm.pa_start(i), vm.pa_start(i)) {
+            return ipa - vm.pa_offset(i);
+        }
+    }    
+
+    println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.vm_id(), ipa);
+    return 0;
+}
