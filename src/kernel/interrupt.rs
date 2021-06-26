@@ -93,7 +93,7 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     true
 }
 
-fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
+pub fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
     interrupt_arch_vm_inject(vm, id, source);
 }
 
@@ -124,7 +124,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                 timer_irq_handler(int_id, src);
             }
             InterruptHandler::None => {
-                unimplemented!();
+                todo!();
             }
         }
         return true;

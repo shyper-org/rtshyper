@@ -17,7 +17,10 @@ const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
 pub const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
-    println!("power_arch_cpu_on");
+    println!(
+        "power_arch_cpu_on, {:x}, {:x}, {:x}",
+        PSCI_CPU_ON_AARCH64, mpidr, entry
+    );
     smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0
 }
 

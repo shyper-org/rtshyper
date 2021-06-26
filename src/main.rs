@@ -12,6 +12,8 @@ extern crate lazy_static;
 
 #[macro_use]
 extern crate alloc;
+#[macro_use]
+extern crate log;
 extern crate rlibc;
 
 #[macro_export]
@@ -50,13 +52,13 @@ extern "C" {
 
 #[no_mangle]
 pub unsafe fn init(cpu_id: usize) {
-    // println!("core id {}", core_id);
+    println!("core id {}", cpu_id);
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {
     //     crate::driver::uart::putc(*byte);
     // }
-    tegra_emmc_blk_read(0, 0, 0 as *mut _);
+    // tegra_emmc_blk_read(0, 0, 0 as *mut _);
     if cpu_id == 0 {
         #[cfg(feature = "tx2")]
         println!("Welcome to TX2 Sybilla Hypervisor!");
@@ -64,6 +66,7 @@ pub unsafe fn init(cpu_id: usize) {
         println!("Welcome to Qemu Sybilla Hypervisor!");
         heap_init();
         mem_init();
+        // kernel::logger_init();
     }
     cpu_init();
     interrupt_init();

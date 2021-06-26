@@ -44,10 +44,11 @@ _start:
     ic  iallu // clear icache
 
     // setup stack sp per core
-    adrp x1, boot_stack_top
-    mov x2, (4096 * 2)
+    adrp x1, boot_stack
+    mov x2, (4096 * 4)
     mul x3, x0, x2
-    sub x1, x1, x3
+    add x1, x1, x3
+    add x1, x1, #0x4000
 
     mov sp, x1
 
@@ -135,10 +136,10 @@ set_loop:
 	ret
 
 
+.align 12
 .section .data.boot
 boot_stack:
-    .align 12
-    .space 4096 * 16
+    .space 4096 * 32
 boot_stack_top:
 
 .align 12

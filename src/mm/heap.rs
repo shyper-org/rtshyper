@@ -2,7 +2,7 @@
 use crate::arch::PAGE_SIZE;
 use buddy_system_allocator::LockedHeap;
 
-const HEAP_SIZE: usize = 512 * PAGE_SIZE;
+const HEAP_SIZE: usize = 1024 * PAGE_SIZE;
 
 #[repr(align(4096))]
 struct HeapRegion([u8; HEAP_SIZE]);

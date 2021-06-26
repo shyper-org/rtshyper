@@ -1,4 +1,4 @@
-pub const KERNEL_ENTRY: usize = 0x43000000;
+pub const KERNEL_ENTRY: usize = 0x43001000;
 
 pub const TIMER_FREQUENCY: usize = 62500000;
 
@@ -31,7 +31,7 @@ use crate::device::ARM_CORTEX_A57;
 // holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
-        num: 2,
+        num: 1,
         mpidr_list: [0, 1, 2, 3, 4, 5, 6, 7],
         name: [ARM_CORTEX_A57; 8],
     },

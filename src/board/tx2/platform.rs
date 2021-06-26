@@ -43,3 +43,5 @@ use crate::device::ARM_NVIDIA_DENVER;
 
 // pub static PLAT_DESC: PlatformConfig = PlatformConfig {
 // }
+
+pub fn platform_blk_init() {}

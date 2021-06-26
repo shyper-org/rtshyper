@@ -20,11 +20,13 @@ pub enum DevStat {
     None,
 }
 
+#[derive(Clone)]
 pub enum DevDesc {
     BlkDesc(BlkDesc),
     None,
 }
 
+#[derive(Clone)]
 pub enum DevReq {
     BlkReq(VirtioBlkReq),
     None,
@@ -52,6 +54,26 @@ impl VirtDev {
         inner.features
     }
 
+    pub fn generation(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.generation
+    }
+
+    pub fn desc(&self) -> DevDesc {
+        let inner = self.inner.lock();
+        inner.desc.clone()
+    }
+
+    pub fn req(&self) -> DevReq {
+        let inner = self.inner.lock();
+        inner.req.clone()
+    }
+
+    pub fn int_id(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.int_id
+    }
+
     pub fn set_activated(&self, activated: bool) {
         let mut inner = self.inner.lock();
         inner.activated = activated;
@@ -63,7 +85,7 @@ pub struct VirtDevInner {
     dev_type: VirtioDeviceType,
     features: usize,
     generation: usize,
-    int_id: u32,
+    int_id: usize,
     desc: DevDesc,
     req: DevReq,
     cache: Option<PageFrame>,
@@ -89,7 +111,7 @@ impl VirtDevInner {
     // virtio_dev_init
     pub fn init(&mut self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
         self.dev_type = dev_type;
-        self.int_id = config.irq_id as u32;
+        self.int_id = config.irq_id;
 
         match self.dev_type {
             VirtioDeviceType::Block => {
