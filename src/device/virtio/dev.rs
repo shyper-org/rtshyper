@@ -14,8 +14,9 @@ pub enum VirtioDeviceType {
 }
 
 use crate::device::BlkStat;
+#[derive(Clone)]
 pub enum DevStat {
-    BlkStat(Arc<Mutex<BlkStat>>),
+    BlkStat(BlkStat),
     NetStat(),
     None,
 }
@@ -72,6 +73,16 @@ impl VirtDev {
     pub fn int_id(&self) -> usize {
         let inner = self.inner.lock();
         inner.int_id
+    }
+
+    pub fn cache(&self) -> PageFrame {
+        let inner = self.inner.lock();
+        return inner.cache.as_ref().unwrap().clone();
+    }
+
+    pub fn stat(&self) -> DevStat {
+        let inner = self.inner.lock();
+        inner.stat.clone()
     }
 
     pub fn set_activated(&self, activated: bool) {
@@ -136,7 +147,7 @@ impl VirtDevInner {
                     }
                 }
 
-                self.stat = DevStat::BlkStat(Arc::new(Mutex::new(BlkStat::default())))
+                self.stat = DevStat::BlkStat(BlkStat::default())
             }
             _ => {
                 panic!("ERROR: Wrong virtio device type");

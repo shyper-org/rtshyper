@@ -27,6 +27,7 @@ pub const DISK_PARTITION_2_SIZE: usize = 8192000;
 use crate::arch::GicDesc;
 use crate::board::{ArchDesc, PlatCpuConfig, PlatMemRegion, PlatMemoryConfig, PlatformConfig};
 use crate::device::ARM_CORTEX_A57;
+use crate::driver::{read, write};
 
 // holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
@@ -95,6 +96,14 @@ pub fn power_arch_init() {
 pub fn platform_blk_init() {
     println!("Platform block driver init ok");
     crate::driver::virtio_blk_init();
+}
+
+pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
+    read(sector, count, buf);
+}
+
+pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
+    write(sector, count, buf);
 }
 
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {

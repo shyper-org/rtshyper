@@ -242,9 +242,7 @@ pub fn vcpu_run() {
     );
 
     let sp = cpu_stack() + CPU_STACK_SIZE;
-    println!("cpu stack 0x{:x}", sp);
     let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
-    println!("ctx addr 0x{:x}", ctx);
 
     use core::mem::size_of;
     use rlibc::memcpy;

@@ -2,7 +2,7 @@ use rlibc::memset;
 
 use crate::arch::PAGE_SIZE;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PageFrame {
   pa: usize,
 }
@@ -29,7 +29,6 @@ impl PageFrame {
       core::slice::from_raw_parts(self.pa as *const T, PAGE_SIZE / core::mem::size_of::<T>())
     }
   }
-  
   #[allow(dead_code)]
   pub fn as_mut_slice<T>(&self) -> &'static mut [T] {
     unsafe {

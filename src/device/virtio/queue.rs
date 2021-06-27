@@ -33,7 +33,7 @@ struct VringAvail {
 
 #[repr(C)]
 struct VringUsedElem {
-    flags: u32,
+    id: u32,
     len: u32,
 }
 
@@ -124,6 +124,24 @@ impl Virtq {
         let inner = self.inner.lock();
         let desc_table = inner.desc_table.as_ref().unwrap();
         desc_table[idx].flags & VIRTQ_DESC_F_NEXT as u16 != 0
+    }
+
+    pub fn update_used_ring(&self, len: u32, desc_chain_head_idx: u32, num: u32) -> bool {
+        let mut inner = self.inner.lock();
+        let flag = inner.used_flags;
+        match &mut inner.used {
+            Some(used) => {
+                used.flags = flag;
+                used.ring[used.idx as usize % num as usize].id = desc_chain_head_idx;
+                used.ring[used.idx as usize % num as usize].len = len;
+                used.idx += 1;
+                return true;
+            }
+            None => {
+                println!("update_used_ring: failed to used table");
+                return false;
+            }
+        }
     }
 
     pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio) -> bool) {

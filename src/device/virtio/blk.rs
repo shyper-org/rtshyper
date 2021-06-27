@@ -11,9 +11,15 @@ pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 /* VIRTIO_BLK_FEATURES*/
 pub const VIRTIO_BLK_F_SIZE_MAX: usize = 1 << 1;
 pub const VIRTIO_BLK_F_SEG_MAX: usize = 1 << 2;
+
+/* BLOCK PARAMETERS*/
+pub const SECTOR_BSIZE: usize = 512;
 pub const BLOCKIF_IOV_MAX: usize = 64;
 
 /* BLOCK REQUEST TYPE*/
+pub const VIRTIO_BLK_T_IN: usize = 0;
+pub const VIRTIO_BLK_T_OUT: usize = 1;
+pub const VIRTIO_BLK_T_FLUSH: usize = 4;
 pub const VIRTIO_BLK_T_GET_ID: usize = 8;
 
 /* BLOCK REQUEST STATUS*/
@@ -201,6 +207,41 @@ impl VirtioBlkReq {
         let inner = self.inner.lock();
         inner.req_type
     }
+
+    pub fn sector(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.sector
+    }
+
+    pub fn region_start(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.region.start
+    }
+
+    pub fn region_size(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.region.size
+    }
+
+    pub fn iov_total(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.iov_total
+    }
+
+    pub fn iovn(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.iov.len()
+    }
+
+    pub fn iov_data_bg(&self, idx: usize) -> usize {
+        let inner = self.inner.lock();
+        inner.iov[idx].data_bg
+    }
+
+    pub fn iov_len(&self, idx: usize) -> u32 {
+        let inner = self.inner.lock();
+        inner.iov[idx].len
+    }
 }
 
 // TODO: maybe should not use Vec, but [BlkIov; 64]
@@ -235,6 +276,86 @@ impl VirtioBlkReqInner {
     }
 }
 
+use crate::board::{platform_blk_read, platform_blk_write};
+use crate::mm::PageFrame;
+use rlibc::memcpy;
+pub fn blk_req_handler(req: VirtioBlkReq, cache: PageFrame) -> usize {
+    let sector = req.sector();
+    let region_start = req.region_start();
+    let region_size = req.region_size();
+    let mut total_byte = 0;
+    let mut cache_ptr = cache.pa();
+
+    if sector + req.iov_total() / SECTOR_BSIZE > region_start + region_size {
+        println!(
+            "blk_req_handler: {} out of vm range",
+            if req.req_type() == VIRTIO_BLK_T_IN as u32 {
+                "read"
+            } else {
+                "write"
+            }
+        );
+        return 0;
+    }
+    match req.req_type() as usize {
+        VIRTIO_BLK_T_IN => {
+            platform_blk_read(
+                sector + region_start,
+                req.iov_total() / SECTOR_BSIZE,
+                cache.pa(),
+            );
+
+            for iov_idx in 0..req.iovn() {
+                let data_bg = req.iov_data_bg(iov_idx);
+                let len = req.iov_len(iov_idx) as usize;
+                if len < SECTOR_BSIZE {
+                    println!("blk_req_handler: read len < SECTOR_BSIZE");
+                    return 0;
+                }
+                unsafe {
+                    memcpy(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                }
+                cache_ptr += len;
+                total_byte += len;
+            }
+        }
+        VIRTIO_BLK_T_OUT => {
+            for iov_idx in 0..req.iovn() {
+                let data_bg = req.iov_data_bg(iov_idx);
+                let len = req.iov_len(iov_idx) as usize;
+                if len < SECTOR_BSIZE {
+                    println!("blk_req_handler: read len < SECTOR_BSIZE");
+                    return 0;
+                }
+                unsafe {
+                    memcpy(cache_ptr as *mut u8, data_bg as *mut u8, len);
+                }
+                cache_ptr += len;
+                total_byte += len;
+            }
+
+            platform_blk_write(
+                sector + region_start,
+                req.iov_total() / SECTOR_BSIZE,
+                cache.pa(),
+            );
+        }
+        VIRTIO_BLK_T_GET_ID => unsafe {
+            let data_bg = req.iov_data_bg(0);
+            let name = "virtio-blk".as_ptr();
+            unsafe {
+                memcpy(data_bg as *mut u8, name, 20);
+            }
+            total_byte = 20;
+        },
+        _ => {
+            println!("Wrong block request type {} ", req.req_type());
+            return 0;
+        }
+    }
+    return total_byte;
+}
+
 use crate::device::{VirtioMmio, Virtq};
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
     println!("in virtio_blk_notify_handler");
@@ -251,10 +372,10 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         }
     };
 
-    let process_count: i32 = 0;
-    let desc_chain_head_idx;
+    let mut process_count: i32 = 0;
+    let mut desc_chain_head_idx;
     let vq_size = vq.num();
-    let next_desc_idx_opt = vq.pop_avail_desc_idx();
+    let mut next_desc_idx_opt = vq.pop_avail_desc_idx();
 
     while next_desc_idx_opt.is_some() {
         let mut next_desc_idx = next_desc_idx_opt.unwrap() as usize;
@@ -335,8 +456,31 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
             }
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
-        unimplemented!();
-        // TODO: blk_req_handler and update_used_ring
+
+        let total = blk_req_handler(req.clone(), dev.cache());
+        if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size as u32) {
+            return false;
+        }
+        match dev.stat() {
+            super::DevStat::BlkStat(stat) => match req.req_type() as usize {
+                VIRTIO_BLK_T_IN => {
+                    let read_req = stat.read_req() + 1;
+                    stat.set_read_req(read_req);
+                    let read_byte = stat.read_byte() + total;
+                    stat.set_read_byte(read_byte);
+                }
+                VIRTIO_BLK_T_OUT => {
+                    let write_req = stat.write_req();
+                    stat.set_write_req(write_req);
+                    let write_byte = stat.write_byte();
+                    stat.set_write_byte(write_byte);
+                }
+                _ => {}
+            },
+            _ => {
+                panic!("virtio_blk_notify_handler: illegal dev stat type");
+            }
+        }
 
         process_count += 1;
         next_desc_idx_opt = vq.pop_avail_desc_idx();
