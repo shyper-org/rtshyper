@@ -317,6 +317,11 @@ impl Vm {
         }
         return pmask;
     }
+
+    pub fn show_pagetable(&self, ipa: usize) {
+        let vm_inner = self.inner.lock();
+        vm_inner.pt.as_ref().unwrap().show_pt(ipa);
+    }
 }
 
 use crate::arch::PageTable;
@@ -414,10 +419,10 @@ pub fn vm_ipa2pa(ipa: usize) -> usize {
     }
 
     for i in 0..vm.mem_region_num() {
-        if in_range(ipa - vm.pa_offset(i), vm.pa_start(i), vm.pa_start(i)) {
+        if in_range(ipa - vm.pa_offset(i), vm.pa_start(i), vm.pa_length(i)) {
             return ipa - vm.pa_offset(i);
         }
-    }    
+    }
 
     println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.vm_id(), ipa);
     return 0;

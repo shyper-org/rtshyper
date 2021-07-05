@@ -234,12 +234,12 @@ impl PageTable {
         let l3e = l2e.entry(pt_lvl3_idx(ipa));
         if l3e.valid() {
             println!("map lvl 3 already mapped with 0x{:x}", l3e.to_pte());
+        } else {
+            l2e.set_entry(
+                pt_lvl3_idx(ipa),
+                Aarch64PageTableEntry::from_pa(pa | PTE_TABLE | pte),
+            );
         }
-
-        l2e.set_entry(
-            pt_lvl3_idx(ipa),
-            Aarch64PageTableEntry::from_pa(pa | PTE_TABLE | pte),
-        );
     }
 
     pub fn map_range_2mb(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
@@ -257,9 +257,27 @@ impl PageTable {
 
     pub fn map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
         let page_num = round_up(len, PAGE_SIZE) / PAGE_SIZE;
+        // if ipa == 0x8010000 {
+        //     println!(
+        //         "map_range: ipa {:x}, len {:x}, pa {:x}, pte 0b{:b}, page_num {:x}",
+        //         ipa, len, pa, pte, page_num,
+        //     );
+        // }
         for i in 0..page_num {
             self.map(ipa + i * PAGE_SIZE, pa + i * PAGE_SIZE, pte);
         }
+    }
+
+    pub fn show_pt(&self, ipa: usize) {
+        println!("show_pt");
+        let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
+        println!("1 {:x}", directory.to_pa());
+        let l1e = directory.entry(pt_lvl1_idx(ipa));
+        println!("2 {:x}", l1e.to_pa());
+        let l2e = l1e.entry(pt_lvl2_idx(ipa));
+        println!("3 {:x}", l2e.to_pa());
+        let l3e = l2e.entry(pt_lvl3_idx(ipa));
+        println!("ipa {:x} to pa {:x}", ipa, l3e.to_pa());
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {

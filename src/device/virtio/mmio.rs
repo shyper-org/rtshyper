@@ -283,7 +283,9 @@ impl VirtioMmio {
         if idx >= inner.vq.len() {
             return false;
         }
-        return inner.vq[idx].call_notify_handler(self.clone());
+        let vq = inner.vq[idx].clone();
+        drop(inner);
+        return vq.call_notify_handler(self.clone());
     }
 }
 struct VirtioMmioInner {
@@ -618,6 +620,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
         let q_sel = mmio.q_sel();
+        // println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
         if !mmio.notify_handler(q_sel as usize) {
             println!("Failed to handle virtio mmio request!");
         }
@@ -642,6 +645,5 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
         );
         return false;
     }
-    // unimplemented!();
     return true;
 }

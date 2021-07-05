@@ -75,9 +75,9 @@ impl VirtDev {
         inner.int_id
     }
 
-    pub fn cache(&self) -> PageFrame {
+    pub fn cache(&self) -> usize {
         let inner = self.inner.lock();
-        return inner.cache.as_ref().unwrap().clone();
+        return inner.cache.as_ref().unwrap().pa();
     }
 
     pub fn stat(&self) -> DevStat {
@@ -140,6 +140,7 @@ impl VirtDevInner {
 
                 match mem_pages_alloc(BLOCKIF_IOV_MAX) {
                     Ok(PageFrame) => {
+                        // println!("PageFrame pa {:x}", PageFrame.pa());
                         self.cache = Some(PageFrame);
                     }
                     Err(_) => {

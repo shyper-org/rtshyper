@@ -181,6 +181,7 @@ impl VirtioBlkReq {
     pub fn reset_blk_iov(&self) {
         let mut inner = self.inner.lock();
         inner.iov_total = 0;
+        inner.iov.clear();
     }
 
     pub fn set_type(&self, req_type: u32) {
@@ -277,14 +278,14 @@ impl VirtioBlkReqInner {
 }
 
 use crate::board::{platform_blk_read, platform_blk_write};
-use crate::mm::PageFrame;
 use rlibc::memcpy;
-pub fn blk_req_handler(req: VirtioBlkReq, cache: PageFrame) -> usize {
+pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
+    // println!("blk req handler");
     let sector = req.sector();
     let region_start = req.region_start();
     let region_size = req.region_size();
     let mut total_byte = 0;
-    let mut cache_ptr = cache.pa();
+    let mut cache_ptr = cache;
 
     if sector + req.iov_total() / SECTOR_BSIZE > region_start + region_size {
         println!(
@@ -299,14 +300,22 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: PageFrame) -> usize {
     }
     match req.req_type() as usize {
         VIRTIO_BLK_T_IN => {
-            platform_blk_read(
-                sector + region_start,
-                req.iov_total() / SECTOR_BSIZE,
-                cache.pa(),
-            );
-
+            // println!(
+            //     "blk read, start {:x}, iovn {}, iov_total {}",
+            //     sector + region_start,
+            //     req.iovn(),
+            //     req.iov_total()
+            // );
+            platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
             for iov_idx in 0..req.iovn() {
                 let data_bg = req.iov_data_bg(iov_idx);
+                // println!(
+                //     "data_bg {:x} cache {:x} data before {}",
+                //     data_bg,
+                //     cache,
+                //     unsafe { *(data_bg as *mut u32) }
+                // );
+                println!("cache, cache {:x}", 1);
                 let len = req.iov_len(iov_idx) as usize;
                 if len < SECTOR_BSIZE {
                     println!("blk_req_handler: read len < SECTOR_BSIZE");
@@ -317,7 +326,11 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: PageFrame) -> usize {
                 }
                 cache_ptr += len;
                 total_byte += len;
+                // println!("data_bg data {}", unsafe { *(data_bg as *mut u32) });
             }
+            // if sector == 0x8 {
+            //     panic!("");
+            // }
         }
         VIRTIO_BLK_T_OUT => {
             for iov_idx in 0..req.iovn() {
@@ -334,11 +347,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: PageFrame) -> usize {
                 total_byte += len;
             }
 
-            platform_blk_write(
-                sector + region_start,
-                req.iov_total() / SECTOR_BSIZE,
-                cache.pa(),
-            );
+            platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
         }
         VIRTIO_BLK_T_GET_ID => unsafe {
             let data_bg = req.iov_data_bg(0);
@@ -358,7 +367,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: PageFrame) -> usize {
 
 use crate::device::{VirtioMmio, Virtq};
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
-    println!("in virtio_blk_notify_handler");
+    // println!("in virtio_blk_notify_handler");
+    // use crate::kernel::active_vm;
+    // let vm = active_vm().unwrap();
+
     if vq.ready() == 0 {
         println!("Virt_queue is not ready!");
         return false;
@@ -388,7 +400,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         desc_chain_head_idx = next_desc_idx;
         req.reset_blk_iov();
 
+        // println!("desc_chain_head {}", desc_chain_head_idx);
+        // vq.show_desc_info(4);
+
         loop {
+            // println!("next desc idx {}", next_desc_idx);
             if vq.desc_has_next(next_desc_idx) {
                 if head {
                     if vq.desc_is_writable(next_desc_idx) {
@@ -406,6 +422,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                         return false;
                     }
                     let vreq = unsafe { &mut *(vreq_addr as *mut VirtioBlkReqInner) };
+                    // println!("type {}", vreq.req_type);
+                    // println!("sector {}", vreq.sector);
                     req.set_type(vreq.req_type);
                     req.set_sector(vreq.sector);
                 } else {
@@ -433,7 +451,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                 }
             } else {
                 /*state handler*/
-                if vq.desc_is_writable(next_desc_idx) {
+                // println!("state handler");
+                if !vq.desc_is_writable(next_desc_idx) {
                     println!(
                         "Failed to get virt blk queue desc status, idx = {}",
                         next_desc_idx,
@@ -456,7 +475,6 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
             }
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
-
         let total = blk_req_handler(req.clone(), dev.cache());
         if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size as u32) {
             return false;
@@ -490,5 +508,6 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         vq.notify(dev.int_id());
     }
 
+    // vm.show_pagetable(0x8010000);
     return true;
 }

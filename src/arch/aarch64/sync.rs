@@ -15,7 +15,7 @@ use crate::kernel::{get_cpu_ctx_elr, set_cpu_ctx_elr};
 pub fn data_abort_handler() {
     if !exception_data_abort_handleable() {
         panic!(
-            "Cpre {} data abort not handleable 0x{:x}, esr 0x{:x}",
+            "Core {} data abort not handleable 0x{:x}, esr 0x{:x}",
             cpu_id(),
             exception_fault_ipa(),
             exception_esr()
@@ -24,7 +24,7 @@ pub fn data_abort_handler() {
 
     if !exception_data_abort_is_translate_fault() {
         panic!(
-            "Cpre {} data abort is translate fault 0x{:x}",
+            "Core {} data abort is translate fault 0x{:x}",
             cpu_id(),
             exception_fault_ipa(),
         );

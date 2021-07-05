@@ -90,5 +90,5 @@ pub fn emu_register_dev(
         ipa: address,
         size,
         handler,
-    })
+    });
 }

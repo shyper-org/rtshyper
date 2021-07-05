@@ -118,7 +118,7 @@ impl HeapRegion {
             self.region.last = 0;
         }
 
-        let addr = self.region.base + (bit + size) * PAGE_SIZE;
+        let addr = self.region.base + bit * PAGE_SIZE;
         unsafe {
             memset(addr as *mut u8, 0, size * PAGE_SIZE);
         }

@@ -10,7 +10,7 @@ pub const VIRTQ_DESC_F_WRITE: usize = 2;
 
 pub const VRING_USED_F_NO_NOTIFY: usize = 1;
 
-pub const DESC_QUEUE_SIZE: usize = 32;
+pub const DESC_QUEUE_SIZE: usize = 256;
 
 #[repr(C, align(16))]
 struct VringDesc {
@@ -28,7 +28,7 @@ struct VringDesc {
 struct VringAvail {
     flags: u16,
     idx: u16,
-    ring: [u16; 32],
+    ring: [u16; 256],
 }
 
 #[repr(C)]
@@ -41,7 +41,7 @@ struct VringUsedElem {
 struct VringUsed {
     flags: u16,
     idx: u16,
-    ring: [VringUsedElem; 32],
+    ring: [VringUsedElem; 256],
 }
 
 pub trait VirtioQueue {
@@ -153,12 +153,27 @@ impl Virtq {
         let inner = self.inner.lock();
         match inner.notify_handler {
             Some(handler) => {
+                drop(inner);
                 return handler(self.clone(), mmio);
             }
             None => {
                 println!("call_notify_handler: virtq notify handler is None");
                 return false;
             }
+        }
+    }
+
+    pub fn show_desc_info(&self, size: usize) {
+        let inner = self.inner.lock();
+        let desc = inner.desc_table.as_ref().unwrap();
+        println!("[*desc_ring*]");
+        for i in 0..size {
+            use crate::kernel::vm_ipa2pa;
+            let desc_addr = vm_ipa2pa(desc[i].addr);
+            println!(
+                "index {}   desc_addr 0x{:x}   len 0x{:x}   flags {}  next {}",
+                i, desc_addr, desc[i].len, desc[i].flags, desc[i].next
+            );
         }
     }
 

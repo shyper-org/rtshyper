@@ -168,7 +168,7 @@ pub fn config_init() {
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
-        cfg_list: vec![DISK_PARTITION_1_SIZE, DISK_PARTITION_1_START],
+        cfg_list: vec![DISK_PARTITION_1_START, DISK_PARTITION_1_SIZE],
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
     });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
@@ -198,14 +198,14 @@ pub fn config_init() {
         dma: false,
         irq_list: Vec::new(),
     });
-    pt_dev_config.push(VmPassthroughDeviceConfig {
-        name: Some("nic"),
-        base_pa: 0x0a003000,
-        base_ipa: 0x0a003000,
-        length: 0x1000,
-        dma: false,
-        irq_list: vec![32 + 0x2e],
-    });
+    // pt_dev_config.push(VmPassthroughDeviceConfig {
+    //     name: Some("nic"),
+    //     base_pa: 0x0a003000,
+    //     base_ipa: 0x0a003000,
+    //     length: 0x1000,
+    //     dma: false,
+    //     irq_list: vec![32 + 0x2e],
+    // });
 
     // vm0 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
@@ -232,8 +232,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0x53000000,
         },
         cpu: VmCpuConfig {
-            num: 2,
-            allocate_bitmap: 0b0011,
+            num: 1,
+            allocate_bitmap: 0b0001,
             master: 0,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
