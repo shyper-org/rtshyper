@@ -283,6 +283,9 @@ fn io(sector: usize, count: usize, buf: usize, op: Operation) {
     let avail = &mut ring.driver;
     avail.ring[(avail.idx as usize) % QUEUE_SIZE] = 0;
     // barrier
+    unsafe {
+        llvm_asm!("dsb sy");
+    }
     avail.idx = avail.idx.wrapping_add(1);
 
     let mmio = &VIRTIO_MMIO;
@@ -291,6 +294,9 @@ fn io(sector: usize, count: usize, buf: usize, op: Operation) {
 
     loop {
         // barrier
+        unsafe {
+            llvm_asm!("dsb sy");
+        }
         if *status == 0 {
             return;
         } else if *status == 1 {

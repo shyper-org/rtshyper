@@ -315,7 +315,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 //     cache,
                 //     unsafe { *(data_bg as *mut u32) }
                 // );
-                println!("cache, cache {:x}", 1);
+                // print!("{:x}", 1);
                 let len = req.iov_len(iov_idx) as usize;
                 if len < SECTOR_BSIZE {
                     println!("blk_req_handler: read len < SECTOR_BSIZE");

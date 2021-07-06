@@ -377,7 +377,7 @@ static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
 ]);
 
 #[no_mangle]
-#[link_section = ".text.boot"]
+// #[link_section = ".text.boot"]
 pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
     let mut cpu_lock = CPU_LIST.lock();
     let mut cpu = &mut (*cpu_lock)[cpu_id];

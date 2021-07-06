@@ -81,6 +81,9 @@ impl Virtq {
                 if (avail.idx == inner.last_avail_idx) {
                     return None;
                 }
+                unsafe {
+                    llvm_asm!("dsb ish");
+                }
                 let idx = inner.last_avail_idx as usize % inner.num;
                 let avail_desc_idx = avail.ring[idx];
                 inner.last_avail_idx += 1;
@@ -134,6 +137,9 @@ impl Virtq {
                 used.flags = flag;
                 used.ring[used.idx as usize % num as usize].id = desc_chain_head_idx;
                 used.ring[used.idx as usize % num as usize].len = len;
+                unsafe {
+                    llvm_asm!("dsb ish");
+                }
                 used.idx += 1;
                 return true;
             }

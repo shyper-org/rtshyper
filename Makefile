@@ -1,14 +1,19 @@
 disk = /home/ohmr/work/hypervisor/disk-img
 
-qemu:
+qemu_release:
+	RUSTFLAGS="-C llvm-args=-global-isel=false" \
+	cargo build -Z build-std=core,alloc --target aarch64.json --features qemu --release
+	aarch64-linux-gnu-objdump -d target/aarch64/release/rust_hypervisor > target/aarch64/release/t.txt
+
+qemu_debug:
 	RUSTFLAGS="-C llvm-args=-global-isel=false" \
 	cargo build -Z build-std=core,alloc --target aarch64.json --features qemu
-	aarch64-linux-gnu-objdump -d target/aarch64/release/rust_hypervisor > target/aarch64/debug/t.txt
+	aarch64-linux-gnu-objdump -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
 
 tx2:
 	RUSTFLAGS="-C llvm-args=-global-isel=false" \
-	cargo build -Z build-std=core,alloc --target aarch64.json --features tx2
-	aarch64-linux-gnu-objdump -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
+	cargo build -Z build-std=core,alloc --target aarch64.json --features tx2 --release
+	aarch64-linux-gnu-objdump -d target/aarch64/release/rust_hypervisor > target/aarch64/release/t.txt
 
 release:
 	RUSTFLAGS="-C llvm-args=-global-isel=false" \
