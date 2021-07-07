@@ -139,9 +139,9 @@ impl VirtDevInner {
                 self.req = DevReq::BlkReq(blk_req);
 
                 match mem_pages_alloc(BLOCKIF_IOV_MAX) {
-                    Ok(PageFrame) => {
-                        // println!("PageFrame pa {:x}", PageFrame.pa());
-                        self.cache = Some(PageFrame);
+                    Ok(page_frame) => {
+                        // println!("PageFrame pa {:x}", page_frame.pa());
+                        self.cache = Some(page_frame);
                     }
                     Err(_) => {
                         println!("VirtDevInner::init(): mem_pages_alloc failed");

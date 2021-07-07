@@ -67,9 +67,14 @@ impl VgicInt {
         vgic_int.state = state;
     }
 
-    fn set_owner(&self, owner: Option<Vcpu>) {
+    fn set_owner(&self, owner: Vcpu) {
         let mut vgic_int = self.inner.lock();
-        vgic_int.owner = owner;
+        vgic_int.owner = Some(owner);
+    }
+
+    fn clear_owner(&self) {
+        let mut vgic_int = self.inner.lock();
+        vgic_int.owner = None;
     }
 
     fn set_hw(&self, hw: bool) {
@@ -134,24 +139,46 @@ impl VgicInt {
                 return Some(vcpu.clone());
             }
             None => {
+                // println!("vgic_int {} owner vcpu is none", vgic_int.id);
                 return None;
             }
         }
     }
 
-    fn owner_phys_id(&self) -> usize {
+    fn owner_phys_id(&self) -> Option<usize> {
         let vgic_int = self.inner.lock();
-        vgic_int.owner_phys_id()
+        match &vgic_int.owner {
+            Some(owner) => {
+                return Some(owner.phys_id());
+            }
+            None => {
+                return None;
+            }
+        }
     }
 
-    fn owner_id(&self) -> usize {
+    fn owner_id(&self) -> Option<usize> {
         let vgic_int = self.inner.lock();
-        vgic_int.owner_id()
+        match &vgic_int.owner {
+            Some(owner) => {
+                return Some(owner.id());
+            }
+            None => {
+                return None;
+            }
+        }
     }
 
-    fn owner_vm_id(&self) -> usize {
+    fn owner_vm_id(&self) -> Option<usize> {
         let vgic_int = self.inner.lock();
-        vgic_int.owner_vm_id()
+        match &vgic_int.owner {
+            Some(owner) => {
+                return Some(owner.vm_id());
+            }
+            None => {
+                return None;
+            }
+        }
     }
 
     fn owner_vm(&self) -> Vm {
@@ -207,21 +234,6 @@ impl VgicIntInner {
     fn owner_vm(&self) -> Vm {
         let owner = self.owner.as_ref().unwrap();
         owner.vm().unwrap()
-    }
-
-    fn owner_id(&self) -> usize {
-        let owner = self.owner.as_ref().unwrap();
-        owner.id()
-    }
-
-    fn owner_phys_id(&self) -> usize {
-        let owner = self.owner.as_ref().unwrap();
-        owner.phys_id()
-    }
-
-    fn owner_vm_id(&self) -> usize {
-        let owner = self.owner.as_ref().unwrap();
-        owner.vm_id()
     }
 }
 
@@ -653,7 +665,7 @@ impl Vgic {
                     }
                     vgic_int_yield_owner(vcpu.clone(), interrupt.clone());
                 } else {
-                    let int_phys_id = interrupt.owner_phys_id();
+                    let int_phys_id = interrupt.owner_phys_id().unwrap();
                     let vcpu_vm_id = vcpu.vm_id();
                     let ipi_msg = IpiInitcMessage {
                         event: InitcEvent::VgicdSetEn,
@@ -716,7 +728,7 @@ impl Vgic {
                     int_id: interrupt.id(),
                     val: pend as u8,
                 };
-                let phys_id = interrupt.owner_phys_id();
+                let phys_id = interrupt.owner_phys_id().unwrap();
                 if !ipi_send_msg(phys_id, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
                     println!(
                         "vgicd_set_pend: Failed to send ipi message, target {} type {}",
@@ -755,7 +767,7 @@ impl Vgic {
                     int_id: interrupt.id(),
                     val: act as u8,
                 };
-                let phys_id = interrupt.owner_phys_id();
+                let phys_id = interrupt.owner_phys_id().unwrap();
                 if !ipi_send_msg(phys_id, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
                     println!(
                         "vgicd_set_active: Failed to send ipi message, target {} type {}",
@@ -783,13 +795,13 @@ impl Vgic {
                     val: cfg,
                 };
                 if !ipi_send_msg(
-                    interrupt.owner_phys_id(),
+                    interrupt.owner_phys_id().unwrap(),
                     IpiType::IpiTIntc,
                     IpiInnerMsg::Initc(m),
                 ) {
                     println!(
                         "set_icfgr: Failed to send ipi message, target {} type {}",
-                        interrupt.owner_phys_id(),
+                        interrupt.owner_phys_id().unwrap(),
                         0
                     );
                 }
@@ -888,13 +900,13 @@ impl Vgic {
                     val: prio,
                 };
                 if !ipi_send_msg(
-                    interrupt.owner_phys_id(),
+                    interrupt.owner_phys_id().unwrap(),
                     IpiType::IpiTIntc,
                     IpiInnerMsg::Initc(m),
                 ) {
                     println!(
                         "set_prio: Failed to send ipi message, target {} type {}",
-                        interrupt.owner_phys_id(),
+                        interrupt.owner_phys_id().unwrap(),
                         0
                     );
                 }
@@ -937,13 +949,13 @@ impl Vgic {
                     val: trgt,
                 };
                 if !ipi_send_msg(
-                    interrupt.owner_phys_id(),
+                    interrupt.owner_phys_id().unwrap(),
                     IpiType::IpiTIntc,
                     IpiInnerMsg::Initc(m),
                 ) {
                     println!(
                         "set_trgt: Failed to send ipi message, target {} type {}",
-                        interrupt.owner_phys_id(),
+                        interrupt.owner_phys_id().unwrap(),
                         0
                     );
                 }
@@ -961,7 +973,7 @@ impl Vgic {
         let interrupt_option = self.get_int(vcpu.clone(), bit_extract(id, 0, 10));
         if let Some(interrupt) = interrupt_option {
             if interrupt.hw() {
-                interrupt.set_owner(Some(vcpu.clone()));
+                interrupt.set_owner(vcpu.clone());
                 interrupt.set_state(IrqState::IrqSPend);
                 interrupt.set_in_lr(false);
                 self.route(vcpu.clone(), interrupt);
@@ -1648,29 +1660,37 @@ fn vgic_owns(vcpu: Vcpu, interrupt: VgicInt) -> bool {
     if gic_is_priv(interrupt.id() as usize) {
         return true;
     }
-    if interrupt.owner().is_none() {
-        return false;
-    }
-
-    let tmp = interrupt.owner().unwrap();
-    let owner_vcpu_id = interrupt.owner_id();
-    let owner_pcpu_id = interrupt.owner_phys_id();
-    // let owner_vm_id = interrupt.owner_vm_id();
-    // println!("3: owner_vm_id {}", owner_vm_id);
+    // if interrupt.owner().is_none() {
+    //     return false;
+    // }
 
     let vcpu_id = vcpu.id();
     let pcpu_id = vcpu.phys_id();
+    match interrupt.owner() {
+        Some(owner) => {
+            let owner_vcpu_id = owner.id();
+            let owner_pcpu_id = owner.phys_id();
+            return (owner_vcpu_id == vcpu_id && owner_pcpu_id == pcpu_id);
+        }
+        None => return false,
+    }
+
+    // let tmp = interrupt.owner().unwrap();
+    // let owner_vcpu_id = interrupt.owner_id();
+    // let owner_pcpu_id = interrupt.owner_phys_id();
+    // let owner_vm_id = interrupt.owner_vm_id();
+    // println!("3: owner_vm_id {}", owner_vm_id);
+
     // let vcpu_vm_id = vcpu.vm_id();
 
     // println!("return vgic_owns: vcpu_vm_id {}", vcpu_vm_id);
     // return (owner_vcpu_id == vcpu_id && owner_vm_id == vcpu_vm_id);
-    return (owner_vcpu_id == vcpu_id && owner_pcpu_id == pcpu_id);
 }
 
 fn vgic_get_state(interrupt: VgicInt) -> usize {
     let mut state = interrupt.state().to_num();
 
-    if interrupt.in_lr() && interrupt.owner_phys_id() == cpu_id() {
+    if interrupt.in_lr() && interrupt.owner_phys_id().unwrap() == cpu_id() {
         let lr_option = gich_get_lr(interrupt.clone());
         if let Some(lr_val) = lr_option {
             state = lr_val as usize;
@@ -1686,7 +1706,7 @@ fn vgic_get_state(interrupt: VgicInt) -> usize {
 
     let vm = interrupt.owner_vm();
     let vgic = vm.vgic();
-    let vcpu_id = interrupt.owner_id();
+    let vcpu_id = interrupt.owner_id().unwrap();
 
     if vgic.cpu_priv_sgis_pend(vcpu_id, interrupt.id() as usize) != 0 {
         state |= 1;
@@ -1704,7 +1724,7 @@ fn vgic_int_yield_owner(vcpu: Vcpu, interrupt: VgicInt) {
     }
 
     if vgic_get_state(interrupt.clone()) & 2 == 0 {
-        interrupt.set_owner(None);
+        interrupt.clear_owner();
     }
 }
 
@@ -1714,7 +1734,7 @@ fn vgic_int_is_hw(interrupt: VgicInt) -> bool {
 
 fn gich_get_lr(interrupt: VgicInt) -> Option<u32> {
     let cpu_id = cpu_id();
-    let phys_id = interrupt.owner_phys_id();
+    let phys_id = interrupt.owner_phys_id().unwrap();
 
     if !interrupt.in_lr() || phys_id != cpu_id {
         return None;
@@ -1729,12 +1749,12 @@ fn gich_get_lr(interrupt: VgicInt) -> Option<u32> {
 
 fn vgic_int_get_owner(vcpu: Vcpu, interrupt: VgicInt) -> bool {
     if interrupt.owner().is_none() {
-        interrupt.set_owner(Some(vcpu.clone()));
+        interrupt.set_owner(vcpu.clone());
         return true;
     }
 
-    let owner_vcpu_id = interrupt.owner_id();
-    let owner_vm_id = interrupt.owner_vm_id();
+    let owner_vcpu_id = interrupt.owner_id().unwrap();
+    let owner_vm_id = interrupt.owner_vm_id().unwrap();
 
     let vcpu_id = vcpu.id();
     let vcpu_vm_id = vcpu.vm_id();
