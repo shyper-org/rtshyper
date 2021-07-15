@@ -125,14 +125,14 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
         return usize::MAX - 1;
     }
-    #[cfg(feature = "tx2")]
-    {
-        let cluster = (mpidr >> 8) & 0xff;
-        if vm.vm_id() == 0 && cluster != 1 {
-            println!("psci_guest_cpu_on: L4T only support cluster #1");
-            return usize::MAX - 1;
-        }
-    }
+    // #[cfg(feature = "tx2")]
+    // {
+    //     let cluster = (mpidr >> 8) & 0xff;
+    //     if vm.vm_id() == 0 && cluster != 1 {
+    //         println!("psci_guest_cpu_on: L4T only support cluster #1");
+    //         return usize::MAX - 1;
+    //     }
+    // }
 
     let m = IpiPowerMessage {
         event: PowerEvent::PsciIpiCpuOn,

@@ -599,6 +599,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
 }
 
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
+    println!("emu_virtio_mmio_handler");
     let vm = match active_vm() {
         Some(vm) => vm,
         None => {
@@ -620,7 +621,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
         let q_sel = mmio.q_sel();
-        // println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
+        println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
         if !mmio.notify_handler(q_sel as usize) {
             println!("Failed to handle virtio mmio request!");
         }

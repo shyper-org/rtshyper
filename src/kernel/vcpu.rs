@@ -77,13 +77,17 @@ impl Vcpu {
 
     pub fn vm_id(&self) -> usize {
         let inner = self.inner.lock();
-        inner.vm_id()
+        let vm = inner.vm.clone().unwrap();
+        drop(inner);
+        vm.vm_id()
     }
 
     #[allow(dead_code)]
     pub fn vm_pt_dir(&self) -> usize {
         let inner = self.inner.lock();
-        inner.vm_pt_dir()
+        let vm = inner.vm.clone().unwrap();
+        drop(inner);
+        vm.pt_dir()
     }
 
     #[allow(dead_code)]

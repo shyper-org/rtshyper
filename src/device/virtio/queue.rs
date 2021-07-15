@@ -183,6 +183,14 @@ impl Virtq {
         }
     }
 
+    pub fn show_addr_info(&self) {
+        let inner = self.inner.lock();
+        println!(
+            "avail_addr {:x}, desc_addr {:x}, used_addr {:x}",
+            inner.avail_addr, inner.desc_table_addr, inner.used_addr
+        );
+    }
+
     pub fn set_num(&self, num: usize) {
         let mut inner = self.inner.lock();
         inner.num = num;

@@ -277,9 +277,12 @@ impl Vm {
     }
 
     pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
+        // println!("vcpuid_to_pcpuid");
         let vm_inner = self.inner.lock();
         if vcpuid < vm_inner.cpu_num {
-            return Ok(vm_inner.vcpu_list[vcpuid].phys_id());
+            let vcpu = vm_inner.vcpu_list[vcpuid].clone();
+            drop(vm_inner);
+            return Ok(vcpu.phys_id());
         } else {
             return Err(());
         }

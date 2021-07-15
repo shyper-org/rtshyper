@@ -49,7 +49,7 @@ pub fn config_init() {
         base_ipa: 0x9000000,
         length: 0x1000,
         dma: false,
-        irq_list: vec![27, UART_1_INT],
+        irq_list: vec![UART_1_INT, 27],
     });
     pt_dev_config.push(VmPassthroughDeviceConfig {
         name: Some("gicc"),

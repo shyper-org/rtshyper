@@ -171,6 +171,7 @@ impl GicDistributor {
     }
 
     pub fn send_sgi(&self, cpu_if: usize, sgi_num: usize) {
+        println!("Core {} send ipi to cpu {}", cpu_id(), cpu_if);
         self.SGIR
             .set(((1 << (16 + cpu_if)) | (sgi_num & 0b1111)) as u32);
     }

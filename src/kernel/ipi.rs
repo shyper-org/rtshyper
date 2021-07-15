@@ -40,7 +40,7 @@ pub struct IpiPowerMessage {
     pub context: usize,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum IpiType {
     IpiTIntc = 0,
     IpiTPower = 1,
@@ -78,10 +78,11 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
-    // println!("ipi_irq_handler");
+    println!("Core[{}] ipi_irq_handler", cpu_id());
     let cpu_id = cpu_id();
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
+    drop(cpu_if_list);
     let ipi_handler_list = IPI_HANDLER_LIST.lock();
 
     while !msg.is_none() {
@@ -90,9 +91,10 @@ pub fn ipi_irq_handler() {
         if ipi_handler_list.len() <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
-            // println!("ipi type is {}", ipi_type);
+            println!("ipi type is {:#?}", ipi_msg.ipi_type);
             (ipi_handler_list[ipi_type].handler)(&ipi_msg);
         }
+        let mut cpu_if_list = CPU_IF_LIST.lock();
         msg = cpu_if_list[cpu_id].pop();
     }
 }
@@ -128,11 +130,26 @@ fn ipi_send(target_id: usize, msg: IpiMessage) -> bool {
     true
 }
 
-pub fn ipi_send_msg(target_id: usize, ipi_type: IpiType, msg: IpiInnerMsg) -> bool {
+pub fn ipi_send_msg(target_id: usize, ipi_type: IpiType, ipi_message: IpiInnerMsg) -> bool {
     let msg = IpiMessage {
         ipi_type,
-        ipi_message: msg,
+        ipi_message,
     };
+    if ipi_type as usize == 0 {
+        match ipi_message {
+            IpiInnerMsg::Initc(message) => {
+                println!(
+                    "Core[{}] send intc ipi to Core[{}], event {:#?}, int {}, val {}",
+                    cpu_id(),
+                    target_id,
+                    message.event,
+                    message.int_id,
+                    message.val
+                );
+            }
+            _ => {}
+        }
+    }
     ipi_send(target_id, msg)
 }
 

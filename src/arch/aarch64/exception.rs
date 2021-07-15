@@ -134,10 +134,10 @@ unsafe extern "C" fn current_el_spx_serror() {
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     set_cpu_ctx(ctx);
-
     // println!("exception class {}", exception_class());
     match exception_class() {
         0x24 => {
+            // println!("Core[{}] data_abort_handler", cpu_id());
             data_abort_handler();
         }
         0x17 => {
@@ -162,7 +162,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
-    // println!("lower_aarch64_irq");
+    // println!("Core[{}] lower_aarch64_irq", cpu_id());
     set_cpu_ctx(ctx);
     let (id, src) = gicc_get_current_irq();
 
