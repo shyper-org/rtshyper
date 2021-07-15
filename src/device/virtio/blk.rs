@@ -280,7 +280,7 @@ impl VirtioBlkReqInner {
 use crate::board::{platform_blk_read, platform_blk_write};
 use rlibc::memcpy;
 pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
-    println!("blk req handler");
+    // println!("blk req handler");
     let sector = req.sector();
     let region_start = req.region_start();
     let region_size = req.region_size();
@@ -367,9 +367,9 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
 
 use crate::device::{VirtioMmio, Virtq};
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
-    println!("in virtio_blk_notify_handler");
-    // use crate::kernel::active_vm;
-    // let vm = active_vm().unwrap();
+    // println!("in virtio_blk_notify_handler");
+    use crate::kernel::active_vm;
+    let vm = active_vm().unwrap();
 
     if vq.ready() == 0 {
         println!("Virt_queue is not ready!");
@@ -400,11 +400,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         desc_chain_head_idx = next_desc_idx;
         req.reset_blk_iov();
 
-        println!("desc_chain_head {}", desc_chain_head_idx);
-        vq.show_desc_info(4);
+        // println!("desc_chain_head {}", desc_chain_head_idx);
+        // vq.show_desc_info(4);
 
         loop {
-            println!("next desc idx {}", next_desc_idx);
+            // println!("next desc idx {}", next_desc_idx);
             if vq.desc_has_next(next_desc_idx) {
                 if head {
                     if vq.desc_is_writable(next_desc_idx) {
@@ -422,13 +422,13 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                         return false;
                     }
                     let vreq = unsafe { &mut *(vreq_addr as *mut VirtioBlkReqInner) };
-                    println!("type {}", vreq.req_type);
-                    println!("sector {}", vreq.sector);
+                    // println!("type {}", vreq.req_type);
+                    // println!("sector {}", vreq.sector);
                     req.set_type(vreq.req_type);
                     req.set_sector(vreq.sector);
                 } else {
                     /*data handler*/
-                    println!("data handler");
+                    // println!("data handler");
                     if (vq.desc_flags(next_desc_idx) & 0x2) as u32 >> 1 == req.req_type() {
                         println!(
                             "Failed to get virt blk queue desc data, idx = {}, req.type = {}, desc.flags = {}", 
@@ -452,7 +452,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                 }
             } else {
                 /*state handler*/
-                println!("state handler");
+                // println!("state handler");
                 if !vq.desc_is_writable(next_desc_idx) {
                     println!(
                         "Failed to get virt blk queue desc status, idx = {}",
@@ -480,7 +480,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size as u32) {
             return false;
         }
-        println!("finish blk req handler");
+        // println!("finish blk req handler");
         match dev.stat() {
             super::DevStat::BlkStat(stat) => match req.req_type() as usize {
                 VIRTIO_BLK_T_IN => {
@@ -510,7 +510,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         vq.notify(dev.int_id());
     }
 
-    println!("end virtio blk handler");
-    // vm.show_pagetable(0x8010000);
+    // println!("end virtio blk handler");
+    vm.show_pagetable(0x8010000);
     return true;
 }

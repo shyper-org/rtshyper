@@ -98,9 +98,9 @@ pub fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
 }
 
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
-    if int_id != 27 {
-        println!("interrupt_handler: int_id {}", int_id);
-    }
+    // if int_id != 27 {
+    //     println!("interrupt_handler: int_id {}", int_id);
+    // }
     use crate::kernel::active_vm;
     match active_vm() {
         Some(vm) => {
@@ -129,13 +129,13 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                 unimplemented!();
             }
         }
-        if int_id != 27 {
-            println!(
-                "Core[{}] finish interrupt_handler: int_id {}",
-                cpu_id(),
-                int_id
-            );
-        }
+        // if int_id != 27 {
+        //     println!(
+        //         "Core[{}] finish interrupt_handler: int_id {}",
+        //         cpu_id(),
+        //         int_id
+        //     );
+        // }
         return true;
     } else {
         println!(

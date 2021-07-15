@@ -269,15 +269,15 @@ impl PageTable {
     }
 
     pub fn show_pt(&self, ipa: usize) {
-        println!("show_pt");
+        // println!("show_pt");
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         println!("1 {:x}", directory.to_pa());
         let l1e = directory.entry(pt_lvl1_idx(ipa));
-        println!("2 {:x}", l1e.to_pa());
+        // println!("2 {:x}", l1e.to_pa());
         let l2e = l1e.entry(pt_lvl2_idx(ipa));
-        println!("3 {:x}", l2e.to_pa());
+        // println!("3 {:x}", l2e.to_pa());
         let l3e = l2e.entry(pt_lvl3_idx(ipa));
-        println!("ipa {:x} to pa {:x}", ipa, l3e.to_pa());
+        // println!("ipa {:x} to pa {:x}", ipa, l3e.to_pa());
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {

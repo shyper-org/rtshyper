@@ -78,7 +78,7 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
-    println!("Core[{}] ipi_irq_handler", cpu_id());
+    // println!("Core[{}] ipi_irq_handler", cpu_id());
     let cpu_id = cpu_id();
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
@@ -135,21 +135,21 @@ pub fn ipi_send_msg(target_id: usize, ipi_type: IpiType, ipi_message: IpiInnerMs
         ipi_type,
         ipi_message,
     };
-    if ipi_type as usize == 0 {
-        match ipi_message {
-            IpiInnerMsg::Initc(message) => {
-                println!(
-                    "Core[{}] send intc ipi to Core[{}], event {:#?}, int {}, val {}",
-                    cpu_id(),
-                    target_id,
-                    message.event,
-                    message.int_id,
-                    message.val
-                );
-            }
-            _ => {}
-        }
-    }
+    // if ipi_type as usize == 0 {
+    //     match ipi_message {
+    //         IpiInnerMsg::Initc(message) => {
+    //             println!(
+    //                 "Core[{}] send intc ipi to Core[{}], event {:#?}, int {}, val {}",
+    //                 cpu_id(),
+    //                 target_id,
+    //                 message.event,
+    //                 message.int_id,
+    //                 message.val
+    //             );
+    //         }
+    //         _ => {}
+    //     }
+    // }
     ipi_send(target_id, msg)
 }
 

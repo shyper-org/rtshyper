@@ -40,7 +40,7 @@ pub fn data_abort_handler() {
     };
 
     let elr = get_cpu_ctx_elr();
-    println!("emu_handler");
+    // println!("emu_handler");
     if !emu_handler(&emu_ctx) {
         println!(
             "data_abort_handler: Failed to handler emul device request, ipa 0x{:x} elr 0x{:x}",
