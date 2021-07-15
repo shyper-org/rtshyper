@@ -39,9 +39,88 @@ pub const DISK_PARTITION_4_INT: usize = 32 + 0x13;
 
 use crate::arch::GicDesc;
 use crate::board::{ArchDesc, PlatCpuConfig, PlatMemRegion, PlatMemoryConfig, PlatformConfig};
+use crate::device::ARM_CORTEX_A57;
 use crate::device::ARM_NVIDIA_DENVER;
 
-// pub static PLAT_DESC: PlatformConfig = PlatformConfig {
+pub static PLAT_DESC: PlatformConfig = PlatformConfig {
+    cpu_desc: PlatCpuConfig {
+        num: 4,
+        mpidr_list: [0x80000100, 0x80000101, 0x80000102, 0x80000103],
+        name: [ARM_CORTEX_A57; 4],
+    },
+    mem_desc: PlatMemoryConfig {
+        region_num: 3,
+        regions: [
+            PlatMemRegion {
+                base: 0x80000000,
+                size: 0x10000000,
+            },
+            PlatMemRegion {
+                base: 0x90000000,
+                size: 0x60000000,
+            },
+            PlatMemRegion {
+                base: 0xf0200000,
+                size: 0x185600000,
+            },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
+        ],
+        base: 0x80000000,
+    },
+    uart_base: UART_0_ADDR,
+    arch_desc: ArchDesc {
+        gic_desc: GicDesc {
+            gicd_addr: PLATFORM_GICD_BASE,
+            gicc_addr: PLATFORM_GICC_BASE,
+            gich_addr: PLATFORM_GICH_BASE,
+            gicv_addr: PLATFORM_GICV_BASE,
+            maintenance_int_id: 25,
+        },
+    },
+};
+
+fn platform_cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
+    use crate::arch::power_arch_cpu_on;
+    power_arch_cpu_on(arch_core_id, entry, ctx);
+}
+
+pub fn platform_power_on_secondary_cores() {
+    for i in 1..PLAT_DESC.cpu_desc.num {
+        platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], KERNEL_ENTRY, 0);
+    }
+}
+
+// TODO
+pub fn platform_blk_init() {
+    //     println!("Platform block driver init ok");
+    //     crate::driver::virtio_blk_init();
+    println!("Platform block driver init ok");
+}
+
+// pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
+//     read(sector, count, buf);
 // }
 
-pub fn platform_blk_init() {}
+// pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
+//     write(sector, count, buf);
+// }
+
+pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
+    cpuid + PLAT_DESC.cpu_desc.num
+}
+
+pub fn platform_cpuif_to_cpuid(cpuif: usize) -> usize {
+    cpuif - PLAT_DESC.cpu_desc.num
+}

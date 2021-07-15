@@ -23,7 +23,7 @@ pub struct VmPassthroughDeviceConfig {
     pub base_pa: usize,
     pub base_ipa: usize,
     pub length: usize,
-    pub dma: bool,
+    // pub dma: bool,
     pub irq_list: Vec<usize>,
 }
 

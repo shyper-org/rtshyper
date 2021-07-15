@@ -48,7 +48,7 @@ pub fn config_init() {
         base_pa: UART_1_ADDR,
         base_ipa: 0x9000000,
         length: 0x1000,
-        dma: false,
+        // dma: false,
         irq_list: vec![UART_1_INT, 27],
     });
     pt_dev_config.push(VmPassthroughDeviceConfig {
@@ -56,7 +56,7 @@ pub fn config_init() {
         base_pa: PLATFORM_GICV_BASE,
         base_ipa: 0x8010000,
         length: 0x2000,
-        dma: false,
+        // dma: false,
         irq_list: Vec::new(),
     });
     // pt_dev_config.push(VmPassthroughDeviceConfig {
