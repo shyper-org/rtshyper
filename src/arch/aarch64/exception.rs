@@ -169,7 +169,11 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     if id >= 1022 {
         return;
     }
+    // use crate::lib::time_current_us;
+    // let begin = time_current_us();
     let handled_by_hypervisor = interrupt_handler(id, src);
+    // let end = time_current_us();
+
     gicc_clear_current_irq(handled_by_hypervisor);
     clear_cpu_ctx();
 }

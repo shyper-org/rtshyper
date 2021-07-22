@@ -8,13 +8,26 @@ use crate::kernel::{
 
 pub const PSCI_VERSION: usize = 0x84000000;
 pub const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
+pub const PSCI_FEATURES: usize = 0x8400000A;
 pub const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
 pub const PSCI_CPU_OFF: usize = 0xc4000002;
 pub const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
+
+pub const PSCI_E_SUCCESS: usize = 0;
+pub const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
+
 #[cfg(feature = "tx2")]
 const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
 
 pub const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
+
+pub fn power_arch_init() {
+    use crate::arch::psci_ipi_handler;
+    use crate::kernel::{ipi_register, IpiType};
+    if !ipi_register(IpiType::IpiTPower, psci_ipi_handler) {
+        panic!("power_arch_init: failed to register ipi IpiTPower");
+    }
+}
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     println!(
@@ -47,8 +60,16 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             context_set_gpr(1, result.1);
             context_set_gpr(2, result.2);
         }
+        PSCI_FEATURES => match x1 {
+            PSCI_VERSION | PSCI_CPU_ON_AARCH64 | PSCI_FEATURES => {
+                r = PSCI_E_SUCCESS;
+            }
+            _ => {
+                r = PSCI_E_NOT_SUPPORTED;
+            }
+        },
         _ => {
-            unimplemented!();
+            // unimplemented!();
             return false;
         }
     }
@@ -125,14 +146,14 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
         return usize::MAX - 1;
     }
-    // #[cfg(feature = "tx2")]
-    // {
-    //     let cluster = (mpidr >> 8) & 0xff;
-    //     if vm.vm_id() == 0 && cluster != 1 {
-    //         println!("psci_guest_cpu_on: L4T only support cluster #1");
-    //         return usize::MAX - 1;
-    //     }
-    // }
+    #[cfg(feature = "tx2")]
+    {
+        let cluster = (mpidr >> 8) & 0xff;
+        if vm.vm_id() == 0 && cluster != 1 {
+            println!("psci_guest_cpu_on: L4T only support cluster #1");
+            return usize::MAX - 1;
+        }
+    }
 
     let m = IpiPowerMessage {
         event: PowerEvent::PsciIpiCpuOn,

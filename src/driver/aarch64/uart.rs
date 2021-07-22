@@ -1,9 +1,17 @@
 use core::ptr;
 
-const UART0: *mut u8 = 0x0900_0000 as *mut u8;
-
 pub fn putc(byte: u8) {
+    use crate::board::UART_0_ADDR;
+    #[cfg(feature = "qemu")]
     unsafe {
-        ptr::write_volatile(UART0, byte);
+        ptr::write_volatile(UART_0_ADDR as *mut u8, byte);
+    }
+    #[cfg(feature = "tx2")]
+    unsafe {
+        if byte == '\n' as u8 {
+            putc('\r' as u8);
+        }
+        while (ptr::read_volatile((UART_0_ADDR + 20) as *const u8) & 0x20 == 0) {}
+        ptr::write_volatile(UART_0_ADDR as *mut u8, byte);
     }
 }

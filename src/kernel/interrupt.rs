@@ -76,7 +76,7 @@ pub fn interrupt_init() {
 
 use crate::arch::{interrupt_arch_vm_register, GIC_PRIVINT_NUM};
 pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
-    println!("VM {} register interrupt {}", vm.vm_id(), id);
+    // println!("VM {} register interrupt {}", vm.vm_id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     if glb_bitmap_lock.get(id) != 0 && id > GIC_PRIVINT_NUM {
         println!(
@@ -98,9 +98,7 @@ pub fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
 }
 
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
-    // if int_id != 27 {
-    //     println!("interrupt_handler: int_id {}", int_id);
-    // }
+    // println!("interrupt_handler: int_id {}", int_id);
     use crate::kernel::active_vm;
     match active_vm() {
         Some(vm) => {
@@ -113,7 +111,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     }
 
     if interrupt_is_reserved(int_id) {
-        // println!("is reserved");
+        // println!("is reserved int {}", int_id);
         let irq_handler = INTERRUPT_HANDLERS.lock();
         match irq_handler[int_id] {
             InterruptHandler::IpiIrqHandler(irq_handler) => {
@@ -129,13 +127,6 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                 unimplemented!();
             }
         }
-        // if int_id != 27 {
-        //     println!(
-        //         "Core[{}] finish interrupt_handler: int_id {}",
-        //         cpu_id(),
-        //         int_id
-        //     );
-        // }
         return true;
     } else {
         println!(

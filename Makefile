@@ -12,13 +12,15 @@ qemu_release:
 
 tx2:
 	RUSTFLAGS="-C llvm-args=-global-isel=false" \
-	cargo build -Z build-std=core,alloc --target aarch64.json --features tx2 --release
-	aarch64-linux-gnu-objdump -d target/aarch64/release/rust_hypervisor > target/aarch64/release/t.txt
+	cargo build -Z build-std=core,alloc --target aarch64-tx2.json --features tx2
+	bash upload
+	aarch64-linux-gnu-objdump -d target/aarch64-tx2/debug/rust_hypervisor > target/aarch64-tx2/debug/t.txt
 
-release:
+tx2_release:
 	RUSTFLAGS="-C llvm-args=-global-isel=false" \
-	cargo build -Z build-std=core,alloc --target aarch64.json --release --features tx2
-	aarch64-linux-gnu-objdump -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
+	cargo build -Z build-std=core,alloc --target aarch64-tx2.json --features tx2 --release
+	bash upload_release
+	aarch64-linux-gnu-objdump -d target/aarch64-tx2/release/rust_hypervisor > target/aarch64-tx2/release/t.txt
 
 run:
 	/usr/share/qemu/bin/qemu-system-aarch64 \

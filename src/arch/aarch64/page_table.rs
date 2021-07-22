@@ -245,10 +245,10 @@ impl PageTable {
     pub fn map_range_2mb(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
         let size_2mb = 1 << LVL2_SHIFT;
         let page_num = round_up(len, size_2mb) / size_2mb;
-        println!(
-            "map_range_2mb: ipa {:x}, len {:x}, pa {:x}, pte 0b{:b}, page_num {:x}, size_2mb {:x}",
-            ipa, len, pa, pte, page_num, size_2mb
-        );
+        // println!(
+        //     "map_range_2mb: ipa {:x}, len {:x}, pa {:x}, pte 0b{:b}, page_num {:x}, size_2mb {:x}",
+        //     ipa, len, pa, pte, page_num, size_2mb
+        // );
 
         for i in 0..page_num {
             self.map_2mb(ipa + i * size_2mb, pa + i * size_2mb, pte);

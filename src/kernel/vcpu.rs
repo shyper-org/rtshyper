@@ -180,7 +180,8 @@ impl VcpuInner {
         vmpidr |= 1 << 31;
 
         #[cfg(feature = "tx2")]
-        if vm_id() == 0 {
+        if self.vm_id() == 0 {
+            // A57 is cluster #1 for L4T
             vmpidr |= 0x100;
         }
 

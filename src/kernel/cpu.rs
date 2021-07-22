@@ -334,9 +334,9 @@ pub fn cpu_stack() -> usize {
 
 pub fn cpu_init() {
     let cpu_id = cpu_id();
-    println!("cpu id {}", cpu_id);
     if cpu_id == 0 {
-        use crate::board::{platform_power_on_secondary_cores, power_arch_init};
+        use crate::arch::power_arch_init;
+        use crate::board::platform_power_on_secondary_cores;
         platform_power_on_secondary_cores();
         power_arch_init();
         cpu_if_init();
@@ -365,7 +365,7 @@ pub fn cpu_idle() {
     }
 }
 
-static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
+static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [
     Cpu::default(),
     Cpu::default(),
     Cpu::default(),
@@ -374,14 +374,24 @@ static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
     Cpu::default(),
     Cpu::default(),
     Cpu::default(),
-]);
+];
+// static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
+//     Cpu::default(),
+//     Cpu::default(),
+//     Cpu::default(),
+//     Cpu::default(),
+//     Cpu::default(),
+//     Cpu::default(),
+//     Cpu::default(),
+//     Cpu::default(),
+// ]);
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
 pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
-    let mut cpu_lock = CPU_LIST.lock();
-    let mut cpu = &mut (*cpu_lock)[cpu_id];
-    // let mut cpu = unsafe { &mut CPU_LIST[cpu_id] };
+    // let mut cpu_lock = CPU_LIST.lock();
+    // let mut cpu = &mut (*cpu_lock)[cpu_id];
+    let mut cpu = unsafe { &mut CPU_LIST[cpu_id] };
     (*cpu).id = cpu_id;
 
     let lvl1_addr = pt_map_banked_cpu(cpu);

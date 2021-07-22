@@ -19,6 +19,7 @@ impl Disk {
     }
 }
 
+use crate::board::{platform_blk_read, DISK_PARTITION_0_START};
 // TODO: add fatfs read
 impl core_io::Read for Disk {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -28,7 +29,7 @@ impl core_io::Read for Disk {
         assert!(count <= 8);
         if buf.len() == PAGE_SIZE {
             let addr = buf.as_ptr() as usize;
-            crate::driver::read(sector, count, addr);
+            platform_blk_read(sector + DISK_PARTITION_0_START, count, addr);
             return Ok(buf.len());
         }
 
@@ -44,7 +45,7 @@ impl core_io::Read for Disk {
             //     self.pointer
             // );
             // }
-            crate::driver::read(sector, count, frame.pa());
+            platform_blk_read(sector + DISK_PARTITION_0_START, count, frame.pa());
             for i in 0..buf.len() {
                 buf[i] = frame.as_slice()[offset + i];
                 // print!("{}", buf[i]);
@@ -95,40 +96,40 @@ impl core_io::Seek for Disk {
 // static ROOT_DIR: Mutex<Option<Dir<Disk>>> = Mutex::new(None);
 
 pub fn fs_init() {
-    let mut disk = Disk {
-        pointer: 0,
-        size: 536870912,
-    };
+    // let mut disk = Disk {
+    //     pointer: 0,
+    //     size: 536870912,
+    // };
 
     // // let fs = FS.lock();
     // let mut fs: io::Result<fatfs::FileSystem<&mut Disk>> =
     //     fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new());
 
-    let fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
-    let root_dir = fs.root_dir();
-    let file = root_dir.open_file("hello.txt");
-    match file {
-        Ok(mut file) => {
-            let mut buf = [0u8; 5000];
-            // let len = file.seek(SeekFrom::End(0)).unwrap();
-            file.read(&mut buf);
-            file.read(&mut buf[4096..]);
-            let mut idx = 0;
-            for i in 0..buf.len() {
-                let val = buf[i as usize];
-                if val != 0 {
-                    idx += 1;
-                }
-                // let tmp = char::from_u32(val as u32);
-                // print!("{}", tmp.unwrap());
-            }
-            println!("idx is {}", idx);
-            println!("FAT file system init ok");
-        }
-        Err(_) => {
-            println!("err");
-        }
-    }
+    // let fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
+    // let root_dir = fs.root_dir();
+    // let file = root_dir.open_file("hello.txt");
+    // match file {
+    //     Ok(mut file) => {
+    //         let mut buf = [0u8; 5000];
+    //         // let len = file.seek(SeekFrom::End(0)).unwrap();
+    //         file.read(&mut buf);
+    //         file.read(&mut buf[4096..]);
+    //         let mut idx = 0;
+    //         for i in 0..buf.len() {
+    //             let val = buf[i as usize];
+    //             if val != 0 {
+    //                 idx += 1;
+    //             }
+    //             // let tmp = char::from_u32(val as u32);
+    //             // print!("{}", tmp.unwrap());
+    //         }
+    //         println!("idx is {}", idx);
+    //         println!("FAT file system init ok");
+    //     }
+    //     Err(_) => {
+    //         println!("err");
+    //     }
+    // }
 }
 
 pub fn fs_read_to_mem(filename: &str, buf: &mut [u8]) -> bool {
@@ -164,15 +165,23 @@ pub fn fs_file_size(filename: &str) -> usize {
         pointer: 0,
         size: 536870912,
     };
-    let fs = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new()).unwrap();
-    let root_dir = fs.root_dir();
-    let file = root_dir.open_file(filename);
-    match file {
-        Ok(mut file) => {
-            return file.seek(SeekFrom::End(0)).unwrap() as usize;
+    let result = fatfs::FileSystem::new(&mut disk, fatfs::FsOptions::new());
+    match result {
+        Ok(fs) => {
+            let root_dir = fs.root_dir();
+            let file = root_dir.open_file(filename);
+            match file {
+                Ok(mut file) => {
+                    return file.seek(SeekFrom::End(0)).unwrap() as usize;
+                }
+                Err(_) => {
+                    return 0;
+                }
+            }
         }
-        Err(_) => {
-            return 0;
+        Err(err) => {
+            panic!("Err is {:#?}", err);
         }
     }
+    // let fs = .unwrap();
 }

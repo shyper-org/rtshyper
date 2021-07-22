@@ -45,14 +45,9 @@ use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
 // use lib::{BitAlloc, BitAlloc256};
 
-extern "C" {
-    fn tegra_emmc_blk_read(sector: usize, count: usize, buf: *mut u8);
-    fn tegra_emmc_blk_write(sector: usize, count: usize, buf: *const u8);
-}
-
 #[no_mangle]
 pub unsafe fn init(cpu_id: usize) {
-    println!("core id {}", cpu_id);
+    // println!("core id {}", cpu_id);
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {

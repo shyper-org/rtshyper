@@ -87,12 +87,6 @@ pub fn platform_power_on_secondary_cores() {
     }
 }
 
-pub fn power_arch_init() {
-    use crate::arch::psci_ipi_handler;
-    use crate::kernel::{ipi_register, IpiType};
-    ipi_register(IpiType::IpiTPower, psci_ipi_handler);
-}
-
 pub fn platform_blk_init() {
     println!("Platform block driver init ok");
     crate::driver::virtio_blk_init();

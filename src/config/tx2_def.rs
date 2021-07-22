@@ -1,13 +1,12 @@
 use super::{
-    VmConfigEntry, VmConfigTable, VmCpuConfig, VmEmulatedDeviceConfig, VmImageConfig,
-    VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion, DEF_VM_CONFIG_TABLE,
+    VmConfigEntry, VmCpuConfig, VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig,
+    VmPassthroughDeviceConfig, VmRegion, DEF_VM_CONFIG_TABLE,
 };
 use crate::board::*;
 use crate::device::EmuDeviceType;
 use crate::kernel::VmType;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use spin::Mutex;
 
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
@@ -691,7 +690,7 @@ pub fn config_init() {
             kernel_name: Some("L4T"),
             kernel_load_ipa: 0x90080000,
             kernel_entry_point: 0x90080000,
-            device_tree_filename: Some("virt1.bin"),
+            device_tree_filename: Some("virt113.bin"),
             device_tree_load_ipa: 0x90000000,
             ramdisk_filename: None,
             ramdisk_load_ipa: 0,

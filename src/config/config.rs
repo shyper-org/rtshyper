@@ -2,7 +2,7 @@ const NAME_MAX_LEN: usize = 32;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
 const EMULATED_DEV_MAX_NUM: usize = 16;
 
-use crate::board::*;
+// use crate::board::*;
 use crate::device::EmuDeviceType;
 use crate::kernel::VmType;
 use alloc::sync::Arc;

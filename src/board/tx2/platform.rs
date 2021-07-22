@@ -5,8 +5,8 @@ pub const TIMER_FREQUENCY: usize = 62500000;
 pub const UART_0_ADDR: usize = 0x3100000;
 pub const UART_1_ADDR: usize = 0xc280000;
 
-pub const UART_1_INT: usize = 32 + 0x70;
-pub const UART_2_INT: usize = 32 + 0x72;
+pub const UART_0_INT: usize = 32 + 0x70;
+pub const UART_1_INT: usize = 32 + 0x72;
 
 pub const PLATFORM_GICD_BASE: usize = 0x3881000;
 pub const PLATFORM_GICC_BASE: usize = 0x3882000;
@@ -37,6 +37,12 @@ pub const DISK_PARTITION_4_INT: usize = 32 + 0x13;
 
 //end tx2 platform const
 
+extern "C" {
+    fn tegra_emmc_init();
+    fn tegra_emmc_blk_read(sector: usize, count: usize, buf: *mut u8);
+    fn tegra_emmc_blk_write(sector: usize, count: usize, buf: *const u8);
+}
+
 use crate::arch::GicDesc;
 use crate::board::{ArchDesc, PlatCpuConfig, PlatMemRegion, PlatMemoryConfig, PlatformConfig};
 use crate::device::ARM_CORTEX_A57;
@@ -45,8 +51,8 @@ use crate::device::ARM_NVIDIA_DENVER;
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
         num: 4,
-        mpidr_list: [0x80000100, 0x80000101, 0x80000102, 0x80000103],
-        name: [ARM_CORTEX_A57; 4],
+        mpidr_list: [0x80000100, 0x80000101, 0x80000102, 0x80000103, 0, 0, 0, 0],
+        name: [ARM_CORTEX_A57; 8],
     },
     mem_desc: PlatMemoryConfig {
         region_num: 3,
@@ -104,18 +110,23 @@ pub fn platform_power_on_secondary_cores() {
 
 // TODO
 pub fn platform_blk_init() {
-    //     println!("Platform block driver init ok");
-    //     crate::driver::virtio_blk_init();
+    unsafe {
+        tegra_emmc_init();
+    }
     println!("Platform block driver init ok");
 }
 
-// pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
-//     read(sector, count, buf);
-// }
+pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
+    unsafe {
+        tegra_emmc_blk_read(sector, count, buf as *mut u8);
+    }
+}
 
-// pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
-//     write(sector, count, buf);
-// }
+pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
+    unsafe {
+        tegra_emmc_blk_write(sector, count, buf as *const u8);
+    }
+}
 
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
     cpuid + PLAT_DESC.cpu_desc.num

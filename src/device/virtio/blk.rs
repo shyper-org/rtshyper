@@ -300,23 +300,17 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     }
     match req.req_type() as usize {
         VIRTIO_BLK_T_IN => {
-            // println!(
-            //     "blk read, start {:x}, iovn {}, iov_total {}",
-            //     sector + region_start,
-            //     req.iovn(),
-            //     req.iov_total()
-            // );
             platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
             for iov_idx in 0..req.iovn() {
                 let data_bg = req.iov_data_bg(iov_idx);
-                // println!(
-                //     "data_bg {:x} cache {:x} data before {}",
-                //     data_bg,
-                //     cache,
-                //     unsafe { *(data_bg as *mut u32) }
-                // );
-                // print!("{:x}", 1);
                 let len = req.iov_len(iov_idx) as usize;
+                // println!(
+                //     "data_bg {:x} cache {:x} data before {:x}, len {}",
+                //     data_bg,
+                //     cache_ptr,
+                //     unsafe { *(data_bg as *mut u64) },
+                //     len
+                // );
                 if len < SECTOR_BSIZE {
                     println!("blk_req_handler: read len < SECTOR_BSIZE");
                     return 0;
@@ -326,11 +320,11 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 }
                 cache_ptr += len;
                 total_byte += len;
-                // println!("data_bg data {}", unsafe { *(data_bg as *mut u32) });
+                // println!("data_bg after");
+                // for i in 0..len {
+                //     print!("{:x}", unsafe { *((data_bg + i) as *mut u8) });
+                // }
             }
-            // if sector == 0x8 {
-            //     panic!("");
-            // }
         }
         VIRTIO_BLK_T_OUT => {
             for iov_idx in 0..req.iovn() {
@@ -349,14 +343,14 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
 
             platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
         }
-        VIRTIO_BLK_T_GET_ID => unsafe {
+        VIRTIO_BLK_T_GET_ID => {
             let data_bg = req.iov_data_bg(0);
             let name = "virtio-blk".as_ptr();
             unsafe {
                 memcpy(data_bg as *mut u8, name, 20);
             }
             total_byte = 20;
-        },
+        }
         _ => {
             println!("Wrong block request type {} ", req.req_type());
             return 0;
@@ -510,7 +504,9 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         vq.notify(dev.int_id());
     }
 
-    // println!("end virtio blk handler");
-    vm.show_pagetable(0x8010000);
+    // use crate::arch::GICH;
+    // println!("hcr {:x}", GICH.hcr());
+    // panic!("end virtio blk handler");
+    // vm.show_pagetable(0x8010000);
     return true;
 }

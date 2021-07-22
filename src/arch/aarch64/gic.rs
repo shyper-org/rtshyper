@@ -328,7 +328,7 @@ register_structs! {
     (0x00e0 => NSAPR: [ReadWrite<u32>; 4]),  // Non-secure Active Priorities Register
     (0x00f0 => reserved_1),
     (0x00fc => IIDR: ReadOnly<u32>),    // CPU Interface Identification Register
-    (0x00fd => reserved_2),
+    (0x0100 => reserved_2),
     (0x1000 => DIR: WriteOnly<u32>),    // Deactivate Interrupt Register
     (0x1004 => reserved_3),
     (0x2000 => @END),
@@ -497,12 +497,12 @@ pub fn gicc_clear_current_irq(for_hypervisor: bool) {
     let gicc = &GICC;
     gicc.EOIR.set(irq);
     if for_hypervisor {
-        let addr = 0x08010000 + 0x1000;
-        unsafe {
-            let gicc_dir = addr as *mut u32;
-            *gicc_dir = irq;
-        }
-        // gicc.DIR.set(irq);
+        // let addr = 0x08010000 + 0x1000;
+        // unsafe {
+        //     let gicc_dir = addr as *mut u32;
+        //     *gicc_dir = irq;
+        // }
+        gicc.DIR.set(irq);
     }
     set_cpu_current_irq(0);
 }

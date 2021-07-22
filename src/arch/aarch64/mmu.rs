@@ -99,7 +99,7 @@ const LVL1_SHIFT: usize = 30;
 const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 
 #[no_mangle]
-#[link_section = ".text.boot"]
+// #[link_section = ".text.boot"]
 pub unsafe extern "C" fn pt_populate(pt: &mut PageTables) {
     for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
         let output_addr = i << LVL1_SHIFT;
@@ -118,10 +118,9 @@ pub unsafe extern "C" fn pt_populate(pt: &mut PageTables) {
 }
 
 #[no_mangle]
-#[link_section = ".text.boot"]
+// #[link_section = ".text.boot"]
 pub unsafe extern "C" fn mmu_init(pt: &PageTables) {
     use cortex_a::regs::*;
-    // use cortex_a::*;
     MAIR_EL2.write(
         MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
             + MAIR_EL2::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc

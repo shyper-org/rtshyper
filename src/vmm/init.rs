@@ -80,10 +80,10 @@ fn vmm_load_image(filename: &str, load_ipa: usize, vm: Vm) {
     use crate::lib::fs_file_size;
     // println!("filename: {}, load_ipa 0x{:x}", filename, load_ipa);
     let size = fs_file_size(filename);
-    if size == 0 {
-        println!("vmm_load_image: file {:#} is not exist", filename);
-    }
     // println!("file size is {}", size);
+    if size == 0 {
+        panic!("vmm_load_image: file {:#} is not exist", filename);
+    }
     let config = vm.config();
     for i in 0..config.memory.num {
         let idx = i as usize;
@@ -148,12 +148,16 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         // END QEMU
         #[cfg(feature = "tx2")]
         {
-            let offset = config.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
-            rlibc::memcpy(
-                vm.pa_start(0) + offset,
-                (0x80000000 + vm.vm_id() * 0x1000000),
-                128 * PAGE_SIZE,
-            );
+            use crate::arch::PAGE_SIZE;
+            let offset = config.device_tree_load_ipa
+                - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+            unsafe {
+                rlibc::memcpy(
+                    (vm.pa_start(0) + offset) as *mut u8,
+                    (0x80000000 + vm.vm_id() * 0x1000000) as *mut u8,
+                    128 * PAGE_SIZE,
+                );
+            }
         }
         // END TX2
     } else {

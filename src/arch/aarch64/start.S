@@ -4,18 +4,18 @@
 _start:
 
 // #ifdef PLATFORM_TX2
-//    mrs x0, mpidr_el1
-//    and x1, x0, #0x100
-//    cbz x1, 1f
-//    and x0, x0, #3
-//    b   2f
-//1:  wfe
-//    b   1b
+    mrs x0, mpidr_el1
+    and x1, x0, #0x100
+    cbz x1, 1f
+    and x0, x0, #3
+    b   2f
+1:  wfe
+    b   1b
 
 // #endif
 // #ifdef PLATFORM_QEMU
-    mrs x0, mpidr_el1
-    and x0, x0, #7
+//    mrs x0, mpidr_el1
+//    and x0, x0, #7
 // #endif
 
 2:  /*
@@ -45,10 +45,10 @@ _start:
 
     // setup stack sp per core
     adrp x1, boot_stack
-    mov x2, (4096 * 4)
+    mov x2, (4096 * 2)
     mul x3, x0, x2
     add x1, x1, x3
-    add x1, x1, #0x4000
+    add x1, x1, #0x2000
 
     mov sp, x1
 
@@ -139,7 +139,7 @@ set_loop:
 .align 12
 .section .data.boot
 boot_stack:
-    .space 4096 * 32
+    .space 4096 * 16
 boot_stack_top:
 
 .align 12
