@@ -6,6 +6,7 @@
 #![feature(alloc_error_handler)]
 #![feature(llvm_asm)]
 #![feature(const_fn)]
+#![feature(asm)]
 
 #[macro_use]
 extern crate lazy_static;

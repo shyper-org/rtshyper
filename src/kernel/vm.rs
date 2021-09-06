@@ -422,8 +422,12 @@ pub fn vm_ipa2pa(ipa: usize) -> usize {
     }
 
     for i in 0..vm.mem_region_num() {
-        if in_range(ipa - vm.pa_offset(i), vm.pa_start(i), vm.pa_length(i)) {
-            return ipa - vm.pa_offset(i);
+        if in_range(
+            (ipa as isize - vm.pa_offset(i) as isize) as usize,
+            vm.pa_start(i),
+            vm.pa_length(i),
+        ) {
+            return (ipa as isize - vm.pa_offset(i) as isize) as usize;
         }
     }
 

@@ -91,7 +91,7 @@ pub fn ipi_irq_handler() {
         if ipi_handler_list.len() <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
-            println!("ipi type is {:#?}", ipi_msg.ipi_type);
+            // println!("ipi type is {:#?}", ipi_msg.ipi_type);
             (ipi_handler_list[ipi_type].handler)(&ipi_msg);
         }
         let mut cpu_if_list = CPU_IF_LIST.lock();
@@ -105,7 +105,7 @@ pub fn ipi_register(ipi_type: IpiType, handler: ipi_handler) -> bool {
     for i in 0..ipi_handler_list.len() {
         if ipi_type as usize == ipi_handler_list[i].ipi_type as usize {
             println!("ipi_register: try to cover exist ipi handler");
-            return false;
+            return true;
         }
     }
 

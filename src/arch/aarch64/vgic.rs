@@ -856,7 +856,7 @@ impl Vgic {
                     val: act as u8,
                 };
                 let phys_id = interrupt.owner_phys_id().unwrap();
-                println!("Core {} send ipi to {}", cpu_id(), phys_id);
+                // println!("Core {} send ipi to {}", cpu_id(), phys_id);
                 if !ipi_send_msg(phys_id, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
                     println!(
                         "vgicd_set_active: Failed to send ipi message, target {} type {}",
@@ -1281,10 +1281,10 @@ impl Vgic {
             }
         }
         if first_int >= 16 && !vm_has_interrupt_flag {
-            println!(
-                "emu_activer_access: vm[{}] does not have interrupt {}",
-                vm_id, first_int
-            );
+            // println!(
+            //     "emu_activer_access: vm[{}] does not have interrupt {}",
+            //     vm_id, first_int
+            // );
             return;
         }
 
@@ -1339,10 +1339,10 @@ impl Vgic {
             }
         }
         if first_int >= 16 && !vm_has_interrupt_flag {
-            println!(
-                "emu_icenabler_access: vm[{}] does not have interrupt {}",
-                vm_id, first_int
-            );
+            // println!(
+            //     "emu_icenabler_access: vm[{}] does not have interrupt {}",
+            //     vm_id, first_int
+            // );
             return;
         }
 
@@ -1388,10 +1388,10 @@ impl Vgic {
             }
         }
         if first_int >= 16 && !vm_has_interrupt_flag {
-            println!(
-                "emu_icfgr_access: vm[{}] does not have interrupt {}",
-                vm_id, first_int
-            );
+            // println!(
+            //     "emu_icfgr_access: vm[{}] does not have interrupt {}",
+            //     vm_id, first_int
+            // );
             return;
         }
 
@@ -1501,10 +1501,10 @@ impl Vgic {
             }
         }
         if first_int >= 16 && !vm_has_interrupt_flag {
-            println!(
-                "emu_ipriorityr_access: vm[{}] does not have interrupt {}",
-                vm_id, first_int
-            );
+            // println!(
+            //     "emu_ipriorityr_access: vm[{}] does not have interrupt {}",
+            //     vm_id, first_int
+            // );
             return;
         }
 
@@ -1548,10 +1548,10 @@ impl Vgic {
             }
         }
         if first_int >= 16 && !vm_has_interrupt_flag {
-            println!(
-                "emu_itargetr_access: vm[{}] does not have interrupt {}",
-                vm_id, first_int
-            );
+            // println!(
+            //     "emu_itargetr_access: vm[{}] does not have interrupt {}",
+            //     vm_id, first_int
+            // );
             return;
         }
 

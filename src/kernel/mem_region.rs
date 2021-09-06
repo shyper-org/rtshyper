@@ -128,10 +128,18 @@ impl HeapRegion {
 
     pub fn free_page(&mut self, base: usize) -> bool {
         use crate::lib::range_in_range;
-        if !range_in_range(base, PAGE_SIZE, self.region.base, self.region.size) {
-            println!(
-                "free_page: out of range (addr 0x{:x} page num {} heap base 0x{:x} heap size {})",
-                base, 1, self.region.base, self.region.size
+        if !range_in_range(
+            base,
+            PAGE_SIZE,
+            self.region.base,
+            self.region.size * PAGE_SIZE,
+        ) {
+            panic!(
+                "free_page: out of range (addr 0x{:x} page num {} heap base 0x{:x} heap size 0x{:x})",
+                base,
+                1,
+                self.region.base,
+                self.region.size * PAGE_SIZE
             );
             return false;
         }
