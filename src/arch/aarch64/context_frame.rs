@@ -108,6 +108,12 @@ impl VmCtxFpsimd {
             fpcr: 0,
         }
     }
+
+    pub fn reset(&mut self) {
+        self.fpsr = 0;
+        self.fpcr = 0;
+        self.fpsimd.iter_mut().for_each(|x| *x = 0);
+    }
 }
 
 #[repr(C)]
@@ -204,6 +210,42 @@ impl VmContext {
             hpfar_el2: 0,
             fpsimd: VmCtxFpsimd::default(),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.cntvoff_el2 = 0;
+        self.cntp_cval_el0 = 0;
+        self.cntv_cval_el0 = 0;
+        self.cntkctl_el1 = 0;
+        self.cntp_ctl_el0 = 0;
+        self.vpidr_el2 = 0;
+        self.vmpidr_el2 = 0;
+        self.sp_el0 = 0;
+        self.sp_el1 = 0;
+        self.elr_el1 = 0;
+        self.spsr_el1 = 0;
+        self.sctlr_el1 = 0;
+        self.actlr_el1 = 0;
+        self.cpacr_el1 = 0;
+        self.ttbr0_el1 = 0;
+        self.ttbr1_el1 = 0;
+        self.tcr_el1 = 0;
+        self.esr_el1 = 0;
+        self.far_el1 = 0;
+        self.par_el1 = 0;
+        self.mair_el1 = 0;
+        self.amair_el1 = 0;
+        self.vbar_el1 = 0;
+        self.contextidr_el1 = 0;
+        self.tpidr_el0 = 0;
+        self.tpidr_el1 = 0;
+        self.tpidrro_el0 = 0;
+        self.hcr_el2 = 0;
+        self.cptr_el2 = 0;
+        self.hstr_el2 = 0;
+        self.far_el2 = 0;
+        self.hpfar_el2 = 0;
+        self.fpsimd.reset();
     }
 
     pub fn ext_regs_store(&mut self) {

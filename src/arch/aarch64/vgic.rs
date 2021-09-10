@@ -52,6 +52,9 @@ impl VgicInt {
 
     fn set_targets(&self, targets: u8) {
         let mut vgic_int = self.inner.lock();
+        if vgic_int.targets == 1 && vgic_int.id == 48 {
+            panic!("set targets to {}", targets);
+        }
         vgic_int.targets = targets;
     }
 
@@ -1541,19 +1544,19 @@ impl Vgic {
         };
         let mut vm_has_interrupt_flag = false;
 
-        for i in 0..emu_ctx.width {
-            if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
-                vm_has_interrupt_flag = true;
-                break;
-            }
-        }
-        if first_int >= 16 && !vm_has_interrupt_flag {
-            // println!(
-            //     "emu_itargetr_access: vm[{}] does not have interrupt {}",
-            //     vm_id, first_int
-            // );
-            return;
-        }
+        // for i in 0..emu_ctx.width {
+        //     if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+        //         vm_has_interrupt_flag = true;
+        //         break;
+        //     }
+        // }
+        // if first_int >= 16 && !vm_has_interrupt_flag {
+        // println!(
+        //     "emu_itargetr_access: vm[{}] does not have interrupt {}",
+        //     vm_id, first_int
+        // );
+        // return;
+        // }
 
         if emu_ctx.write {
             // println!("write");
@@ -1718,7 +1721,6 @@ impl Vgic {
     }
 
     fn eoir_highest_spilled_active(&self, vcpu: Vcpu) {
-        println!("eoir_highest_spilled_active");
         let mut interrupt_opt: Option<VgicInt> = None;
         for i in 0..gic_max_spi() {
             let mut temp_int_opt = self.get_int(vcpu.clone(), i);

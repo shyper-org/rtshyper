@@ -10,7 +10,7 @@ pub const VIRTQ_DESC_F_WRITE: usize = 2;
 
 pub const VRING_USED_F_NO_NOTIFY: usize = 1;
 
-pub const DESC_QUEUE_SIZE: usize = 256;
+pub const DESC_QUEUE_SIZE: usize = 32768;
 
 #[repr(C, align(16))]
 struct VringDesc {
@@ -33,8 +33,8 @@ struct VringAvail {
 
 #[repr(C)]
 struct VringUsedElem {
-    id: u32,
-    len: u32,
+    pub id: u32,
+    pub len: u32,
 }
 
 #[repr(C)]
@@ -81,9 +81,13 @@ impl Virtq {
                 if (avail.idx == inner.last_avail_idx) {
                     return None;
                 }
-                unsafe {
-                    llvm_asm!("dsb ish");
-                }
+                // println!("avail idx is {}", avail.idx);
+                // if avail.idx == 200 {
+                //     panic! {"End"};
+                // }
+                // unsafe {
+                //     llvm_asm!("dsb ish");
+                // }
                 let idx = inner.last_avail_idx as usize % inner.num;
                 let avail_desc_idx = avail.ring[idx];
                 inner.last_avail_idx += 1;
@@ -137,9 +141,9 @@ impl Virtq {
                 used.flags = flag;
                 used.ring[used.idx as usize % num as usize].id = desc_chain_head_idx;
                 used.ring[used.idx as usize % num as usize].len = len;
-                unsafe {
-                    llvm_asm!("dsb ish");
-                }
+                // unsafe {
+                //     llvm_asm!("dsb ish");
+                // }
                 used.idx += 1;
                 return true;
             }
@@ -178,7 +182,28 @@ impl Virtq {
             let desc_addr = vm_ipa2pa(desc[i].addr);
             println!(
                 "index {}   desc_addr 0x{:x}   len 0x{:x}   flags {}  next {}",
-                i, desc_addr, desc[i].len, desc[i].flags, desc[i].next
+                i, desc[i].addr, desc[i].len, desc[i].flags, desc[i].next
+            );
+        }
+    }
+
+    pub fn show_avail_info(&self, size: usize) {
+        let inner = self.inner.lock();
+        let avail = inner.avail.as_ref().unwrap();
+        println!("[*avail_ring*]");
+        for i in 0..size {
+            println!("index {} ring_idx {}", i, avail.ring[i]);
+        }
+    }
+
+    pub fn show_used_info(&self, size: usize) {
+        let inner = self.inner.lock();
+        let used = inner.used.as_ref().unwrap();
+        println!("[*used_ring*]");
+        for i in 0..size {
+            println!(
+                "index {} ring_id {} ring_len {:x}",
+                i, used.ring[i].id, used.ring[i].len
             );
         }
     }
@@ -218,8 +243,9 @@ impl Virtq {
 
     pub fn set_desc_table(&self, addr: usize) {
         let mut inner = self.inner.lock();
-        inner.desc_table =
-            Some(unsafe { slice::from_raw_parts_mut(addr as *mut VringDesc, DESC_QUEUE_SIZE) });
+        inner.desc_table = Some(unsafe {
+            slice::from_raw_parts_mut(addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE)
+        });
     }
 
     pub fn set_avail(&self, addr: usize) {
@@ -329,7 +355,6 @@ impl VirtqInner<'_> {
         }
     }
 
-    // TODO: fix this reset fn
     // virtio_queue_reset
     pub fn reset(&mut self, index: usize) {
         self.ready = 0;

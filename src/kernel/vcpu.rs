@@ -197,6 +197,7 @@ impl VcpuInner {
         use crate::kernel::vm_if_list_get_type;
         match vm_if_list_get_type(self.vm_id()) {
             VmType::VmTBma => {
+                self.reset_vm_ctx();
                 self.context_ext_regs_store();
             }
             _ => {}
@@ -205,6 +206,10 @@ impl VcpuInner {
 
     fn context_ext_regs_store(&mut self) {
         self.vm_ctx.ext_regs_store();
+    }
+
+    fn reset_vm_ctx(&mut self) {
+        self.vm_ctx.reset();
     }
 
     fn set_elr(&mut self, elr: usize) {

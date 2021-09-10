@@ -460,6 +460,11 @@ fn vmm_assign_vcpu() {
         set_active_vcpu(size - 1);
     }
     barrier();
+
+    if cpu_id == 0 {
+        let mut vm_assign_list = VM_ASSIGN.lock();
+        vm_assign_list.clear();
+    }
 }
 
 pub fn vmm_init() {
@@ -490,9 +495,7 @@ pub fn vmm_init() {
             use crate::kernel::vm_if_list_set_type;
             vm_if_list_set_type(i, vm_type);
         }
-        drop(vm_cfg_table);
     }
-
     barrier();
     vmm_assign_vcpu();
     let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();

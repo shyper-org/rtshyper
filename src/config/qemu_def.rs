@@ -93,9 +93,9 @@ pub fn config_init() {
             ramdisk_load_ipa: 0x53000000,
         },
         cpu: VmCpuConfig {
-            num: 1,
+            num: 4,
             allocate_bitmap: 0b0001,
-            master: 0,
+            master: -1,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
@@ -165,6 +165,77 @@ pub fn config_init() {
         cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
+            master: -1,
+        },
+        vm_emu_dev_confg: Some(emu_dev_config),
+        vm_pt_dev_confg: Some(pt_dev_config),
+    }));
+
+    // vm2 BMA emu
+    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("vgicd"),
+        base_ipa: 0x8000000,
+        length: 0x1000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTGicd,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio-blk0"),
+        base_ipa: 0xa000000,
+        length: 0x1000,
+        irq_id: 32 + 0x10,
+        cfg_list: vec![DISK_PARTITION_1_START, DISK_PARTITION_1_SIZE],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    });
+
+    // vm2 BMA passthrough
+    let mut pt_dev_config: Vec<VmPassthroughDeviceConfig> = Vec::new();
+    pt_dev_config.push(VmPassthroughDeviceConfig {
+        name: Some("serial1"),
+        base_pa: UART_2_ADDR,
+        base_ipa: 0x9000000,
+        length: 0x1000,
+        // dma: false,
+        irq_list: vec![27],
+    });
+    pt_dev_config.push(VmPassthroughDeviceConfig {
+        name: Some("gicc"),
+        base_pa: PLATFORM_GICV_BASE,
+        base_ipa: 0x8010000,
+        length: 0x2000,
+        // dma: false,
+        irq_list: Vec::new(),
+    });
+
+    // vm2 BMA vm_region
+    let mut vm_region: Vec<VmRegion> = Vec::new();
+    vm_region.push(VmRegion {
+        ipa_start: 0x40000000,
+        length: 0x1000000,
+    });
+
+    // vm2 BMA config
+    vm_config.entries.push(Arc::new(VmConfigEntry {
+        name: Some("guest-bma-0"),
+        os_type: VmType::VmTBma,
+        memory: VmMemoryConfig {
+            num: 1,
+            region: Some(vm_region),
+        },
+        image: VmImageConfig {
+            kernel_name: Some("sbma1.bin"),
+            kernel_load_ipa: 0x40080000,
+            kernel_entry_point: 0x40080000,
+            device_tree_filename: None,
+            device_tree_load_ipa: 0,
+            ramdisk_filename: None,
+            ramdisk_load_ipa: 0,
+        },
+        cpu: VmCpuConfig {
+            num: 1,
+            allocate_bitmap: 0b0100,
             master: -1,
         },
         vm_emu_dev_confg: Some(emu_dev_config),

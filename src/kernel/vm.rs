@@ -288,7 +288,6 @@ impl Vm {
         }
     }
 
-    #[allow(dead_code)]
     pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
         let vm_inner = self.inner.lock();
         for vcpuid in 0..vm_inner.cpu_num {
@@ -313,7 +312,7 @@ impl Vm {
     pub fn pcpu_to_vcpu_mask(&self, mask: usize, len: usize) -> usize {
         let mut pmask = 0;
         for i in 0..len {
-            let shift = self.vcpuid_to_pcpuid(i);
+            let shift = self.pcpuid_to_vcpuid(i);
             if mask & (1 << i) != 0 && !shift.is_err() {
                 pmask |= 1 << shift.unwrap();
             }

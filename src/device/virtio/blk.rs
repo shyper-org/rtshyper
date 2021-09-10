@@ -462,10 +462,21 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                 }
                 let vstatus = unsafe { &mut *(vstatus_addr as *mut u8) };
                 if req.req_type() > 1 && req.req_type() != VIRTIO_BLK_T_GET_ID as u32 {
+                    // if vm.vm_id() == 1 {
+                    //     println!("state VIRTIO_BLK_S_UNSUPP");
+                    // }
                     *vstatus = VIRTIO_BLK_S_UNSUPP as u8;
                 } else {
+                    // if vm.vm_id() == 1 {
+                    //     println!("state VIRTIO_BLK_S_OK");
+                    // }
                     *vstatus = VIRTIO_BLK_S_OK as u8;
                 }
+                // if vm.vm_id() == 1 {
+                //     println!("vstatus_addr {:x}, vstatus {}", vstatus_addr, *unsafe {
+                //         &mut *(vstatus_addr as *mut u8)
+                //     });
+                // }
                 break;
             }
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
@@ -504,9 +515,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         vq.notify(dev.int_id());
     }
 
+    // if vm.vm_id() == 1 {
     // use crate::arch::GICH;
     // println!("hcr {:x}", GICH.hcr());
     // panic!("end virtio blk handler");
     // vm.show_pagetable(0x8010000);
+    // }
     return true;
 }

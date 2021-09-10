@@ -147,6 +147,11 @@ boot_stack_top:
 lvl1_page_table:
     .space 4096
 
+.align 12
+.global lvl2_page_table
+lvl2_page_table:
+    .space 4096
+
 .align 3
 _barrier:
     .quad 0

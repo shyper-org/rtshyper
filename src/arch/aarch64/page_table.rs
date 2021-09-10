@@ -83,6 +83,7 @@ pub fn pt_lvl3_idx(va: usize) -> usize {
 pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     extern "C" {
         fn lvl1_page_table();
+        // fn memset(s: *mut u8, c: i32, n: usize) -> !;
     }
     let addr: usize = lvl1_page_table as usize;
 
