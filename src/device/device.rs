@@ -73,3 +73,36 @@ impl BlkStatInner {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct NicStat {
+    inner: Arc<Mutex<NicStatInner>>,
+}
+
+impl NicStat {
+    pub fn default() -> NicStat {
+        NicStat {
+            inner: Arc::new(Mutex::new(NicStatInner::default())),
+        }
+    }
+}
+
+struct NicStatInner {
+    send_req: usize,
+    receive_req: usize,
+    send_byte: usize,
+    receive_byte: usize,
+    discard: usize,
+}
+
+impl NicStatInner {
+    fn default() -> NicStatInner {
+        NicStatInner {
+            send_req: 0,
+            receive_req: 0,
+            send_byte: 0,
+            receive_byte: 0,
+            discard: 0,
+        }
+    }
+}

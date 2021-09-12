@@ -115,9 +115,9 @@ impl VirtioQueue for VirtioMmio {
                 for i in 0..2 {
                     inner.vq.push(Virtq::default());
                     inner.vq[i].reset(i);
-                    // TODO: queue_notify_handler;
+                    use crate::device::virtio_net_notify_handler;
+                    inner.vq[i].set_notify_handler(virtio_net_notify_handler);
                 }
-                unimplemented!();
             }
             VirtioDeviceType::None => {
                 panic!("virtio_queue_init: unknown emulated device type");

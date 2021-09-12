@@ -1,5 +1,7 @@
 use crate::config::VmEmulatedDeviceConfig;
+use crate::device::{ethernet_ipi_ack_handler, ethernet_ipi_msg_handler, net_features, NetDesc};
 use crate::device::{BlkDesc, VirtioBlkReq, BLOCKIF_IOV_MAX};
+use crate::kernel::{ipi_register, IpiType};
 use crate::mm::PageFrame;
 use alloc::sync::Arc;
 use spin::Mutex;
@@ -13,17 +15,18 @@ pub enum VirtioDeviceType {
     Block = 2,
 }
 
-use crate::device::BlkStat;
+use crate::device::{BlkStat, NicStat};
 #[derive(Clone)]
 pub enum DevStat {
     BlkStat(BlkStat),
-    NetStat(),
+    NicStat(NicStat),
     None,
 }
 
 #[derive(Clone)]
 pub enum DevDesc {
     BlkDesc(BlkDesc),
+    NetDesc(NetDesc),
     None,
 }
 
@@ -148,7 +151,38 @@ impl VirtDevInner {
                     }
                 }
 
-                self.stat = DevStat::BlkStat(BlkStat::default())
+                self.stat = DevStat::BlkStat(BlkStat::default());
+            }
+            VirtioDeviceType::Net => {
+                let net_desc = NetDesc::default();
+                net_desc.cfg_init(&config.cfg_list);
+                self.desc = DevDesc::NetDesc(net_desc);
+
+                self.features |= net_features();
+                if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_msg_handler) {
+                    panic!(
+                        "virtio_dev_init: failed to register ipi {:?}",
+                        IpiType::IpiTEthernetMsg,
+                    );
+                }
+                if !ipi_register(IpiType::IpiTEthernetAck, ethernet_ipi_ack_handler) {
+                    panic!(
+                        "virtio_dev_init: failed to register ipi {:?}",
+                        IpiType::IpiTEthernetMsg,
+                    );
+                }
+
+                match mem_pages_alloc(1) {
+                    Ok(page_frame) => {
+                        // println!("PageFrame pa {:x}", page_frame.pa());
+                        self.cache = Some(page_frame);
+                    }
+                    Err(_) => {
+                        println!("VirtDevInner::init(): mem_pages_alloc failed");
+                    }
+                }
+
+                self.stat = DevStat::NicStat(NicStat::default());
             }
             _ => {
                 panic!("ERROR: Wrong virtio device type");

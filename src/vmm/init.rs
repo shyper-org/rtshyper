@@ -250,6 +250,19 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                     return false;
                 }
             }
+            EmuDeviceTVirtioNet => {
+                dev_name = "virtio net";
+                emu_register_dev(
+                    vm.vm_id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_virtio_mmio_handler,
+                );
+                if !emu_virtio_mmio_init(vm.clone(), idx) {
+                    return false;
+                }
+            }
             _ => {
                 println!("vmm_init_emulated_device: unknown emulated device");
                 return false;

@@ -32,6 +32,14 @@ pub fn config_init() {
         cfg_list: vec![DISK_PARTITION_1_START, DISK_PARTITION_1_SIZE],
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
     });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio-nic0"),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+    });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
     //     name: Some("shyper"),
     //     base_ipa: 0,
@@ -59,14 +67,13 @@ pub fn config_init() {
         // dma: false,
         irq_list: Vec::new(),
     });
-    // pt_dev_config.push(VmPassthroughDeviceConfig {
-    //     name: Some("nic"),
-    //     base_pa: 0x0a003000,
-    //     base_ipa: 0x0a003000,
-    //     length: 0x1000,
-    //     dma: false,
-    //     irq_list: vec![32 + 0x2e],
-    // });
+    pt_dev_config.push(VmPassthroughDeviceConfig {
+        name: Some("nic"),
+        base_pa: 0x0a003000,
+        base_ipa: 0x0a003000,
+        length: 0x1000,
+        irq_list: vec![32 + 0x2e],
+    });
 
     // vm0 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
