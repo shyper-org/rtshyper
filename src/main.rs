@@ -45,7 +45,6 @@ use lib::fs_init;
 use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
 // use lib::{BitAlloc, BitAlloc256};
-// global_asm!(include_str!("arch/aarch64/memset.S"));
 
 #[no_mangle]
 pub unsafe fn init(cpu_id: usize) {

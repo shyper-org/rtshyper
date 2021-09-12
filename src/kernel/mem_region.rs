@@ -1,10 +1,10 @@
 use super::AllocError;
 use crate::arch::PAGE_SIZE;
+use crate::lib::memset;
 use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
 use crate::mm::PageFrame;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use rlibc::memset;
 use spin::Mutex;
 
 const TOTAL_MEM_REGION_MAX: usize = 16;

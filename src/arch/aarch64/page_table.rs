@@ -3,9 +3,10 @@ use crate::arch::ArchPageTableEntryTrait;
 use crate::arch::WORD_SIZE;
 use crate::kernel::Cpu;
 use crate::lib::round_up;
+use crate::lib::{memcpy, memset};
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
-use rlibc::{memcpy, memset};
+// use rlibc::{memcpy, memset};
 use spin::Mutex;
 
 // page_table const
@@ -83,7 +84,6 @@ pub fn pt_lvl3_idx(va: usize) -> usize {
 pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     extern "C" {
         fn lvl1_page_table();
-        // fn memset(s: *mut u8, c: i32, n: usize) -> !;
     }
     let addr: usize = lvl1_page_table as usize;
 

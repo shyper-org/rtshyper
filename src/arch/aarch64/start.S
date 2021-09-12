@@ -25,7 +25,7 @@ _start:
 
     // disable cache and MMU
     mrs x1, sctlr_el2
-    bic x1, x1, #0x7
+    bic x1, x1, #0xf
     msr sctlr_el2, x1
 
     mov x19, x0 // save core_id
@@ -48,7 +48,6 @@ _start:
     mov x2, (4096 * 2)
     mul x3, x0, x2
     add x1, x1, x3
-    add x1, x1, #0x2000
 
     mov sp, x1
 

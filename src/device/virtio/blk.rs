@@ -278,7 +278,7 @@ impl VirtioBlkReqInner {
 }
 
 use crate::board::{platform_blk_read, platform_blk_write};
-use rlibc::memcpy;
+use crate::lib::memcpy;
 pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     // println!("blk req handler");
     let sector = req.sector();

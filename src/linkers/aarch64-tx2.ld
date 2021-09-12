@@ -23,11 +23,12 @@ SECTIONS
         *(.data*)
     }
 
-
+    . = ALIGN(4096);
     _bss_begin = .;
-    .bss : {
+    .bss (NOLOAD) : ALIGN(4096) {
         *(.bss*)
     }
+    . = ALIGN(4096);
     _bss_end = .;
 
     _image_end = ABSOLUTE(.);

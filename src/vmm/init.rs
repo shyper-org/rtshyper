@@ -152,7 +152,7 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
             let offset = config.device_tree_load_ipa
                 - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
             unsafe {
-                rlibc::memcpy(
+                crate::lib::memcpy(
                     (vm.pa_start(0) + offset) as *mut u8,
                     (0x80000000 + vm.vm_id() * 0x1000000) as *mut u8,
                     128 * PAGE_SIZE,

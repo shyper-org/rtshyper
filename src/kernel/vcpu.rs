@@ -254,8 +254,8 @@ pub fn vcpu_run() {
     let sp = cpu_stack() + CPU_STACK_SIZE;
     let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
 
+    use crate::lib::memcpy;
     use core::mem::size_of;
-    use rlibc::memcpy;
     let size = size_of::<Aarch64ContextFrame>();
     unsafe {
         memcpy((sp - size) as *mut u8, ctx as *mut u8, size);

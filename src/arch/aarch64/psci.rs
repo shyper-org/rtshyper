@@ -94,8 +94,8 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
     vcpu.reset_state();
     match cpu_ctx() {
         Some(ctx) => {
+            use crate::lib::memcpy;
             use core::mem::size_of;
-            use rlibc::memcpy;
             let size = size_of::<Aarch64ContextFrame>();
             unsafe {
                 memcpy(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);

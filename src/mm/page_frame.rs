@@ -1,4 +1,4 @@
-use rlibc::memset;
+use crate::lib::memset;
 
 use crate::arch::PAGE_SIZE;
 
