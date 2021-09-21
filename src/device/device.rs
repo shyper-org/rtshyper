@@ -85,6 +85,56 @@ impl NicStat {
             inner: Arc::new(Mutex::new(NicStatInner::default())),
         }
     }
+
+    pub fn send_req(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.send_req
+    }
+
+    pub fn send_byte(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.send_byte
+    }
+
+    pub fn discard(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.discard
+    }
+
+    pub fn receive_req(&self) -> usize {
+        let mut inner = self.inner.lock();
+        inner.receive_req
+    }
+
+    pub fn receive_byte(&self) -> usize {
+        let mut inner = self.inner.lock();
+        inner.receive_byte
+    }
+
+    pub fn set_send_req(&self, req: usize) {
+        let mut inner = self.inner.lock();
+        inner.send_req = req;
+    }
+
+    pub fn set_send_byte(&self, byte: usize) {
+        let mut inner = self.inner.lock();
+        inner.send_byte = byte;
+    }
+
+    pub fn set_discard(&self, discard: usize) {
+        let mut inner = self.inner.lock();
+        inner.discard = discard;
+    }
+
+    pub fn set_receive_req(&self, receive_req: usize) {
+        let mut inner = self.inner.lock();
+        inner.receive_req = receive_req;
+    }
+
+    pub fn set_receive_byte(&self, receive_byte: usize) {
+        let mut inner = self.inner.lock();
+        inner.receive_byte = receive_byte;
+    }
 }
 
 struct NicStatInner {

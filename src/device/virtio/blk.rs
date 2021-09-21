@@ -366,7 +366,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
     let vm = active_vm().unwrap();
 
     if vq.ready() == 0 {
-        println!("Virt_queue is not ready!");
+        println!("blk virt_queue is not ready!");
         return false;
     }
 
@@ -482,7 +482,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
         let total = blk_req_handler(req.clone(), dev.cache());
-        if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size as u32) {
+        if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size) {
             return false;
         }
         // println!("finish blk req handler");

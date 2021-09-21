@@ -403,7 +403,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                     }
                     Err(_) => {
                         panic!("virtio_mmio_queue_access: wrong q_sel {:x} in read VIRTIO_MMIO_QUEUE_READY", idx);
-                        return;
+                        // return;
                     }
                 }
             }
@@ -428,7 +428,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                     }
                     Err(_) => {
                         panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_NUM", q_sel);
-                        return;
+                        // return;
                     }
                 }
             }
@@ -453,7 +453,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_READY", q_sel);
-                    return;
+                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_DESC_LOW => match mmio.vq(q_sel) {
@@ -462,7 +462,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_DESC_LOW", q_sel);
-                    return;
+                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_DESC_HIGH => match mmio.vq(q_sel) {
@@ -477,7 +477,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_DESC_HIGH", q_sel);
-                    return;
+                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_AVAIL_LOW => match mmio.vq(q_sel) {
@@ -486,7 +486,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_AVAIL_LOW", q_sel);
-                    return;
+                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_AVAIL_HIGH => match mmio.vq(q_sel) {
@@ -501,7 +501,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_AVAIL_HIGH", q_sel);
-                    return;
+                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_USED_LOW => match mmio.vq(q_sel) {
@@ -510,7 +510,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_USED_LOW", q_sel);
-                    return;
+                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_USED_HIGH => match mmio.vq(q_sel) {
@@ -525,7 +525,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_USED_HIGH", q_sel);
-                    return;
+                    // return;
                 }
             },
             _ => {

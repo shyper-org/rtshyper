@@ -13,6 +13,7 @@ use crate::device::VirtioMmio;
 pub enum EmuDevs {
     Vgic(Arc<Vgic>),
     VirtioBlk(VirtioMmio),
+    VirtioNet(VirtioMmio),
     None,
 }
 

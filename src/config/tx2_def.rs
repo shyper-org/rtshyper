@@ -8,6 +8,13 @@ use crate::kernel::VmType;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+// pub fn vm_num() -> usize {
+//     let vm_config = DEF_VM_CONFIG_TABLE.lock();
+//     let vm_num = vm_config.vm_num;
+//     drop(vm_config);
+//     vm_num()
+// }
+
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
@@ -721,6 +728,14 @@ pub fn config_init() {
         irq_id: 32 + 0x10,
         cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_mmio@a000000"),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
     });
 
     // vm1 passthrough

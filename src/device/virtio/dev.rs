@@ -88,6 +88,11 @@ impl VirtDev {
         inner.stat.clone()
     }
 
+    pub fn activated(&self) -> bool {
+        let inner = self.inner.lock();
+        inner.activated
+    }
+
     pub fn set_activated(&self, activated: bool) {
         let mut inner = self.inner.lock();
         inner.activated = activated;

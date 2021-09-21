@@ -2,7 +2,6 @@ use super::active_vm;
 use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
 use crate::config::DEF_VM_CONFIG_TABLE;
-use crate::kernel::active_vm_id;
 use crate::lib::*;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -35,6 +34,26 @@ pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
     vm_if.vm_type
 }
 
+pub fn vm_if_list_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.master_cpu_id = master_cpu_id;
+}
+
+pub fn vm_if_list_get_cpu_id(vm_id: usize) -> usize {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.master_cpu_id
+}
+
+pub fn vm_if_list_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    for i in 0..6 {
+        if vm_if.mac[i] != frame[i] {
+            return false;
+        }
+    }
+    true
+}
+
 pub enum VmState {
     VmInv = 0,
     VmPending = 1,
@@ -48,17 +67,19 @@ pub enum VmType {
 }
 
 pub struct VmInterface {
-    pub master_vcpu_id: usize,
+    pub master_cpu_id: usize,
     pub state: VmState,
     pub vm_type: VmType,
+    pub mac: [u8; 6],
 }
 
 impl VmInterface {
     const fn default() -> VmInterface {
         VmInterface {
-            master_vcpu_id: 0,
+            master_cpu_id: 0,
             state: VmState::VmPending,
             vm_type: VmType::VmTBma,
+            mac: [0; 6],
         }
     }
 }
@@ -237,6 +258,24 @@ impl Vm {
     pub fn emu_dev(&self, dev_id: usize) -> EmuDevs {
         let vm_inner = self.inner.lock();
         vm_inner.emu_devs[dev_id].clone()
+    }
+
+    pub fn emu_net_dev(&self, id: usize) -> EmuDevs {
+        let vm_inner = self.inner.lock();
+        let mut dev_num = 0;
+
+        for i in 0..vm_inner.emu_devs.len() {
+            match vm_inner.emu_devs[i] {
+                EmuDevs::VirtioNet(_) => {
+                    if dev_num == id {
+                        return vm_inner.emu_devs[i].clone();
+                    }
+                    dev_num += 1;
+                }
+                _ => {}
+            }
+        }
+        return EmuDevs::None;
     }
 
     pub fn ncpu(&self) -> usize {

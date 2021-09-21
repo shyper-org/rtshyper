@@ -143,3 +143,13 @@ impl VmConfigTable {
 lazy_static! {
     pub static ref DEF_VM_CONFIG_TABLE: Mutex<VmConfigTable> = Mutex::new(VmConfigTable::default());
 }
+
+pub fn vm_num() -> usize {
+    let vm_config = DEF_VM_CONFIG_TABLE.lock();
+    vm_config.vm_num
+}
+
+pub fn vm_type(id: usize) -> VmType {
+    let vm_config = DEF_VM_CONFIG_TABLE.lock();
+    vm_config.entries[id].os_type
+}

@@ -4,7 +4,8 @@ use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TA
 use crate::kernel::Vm;
 use crate::kernel::VM_LIST;
 use crate::kernel::{
-    cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, CPU,
+    cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign,
+    vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::lib::barrier;
@@ -262,6 +263,11 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                 if !emu_virtio_mmio_init(vm.clone(), idx) {
                     return false;
                 }
+                let mut vm_if_list = VM_IF_LIST[vm.vm_id()].lock();
+                for i in 0..6 {
+                    vm_if_list.mac[i] = emu_dev.cfg_list[i] as u8;
+                }
+                drop(vm_if_list);
             }
             _ => {
                 println!("vmm_init_emulated_device: unknown emulated device");
@@ -372,7 +378,6 @@ impl VmAssignment {
 
 static VM_ASSIGN: Mutex<Vec<Mutex<VmAssignment>>> = Mutex::new(Vec::new());
 
-use crate::kernel::VM_IF_LIST;
 fn vmm_assign_vcpu() {
     vcpu_pool_init();
 
@@ -417,8 +422,9 @@ fn vmm_assign_vcpu() {
                     panic!("core {} too many vcpu", cpu_id);
                 }
                 // TODO: vm_if_list.master_vcpu_id
-                let mut vm_if = VM_IF_LIST[i].lock();
-                vm_if.master_vcpu_id = cpu_id;
+                vm_if_list_set_cpu_id(i, cpu_id);
+                // let mut vm_if = VM_IF_LIST[i].lock();
+                // vm_if.master_cpu_id = cpu_id;
 
                 vm_assigned.has_master = true;
                 vm_assigned.cpu_num += 1;

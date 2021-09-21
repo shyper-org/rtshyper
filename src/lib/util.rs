@@ -1,3 +1,5 @@
+use crate::arch::PAGE_SIZE;
+
 #[inline(always)]
 pub fn round_up(value: usize, to: usize) -> usize {
     ((value + to - 1) / to) * to
@@ -6,6 +8,11 @@ pub fn round_up(value: usize, to: usize) -> usize {
 #[inline(always)]
 pub fn round_down(value: usize, to: usize) -> usize {
     value & !(to - 1)
+}
+
+#[inline(always)]
+pub fn byte2page(byte: usize) -> usize {
+    round_up(byte, PAGE_SIZE) / PAGE_SIZE
 }
 
 #[inline(always)]

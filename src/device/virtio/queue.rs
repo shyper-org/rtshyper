@@ -78,7 +78,7 @@ impl Virtq {
         let mut inner = self.inner.lock();
         match &inner.avail {
             Some(avail) => {
-                if (avail.idx == inner.last_avail_idx) {
+                if avail.idx == inner.last_avail_idx {
                     return None;
                 }
                 // println!("avail idx is {}", avail.idx);
@@ -98,6 +98,11 @@ impl Virtq {
                 return None;
             }
         }
+    }
+
+    pub fn avail_is_avail(&self) -> bool {
+        let mut inner = self.inner.lock();
+        inner.avail.is_some()
     }
 
     pub fn disable_notify(&self) {
@@ -133,14 +138,14 @@ impl Virtq {
         desc_table[idx].flags & VIRTQ_DESC_F_NEXT as u16 != 0
     }
 
-    pub fn update_used_ring(&self, len: u32, desc_chain_head_idx: u32, num: u32) -> bool {
+    pub fn update_used_ring(&self, len: u32, desc_chain_head_idx: u32, num: usize) -> bool {
         let mut inner = self.inner.lock();
         let flag = inner.used_flags;
         match &mut inner.used {
             Some(used) => {
                 used.flags = flag;
-                used.ring[used.idx as usize % num as usize].id = desc_chain_head_idx;
-                used.ring[used.idx as usize % num as usize].len = len;
+                used.ring[used.idx as usize % num].id = desc_chain_head_idx;
+                used.ring[used.idx as usize % num].len = len;
                 // unsafe {
                 //     llvm_asm!("dsb ish");
                 // }
@@ -216,6 +221,11 @@ impl Virtq {
         );
     }
 
+    pub fn set_last_used_idx(&self, last_used_idx: u16) {
+        let mut inner = self.inner.lock();
+        inner.last_used_idx = last_used_idx;
+    }
+
     pub fn set_num(&self, num: usize) {
         let mut inner = self.inner.lock();
         inner.num = num;
@@ -258,6 +268,11 @@ impl Virtq {
         inner.used = Some(unsafe { &mut *(addr as *mut VringUsed) });
     }
 
+    pub fn last_used_idx(&self) -> u16 {
+        let mut inner = self.inner.lock();
+        inner.last_used_idx
+    }
+
     pub fn desc_table_addr(&self) -> usize {
         let inner = self.inner.lock();
         inner.desc_table_addr
@@ -276,6 +291,11 @@ impl Virtq {
     pub fn ready(&self) -> usize {
         let inner = self.inner.lock();
         inner.ready
+    }
+
+    pub fn vq_indx(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.vq_index
     }
 
     pub fn num(&self) -> usize {
@@ -311,6 +331,12 @@ impl Virtq {
         let inner = self.inner.lock();
         let avail = inner.avail.as_ref().unwrap();
         avail.flags
+    }
+
+    pub fn used_idx(&self) -> u16 {
+        let inner = self.inner.lock();
+        let used = inner.used.as_ref().unwrap();
+        used.idx
     }
 }
 

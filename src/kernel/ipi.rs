@@ -40,6 +40,19 @@ pub struct IpiPowerMessage {
     pub context: usize,
 }
 
+#[derive(Copy, Clone)]
+pub struct IpiEthernetAckMsg {
+    pub len: usize,
+    pub succeed: bool,
+}
+
+#[derive(Copy, Clone)]
+pub struct IpiEthernetMsg {
+    pub src: usize,
+    pub len: usize,
+    pub frame: usize, // addr
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum IpiType {
     IpiTIntc = 0,
@@ -53,6 +66,8 @@ pub enum IpiType {
 pub enum IpiInnerMsg {
     Initc(IpiInitcMessage),
     Power(IpiPowerMessage),
+    EthernetAck(IpiEthernetAckMsg),
+    EnternetMsg(IpiEthernetMsg),
     None,
 }
 
@@ -62,15 +77,15 @@ pub struct IpiMessage {
 }
 
 const IPI_HANDLER_MAX: usize = 16;
-pub type ipi_handler = fn(&IpiMessage);
+pub type IpiHandlerFunc = fn(&IpiMessage);
 
 pub struct IpiHandler {
-    pub handler: ipi_handler,
+    pub handler: IpiHandlerFunc,
     pub ipi_type: IpiType,
 }
 
 impl IpiHandler {
-    fn new(handler: ipi_handler, ipi_type: IpiType) -> IpiHandler {
+    fn new(handler: IpiHandlerFunc, ipi_type: IpiType) -> IpiHandler {
         IpiHandler { handler, ipi_type }
     }
 }
@@ -99,7 +114,7 @@ pub fn ipi_irq_handler() {
     }
 }
 
-pub fn ipi_register(ipi_type: IpiType, handler: ipi_handler) -> bool {
+pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) -> bool {
     // check handler max
     let mut ipi_handler_list = IPI_HANDLER_LIST.lock();
     for i in 0..ipi_handler_list.len() {

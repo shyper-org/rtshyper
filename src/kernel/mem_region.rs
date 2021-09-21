@@ -3,7 +3,6 @@ use crate::arch::PAGE_SIZE;
 use crate::lib::memset;
 use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
 use crate::mm::PageFrame;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
@@ -141,7 +140,7 @@ impl HeapRegion {
                 self.region.base,
                 self.region.size * PAGE_SIZE
             );
-            return false;
+            // return false;
         }
 
         let page_idx = (base - self.region.base) / PAGE_SIZE;
