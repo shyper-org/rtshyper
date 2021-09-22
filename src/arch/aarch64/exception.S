@@ -29,6 +29,8 @@
     b      1b
 .endm
 
+
+.section .text.vectors
 .align 11
 .global vectors
 vectors:

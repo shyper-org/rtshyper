@@ -290,6 +290,7 @@ use crate::arch::PTE_S2_DEVICE;
 use crate::config::VmPassthroughDeviceConfig;
 use crate::kernel::interrupt_vm_register;
 fn vmm_init_passthrough_device(config: &Option<Vec<VmPassthroughDeviceConfig>>, vm: Vm) -> bool {
+    println!("vmm_init_passthrough_device");
     match config {
         Some(cfg) => {
             for i in 0..cfg.len() {
@@ -418,13 +419,12 @@ fn vmm_assign_vcpu() {
                 let vcpu = vm_inner.vcpu_list[0].clone();
                 let vcpu_id = vcpu.id();
 
+                // println!("core {} before vcpu_pool_append0", cpu_id);
                 if !vcpu_pool_append(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
                 }
-                // TODO: vm_if_list.master_vcpu_id
+                // println!("core {} after vcpu_pool_append0", cpu_id);
                 vm_if_list_set_cpu_id(i, cpu_id);
-                // let mut vm_if = VM_IF_LIST[i].lock();
-                // vm_if.master_cpu_id = cpu_id;
 
                 vm_assigned.has_master = true;
                 vm_assigned.cpu_num += 1;
@@ -444,9 +444,11 @@ fn vmm_assign_vcpu() {
                 let vcpu = vm_inner.vcpu_list[trgt_id].clone();
                 let vcpu_id = vcpu.id();
 
+                println!("core {} before vcpu_pool_append1", cpu_id);
                 if !vcpu_pool_append(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
                 }
+                println!("core {} after vcpu_pool_append1", cpu_id);
                 set_cpu_assign(true);
                 vm_assigned.cpu_num += 1;
                 vm_assigned.cpus |= 1 << cpu_id;
@@ -458,7 +460,6 @@ fn vmm_assign_vcpu() {
         }
     }
     barrier();
-
     if cpu_assigned() {
         if let Some(vcpu_pool) = unsafe { &mut CPU.vcpu_pool } {
             for i in 0..vcpu_pool.content.len() {

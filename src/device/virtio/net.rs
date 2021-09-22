@@ -317,10 +317,12 @@ pub fn ethernet_ipi_ack_handler(msg: &IpiMessage) {
 }
 
 fn ethernet_transmit(frame: &[u8], len: usize) -> bool {
+    // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]
     if len < 6 + 6 + 2 {
         return false;
     }
     // need to check mac
+    // vm_if_list_cmp_mac(active_vm_id(), frame + 6);
 
     if frame[0] == 0xff
         && frame[1] == 0xff

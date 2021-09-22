@@ -345,9 +345,8 @@ pub fn cpu_init() {
     set_cpu_state(CpuState::CpuIdle);
     println!("Core {} init ok", cpu_id);
 
-    use crate::lib::barrier;
-    barrier();
-
+    crate::lib::barrier();
+    // println!("after barrier cpu init");
     use crate::board::PLAT_DESC;
     if cpu_id == 0 {
         println!("Bring up {} cores", PLAT_DESC.cpu_desc.num);
