@@ -53,6 +53,13 @@ impl NetDesc {
         inner.mac[4] = mac[4] as u8;
         inner.mac[5] = mac[5] as u8;
     }
+
+    pub fn offset_data(&self, offset: usize) -> u32 {
+        let inner = self.inner.lock();
+        let start_addr = &inner.mac[0] as *const _ as usize;
+        let value = unsafe { *((start_addr + offset) as *const u32) };
+        return value;
+    }
 }
 
 #[repr(C)]
@@ -76,6 +83,16 @@ pub fn net_features() -> usize {
 
 use crate::device::{VirtioMmio, Virtq};
 pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio) -> bool {
+    // let vm = match active_vm() {
+    //     Some(vm) => vm,
+    //     None => {
+    //         panic!("emu_virtio_mmio_handler: current vcpu.vm is none");
+    //     }
+    // };
+
+    // if vm.vm_id() == 1 {
+    //     println!("virtio_net_notify_handler");
+    // }
     if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
         return false;
@@ -94,6 +111,9 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio) -> bool {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
         let mut ptr = buf;
         loop {
+            // if vm.vm_id() == 1 {
+            //     vq.show_desc_info(4);
+            // }
             let temp = vm_ipa2pa(vq.desc_addr(idx));
             if temp == 0 {
                 println!("virtio_net_notify_handler: failed to desc addr");
@@ -104,6 +124,15 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio) -> bool {
             unsafe {
                 memcpy(ptr as *mut u8, temp as *mut u8, vq.desc_len(idx) as usize);
             }
+            // if vm.vm_id() == 1 {
+            //     println!(
+            //         "idx {} len {}, next_idx {}, temp 0x{:x}",
+            //         idx,
+            //         vq.desc_len(idx),
+            //         vq.desc_next(idx),
+            //         temp
+            //     );
+            // }
             ptr += vq.desc_len(idx) as usize;
             idx = vq.desc_next(idx) as usize;
             if vq.desc_flags(idx) == 0 {
@@ -156,7 +185,10 @@ pub fn ethernet_ipi_msg_handler(msg: &IpiMessage) {
             let nic = match vm.emu_net_dev(0) {
                 EmuDevs::VirtioNet(x) => x,
                 _ => {
-                    println!("failed to get virtio net dev");
+                    println!(
+                        "ethernet_ipi_msg_handler: vm[{}] failed to get virtio net dev",
+                        vm.vm_id()
+                    );
                     ethernet_ipi_send_msg(&ethernet_msg, &ack, npage);
                     return;
                 }
@@ -168,7 +200,10 @@ pub fn ethernet_ipi_msg_handler(msg: &IpiMessage) {
             let rx_vq = match nic.vq(0) {
                 Ok(x) => x,
                 Err(_) => {
-                    println!("failed to get virtio net rx virt queue");
+                    println!(
+                        "ethernet_ipi_msg_handler: vm[{}] failed to get virtio net rx virt queue",
+                        vm.vm_id()
+                    );
                     ethernet_ipi_send_msg(&ethernet_msg, &ack, npage);
                     return;
                 }
@@ -203,6 +238,11 @@ pub fn ethernet_ipi_msg_handler(msg: &IpiMessage) {
                     return;
                 }
                 let desc_len = rx_vq.desc_len(desc_idx) as usize;
+                // if vm.vm_id() == 0 {
+                //     println!("rx_vq, idx {}", desc_idx);
+                //     rx_vq.show_desc_info(4);
+                //     println!("remain {}, desc_len {}", remain, desc_len);
+                // }
                 let written_len = if remain > desc_len { desc_len } else { remain };
                 use crate::lib::memcpy;
                 unsafe {
@@ -210,7 +250,7 @@ pub fn ethernet_ipi_msg_handler(msg: &IpiMessage) {
                 }
                 frame_ptr += written_len;
                 remain -= written_len;
-                if rx_vq.desc_flags(desc_idx) & 0x1 != 0 {
+                if rx_vq.desc_flags(desc_idx) & 0x1 == 0 {
                     break;
                 }
                 desc_idx = rx_vq.desc_next(desc_idx) as usize;
@@ -318,6 +358,24 @@ pub fn ethernet_ipi_ack_handler(msg: &IpiMessage) {
 
 fn ethernet_transmit(frame: &[u8], len: usize) -> bool {
     // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]
+    // let vm = match active_vm() {
+    //     Some(vm) => vm,
+    //     None => {
+    //         panic!("emu_virtio_mmio_handler: current vcpu.vm is none");
+    //     }
+    // };
+    // if vm.vm_id() == 1 {
+    //     println!(
+    //         "dst mac {:x} {:x} {:x} {:x} {:x} {:x}",
+    //         frame[0], frame[1], frame[2], frame[3], frame[4], frame[5]
+    //     );
+    //     println!(
+    //         "src mac {:x} {:x} {:x} {:x} {:x} {:x}",
+    //         frame[6], frame[7], frame[8], frame[9], frame[10], frame[11]
+    //     );
+    //     println!("eth type {} {}", frame[12], frame[13]);
+    // }
+
     if len < 6 + 6 + 2 {
         return false;
     }
@@ -363,7 +421,7 @@ fn ethernet_broadcast(frame: &[u8], len: usize) -> bool {
         if vm_id == cur_vm_id {
             continue;
         }
-        if vm_type(vm_id) as usize == 0 {
+        if vm_type(vm_id) as usize != 0 {
             continue;
         }
         if !ethernet_send_to(vm_id, frame, len) {
@@ -392,9 +450,16 @@ fn ethernet_send_to(vmid: usize, frame: &[u8], len: usize) -> bool {
         }
     }
     unsafe {
-        memcpy(m.frame as *const u8, frame.as_ptr(), len);
+        memcpy(
+            (m.frame + size_of::<VirtioNetHdr>()) as *const u8,
+            frame.as_ptr(),
+            len,
+        );
     }
     let cpu_trgt = vm_if_list_get_cpu_id(vmid);
+    // if vmid == 0 {
+    //     println!("vm1 send eth to vm0 cpu {}", cpu_trgt);
+    // }
     if !ipi_send_msg(
         cpu_trgt,
         IpiType::IpiTEthernetMsg,

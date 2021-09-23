@@ -549,6 +549,9 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
                 super::DevDesc::BlkDesc(blk_desc) => {
                     value = blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
                 }
+                super::DevDesc::NetDesc(net_desc) => {
+                    value = net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
+                }
                 _ => {
                     panic!("unknow desc type");
                 }
@@ -573,20 +576,21 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
 pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
     let mut virt_dev_type: VirtioDeviceType = VirtioDeviceType::None;
     let vm_cfg = vm.config();
+    let mmio = VirtioMmio::new(emu_dev_id);
     match vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].emu_type {
         crate::device::EmuDeviceType::EmuDeviceTVirtioBlk => {
             virt_dev_type = VirtioDeviceType::Block;
+            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioBlk(mmio.clone()));
         }
         crate::device::EmuDeviceType::EmuDeviceTVirtioNet => {
             virt_dev_type = VirtioDeviceType::Net;
+            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioNet(mmio.clone()));
         }
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
             return false;
         }
     }
-    let mmio = VirtioMmio::new(emu_dev_id);
-    vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioBlk(mmio.clone()));
 
     mmio.mmio_reg_init(virt_dev_type);
     mmio.dev_init(
@@ -610,6 +614,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
 
     let mmio = match vm.emu_dev(emu_dev_id) {
         EmuDevs::VirtioBlk(blk) => blk,
+        EmuDevs::VirtioNet(net) => net,
         _ => {
             panic!("emu_virtio_mmio_handler: illegal mmio dev type")
         }
@@ -619,6 +624,9 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     let offset = addr - vm.config().vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].base_ipa;
     let write = emu_ctx.write;
 
+    // if vm.vm_id() == 1 && emu_dev_id == 2 {
+    //     println!("### emu_virtio_mmio_handler offset {:x} ###", offset);
+    // }
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
         let q_sel = mmio.q_sel();
