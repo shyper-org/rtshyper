@@ -39,6 +39,7 @@ mod panic;
 mod vmm;
 
 use board::platform_blk_init;
+use device::init_vm0_dtb;
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
@@ -68,46 +69,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         heap_init();
         mem_init();
         // kernel::logger_init();
-
-        unsafe {
-            use fdt::*;
-            println!("fdt orignal size {}", fdt_size(dtb));
-            fdt_pack(dtb);
-            fdt_enlarge(dtb);
-            let r = fdt_del_mem_rsv(dtb, 0);
-            assert_eq!(r, 0);
-            // fdt_add_mem_rsv(fdt, 0x80000000, 0x10000000);
-            let r = fdt_clear_initrd(dtb);
-            let r = fdt_remove_node(dtb, "/cpus/cpu-map/cluster0/core0\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_remove_node(dtb, "/cpus/cpu-map/cluster0/core1\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/cpus/cpu@0\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/cpus/cpu@1\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/serial@c280000\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/serial@3110000\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/serial@3130000\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/combined-uart\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/trusty\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/host1x/nvdisplay@15210000\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/reserved-memory/ramoops_carveout\0".as_ptr());
-            assert_eq!(r, 0);
-            let r = fdt_disable_node(dtb, "/watchdog@30c0000\0".as_ptr());
-            assert_eq!(r, 0);
-            let len = fdt_size(dtb);
-            println!("fdt after patched size {}", len);
-            let slice = core::slice::from_raw_parts(dtb as *const u8, len as usize);
-
-            SYSTEM_FDT.call_once(|| slice.to_vec());
-        }
+        init_vm0_dtb(dtb);
     }
     cpu_init();
     interrupt_init();

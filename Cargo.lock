@@ -132,6 +132,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cstr_core"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "917ba9efe9e1e736671d5a03f006afc4e7e3f32503e2077e0bcaf519c0c8c1d3"
+dependencies = [
+ "cty",
+ "memchr",
+]
+
+[[package]]
+name = "cty"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7313c0d620d0cb4dbd9d019e461a4beb501071ff46ec0ab933efb4daa76d73e3"
+
+[[package]]
 name = "env_logger"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,6 +319,7 @@ dependencies = [
  "log",
  "spin 0.9.0",
  "tock-registers",
+ "vm-fdt",
  "volatile",
 ]
 
@@ -404,6 +421,13 @@ name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fecdca9a5291cc2b8dcf7dc02453fee791a280f3743cb0905f8822ae463b3fe"
+
+[[package]]
+name = "vm-fdt"
+version = "0.1.0"
+dependencies = [
+ "cstr_core",
+]
 
 [[package]]
 name = "volatile"

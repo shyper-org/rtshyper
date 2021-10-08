@@ -16,6 +16,7 @@ debug = true
 
 
 [dependencies]
+vm-fdt = {path = "/home/ohmr/work/rust_projects/vm-fdt"}
 fdt = {path = "/home/ohmr/work/rust_projects/libfdt-binding"}
 log = "0.4.5"
 volatile = "0.4.4"
