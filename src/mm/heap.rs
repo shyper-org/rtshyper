@@ -10,7 +10,7 @@ struct HeapRegion([u8; HEAP_SIZE]);
 static HEAP_REGION: HeapRegion = HeapRegion([0; HEAP_SIZE]);
 
 #[global_allocator]
-pub static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
+pub static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::empty();
 
 pub fn heap_init() {
     println!("init buddy system");

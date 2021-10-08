@@ -12,6 +12,7 @@ pub const PSCI_FEATURES: usize = 0x8400000A;
 pub const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
 pub const PSCI_CPU_OFF: usize = 0xc4000002;
 pub const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
+pub const PSCI_AFFINITY_INFO_AARCH64: usize = 0xc4000004;
 
 pub const PSCI_E_SUCCESS: usize = 0;
 pub const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
@@ -52,15 +53,18 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
         PSCI_CPU_ON_AARCH64 => {
             r = psci_guest_cpu_on(x1, x2, x3);
         }
+        PSCI_AFFINITY_INFO_AARCH64 => {
+            r = 0;
+        }
         #[cfg(feature = "tx2")]
         TEGRA_SIP_GET_ACTMON_CLK_COUNTERS => {
             let result = smc_call(fid, x1, x2, x3);
             r = result.0;
             // println!("x1 0x{:x}, x2 0x{:x}, x3 0x{:x}", x1, x2, x3);
-            // println!(
-            //     "result.0 0x{:x}, result.1 0x{:x}, result.1 0x{:x}",
-            //     result.0, result.1, result.2
-            // );
+            println!(
+                "result.0 0x{:x}, result.1 0x{:x}, result.1 0x{:x}",
+                result.0, result.1, result.2
+            );
             context_set_gpr(1, result.1);
             context_set_gpr(2, result.2);
         }

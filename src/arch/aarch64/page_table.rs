@@ -274,18 +274,29 @@ impl PageTable {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         println!("1 {:x}", directory.to_pa());
         let l1e = directory.entry(pt_lvl1_idx(ipa));
-        // println!("2 {:x}", l1e.to_pa());
+        println!("2 {:x}", l1e.to_pa());
         let l2e = l1e.entry(pt_lvl2_idx(ipa));
-        // println!("3 {:x}", l2e.to_pa());
-        let l3e = l2e.entry(pt_lvl3_idx(ipa));
-        // println!("ipa {:x} to pa {:x}", ipa, l3e.to_pa());
+        println!("3 {:x}", l2e.to_pa());
+        if l2e.to_pte() & 0b11 == PTE_BLOCK {
+            println!("ipa {:x} to pa {:x}", ipa, l2e.to_pa());
+        } else {
+            let l3e = l2e.entry(pt_lvl3_idx(ipa));
+            println!("ipa {:x} to pa {:x}", ipa, l3e.to_pa());
+        }
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
         let size_2mb = 1 << LVL2_SHIFT;
         if ipa % size_2mb == 0 && len % size_2mb == 0 && pa % size_2mb == 0 {
             self.map_range_2mb(ipa, len, pa, pte);
+            if ipa == 0x17000000 {
+                println!("map 2mb for gp10b");
+                self.show_pt(ipa);
+            }
         } else {
+            if ipa == 0x17000000 {
+                println!("normal map for gp10b");
+            }
             self.map_range(ipa, len, pa, pte);
         }
     }

@@ -359,7 +359,7 @@ pub fn cpu_idle() {
     cpu_interrupt_unmask();
     loop {
         unsafe {
-            llvm_asm!("wfi");
+            asm!("wfi");
         }
     }
 }

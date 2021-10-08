@@ -40,17 +40,16 @@ pub struct IpiPowerMessage {
     pub context: usize,
 }
 
-#[derive(Copy, Clone)]
-pub struct IpiEthernetAckMsg {
-    pub len: usize,
-    pub succeed: bool,
-}
+// #[derive(Copy, Clone)]
+// pub struct IpiEthernetAckMsg {
+//     pub len: usize,
+//     pub succeed: bool,
+// }
 
 #[derive(Copy, Clone)]
 pub struct IpiEthernetMsg {
-    pub src: usize,
-    pub len: usize,
-    pub frame: usize, // addr
+    pub src_vmid: usize,
+    pub trgt_vmid: usize,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -66,7 +65,6 @@ pub enum IpiType {
 pub enum IpiInnerMsg {
     Initc(IpiInitcMessage),
     Power(IpiPowerMessage),
-    EthernetAck(IpiEthernetAckMsg),
     EnternetMsg(IpiEthernetMsg),
     None,
 }

@@ -468,7 +468,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
             VIRTIO_MMIO_QUEUE_DESC_HIGH => match mmio.vq(q_sel) {
                 Ok(virtq) => {
                     virtq.or_desc_table_addr(value << 32);
-                    let desc_table_addr = vm_ipa2pa(virtq.desc_table_addr());
+                    let desc_table_addr = vm_ipa2pa(active_vm().unwrap(), virtq.desc_table_addr());
                     if desc_table_addr == 0 {
                         println!("virtio_mmio_queue_access: invalid desc_table_addr");
                         return;
@@ -492,7 +492,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
             VIRTIO_MMIO_QUEUE_AVAIL_HIGH => match mmio.vq(q_sel) {
                 Ok(virtq) => {
                     virtq.or_avail_addr(value << 32);
-                    let avail_addr = vm_ipa2pa(virtq.avail_addr());
+                    let avail_addr = vm_ipa2pa(active_vm().unwrap(), virtq.avail_addr());
                     if avail_addr == 0 {
                         println!("virtio_mmio_queue_access: invalid avail_addr");
                         return;
@@ -516,7 +516,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
             VIRTIO_MMIO_QUEUE_USED_HIGH => match mmio.vq(q_sel) {
                 Ok(virtq) => {
                     virtq.or_used_addr(value << 32);
-                    let used_addr = vm_ipa2pa(virtq.used_addr());
+                    let used_addr = vm_ipa2pa(active_vm().unwrap(), virtq.used_addr());
                     if used_addr == 0 {
                         println!("virtio_mmio_queue_access: invalid used_addr");
                         return;

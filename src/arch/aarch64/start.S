@@ -2,7 +2,7 @@
 
 .global _start
 _start:
-
+    mov x20, x0
 // #ifdef PLATFORM_TX2
     mrs x0, mpidr_el1
     and x1, x0, #0x100
@@ -89,7 +89,7 @@ _start:
 
  
     mov x0, x19
-    ldr x1, =init
+    ldr x3, =init
 
 
     ldr x2, =(0x30c51835)
@@ -99,7 +99,8 @@ _start:
 	dsb	nsh
 	isb
 
-    br  x1
+    mov x1, x20
+    br  x3
     
 /*
  * snipet from "Application Note Bare-metal Boot Code for ARMv8-A

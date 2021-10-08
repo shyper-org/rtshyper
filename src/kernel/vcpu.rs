@@ -159,19 +159,21 @@ impl VcpuInner {
     }
 
     fn arch_reset(&self) {
+        use cortex_a::registers::*;
+        use tock_registers::interfaces::*;
         unsafe {
-            llvm_asm!("msr cntvoff_el2, $0" :: "r"(0) :: "volatile");
-            llvm_asm!("msr sctlr_el1, $0" :: "r"(0x30C50830 as usize) :: "volatile");
-            llvm_asm!("msr cntkctl_el1, $0" :: "r"(0) :: "volatile");
-            llvm_asm!("msr pmcr_el0, $0" :: "r"(0) :: "volatile");
-            llvm_asm!("msr vtcr_el2, $0" :: "r"(0x8001355c as usize) :: "volatile");
+            CNTVOFF_EL2.set(0);
+            SCTLR_EL1.set(0x30C50830);
+            asm!("msr cntkctl_el1, xzr");
+            asm!("msr pmcr_el0, xzr");
+            let vtcr = 0x8001355cu64;
+            asm!("msr vtcr_el2, {0}", in(reg) vtcr);
         };
         let vttbr = (self.vm_id() << 48) | self.vm_pt_dir();
         // println!("vttbr_el2 is {:x}", vttbr);
         // println!("vttbr_el2 pt addr is {:x}", self.vm_pt_dir());
         unsafe {
-            llvm_asm!("msr vttbr_el2, $0" :: "r"(vttbr) :: "volatile");
-            llvm_asm!("isb");
+            asm!("msr vttbr_el2, {0}", "isb", in(reg) vttbr);
         }
 
         tlb_invalidate_guest_all();
@@ -187,7 +189,7 @@ impl VcpuInner {
 
         vmpidr |= self.id;
         unsafe {
-            llvm_asm!("msr vmpidr_el2, $0" :: "r"(vmpidr) :: "volatile");
+            asm!("msr vmpidr_el2, {0}", in(reg) vmpidr);
         }
     }
 
@@ -251,6 +253,8 @@ pub fn vcpu_run() {
         active_vcpu_id()
     );
 
+    let vm = crate::kernel::active_vm().unwrap();
+    vm.show_pagetable(0x17000000);
     let sp = cpu_stack() + CPU_STACK_SIZE;
     let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
 

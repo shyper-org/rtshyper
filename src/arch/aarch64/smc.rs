@@ -1,4 +1,4 @@
-// #[inline(always)]
+#[inline(always)]
 pub fn smc_call(x0: usize, x1: usize, x2: usize, x3: usize) -> (usize, usize, usize, usize) {
     let r0;
     let r1;

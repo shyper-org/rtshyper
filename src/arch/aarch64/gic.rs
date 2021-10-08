@@ -2,9 +2,10 @@ use crate::board::{PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE};
 use crate::kernel::INTERRUPT_NUM_MAX;
 use crate::kernel::{cpu_current_irq, cpu_id, set_cpu_current_irq};
 use crate::lib::bit_extract;
-use register::mmio::*;
-use register::*;
 use spin::Mutex;
+use tock_registers::interfaces::*;
+use tock_registers::registers::*;
+use tock_registers::*;
 
 // GICD BITS
 const GICD_CTLR_EN_BIT: usize = 0x1;

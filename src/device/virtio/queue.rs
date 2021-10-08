@@ -1,5 +1,6 @@
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
+use crate::kernel::active_vm;
 use alloc::sync::Arc;
 use core::slice;
 use spin::Mutex;
@@ -100,6 +101,18 @@ impl Virtq {
         }
     }
 
+    pub fn put_back_avail_desc_idx(&self) {
+        let mut inner = self.inner.lock();
+        match &inner.avail {
+            Some(avail) => {
+                inner.last_avail_idx -= 1;
+            }
+            None => {
+                println!("put_back_avail_desc_idx: failed to avail table");
+            }
+        }
+    }
+
     pub fn avail_is_avail(&self) -> bool {
         let mut inner = self.inner.lock();
         inner.avail.is_some()
@@ -184,7 +197,7 @@ impl Virtq {
         println!("[*desc_ring*]");
         for i in 0..size {
             use crate::kernel::vm_ipa2pa;
-            let desc_addr = vm_ipa2pa(desc[i].addr);
+            let desc_addr = vm_ipa2pa(active_vm().unwrap(), desc[i].addr);
             println!(
                 "index {}   desc_addr 0x{:x}   len 0x{:x}   flags {}  next {}",
                 i, desc[i].addr, desc[i].len, desc[i].flags, desc[i].next

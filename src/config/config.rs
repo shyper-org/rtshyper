@@ -18,13 +18,24 @@ pub struct VmEmulatedDeviceConfig {
     pub emu_type: EmuDeviceType,
 }
 
-pub struct VmPassthroughDeviceConfig {
-    pub name: Option<&'static str>,
-    pub base_pa: usize,
-    pub base_ipa: usize,
+#[derive(Default)]
+pub struct PassthroughRegion {
+    pub ipa: usize,
+    pub pa: usize,
     pub length: usize,
-    // pub dma: bool,
-    pub irq_list: Vec<usize>,
+}
+
+// impl PassthroughRegion {
+//     pub fn new(ipa: usize, pa: usize, length: usize) -> Self {
+//         PassthroughRegion { ipa, pa, length }
+//     }
+// }
+
+#[derive(Default)]
+pub struct VmPassthroughDeviceConfig {
+    pub regions: Vec<PassthroughRegion>,
+    pub irqs: Vec<usize>,
+    pub streams_ids: Vec<usize>,
 }
 
 pub struct VmRegion {
@@ -106,7 +117,8 @@ pub struct VmConfigEntry {
     pub image: VmImageConfig,
     pub cpu: VmCpuConfig,
     pub vm_emu_dev_confg: Option<Vec<VmEmulatedDeviceConfig>>,
-    pub vm_pt_dev_confg: Option<Vec<VmPassthroughDeviceConfig>>,
+    pub vm_pt_dev_confg: Option<VmPassthroughDeviceConfig>,
+    pub cmdline: &'static str,
 }
 
 impl VmConfigEntry {
@@ -120,6 +132,7 @@ impl VmConfigEntry {
             cpu: VmCpuConfig::default(),
             vm_emu_dev_confg: None,
             vm_pt_dev_confg: None,
+            cmdline: "",
         }
     }
 }

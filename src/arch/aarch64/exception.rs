@@ -3,17 +3,14 @@ use crate::arch::{data_abort_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
 use crate::kernel::{active_vm_id, clear_cpu_ctx, cpu_id, set_cpu_ctx};
-use cortex_a::regs::*;
+use cortex_a::registers::*;
+use tock_registers::interfaces::*;
 
 global_asm!(include_str!("exception.S"));
 
 #[inline(always)]
 pub fn exception_esr() -> usize {
-    let esr;
-    unsafe {
-        llvm_asm!("mrs $0, esr_el2" : "=r"(esr) ::: "volatile");
-    }
-    esr
+    cortex_a::registers::ESR_EL2.get() as usize
 }
 
 #[inline(always)]
@@ -23,20 +20,17 @@ fn exception_class() -> usize {
 
 #[inline(always)]
 fn exception_far() -> usize {
-    let far;
-    unsafe {
-        llvm_asm!("mrs $0, far_el2" : "=r"(far) ::: "volatile");
-    }
-    far
+    cortex_a::registers::FAR_EL2.get() as usize
 }
 
 #[inline(always)]
 fn exception_hpfar() -> usize {
-    let hpfar;
+    // cortex_a::registers::HPFAR_EL2.get() as usize
+    let hpfar: u64;
     unsafe {
-        llvm_asm!("mrs $0, hpfar_el2" : "=r"(hpfar) ::: "volatile");
+        asm!("mrs {0}, HPFAR_EL2", out(reg) hpfar);
     }
-    hpfar
+    hpfar as usize
 }
 
 #[inline(always)]
@@ -116,7 +110,7 @@ unsafe extern "C" fn current_el_sp0_serror() {
 unsafe extern "C" fn current_el_spx_synchronous() {
     panic!(
         "current_elx_synchronous {:016x}",
-        cortex_a::regs::ELR_EL2.get()
+        cortex_a::registers::ELR_EL2.get()
     );
 }
 

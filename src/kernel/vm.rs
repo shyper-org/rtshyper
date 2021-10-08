@@ -127,6 +127,16 @@ impl Vm {
         }
     }
 
+    pub fn dtb(&self) -> Option<*mut fdt::myctypes::c_void> {
+        let vm_inner = self.inner.lock();
+        vm_inner.dtb.map(|x| x as *mut fdt::myctypes::c_void)
+    }
+    
+    pub fn set_dtb(&self, val: *mut fdt::myctypes::c_void) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.dtb = Some(val as usize);
+    }
+
     pub fn push_vcpu(&self, vcpu: Vcpu) {
         let mut vm_inner = self.inner.lock();
         vm_inner.vcpu_list.push(vcpu);
@@ -371,7 +381,7 @@ use crate::device::EmuDevs;
 pub struct VmInner {
     pub id: usize,
     pub config: Option<Arc<VmConfigEntry>>,
-
+    pub dtb: Option<usize>,
     // memory config
     pub pt: Option<PageTable>,
     pub mem_region_num: usize,
@@ -398,6 +408,7 @@ impl VmInner {
         VmInner {
             id: 0,
             config: None,
+            dtb: None,
             pt: None,
             mem_region_num: 0,
             pa_region: None,
@@ -416,6 +427,7 @@ impl VmInner {
         VmInner {
             id,
             config: None,
+            dtb: None,
             pt: None,
             mem_region_num: 0,
             pa_region: None,
@@ -447,13 +459,18 @@ impl VmInner {
 // ]);
 pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
 
-pub fn vm_ipa2pa(ipa: usize) -> usize {
-    let vm = match active_vm() {
-        Some(vm) => vm,
-        None => {
-            panic!("vm_ipa2pa: current vcpu.vm is none");
-        }
-    };
+pub fn vm(id: usize) -> Vm {
+    let vm_list = VM_LIST.lock();
+    vm_list[id].clone()
+}
+
+pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
+    // let vm = match active_vm() {
+    //     Some(vm) => vm,
+    //     None => {
+    //         panic!("vm_ipa2pa: current vcpu.vm is none");
+    //     }
+    // };
 
     if ipa == 0 {
         return 0;

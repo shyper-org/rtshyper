@@ -1,4 +1,6 @@
 use spin::Mutex;
+use tock_registers::interfaces::*;
+
 const CTL_IMASK: usize = 1 << 1;
 
 static TIMER_FREQ: Mutex<usize> = Mutex::new(0);
@@ -9,41 +11,30 @@ pub fn timer_arch_set(num: usize) {
     let val = *slice_lock * num;
     drop(slice_lock);
     unsafe {
-        llvm_asm!("msr CNTHP_TVAL_EL2, $0" :: "r"(val) :: "volatile");
-        llvm_asm!("isb");
+        asm!("msr CNTHP_TVAL_EL2, {0}", "isb", in(reg) val);
     };
 }
 
 pub fn timer_arch_enable_irq() {
+    let val = 1;
     unsafe {
-        llvm_asm!("msr CNTHP_CTL_EL2, $0" :: "r"(1) :: "volatile");
-        llvm_asm!("isb");
+        asm!("msr CNTHP_CTL_EL2, {0}", "isb", in(reg) val);
     };
 }
 
 pub fn timer_arch_disable_irq() {
+    let val = 2;
     unsafe {
-        llvm_asm!("msr CNTHP_CTL_EL2, $0" :: "r"(2) :: "volatile");
-        llvm_asm!("isb");
+        asm!("msr CNTHP_CTL_EL2, {0}", "isb", in(reg) val);
     };
 }
 
 pub fn timer_arch_get_counter() -> usize {
-    let cnt;
-    unsafe {
-        llvm_asm!("mrs $0, CNTPCT_EL0" : "=r"(cnt) ::: "volatile");
-        llvm_asm!("isb");
-    };
-    cnt
+    cortex_a::registers::CNTPCT_EL0.get() as usize
 }
 
 pub fn timer_arch_get_frequency() -> usize {
-    let freq;
-    unsafe {
-        llvm_asm!("mrs $0, CNTFRQ_EL0" : "=r"(freq) ::: "volatile");
-        llvm_asm!("isb");
-    };
-    freq
+    cortex_a::registers::CNTFRQ_EL0.get() as usize
 }
 
 pub fn timer_arch_init() {
@@ -52,8 +43,10 @@ pub fn timer_arch_init() {
     *freq_lock = timer_arch_get_frequency();
     *slice_lock = (*freq_lock) / 100;
 
+    let ctl = 0x3 & (1 | !CTL_IMASK);
+    let tval = *slice_lock * 10;
     unsafe {
-        llvm_asm!("msr CNTHP_CTL_EL2, $0" :: "r"(0x3 & (1 | !CTL_IMASK)) :: "volatile");
-        llvm_asm!("msr CNTHP_TVAL_EL2, $0" :: "r"(*slice_lock * 10) :: "volatile");
+        asm!("msr CNTHP_CTL_EL2, {0}", "isb", in(reg) ctl);
+        asm!("msr CNTHP_TVAL_EL2, {0}", "isb", in(reg) tval);
     }
 }

@@ -1,5 +1,5 @@
 use crate::config::VmEmulatedDeviceConfig;
-use crate::device::{ethernet_ipi_ack_handler, ethernet_ipi_msg_handler, net_features, NetDesc};
+use crate::device::{ethernet_ipi_rev_handler, net_features, NetDesc};
 use crate::device::{BlkDesc, VirtioBlkReq, BLOCKIF_IOV_MAX};
 use crate::kernel::{ipi_register, IpiType};
 use crate::mm::PageFrame;
@@ -164,18 +164,18 @@ impl VirtDevInner {
                 self.desc = DevDesc::NetDesc(net_desc);
 
                 self.features |= net_features();
-                if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_msg_handler) {
+                if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
                     panic!(
                         "virtio_dev_init: failed to register ipi {:?}",
                         IpiType::IpiTEthernetMsg,
                     );
                 }
-                if !ipi_register(IpiType::IpiTEthernetAck, ethernet_ipi_ack_handler) {
-                    panic!(
-                        "virtio_dev_init: failed to register ipi {:?}",
-                        IpiType::IpiTEthernetMsg,
-                    );
-                }
+                // if !ipi_register(IpiType::IpiTEthernetAck, ethernet_ipi_ack_handler) {
+                //     panic!(
+                //         "virtio_dev_init: failed to register ipi {:?}",
+                //         IpiType::IpiTEthernetAck,
+                //     );
+                // }
 
                 match mem_pages_alloc(1) {
                     Ok(page_frame) => {

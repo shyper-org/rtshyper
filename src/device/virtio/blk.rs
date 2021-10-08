@@ -300,7 +300,8 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     }
     match req.req_type() as usize {
         VIRTIO_BLK_T_IN => {
-            platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
+            todo!();
+            // platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
             for iov_idx in 0..req.iovn() {
                 let data_bg = req.iov_data_bg(iov_idx);
                 let len = req.iov_len(iov_idx) as usize;
@@ -340,8 +341,8 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 cache_ptr += len;
                 total_byte += len;
             }
-
-            platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
+            todo!();
+            // platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
         }
         VIRTIO_BLK_T_GET_ID => {
             let data_bg = req.iov_data_bg(0);
@@ -410,7 +411,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                         return false;
                     }
                     head = false;
-                    let vreq_addr = vm_ipa2pa(vq.desc_addr(next_desc_idx));
+                    let vreq_addr = vm_ipa2pa(vm.clone(), vq.desc_addr(next_desc_idx));
                     if vreq_addr == 0 {
                         println!("virtio_blk_notify_handler: failed to get vreq");
                         return false;
@@ -431,7 +432,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                         vq.notify(dev.int_id());
                         return false;
                     }
-                    let data_bg = vm_ipa2pa(vq.desc_addr(next_desc_idx));
+                    let data_bg = vm_ipa2pa(vm.clone(), vq.desc_addr(next_desc_idx));
                     if data_bg == 0 {
                         println!("virtio_blk_notify_handler: failed to get iov data begin");
                         return false;
@@ -455,7 +456,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                     vq.notify(dev.int_id());
                     return false;
                 }
-                let vstatus_addr = vm_ipa2pa(vq.desc_addr(next_desc_idx));
+                let vstatus_addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(next_desc_idx));
                 if vstatus_addr == 0 {
                     println!("virtio_blk_notify_handler: failed to vstatus");
                     return false;

@@ -2,9 +2,12 @@
 use super::virtio::*;
 use alloc::boxed::Box;
 use core::mem::size_of;
-use register::mmio::*;
-use register::*;
+// use register::mmio::*;
+// use register::*;
 use spin::Mutex;
+use tock_registers::*;
+use tock_registers::interfaces::*;
+use tock_registers::registers::*;
 
 const VIRTIO_MMIO_BASE: usize = 0x0a000000;
 const QUEUE_SIZE: usize = 8;
@@ -284,7 +287,7 @@ fn io(sector: usize, count: usize, buf: usize, op: Operation) {
     avail.ring[(avail.idx as usize) % QUEUE_SIZE] = 0;
     // barrier
     unsafe {
-        llvm_asm!("dsb sy");
+        asm!("dsb sy");
     }
     avail.idx = avail.idx.wrapping_add(1);
 
@@ -295,7 +298,7 @@ fn io(sector: usize, count: usize, buf: usize, op: Operation) {
     loop {
         // barrier
         unsafe {
-            llvm_asm!("dsb sy");
+            asm!("dsb sy");
         }
         if *status == 0 {
             return;
