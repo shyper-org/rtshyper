@@ -1,6 +1,6 @@
 use super::{
-    VmConfigEntry, VmCpuConfig, VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig,
-    VmPassthroughDeviceConfig, VmRegion, DEF_VM_CONFIG_TABLE,
+    AddrRegions, DtbDevType, VmConfigEntry, VmCpuConfig, VmDtbDev, VmEmulatedDeviceConfig,
+    VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion, DEF_VM_CONFIG_TABLE,
 };
 use crate::board::*;
 use crate::config::PassthroughRegion;
@@ -596,84 +596,102 @@ pub fn config_init() {
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
+        vm_dtb_devs: None,
         cmdline: "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/mmcblk0p1 rw audit=0\0",
     }));
+
+    // vm1 emu
+    // let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("intc@8000000"),
+    //     base_ipa: 0x8000000,
+    //     length: 0x1000,
+    //     irq_id: 0,
+    //     cfg_list: Vec::new(),
+    //     emu_type: EmuDeviceType::EmuDeviceTGicd,
+    // });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_mmio@a000000"),
+    //     base_ipa: 0xa000000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x10,
+    //     cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    // });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_mmio@a001000"),
+    //     base_ipa: 0xa001000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x11,
+    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+    // });
+
+    // // vm1 passthrough
+    // let mut pt_dev_config: Vec<VmPassthroughDeviceConfig> = Vec::new();
+    // pt_dev_config.push(VmPassthroughDeviceConfig {
+    //     name: Some("serial@3100000"),
+    //     base_pa: UART_0_ADDR,
+    //     base_ipa: UART_0_ADDR,
+    //     length: 0x1000,
+    //     irq_list: vec![UART_0_INT],
+    // });
+    // pt_dev_config.push(VmPassthroughDeviceConfig {
+    //     name: Some("intc@8000000"),
+    //     base_pa: PLATFORM_GICV_BASE,
+    //     base_ipa: 0x8010000,
+    //     length: 0x2000,
+    //     irq_list: vec![27],
+    // });
+
+    // // vm1 vm_region
+    // let mut vm_region: Vec<VmRegion> = Vec::new();
+    // vm_region.push(VmRegion {
+    //     ipa_start: 0x80000000,
+    //     length: 0x40000000,
+    // });
+
+    // let mut vm_dtb_devs: Vec<VmDtbDev>;
+    // vm_dtb_devs.push(VmDtbDev {
+    //     dev_type: DtbDevType::DevGicd,
+    //     irqs: vec![],
+    //     addr_region: AddrRegions {
+    //         ipa: 0x8000000,
+    //         length: 0x1000,
+    //     },
+    // });
+    // vm_dtb_devs.push(VmDtbDev {
+    //     dev_type: DtbDevType::DevGicc,
+    //     irqs: vec![],
+    //     addr_region: AddrRegions {
+    //         ipa: 0x8010000,
+    //         length: 0x2000,
+    //     },
+    // });
+
+    // // vm1 config
+    // vm_config.entries.push(Arc::new(VmConfigEntry {
+    //     name: Some("guest-os-0"),
+    //     os_type: VmType::VmTOs,
+    //     memory: VmMemoryConfig {
+    //         num: 1,
+    //         region: Some(vm_region),
+    //     },
+    //     image: VmImageConfig {
+    //         kernel_name: Some("Vanilla"),
+    //         kernel_load_ipa: 0x88080000,
+    //         kernel_entry_point: 0x88080000,
+    //         device_tree_filename: Some("virt213.bin"),
+    //         device_tree_load_ipa: 0x82000000,
+    //         ramdisk_filename: None,
+    //         ramdisk_load_ipa: 0,
+    //     },
+    //     cpu: VmCpuConfig {
+    //         num: 2,
+    //         allocate_bitmap: 0b1100,
+    //         master: -1,
+    //     },
+    //     vm_emu_dev_confg: Some(emu_dev_config),
+    //     vm_pt_dev_confg: Some(pt_dev_config),
+    // }));
 }
-
-// vm1 emu
-//     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-//     emu_dev_config.push(VmEmulatedDeviceConfig {
-//         name: Some("intc@8000000"),
-//         base_ipa: 0x8000000,
-//         length: 0x1000,
-//         irq_id: 0,
-//         cfg_list: Vec::new(),
-//         emu_type: EmuDeviceType::EmuDeviceTGicd,
-//     });
-//     emu_dev_config.push(VmEmulatedDeviceConfig {
-//         name: Some("virtio_mmio@a000000"),
-//         base_ipa: 0xa000000,
-//         length: 0x1000,
-//         irq_id: 32 + 0x10,
-//         cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-//         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-//     });
-//     emu_dev_config.push(VmEmulatedDeviceConfig {
-//         name: Some("virtio_mmio@a001000"),
-//         base_ipa: 0xa001000,
-//         length: 0x1000,
-//         irq_id: 32 + 0x11,
-//         cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
-//         emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-//     });
-
-//     // vm1 passthrough
-//     let mut pt_dev_config: Vec<VmPassthroughDeviceConfig> = Vec::new();
-//     pt_dev_config.push(VmPassthroughDeviceConfig {
-//         name: Some("serial@3100000"),
-//         base_pa: UART_0_ADDR,
-//         base_ipa: UART_0_ADDR,
-//         length: 0x1000,
-//         irq_list: vec![UART_0_INT],
-//     });
-//     pt_dev_config.push(VmPassthroughDeviceConfig {
-//         name: Some("intc@8000000"),
-//         base_pa: PLATFORM_GICV_BASE,
-//         base_ipa: 0x8010000,
-//         length: 0x2000,
-//         irq_list: vec![27],
-//     });
-
-//     // vm1 vm_region
-//     let mut vm_region: Vec<VmRegion> = Vec::new();
-//     vm_region.push(VmRegion {
-//         ipa_start: 0x80000000,
-//         length: 0x40000000,
-//     });
-
-//     // vm1 config
-//     vm_config.entries.push(Arc::new(VmConfigEntry {
-//         name: Some("guest-os-0"),
-//         os_type: VmType::VmTOs,
-//         memory: VmMemoryConfig {
-//             num: 1,
-//             region: Some(vm_region),
-//         },
-//         image: VmImageConfig {
-//             kernel_name: Some("Vanilla"),
-//             kernel_load_ipa: 0x88080000,
-//             kernel_entry_point: 0x88080000,
-//             device_tree_filename: Some("virt213.bin"),
-//             device_tree_load_ipa: 0x82000000,
-//             ramdisk_filename: None,
-//             ramdisk_load_ipa: 0,
-//         },
-//         cpu: VmCpuConfig {
-//             num: 2,
-//             allocate_bitmap: 0b1100,
-//             master: -1,
-//         },
-//         vm_emu_dev_confg: Some(emu_dev_config),
-//         vm_pt_dev_confg: Some(pt_dev_config),
-//     }));
-// }

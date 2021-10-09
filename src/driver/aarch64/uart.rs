@@ -11,7 +11,7 @@ pub fn putc(byte: u8) {
         if byte == '\n' as u8 {
             putc('\r' as u8);
         }
-        while (ptr::read_volatile((UART_1_ADDR + 20) as *const u8) & 0x20 == 0) {}
+        while ptr::read_volatile((UART_1_ADDR + 20) as *const u8) & 0x20 == 0 {}
         ptr::write_volatile(UART_1_ADDR as *mut u8, byte);
     }
 }

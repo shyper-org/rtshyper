@@ -9,6 +9,13 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
+pub enum DtbDevType {
+    DevSerial,
+    DevGicd,
+    DevGicc,
+    DevVirtio,
+}
+
 pub struct VmEmulatedDeviceConfig {
     pub name: Option<&'static str>,
     pub base_ipa: usize,
@@ -110,6 +117,18 @@ impl VmCpuConfig {
     }
 }
 
+pub struct AddrRegions {
+    pub ipa: usize,
+    pub length: usize,
+}
+
+pub struct VmDtbDev {
+    pub name: &'static str,
+    pub dev_type: DtbDevType,
+    pub irqs: Vec<usize>,
+    pub addr_region: AddrRegions,
+}
+
 pub struct VmConfigEntry {
     pub name: Option<&'static str>,
     pub os_type: VmType,
@@ -118,6 +137,7 @@ pub struct VmConfigEntry {
     pub cpu: VmCpuConfig,
     pub vm_emu_dev_confg: Option<Vec<VmEmulatedDeviceConfig>>,
     pub vm_pt_dev_confg: Option<VmPassthroughDeviceConfig>,
+    pub vm_dtb_devs: Option<Vec<VmDtbDev>>,
     pub cmdline: &'static str,
 }
 
@@ -132,8 +152,47 @@ impl VmConfigEntry {
             cpu: VmCpuConfig::default(),
             vm_emu_dev_confg: None,
             vm_pt_dev_confg: None,
+            vm_dtb_devs: None,
             cmdline: "",
         }
+    }
+
+    pub fn gicc_addr(&self) -> usize {
+        match &self.vm_dtb_devs {
+            Some(vm_dtb_devs) => {
+                for dev in vm_dtb_devs {
+                    match dev.dev_type {
+                        DtbDevType::DevGicc => {
+                            return dev.addr_region.ipa;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            None => {
+                return 0;
+            }
+        }
+        0
+    }
+
+    pub fn gicd_addr(&self) -> usize {
+        match &self.vm_dtb_devs {
+            Some(vm_dtb_devs) => {
+                for dev in vm_dtb_devs {
+                    match dev.dev_type {
+                        DtbDevType::DevGicd => {
+                            return dev.addr_region.ipa;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            None => {
+                return 0;
+            }
+        }
+        0
     }
 }
 

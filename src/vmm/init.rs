@@ -359,8 +359,13 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         if !vmm_init_image(&config.image, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_image failed");
         }
-        unsafe {
-            vmm_setup_fdt(config.clone(), vm.clone());
+        if vm.vm_id() != 0 {
+            // init vm1 dtb
+            todo!();
+        } else {
+            unsafe {
+                vmm_setup_fdt(config.clone(), vm.clone());
+            }
         }
     }
 
