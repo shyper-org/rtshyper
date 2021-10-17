@@ -12,7 +12,7 @@ const GICD_CTLR_EN_BIT: usize = 0x1;
 
 // GICC BITS
 const GICC_CTLR_EN_BIT: usize = 0x1;
-const GICC_CTLR_EOImodeNS_BIT: usize = 1 << 9;
+const GICC_CTLR_EOIMODENS_BIT: usize = 1 << 9;
 
 // GICH BITS
 const GICH_HCR_LRENPIE_BIT: usize = 1 << 2;
@@ -37,7 +37,7 @@ const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
 pub const GIC_LIST_REGS_NUM: usize = 64;
 
 pub const GICD_TYPER_CPUNUM_OFF: usize = 5;
-pub const GICD_TYPER_CPUNUM_LEN: usize = 3;
+// pub const GICD_TYPER_CPUNUM_LEN: usize = 3;
 pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
 
 pub static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
@@ -369,7 +369,7 @@ impl GicCpuInterface {
         //     gich_lrs_num()
         // );
         self.CTLR
-            .set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOImodeNS_BIT as u32);
+            .set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOIMODENS_BIT as u32);
 
         let hcr_prev = GICH.HCR.get();
         GICH.HCR.set(hcr_prev | GICH_HCR_LRENPIE_BIT as u32);

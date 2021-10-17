@@ -24,6 +24,11 @@ pub fn vm_if_list_set_state(vm_id: usize, vm_state: VmState) {
     vm_if.state = vm_state;
 }
 
+pub fn vm_if_list_get_state(vm_id: usize) -> VmState {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.state
+}
+
 pub fn vm_if_list_set_type(vm_id: usize, vm_type: VmType) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.vm_type = vm_type;
@@ -54,6 +59,27 @@ pub fn vm_if_list_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
     true
 }
 
+pub fn vm_if_list_set_ivc_arg(vm_id: usize, ivc_arg: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.ivc_arg = ivc_arg;
+}
+
+pub fn vm_if_list_ivc_arg(vm_id: usize) -> usize {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.ivc_arg
+}
+
+pub fn vm_if_list_set_ivc_arg_ptr(vm_id: usize, ivc_arg_ptr: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.ivc_arg_ptr = ivc_arg_ptr;
+}
+
+pub fn vm_if_list_ivc_arg_ptr(vm_id: usize) -> usize {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.ivc_arg_ptr
+}
+
+#[derive(Clone, Copy)]
 pub enum VmState {
     VmInv = 0,
     VmPending = 1,
@@ -71,6 +97,8 @@ pub struct VmInterface {
     pub state: VmState,
     pub vm_type: VmType,
     pub mac: [u8; 6],
+    pub ivc_arg: usize,
+    pub ivc_arg_ptr: usize,
 }
 
 impl VmInterface {
@@ -80,6 +108,8 @@ impl VmInterface {
             state: VmState::VmPending,
             vm_type: VmType::VmTBma,
             mac: [0; 6],
+            ivc_arg: 0,
+            ivc_arg_ptr: 0,
         }
     }
 }
@@ -109,6 +139,7 @@ pub struct Vm {
 }
 
 use crate::arch::Vgic;
+
 impl Vm {
     pub fn inner(&self) -> Arc<Mutex<VmInner>> {
         self.inner.clone()
@@ -131,7 +162,6 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.dtb.map(|x| x as *mut fdt::myctypes::c_void)
     }
-    
     pub fn set_dtb(&self, val: *mut fdt::myctypes::c_void) {
         let mut vm_inner = self.inner.lock();
         vm_inner.dtb = Some(val as usize);
@@ -377,6 +407,7 @@ impl Vm {
 
 use crate::arch::PageTable;
 use crate::device::EmuDevs;
+
 #[repr(align(4096))]
 pub struct VmInner {
     pub id: usize,
@@ -462,6 +493,11 @@ pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
 pub fn vm(id: usize) -> Vm {
     let vm_list = VM_LIST.lock();
     vm_list[id].clone()
+}
+
+pub fn vm_num() -> usize {
+    let vm_list = VM_LIST.lock();
+    vm_list.len()
 }
 
 pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {

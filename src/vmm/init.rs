@@ -1,14 +1,17 @@
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
+use crate::device::create_fdt;
 use crate::kernel::Vm;
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign,
     vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
 };
+use crate::kernel::{ipi_register, IpiType};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{vm, VM_LIST};
 use crate::lib::barrier;
+use crate::vmm::vmm_ipi_handler;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -77,8 +80,7 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
     true
 }
 
-fn vmm_load_kernel(load_ipa: usize, vm: Vm) {
-    let bin = include_bytes!("../../image/Image");
+fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     let size = bin.len();
     let config = vm.config();
     for i in 0..config.memory.num {
@@ -109,10 +111,10 @@ fn vmm_load_kernel(load_ipa: usize, vm: Vm) {
 }
 
 fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
-    if config.kernel_name.is_none() {
-        println!("vmm_init_image: filename is missed");
-        return false;
-    }
+    // if config.kernel_name.is_none() {
+    //     println!("vmm_init_image: filename is missed");
+    //     return false;
+    // }
 
     if config.kernel_load_ipa == 0 {
         println!("vmm_init_image: kernel load ipa is null");
@@ -120,7 +122,19 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     vm.set_entry_point(config.kernel_entry_point);
-    vmm_load_kernel(config.kernel_load_ipa, vm.clone());
+    if vm.vm_id() == 0 {
+        vmm_load_image(
+            config.kernel_load_ipa,
+            vm.clone(),
+            include_bytes!("../../image/Image_tegra"),
+        );
+    } else {
+        vmm_load_image(
+            config.kernel_load_ipa,
+            vm.clone(),
+            include_bytes!("../../image/Image_vanilla"),
+        );
+    }
 
     match &vm.config().os_type {
         crate::kernel::VmType::VmTBma => return true,
@@ -161,11 +175,11 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     if config.ramdisk_load_ipa != 0 {
-        // vmm_load_image(
-        //     config.ramdisk_filename.unwrap(),
-        //     config.ramdisk_load_ipa,
-        //     vm.clone(),
-        // );
+        vmm_load_image(
+            config.ramdisk_load_ipa,
+            vm.clone(),
+            include_bytes!("../../image/initrd.gz"),
+        );
     } else {
         println!(
             "VM {} id {} ramdisk not found",
@@ -238,7 +252,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                     emu_dev.length,
                     emu_virtio_mmio_handler,
                 );
-                if !emu_virtio_mmio_init(vm.clone(), idx) {
+                if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
             }
@@ -251,7 +265,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                     emu_dev.length,
                     emu_virtio_mmio_handler,
                 );
-                if !emu_virtio_mmio_init(vm.clone(), idx) {
+                if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
                 let mut vm_if_list = VM_IF_LIST[vm.vm_id()].lock();
@@ -347,9 +361,10 @@ unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
 
 fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
     let cpu_id = cpu_id();
+    let vm_id = vm.vm_id();
 
     if cpu_id == 0 {
-        if vm.vm_id() >= VM_NUM_MAX {
+        if vm_id >= VM_NUM_MAX {
             panic!("vmm_setup_config: out of vm");
         }
         if !vmm_init_memory(&config.memory, vm.clone()) {
@@ -359,9 +374,26 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         if !vmm_init_image(&config.image, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_image failed");
         }
-        if vm.vm_id() != 0 {
+        if vm_id != 0 {
             // init vm1 dtb
-            todo!();
+            match create_fdt(config.clone()) {
+                Ok(dtb) => {
+                    let offset = config.image.device_tree_load_ipa
+                        - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                    println!("dtb size {}", dtb.len());
+                    println!("pa 0x{:x}", vm.pa_start(0) + offset);
+                    unsafe {
+                        crate::lib::memcpy(
+                            (vm.pa_start(0) + offset) as *const u8,
+                            dtb.as_ptr(),
+                            dtb.len(),
+                        );
+                    }
+                }
+                _ => {
+                    panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
+                }
+            }
         } else {
             unsafe {
                 vmm_setup_fdt(config.clone(), vm.clone());
@@ -547,6 +579,10 @@ pub fn vmm_init() {
     }
     drop(vm_cfg_table);
 
+    if !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
+        panic!("vmm_init: failed to register ipi vmm");
+    }
+
     if cpu_id() == 0 {
         println!("Sybilla Hypervisor init ok\n\nStart booting VMs ...");
     }
@@ -556,25 +592,21 @@ pub fn vmm_init() {
 
 use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle, vcpu_run};
 pub fn vmm_boot() {
-    if cpu_assigned() {
-        if active_vcpu_id() == 0 {
-            let vcpu_pool = cpu_vcpu_pool();
-            for i in 0..cpu_vcpu_pool_size() {
-                let vcpu = vcpu_pool.content[i].vcpu.clone();
-                // Before running, every vcpu need to reset context state
-                vcpu.reset_state();
-            }
-            vcpu_run();
-
-            // // test
-            // for i in 0..0x1000 {}
-            // println!("send ipi");
-            // crate::kernel::interrupt_cpu_ipi_send(4, 1);
-            // // end test
-        } else {
-            // if the vcpu is not the master, just go idle and wait for wokening up
-            vcpu_idle();
+    if cpu_assigned() && active_vcpu_id() == 0 {
+        let vcpu_pool = cpu_vcpu_pool();
+        for i in 0..cpu_vcpu_pool_size() {
+            let vcpu = vcpu_pool.content[i].vcpu.clone();
+            // Before running, every vcpu need to reset context state
+            vcpu.reset_state();
         }
+        println!("Core {} start running", cpu_id());
+        vcpu_run();
+
+        // // test
+        // for i in 0..0x1000 {}
+        // println!("send ipi");
+        // crate::kernel::interrupt_cpu_ipi_send(4, 1);
+        // // end test
     } else {
         // If there is no available vm(vcpu), just go idle
         println!("Core {} idle", cpu_id());

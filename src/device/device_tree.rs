@@ -54,7 +54,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
 }
 
 // create vm1 fdt demo
-fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
+pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
     let mut fdt = FdtWriter::new()?;
 
     let root_node = fdt.begin_node("root")?;
@@ -71,7 +71,12 @@ fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
 
     create_memory_node(&mut fdt, &config.memory)?;
     create_timer_node(&mut fdt, 0x8)?;
-    create_chosen_node(&mut fdt, config.cmdline)?;
+    create_chosen_node(
+        &mut fdt,
+        config.cmdline,
+        config.image.ramdisk_load_ipa,
+        0x10dab1,
+    )?;
     create_cpu_node(&mut fdt, &config.cpu)?;
     match &config.vm_dtb_devs {
         Some(vm_dtb_devs) => {
@@ -172,7 +177,7 @@ fn create_serial_node(fdt: &mut FdtWriter, devs_config: &Vec<VmDtbDev>) -> FdtWr
                 fdt.property_u32("reg-shift", 0x2)?;
                 fdt.property_array_u32("interrupts", &[0x0, (dev.irqs[0] - 32) as u32, 0x4])?;
                 fdt.property_u32("clock-frequency", 408000000)?;
-                fdt.property_string("status", "disabled")?;
+                // fdt.property_string("status", "disabled")?;
                 fdt.end_node(serial)?;
             }
             _ => {}
@@ -182,9 +187,16 @@ fn create_serial_node(fdt: &mut FdtWriter, devs_config: &Vec<VmDtbDev>) -> FdtWr
     Ok(())
 }
 
-fn create_chosen_node(fdt: &mut FdtWriter, cmdline: &'static str) -> FdtWriterResult<()> {
+fn create_chosen_node(
+    fdt: &mut FdtWriter,
+    cmdline: &str,
+    ipa: usize,
+    size: usize,
+) -> FdtWriterResult<()> {
     let chosen = fdt.begin_node("chosen")?;
     fdt.property_string("bootargs", cmdline)?;
+    fdt.property_u32("linux,initrd-start", ipa as u32)?;
+    fdt.property_u32("linux,initrd-end", (ipa + size) as u32)?;
     fdt.end_node(chosen)?;
     Ok(())
 }

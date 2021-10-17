@@ -254,7 +254,7 @@ pub fn vcpu_run() {
     );
 
     let vm = crate::kernel::active_vm().unwrap();
-    vm.show_pagetable(0x17000000);
+    // vm.show_pagetable(0x17000000);
     let sp = cpu_stack() + CPU_STACK_SIZE;
     let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
 

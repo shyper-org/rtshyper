@@ -2,8 +2,10 @@ use super::Vm;
 use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
 use crate::kernel::{cpu_id, interrupt_cpu_ipi_send, CPU_IF_LIST};
+use crate::vmm::VmmEvent;
 use alloc::vec::Vec;
 use spin::Mutex;
+use crate::device::BlkIov;
 
 #[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
@@ -52,6 +54,23 @@ pub struct IpiEthernetMsg {
     pub trgt_vmid: usize,
 }
 
+#[derive(Copy, Clone)]
+pub struct IpiVmmMsg {
+    pub vmid: usize,
+    pub event: VmmEvent,
+}
+
+
+#[derive(Clone)]
+pub struct IpiMediatedMsg {
+    pub src_id: usize,
+    pub req_type: usize,
+    pub blk_id: usize,
+    pub sector: usize,
+    pub count: usize,
+    pub iov_list: Vec<BlkIov>,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum IpiType {
     IpiTIntc = 0,
@@ -59,13 +78,17 @@ pub enum IpiType {
     IpiTEthernetMsg = 2,
     IpiTEthernetAck = 3,
     IpiTHvc = 4,
+    IpiTVMM = 5,
+    IpiTMediatedDev = 6,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum IpiInnerMsg {
     Initc(IpiInitcMessage),
     Power(IpiPowerMessage),
     EnternetMsg(IpiEthernetMsg),
+    VmmMsg(IpiVmmMsg),
+    MediatedMsg(IpiMediatedMsg),
     None,
 }
 
@@ -75,6 +98,7 @@ pub struct IpiMessage {
 }
 
 const IPI_HANDLER_MAX: usize = 16;
+
 pub type IpiHandlerFunc = fn(&IpiMessage);
 
 pub struct IpiHandler {
@@ -172,7 +196,7 @@ pub fn ipi_intra_broadcast_msg(vm: Vm, ipi_type: IpiType, msg: IpiInnerMsg) -> b
     while n < (vm.cpu_num() - 1) {
         if ((1 << i) & vm.ncpu()) != 0 && i != cpu_id() {
             n += 1;
-            if !ipi_send_msg(i, ipi_type, msg) {
+            if !ipi_send_msg(i, ipi_type, msg.clone()) {
                 println!(
                     "ipi_intra_broadcast_msg: Failed to send ipi request, cpu {} type {}",
                     i, ipi_type as usize

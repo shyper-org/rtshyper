@@ -12,7 +12,6 @@ extern crate lazy_static;
 
 #[macro_use]
 extern crate alloc;
-#[macro_use]
 extern crate log;
 // extern crate rlibc;
 
@@ -38,8 +37,7 @@ mod mm;
 mod panic;
 mod vmm;
 
-use board::platform_blk_init;
-use device::init_vm0_dtb;
+use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
@@ -62,20 +60,23 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         #[cfg(feature = "tx2")]
         println!("Welcome to TX2 Sybilla Hypervisor!");
         #[cfg(feature = "qemu")]
-        println!(
-            "Welcome to Qemu Sybilla 
-        Hypervisor!"
-        );
+        println!("Welcome to Qemu Sybilla Hypervisor!");
         heap_init();
         mem_init();
         // kernel::logger_init();
         init_vm0_dtb(dtb);
+        mediated_dev_init();
     }
     cpu_init();
     interrupt_init();
     timer_init();
 
     vmm_init();
+
+    if cpu_id != 0 {
+        crate::kernel::cpu_idle();
+    }
+    println!("Start booting Manager VM ...");
     vmm_boot();
 
     loop {}

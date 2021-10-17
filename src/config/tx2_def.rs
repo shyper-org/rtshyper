@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 1;
+    vm_config.vm_num = 2;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -30,23 +30,26 @@ pub fn config_init() {
         irq_id: 0,
         cfg_list: Vec::new(),
         emu_type: EmuDeviceType::EmuDeviceTGicd,
+        mediated: false,
     });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a000000"),
-        base_ipa: 0xa000000,
-        length: 0x1000,
-        irq_id: 32 + 0x10,
-        cfg_list: vec![DISK_PARTITION_1_START, DISK_PARTITION_1_SIZE],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a002000"),
-        base_ipa: 0xa002000,
-        length: 0x1000,
-        irq_id: 32 + 0x12,
-        cfg_list: vec![DISK_PARTITION_0_START, DISK_PARTITION_0_SIZE],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_mmio@a000000"),
+    //     base_ipa: 0xa000000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x10,
+    //     cfg_list: vec![DISK_PARTITION_1_START, DISK_PARTITION_1_SIZE],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    //     mediated: false,
+    // });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_mmio@a002000"),
+    //     base_ipa: 0xa002000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x12,
+    //     cfg_list: vec![DISK_PARTITION_0_START, DISK_PARTITION_0_SIZE],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    //     mediated: false,
+    // });
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some("virtio_mmio@a001000"),
         base_ipa: 0xa001000,
@@ -54,6 +57,7 @@ pub fn config_init() {
         irq_id: 32 + 0x11,
         cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
         emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
     });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
     //     name: Some("shyper"),
@@ -247,11 +251,12 @@ pub fn config_init() {
             pa: 0x03440000,
             length: 0x1000,
         },
-        PassthroughRegion {
-            ipa: 0x03460000,
-            pa: 0x03460000,
-            length: 0x140000,
-        },
+        // emmc blk
+        // PassthroughRegion {
+        //     ipa: 0x03460000,
+        //     pa: 0x03460000,
+        //     length: 0x140000,
+        // },
         PassthroughRegion {
             ipa: 0x03500000,
             pa: 0x03500000,
@@ -581,12 +586,12 @@ pub fn config_init() {
             region: Some(vm_region),
         },
         image: VmImageConfig {
-            kernel_name: Some("L4T"),
+            // kernel_name: Some("L4T"),
             kernel_load_ipa: 0x90080000,
             kernel_entry_point: 0x90080000,
-            device_tree_filename: Some("virt113.bin"),
+            // device_tree_filename: Some("virt113.bin"),
             device_tree_load_ipa: 0x90000000,
-            ramdisk_filename: None,
+            // ramdisk_filename: None,
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig {
@@ -597,37 +602,55 @@ pub fn config_init() {
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: None,
-        cmdline: "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/mmcblk0p1 rw audit=0\0",
+        cmdline:
+        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0\0",
     }));
 
     // vm1 emu
-    // let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("intc@8000000"),
-    //     base_ipa: 0x8000000,
-    //     length: 0x1000,
-    //     irq_id: 0,
-    //     cfg_list: Vec::new(),
-    //     emu_type: EmuDeviceType::EmuDeviceTGicd,
-    // });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("virtio_mmio@a000000"),
-    //     base_ipa: 0xa000000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x10,
-    //     cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-    // });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("virtio_mmio@a001000"),
-    //     base_ipa: 0xa001000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x11,
-    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-    // });
+    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("intc@8000000"),
+        base_ipa: 0x8000000,
+        length: 0x1000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTGicd,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_mmio@a000000"),
+        base_ipa: 0xa000000,
+        length: 0x1000,
+        irq_id: 32 + 0x10,
+        cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+        mediated: true,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_mmio@a001000"),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
 
-    // // vm1 passthrough
+    // vm1 passthrough
+    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
+    pt_dev_config.regions = vec![
+        PassthroughRegion {
+            ipa: UART_1_ADDR,
+            pa: UART_1_ADDR,
+            length: 0x1000,
+        },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: PLATFORM_GICV_BASE,
+            length: 0x2000,
+        },
+    ];
+    pt_dev_config.irqs = vec![UART_1_INT, 27];
     // let mut pt_dev_config: Vec<VmPassthroughDeviceConfig> = Vec::new();
     // pt_dev_config.push(VmPassthroughDeviceConfig {
     //     name: Some("serial@3100000"),
@@ -644,54 +667,76 @@ pub fn config_init() {
     //     irq_list: vec![27],
     // });
 
-    // // vm1 vm_region
-    // let mut vm_region: Vec<VmRegion> = Vec::new();
-    // vm_region.push(VmRegion {
-    //     ipa_start: 0x80000000,
-    //     length: 0x40000000,
-    // });
+    // vm1 vm_region
+    let mut vm_region: Vec<VmRegion> = Vec::new();
+    vm_region.push(VmRegion {
+        ipa_start: 0x80000000,
+        length: 0x40000000,
+    });
 
-    // let mut vm_dtb_devs: Vec<VmDtbDev>;
-    // vm_dtb_devs.push(VmDtbDev {
-    //     dev_type: DtbDevType::DevGicd,
-    //     irqs: vec![],
-    //     addr_region: AddrRegions {
-    //         ipa: 0x8000000,
-    //         length: 0x1000,
-    //     },
-    // });
-    // vm_dtb_devs.push(VmDtbDev {
-    //     dev_type: DtbDevType::DevGicc,
-    //     irqs: vec![],
-    //     addr_region: AddrRegions {
-    //         ipa: 0x8010000,
-    //         length: 0x2000,
-    //     },
-    // });
+    let mut vm_dtb_devs: Vec<VmDtbDev> = vec![];
+    vm_dtb_devs.push(VmDtbDev {
+        name: "gicd",
+        dev_type: DtbDevType::DevGicd,
+        irqs: vec![],
+        addr_region: AddrRegions {
+            ipa: 0x8000000,
+            length: 0x1000,
+        },
+    });
+    vm_dtb_devs.push(VmDtbDev {
+        name: "gicc",
+        dev_type: DtbDevType::DevGicc,
+        irqs: vec![],
+        addr_region: AddrRegions {
+            ipa: 0x8010000,
+            length: 0x2000,
+        },
+    });
+    vm_dtb_devs.push(VmDtbDev {
+        name: "serial",
+        dev_type: DtbDevType::DevSerial,
+        irqs: vec![UART_1_INT],
+        addr_region: AddrRegions {
+            ipa: UART_1_ADDR,
+            length: 0x1000,
+        },
+    });
+    vm_dtb_devs.push(VmDtbDev {
+        name: "virtio_blk@a000000",
+        dev_type: DtbDevType::DevVirtio,
+        irqs: vec![0x20 + 0x10],
+        addr_region: AddrRegions {
+            ipa: 0xa000000,
+            length: 0x1000,
+        },
+    });
 
-    // // vm1 config
-    // vm_config.entries.push(Arc::new(VmConfigEntry {
-    //     name: Some("guest-os-0"),
-    //     os_type: VmType::VmTOs,
-    //     memory: VmMemoryConfig {
-    //         num: 1,
-    //         region: Some(vm_region),
-    //     },
-    //     image: VmImageConfig {
-    //         kernel_name: Some("Vanilla"),
-    //         kernel_load_ipa: 0x88080000,
-    //         kernel_entry_point: 0x88080000,
-    //         device_tree_filename: Some("virt213.bin"),
-    //         device_tree_load_ipa: 0x82000000,
-    //         ramdisk_filename: None,
-    //         ramdisk_load_ipa: 0,
-    //     },
-    //     cpu: VmCpuConfig {
-    //         num: 2,
-    //         allocate_bitmap: 0b1100,
-    //         master: -1,
-    //     },
-    //     vm_emu_dev_confg: Some(emu_dev_config),
-    //     vm_pt_dev_confg: Some(pt_dev_config),
-    // }));
+    // vm1 config
+    vm_config.entries.push(Arc::new(VmConfigEntry {
+        name: Some("guest-os-0"),
+        os_type: VmType::VmTOs,
+        memory: VmMemoryConfig {
+            num: 1,
+            region: Some(vm_region),
+        },
+        image: VmImageConfig {
+            // kernel_name: Some("Vanilla"),
+            kernel_load_ipa: 0x80080000,
+            kernel_entry_point: 0x80080000,
+            // device_tree_filename: Some("virt213.bin"),
+            device_tree_load_ipa: 0x80000000,
+            // ramdisk_filename: None,
+            ramdisk_load_ipa: 0,//0x83000000,
+        },
+        cpu: VmCpuConfig {
+            num: 1,
+            allocate_bitmap: 0b1000,
+            master: -1,
+        },
+        vm_emu_dev_confg: Some(emu_dev_config),
+        vm_pt_dev_confg: Some(pt_dev_config),
+        vm_dtb_devs: Some(vm_dtb_devs),
+        cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
+    }));
 }

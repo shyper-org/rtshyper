@@ -1,4 +1,6 @@
+use crate::arch::PAGE_SIZE;
 use crate::config::VmEmulatedDeviceConfig;
+// use crate::device::add_mediated_dev;
 use crate::device::{ethernet_ipi_rev_handler, net_features, NetDesc};
 use crate::device::{BlkDesc, VirtioBlkReq, BLOCKIF_IOV_MAX};
 use crate::kernel::{ipi_register, IpiType};
@@ -16,6 +18,7 @@ pub enum VirtioDeviceType {
 }
 
 use crate::device::{BlkStat, NicStat};
+
 #[derive(Clone)]
 pub enum DevStat {
     BlkStat(BlkStat),
@@ -48,9 +51,14 @@ impl VirtDev {
         }
     }
 
-    pub fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
+    pub fn init(
+        &self,
+        dev_type: VirtioDeviceType,
+        config: &VmEmulatedDeviceConfig,
+        mediated: bool,
+    ) {
         let mut inner = self.inner.lock();
-        inner.init(dev_type, config);
+        inner.init(dev_type, config, mediated);
     }
 
     pub fn features(&self) -> usize {
@@ -112,6 +120,7 @@ pub struct VirtDevInner {
 }
 
 use crate::kernel::mem_pages_alloc;
+
 impl VirtDevInner {
     pub fn default() -> VirtDevInner {
         VirtDevInner {
@@ -128,7 +137,12 @@ impl VirtDevInner {
     }
 
     // virtio_dev_init
-    pub fn init(&mut self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
+    pub fn init(
+        &mut self,
+        dev_type: VirtioDeviceType,
+        config: &VmEmulatedDeviceConfig,
+        mediated: bool,
+    ) {
         self.dev_type = dev_type;
         self.int_id = config.irq_id;
 
@@ -143,13 +157,19 @@ impl VirtDevInner {
 
                 let blk_req = VirtioBlkReq::default();
                 blk_req.set_start(config.cfg_list[0]);
+                blk_req.set_mediated(mediated);
                 blk_req.set_size(config.cfg_list[1]);
                 self.req = DevReq::BlkReq(blk_req);
 
                 match mem_pages_alloc(BLOCKIF_IOV_MAX) {
                     Ok(page_frame) => {
                         // println!("PageFrame pa {:x}", page_frame.pa());
-                        self.cache = Some(page_frame);
+                        self.cache = Some(page_frame.clone());
+                        // if mediated {
+                        //     // todo: change to iov ring
+                        //     let cache_size = BLOCKIF_IOV_MAX * PAGE_SIZE;
+                        //     add_mediated_dev(0, page_frame.pa(), cache_size);
+                        // }
                     }
                     Err(_) => {
                         println!("VirtDevInner::init(): mem_pages_alloc failed");

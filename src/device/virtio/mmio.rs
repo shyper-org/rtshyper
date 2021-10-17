@@ -143,9 +143,14 @@ impl VirtioMmio {
         inner.reg_init(dev_type);
     }
 
-    pub fn dev_init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
+    pub fn dev_init(
+        &self,
+        dev_type: VirtioDeviceType,
+        config: &VmEmulatedDeviceConfig,
+        mediated: bool,
+    ) {
         let inner = self.inner.lock();
-        inner.dev.init(dev_type, config);
+        inner.dev.init(dev_type, config, mediated)
     }
 
     // virtio_dev_reset
@@ -289,6 +294,7 @@ impl VirtioMmio {
         return vq.call_notify_handler(self.clone());
     }
 }
+
 struct VirtioMmioInner {
     id: usize,
     driver_features: usize,
@@ -297,6 +303,7 @@ struct VirtioMmioInner {
     dev: VirtDev,
 
     vq: Vec<Virtq>,
+    mediated: bool,
 }
 
 impl VirtioMmioInner {
@@ -308,6 +315,7 @@ impl VirtioMmioInner {
             regs: VirtMmioRegs::default(),
             dev: VirtDev::default(),
             vq: Vec::new(),
+            mediated: false,
         }
     }
 
@@ -573,7 +581,7 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
     }
 }
 
-pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
+pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
     let mut virt_dev_type: VirtioDeviceType = VirtioDeviceType::None;
     let vm_cfg = vm.config();
     let mmio = VirtioMmio::new(emu_dev_id);
@@ -596,6 +604,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize) -> bool {
     mmio.dev_init(
         virt_dev_type,
         &vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id],
+        mediated,
     );
     // no need to set vm_if_list
     mmio.virtio_queue_init(virt_dev_type);

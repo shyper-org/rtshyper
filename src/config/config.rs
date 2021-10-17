@@ -23,6 +23,7 @@ pub struct VmEmulatedDeviceConfig {
     pub irq_id: usize,
     pub cfg_list: Vec<usize>,
     pub emu_type: EmuDeviceType,
+    pub mediated: bool,
 }
 
 #[derive(Default)]
@@ -76,12 +77,12 @@ impl VmMemoryConfig {
 }
 
 pub struct VmImageConfig {
-    pub kernel_name: Option<&'static str>,
+    // pub kernel_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
     pub kernel_entry_point: usize,
-    pub device_tree_filename: Option<&'static str>,
+    // pub device_tree_filename: Option<&'static str>,
     pub device_tree_load_ipa: usize,
-    pub ramdisk_filename: Option<&'static str>,
+    // pub ramdisk_filename: Option<&'static str>,
     pub ramdisk_load_ipa: usize,
 }
 
@@ -89,12 +90,12 @@ impl VmImageConfig {
     #[allow(dead_code)]
     pub const fn default() -> VmImageConfig {
         VmImageConfig {
-            kernel_name: None,
+            // kernel_name: None,
             kernel_load_ipa: 0,
             kernel_entry_point: 0,
-            device_tree_filename: None,
+            // device_tree_filename: None,
             device_tree_load_ipa: 0,
-            ramdisk_filename: None,
+            // ramdisk_filename: None,
             ramdisk_load_ipa: 0,
         }
     }

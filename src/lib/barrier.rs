@@ -4,19 +4,20 @@ global_asm!(include_str!("../arch/aarch64/barrier.S"));
 use crate::board::PLAT_DESC;
 
 #[repr(C)]
-struct CpuSynctoken {
+struct CpuSyncToken {
     lock: u32,
     n: usize,
     count: usize,
     ready: bool,
 }
 
-static mut CPU_GLB_SYNC: CpuSynctoken = CpuSynctoken {
+static mut CPU_GLB_SYNC: CpuSyncToken = CpuSyncToken {
     lock: 0,
     n: PLAT_DESC.cpu_desc.num,
     count: 0,
     ready: true,
 };
+
 use crate::lib::round_up;
 
 extern "C" {

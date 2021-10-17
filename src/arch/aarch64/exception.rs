@@ -1,9 +1,8 @@
 use crate::arch::ContextFrame;
-use crate::arch::{data_abort_handler, smc_handler};
+use crate::arch::{data_abort_handler, hvc_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
 use crate::kernel::{active_vm_id, clear_cpu_ctx, cpu_id, set_cpu_ctx};
-use cortex_a::registers::*;
 use tock_registers::interfaces::*;
 
 global_asm!(include_str!("exception.S"));
@@ -138,7 +137,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             smc_handler();
         }
         0x16 => {
-            unimplemented!();
+            hvc_handler();
         }
         _ => {
             panic!(

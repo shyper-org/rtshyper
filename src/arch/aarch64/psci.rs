@@ -2,15 +2,15 @@ use super::smc::smc_call;
 use crate::arch::Aarch64ContextFrame;
 use crate::kernel::context_set_gpr;
 use crate::kernel::{
-    active_vcpu, active_vcpu_id, active_vm_id, cpu_ctx, cpu_id, set_cpu_assign, set_cpu_ctx,
-    set_cpu_state, CpuState,
+    active_vcpu, active_vcpu_id, active_vm_id, cpu_ctx, cpu_id, set_cpu_assign, set_cpu_state, CpuState,
 };
+use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 
 pub const PSCI_VERSION: usize = 0x84000000;
 pub const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
 pub const PSCI_FEATURES: usize = 0x8400000A;
-pub const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
-pub const PSCI_CPU_OFF: usize = 0xc4000002;
+// pub const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
+// pub const PSCI_CPU_OFF: usize = 0xc4000002;
 pub const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
 pub const PSCI_AFFINITY_INFO_AARCH64: usize = 0xc4000004;
 
@@ -23,7 +23,7 @@ const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
 pub const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
 pub fn power_arch_init() {
-    use crate::kernel::{ipi_register, IpiType};
+    use crate::kernel::ipi_register;
     if !ipi_register(IpiType::IpiTPower, psci_ipi_handler) {
         panic!("power_arch_init: failed to register ipi IpiTPower");
     }
@@ -112,6 +112,7 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
 }
 
 use crate::kernel::IpiMessage;
+
 pub fn psci_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::Power(power_msg) => match power_msg.event {
@@ -144,7 +145,7 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
     }
 }
 
-use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
+
 pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let vcpu_id = mpidr & 0xff;
     let vm = active_vm().unwrap();
@@ -155,13 +156,13 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         return usize::MAX - 1;
     }
     #[cfg(feature = "tx2")]
-    {
-        let cluster = (mpidr >> 8) & 0xff;
-        if vm.vm_id() == 0 && cluster != 1 {
-            println!("psci_guest_cpu_on: L4T only support cluster #1");
-            return usize::MAX - 1;
+        {
+            let cluster = (mpidr >> 8) & 0xff;
+            if vm.vm_id() == 0 && cluster != 1 {
+                println!("psci_guest_cpu_on: L4T only support cluster #1");
+                return usize::MAX - 1;
+            }
         }
-    }
 
     let m = IpiPowerMessage {
         event: PowerEvent::PsciIpiCpuOn,

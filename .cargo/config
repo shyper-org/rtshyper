@@ -1,2 +1,2 @@
 [build]
-target = "aarch64.json"
+target = "aarch64-tx2.json"

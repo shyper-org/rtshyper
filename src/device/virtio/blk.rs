@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::kernel::vm_ipa2pa;
+use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm_ipa2pa};
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
@@ -19,12 +19,12 @@ pub const BLOCKIF_IOV_MAX: usize = 64;
 /* BLOCK REQUEST TYPE*/
 pub const VIRTIO_BLK_T_IN: usize = 0;
 pub const VIRTIO_BLK_T_OUT: usize = 1;
-pub const VIRTIO_BLK_T_FLUSH: usize = 4;
+// pub const VIRTIO_BLK_T_FLUSH: usize = 4;
 pub const VIRTIO_BLK_T_GET_ID: usize = 8;
 
 /* BLOCK REQUEST STATUS*/
 pub const VIRTIO_BLK_S_OK: usize = 0;
-pub const VIRTIO_BLK_S_IOERR: usize = 1;
+// pub const VIRTIO_BLK_S_IOERR: usize = 1;
 pub const VIRTIO_BLK_S_UNSUPP: usize = 2;
 
 #[repr(C)]
@@ -145,9 +145,10 @@ impl BlkDescInner {
 }
 
 #[repr(C)]
-struct BlkIov {
-    data_bg: usize,
-    len: u32,
+#[derive(Clone)]
+pub struct BlkIov {
+    pub data_bg: usize,
+    pub len: u32,
 }
 
 #[repr(C)]
@@ -176,6 +177,16 @@ impl VirtioBlkReq {
     pub fn set_size(&self, size: usize) {
         let mut inner = self.inner.lock();
         inner.set_size(size);
+    }
+
+    pub fn set_mediated(&self, mediated: bool) {
+        let mut inner = self.inner.lock();
+        inner.mediated = mediated;
+    }
+
+    pub fn mediated(&self) -> bool {
+        let inner = self.inner.lock();
+        inner.mediated
     }
 
     pub fn reset_blk_iov(&self) {
@@ -254,6 +265,7 @@ struct VirtioBlkReqInner {
     iov: Vec<BlkIov>,
     iov_total: usize,
     region: BlkReqRegion,
+    mediated: bool,
 }
 
 impl VirtioBlkReqInner {
@@ -265,6 +277,7 @@ impl VirtioBlkReqInner {
             iov: Vec::new(),
             iov_total: 0,
             region: BlkReqRegion { start: 0, size: 0 },
+            mediated: false,
         }
     }
 
@@ -277,8 +290,8 @@ impl VirtioBlkReqInner {
     }
 }
 
-use crate::board::{platform_blk_read, platform_blk_write};
 use crate::lib::memcpy;
+
 pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     // println!("blk req handler");
     let sector = req.sector();
@@ -300,8 +313,27 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     }
     match req.req_type() as usize {
         VIRTIO_BLK_T_IN => {
-            todo!();
-            // platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
+            if req.mediated() {
+                let mut iov_list = Vec::new();
+                for iov_idx in 0..req.iovn() {
+                    iov_list.push(BlkIov {
+                        data_bg: req.iov_data_bg(iov_idx),
+                        len: req.iov_len(iov_idx),
+                    });
+                }
+                let m = IpiMediatedMsg {
+                    src_id: active_vm().unwrap().vm_id(),
+                    req_type: VIRTIO_BLK_T_IN,
+                    blk_id: 0,
+                    sector: sector + region_start,
+                    count: req.iov_total() / SECTOR_BSIZE,
+                    iov_list: iov_list,
+                };
+                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
+            } else {
+                todo!();
+                // platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
+            }
             for iov_idx in 0..req.iovn() {
                 let data_bg = req.iov_data_bg(iov_idx);
                 let len = req.iov_len(iov_idx) as usize;
@@ -316,8 +348,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                     println!("blk_req_handler: read len < SECTOR_BSIZE");
                     return 0;
                 }
-                unsafe {
-                    memcpy(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                if !req.mediated() {
+                    unsafe {
+                        memcpy(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                    }
                 }
                 cache_ptr += len;
                 total_byte += len;
@@ -335,14 +369,35 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                     println!("blk_req_handler: read len < SECTOR_BSIZE");
                     return 0;
                 }
-                unsafe {
-                    memcpy(cache_ptr as *mut u8, data_bg as *mut u8, len);
+                if !req.mediated() {
+                    unsafe {
+                        memcpy(cache_ptr as *mut u8, data_bg as *mut u8, len);
+                    }
                 }
                 cache_ptr += len;
                 total_byte += len;
             }
-            todo!();
-            // platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
+            if req.mediated() {
+                let mut iov_list = Vec::new();
+                for iov_idx in 0..req.iovn() {
+                    iov_list.push(BlkIov {
+                        data_bg: req.iov_data_bg(iov_idx),
+                        len: req.iov_len(iov_idx),
+                    });
+                }
+                let m = IpiMediatedMsg {
+                    src_id: active_vm().unwrap().vm_id(),
+                    req_type: VIRTIO_BLK_T_OUT,
+                    blk_id: 0,
+                    sector: sector + region_start,
+                    count: req.iov_total() / SECTOR_BSIZE,
+                    iov_list: iov_list,
+                };
+                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
+            } else {
+                todo!();
+                // platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
+            }
         }
         VIRTIO_BLK_T_GET_ID => {
             let data_bg = req.iov_data_bg(0);
@@ -361,6 +416,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
 }
 
 use crate::device::{VirtioMmio, Virtq};
+
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
     // println!("in virtio_blk_notify_handler");
     use crate::kernel::active_vm;
@@ -371,6 +427,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         return false;
     }
 
+    // let mediated = blk.mediated();
     let dev = blk.dev();
     let req = match dev.req() {
         super::DevReq::BlkReq(blk_req) => blk_req,
@@ -426,7 +483,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
                     // println!("data handler");
                     if (vq.desc_flags(next_desc_idx) & 0x2) as u32 >> 1 == req.req_type() {
                         println!(
-                            "Failed to get virt blk queue desc data, idx = {}, req.type = {}, desc.flags = {}", 
+                            "Failed to get virt blk queue desc data, idx = {}, req.type = {}, desc.flags = {}",
                             next_desc_idx, req.req_type(), vq.desc_flags(next_desc_idx)
                         );
                         vq.notify(dev.int_id());
@@ -512,7 +569,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
         next_desc_idx_opt = vq.pop_avail_desc_idx();
     }
 
-    if vq.avail_flags() == 0 && process_count > 0 {
+    if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
         vq.notify(dev.int_id());
     }
 
