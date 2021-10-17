@@ -551,19 +551,23 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
         let value;
         match offset {
             VIRTIO_MMIO_CONFIG_GENERATION => {
+                println!("generation");
                 value = mmio.dev().generation() as u32;
             }
-            VIRTIO_MMIO_CONFIG..=0x1ff => match mmio.dev().desc() {
-                super::DevDesc::BlkDesc(blk_desc) => {
-                    value = blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
+            VIRTIO_MMIO_CONFIG..=0x1ff => {
+                println!("config");
+                match mmio.dev().desc() {
+                    super::DevDesc::BlkDesc(blk_desc) => {
+                        value = blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
+                    }
+                    super::DevDesc::NetDesc(net_desc) => {
+                        value = net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
+                    }
+                    _ => {
+                        panic!("unknow desc type");
+                    }
                 }
-                super::DevDesc::NetDesc(net_desc) => {
-                    value = net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
-                }
-                _ => {
-                    panic!("unknow desc type");
-                }
-            },
+            }
             _ => {
                 println!(
                     "virtio_mmio_cfg_access: wrong reg write 0x{:x}",
@@ -613,7 +617,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
 }
 
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
-    // println!("emu_virtio_mmio_handler");
+    println!("emu_virtio_mmio_handler");
     let vm = match active_vm() {
         Some(vm) => vm,
         None => {
@@ -639,26 +643,26 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
         let q_sel = mmio.q_sel();
-        // println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
+        println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
         if !mmio.notify_handler(q_sel as usize) {
             println!("Failed to handle virtio mmio request!");
         }
     } else if offset == VIRTIO_MMIO_INTERRUPT_STATUS && !write {
-        // println!("in VIRTIO_MMIO_INTERRUPT_STATUS");
+        println!("in VIRTIO_MMIO_INTERRUPT_STATUS");
         context_set_gpr(emu_ctx.reg, mmio.irt_stat() as usize);
     } else if offset == VIRTIO_MMIO_INTERRUPT_ACK && write {
-        // println!("in VIRTIO_MMIO_INTERRUPT_ACK");
+        println!("in VIRTIO_MMIO_INTERRUPT_ACK");
         mmio.set_irt_ack(context_get_gpr(emu_ctx.reg) as u32);
     } else if (VIRTIO_MMIO_MAGIC_VALUE <= offset && offset <= VIRTIO_MMIO_GUEST_FEATURES_SEL)
         || offset == VIRTIO_MMIO_STATUS
     {
-        // println!("in virtio_mmio_prologue_access");
+        println!("in virtio_mmio_prologue_access");
         virtio_mmio_prologue_access(mmio.clone(), emu_ctx, offset, write);
     } else if VIRTIO_MMIO_QUEUE_SEL <= offset && offset <= VIRTIO_MMIO_QUEUE_USED_HIGH {
-        // println!("in virtio_mmio_queue_access");
+        println!("in virtio_mmio_queue_access");
         virtio_mmio_queue_access(mmio.clone(), emu_ctx, offset, write);
     } else if VIRTIO_MMIO_CONFIG_GENERATION <= offset && offset <= VIRTIO_MMIO_REGS_END {
-        // println!("in virtio_mmio_cfg_access");
+        println!("in virtio_mmio_cfg_access");
         virtio_mmio_cfg_access(mmio.clone(), emu_ctx, offset, write);
     } else {
         println!(

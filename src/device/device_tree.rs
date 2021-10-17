@@ -224,7 +224,7 @@ fn create_virtio_node(
     let virtio = fdt.begin_node(name)?;
     fdt.property_null("dma-coherent");
     fdt.property_string("compatible", "virtio,mmio")?;
-    fdt.property_array_u32("interrupts", &[0, irq as u32, 0x1]);
+    fdt.property_array_u32("interrupts", &[0, irq as u32 - 32, 0x1]);
     fdt.property_array_u64("reg", &[address as u64, 0x400]);
     fdt.end_node(virtio)?;
 
