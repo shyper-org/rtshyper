@@ -96,6 +96,7 @@ pub struct MediatedBlkReq {
 }
 
 pub fn mediated_dev_init() {
+    println!("register meidated ipi");
     if !ipi_register(IpiType::IpiTMediatedDev, mediated_ipi_handler) {
         panic!("mediated_dev_init: failed to register ipi IpiTMediatedDev", );
     }
@@ -120,6 +121,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
 }
 
 pub fn mediated_ipi_handler(msg: &IpiMessage) {
+    println!("vm {} mediated_ipi_handler", active_vm_id());
     match &msg.ipi_message {
         IpiInnerMsg::MediatedMsg(mediated_msg) => {
             match mediated_msg.req_type {
@@ -168,11 +170,10 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
 
     let med_read_msg = HvcGuestMsg {
         fid: 3,     // HVC_MEDIATED
-        event: 50,  // HVC_MEDIATED_DRV_NOTIFY
-        target_vm: 0,
-        arg: 0,
+        event: 50,  // HVC_MEDIATED_DEV_NOTIFY
     };
 
+    println!("mediated_blk_read send msg to vm0");
     if !hvc_send_msg_to_vm(0, &med_read_msg) {
         println!("mediated_blk_read: failed to notify VM 0");
     }
@@ -190,10 +191,9 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     let med_read_msg = HvcGuestMsg {
         fid: 3,     // HVC_MEDIATED
         event: 50,  // HVC_MEDIATED_DRV_NOTIFY
-        target_vm: 0,
-        arg: 0,
     };
 
+    println!("mediated_blk_write send msg to vm0");
     if !hvc_send_msg_to_vm(0, &med_read_msg) {
         println!("mediated_blk_read: failed to notify VM 0");
     }

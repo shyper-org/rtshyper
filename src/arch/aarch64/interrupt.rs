@@ -4,6 +4,7 @@ use crate::kernel::Vm;
 
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
 pub const INTERRUPT_IRQ_IPI: usize = 1;
+
 use crate::board::platform_cpuid_to_cpuif;
 
 pub fn interrupt_arch_init() {
@@ -46,13 +47,13 @@ pub fn interrupt_arch_enable(int_id: usize, en: bool) {
 
 pub fn interrupt_arch_ipi_send(cpu_id: usize, ipi_id: usize) {
     if ipi_id < GIC_SGIS_NUM {
+        println!("interrupt_arch_ipi_send: send ipi to cpu {}", cpu_id);
         GICD.send_sgi(platform_cpuid_to_cpuif(cpu_id), ipi_id);
     }
 }
 
-use super::vgic_set_hw_int;
 pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
-    vgic_set_hw_int(vm.clone(), id);
+    super::vgic_set_hw_int(vm.clone(), id);
 }
 
 pub fn interrupt_arch_vm_inject(vm: Vm, id: usize, source: usize) {

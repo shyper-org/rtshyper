@@ -551,11 +551,9 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
         let value;
         match offset {
             VIRTIO_MMIO_CONFIG_GENERATION => {
-                println!("generation");
                 value = mmio.dev().generation() as u32;
             }
             VIRTIO_MMIO_CONFIG..=0x1ff => {
-                println!("config");
                 match mmio.dev().desc() {
                     super::DevDesc::BlkDesc(blk_desc) => {
                         value = blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);

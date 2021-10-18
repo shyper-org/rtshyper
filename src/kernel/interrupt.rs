@@ -1,5 +1,5 @@
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
-use crate::kernel::Vm;
+use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::kernel::{cpu_id, ipi_irq_handler};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
@@ -45,7 +45,7 @@ pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
         let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
         irq_handler_lock[int_id] = handler;
         hyper_bitmap_lock.set(int_id);
-        glb_bitmap_lock.set(int_id);
+        glb_bitmap_lock.set(int_id)
     }
 }
 
@@ -69,12 +69,32 @@ pub fn interrupt_init() {
             INTERRUPT_IRQ_IPI,
             InterruptHandler::IpiIrqHandler(ipi_irq_handler),
         );
+
+        use crate::arch::vgic_ipi_handler;
+        if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
+            panic!(
+                "interrupt_init: failed to register intc ipi {}",
+                IpiType::IpiTIntc as usize
+            )
+        }
+        use crate::device::ethernet_ipi_rev_handler;
+        if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
+            panic!(
+                "interrupt_init: failed to register eth ipi {:?}",
+                IpiType::IpiTEthernetMsg,
+            );
+        }
+        if !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
+            panic!("vmm_init: failed to register ipi vmm");
+        }
         println!("Interrupt init ok");
     }
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
 
 use crate::arch::{interrupt_arch_vm_register, GIC_PRIVINT_NUM};
+use crate::vmm::vmm_ipi_handler;
+
 pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     // println!("VM {} register interrupt {}", vm.vm_id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
@@ -111,11 +131,15 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     }
 
     if interrupt_is_reserved(int_id) {
-        // println!("is reserved int {}", int_id);
-        let irq_handler = INTERRUPT_HANDLERS.lock();
-        match irq_handler[int_id] {
-            InterruptHandler::IpiIrqHandler(irq_handler) => {
-                irq_handler();
+        if int_id != 27 {
+            println!("is reserved int {}", int_id);
+        }
+        let irq_handler_list = INTERRUPT_HANDLERS.lock();
+        let irq_handler = irq_handler_list[int_id].clone();
+        drop(irq_handler_list);
+        match irq_handler {
+            InterruptHandler::IpiIrqHandler(ipi_handler) => {
+                ipi_handler();
             }
             InterruptHandler::GicMaintenanceHandler(maintenace_handler) => {
                 maintenace_handler(int_id, src);
@@ -127,6 +151,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                 unimplemented!();
             }
         }
+        drop(irq_handler);
         return true;
     } else {
         println!(

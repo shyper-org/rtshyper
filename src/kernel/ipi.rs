@@ -115,21 +115,26 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
-    // println!("Core[{}] ipi_irq_handler", cpu_id());
+    println!("Core[{}] ipi_irq_handler", cpu_id());
     let cpu_id = cpu_id();
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
     drop(cpu_if_list);
-    let ipi_handler_list = IPI_HANDLER_LIST.lock();
 
     while !msg.is_none() {
         let ipi_msg = msg.unwrap();
         let ipi_type = ipi_msg.ipi_type as usize;
-        if ipi_handler_list.len() <= ipi_type {
+
+        let ipi_handler_list = IPI_HANDLER_LIST.lock();
+        let len = ipi_handler_list.len();
+        let handler = ipi_handler_list[ipi_type].handler.clone();
+        drop(ipi_handler_list);
+
+        if len <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
-            // println!("ipi type is {:#?}", ipi_msg.ipi_type);
-            (ipi_handler_list[ipi_type].handler)(&ipi_msg);
+            println!("ipi type is {:#?}", ipi_msg.ipi_type);
+            handler(&ipi_msg);
         }
         let mut cpu_if_list = CPU_IF_LIST.lock();
         msg = cpu_if_list[cpu_id].pop();
@@ -142,7 +147,7 @@ pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) -> bool {
     for i in 0..ipi_handler_list.len() {
         if ipi_type as usize == ipi_handler_list[i].ipi_type as usize {
             println!("ipi_register: try to cover exist ipi handler");
-            return true;
+            return false;
         }
     }
 

@@ -1667,11 +1667,11 @@ impl Vgic {
                                     Some(ref interrupt) => {
                                         if (!has_pending
                                             && ((temp_state & 1 != 0)
-                                                && ((state & 2 != 0)
-                                                    || ((state & 1 != 0)
-                                                        && temp_int.prio() < interrupt.prio()))))
+                                            && ((state & 2 != 0)
+                                            || ((state & 1 != 0)
+                                            && temp_int.prio() < interrupt.prio()))))
                                             || (has_pending
-                                                && ((temp_state & 2 != 0) && (state & 1 != 0)))
+                                            && ((temp_state & 2 != 0) && (state & 1 != 0)))
                                             || (has_pending && temp_int.prio() < interrupt.prio())
                                         {
                                             let aux = interrupt.clone();
@@ -1963,7 +1963,8 @@ pub fn gic_maintenance_handler(arg: usize, source: usize) {
     // println!("end gic_maintenance_handler");
 }
 
-const VGICD_REG_OFFSET_PREFIX_CTLR: usize = 0x0; // same as TYPER & IIDR
+const VGICD_REG_OFFSET_PREFIX_CTLR: usize = 0x0;
+// same as TYPER & IIDR
 const VGICD_REG_OFFSET_PREFIX_ISENABLER: usize = 0x2;
 const VGICD_REG_OFFSET_PREFIX_ICENABLER: usize = 0x3;
 const VGICD_REG_OFFSET_PREFIX_ISPENDR: usize = 0x4;
@@ -2080,7 +2081,7 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
 }
 
 // use crate::lib::time_current_us;
-fn vgic_ipi_handler(msg: &IpiMessage) {
+pub fn vgic_ipi_handler(msg: &IpiMessage) {
     let vm_id;
     let int_id;
     let val;
@@ -2177,6 +2178,7 @@ fn vgic_ipi_handler(msg: &IpiMessage) {
 }
 
 use crate::device::EmuDevs;
+
 pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     let vgic_cpu_num = vm.config().cpu.num;
     let vgic = Arc::new(Vgic::default());
@@ -2211,12 +2213,12 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
 
     vm.set_emu_devs(emu_dev_id, EmuDevs::Vgic(vgic.clone()));
 
-    if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
-        panic!(
-            "emu_intc_init: failed to register ipi {}",
-            IpiType::IpiTIntc as usize
-        )
-    }
+    // if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
+    //     panic!(
+    //         "emu_intc_init: failed to register ipi {}",
+    //         IpiType::IpiTIntc as usize
+    //     )
+    // }
 }
 
 pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {

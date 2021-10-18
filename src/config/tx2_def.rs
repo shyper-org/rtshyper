@@ -59,14 +59,15 @@ pub fn config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
         mediated: false,
     });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("shyper"),
-    //     base_ipa: 0,
-    //     length: 0,
-    //     irq_id: 32 + 0x20,
-    //     cfg_list: Vec::new(),
-    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("shyper"),
+        base_ipa: 0,
+        length: 0,
+        irq_id: 32 + 0x20,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTShyper,
+        mediated: false,
+    });
 
     // vm0 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -603,7 +604,7 @@ pub fn config_init() {
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: None,
         cmdline:
-        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0\0",
+        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
     // vm1 emu

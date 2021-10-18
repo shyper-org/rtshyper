@@ -1,5 +1,5 @@
 use crate::arch::gicc_clear_current_irq;
-use crate::kernel::vcpu_pool_pop_through_vmid;
+use crate::kernel::{active_vm, vcpu_pool_pop_through_vmid, vm_ipa2pa};
 use crate::kernel::{active_vcpu, active_vm_id, vm_if_list_get_cpu_id, vm_num};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::vmm_boot;
@@ -31,6 +31,15 @@ pub fn vmm_boot_vm(vm_id: usize) {
             println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
         }
     }
+}
+
+pub fn get_vm_id(id_ipa: usize) -> bool {
+    let id_pa = vm_ipa2pa(active_vm().unwrap(), id_ipa);
+    if id_pa == 0 {
+        return false;
+    }
+    unsafe { *(id_pa as *mut usize) = active_vm_id(); }
+    true
 }
 
 pub fn vmm_ipi_handler(msg: &IpiMessage) {

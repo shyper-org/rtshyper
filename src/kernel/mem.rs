@@ -1,6 +1,6 @@
 use crate::arch::PAGE_SIZE;
 use crate::board::*;
-use crate::lib::round_up;
+use crate::lib::{memset, round_up};
 
 use super::mem_region::*;
 
@@ -30,7 +30,7 @@ fn mem_heap_region_init() {
 
     println!("init memory, please waiting...");
     unsafe {
-        // rlibc::memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
+        memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
         // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
     }
 

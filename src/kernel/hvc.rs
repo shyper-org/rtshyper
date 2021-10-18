@@ -1,5 +1,5 @@
 use core::mem::size_of;
-use crate::vmm::vmm_boot_vm;
+use crate::vmm::{get_vm_id, vmm_boot_vm};
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{active_vm_id, cpu_id, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::arch::PAGE_SIZE;
@@ -16,8 +16,6 @@ pub const HVC_IRQ: usize = 32 + 0x20;
 pub struct HvcGuestMsg {
     pub fid: usize,
     pub event: usize,
-    pub target_vm: usize,
-    pub arg: usize,
 }
 
 pub fn hvc_guest_handler(
@@ -63,34 +61,42 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> bool {
         // HVC_VMM_LIST_VM
         0 => {
             todo!();
+            true
         }
         // HVC_VMM_GET_VM_STATE
         1 => {
             todo!();
+            true
         }
         // HVC_VMM_BOOT_VM
         2 => {
             vmm_boot_vm(x0);
+            true
         }
         // HVC_VMM_SHUTDOWN_VM
         3 => {
             todo!();
+            true
         }
         // HVC_VMM_REBOOT_VM
         4 => {
             todo!();
+            true
+        }
+        // HVC_VMM_GET_VM_ID
+        8 => {
+            get_vm_id(x0)
         }
         _ => {
-            println!("unknown event {}", event);
-            return false;
+            println!("hvc_vmm unknown event {}", event);
+            false
         }
     }
-    true
 }
 
 fn hvc_ivc_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize) -> bool {
-    // HVC_IVC_UPDATE_MQ
     match event {
+        // HVC_IVC_UPDATE_MQ
         0 => {
             return ivc_update_mq(x0, x1);
         }
@@ -105,10 +111,12 @@ fn hvc_mediated_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize
     match event {
         // HVC_MEDIATED_DEV_APPEND
         48 => {
+            println!("mediated dev_append");
             mediated_dev_append(x0, x1);
         }
         // HVC_DEVICE_USER_NOTIFY
         49 => {
+            println!("mediated notify");
             mediated_blk_notify_handler(x0);
         }
         _ => {
@@ -124,7 +132,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
     let mut arg_ptr_addr = vm_if_list_ivc_arg_ptr(vm_id);
     let arg_addr = vm_if_list_ivc_arg(vm_id);
 
-    if arg_ptr_addr == 0 {
+    if arg_ptr_addr != 0 {
         arg_ptr_addr += PAGE_SIZE / VM_NUM_MAX;
         if arg_ptr_addr - arg_addr >= PAGE_SIZE {
             vm_if_list_set_ivc_arg_ptr(vm_id, arg_addr);

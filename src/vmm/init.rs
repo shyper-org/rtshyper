@@ -2,7 +2,7 @@ use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
 use crate::device::create_fdt;
-use crate::kernel::Vm;
+use crate::kernel::{HVC_IRQ, Vm};
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign,
     vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
@@ -153,19 +153,19 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-        {
-            use crate::arch::PAGE_SIZE;
-            let offset = config.device_tree_load_ipa
-                - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
-            unsafe {
-                let src = SYSTEM_FDT.get().unwrap();
-                let len = src.len();
-                let dst =
-                    core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                dst.clone_from_slice(&src);
+            {
+                use crate::arch::PAGE_SIZE;
+                let offset = config.device_tree_load_ipa
+                    - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                unsafe {
+                    let src = SYSTEM_FDT.get().unwrap();
+                    let len = src.len();
+                    let dst =
+                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                    dst.clone_from_slice(&src);
+                }
+                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
             }
-            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
-        }
     } else {
         println!(
             "VM {} id {} device tree not found",
@@ -219,6 +219,7 @@ use crate::arch::{emu_intc_handler, emu_intc_init};
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::EmuDeviceType::*;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
+
 fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm) -> bool {
     if config.is_none() {
         println!(
@@ -274,6 +275,9 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                 }
                 drop(vm_if_list);
             }
+            EmuDeviceTShyper => {
+                dev_name = "shyper";
+            }
             _ => {
                 println!("vmm_init_emulated_device: unknown emulated device");
                 return false;
@@ -294,6 +298,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
 use crate::arch::PTE_S2_DEVICE;
 use crate::config::VmPassthroughDeviceConfig;
 use crate::kernel::interrupt_vm_register;
+
 fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: Vm) -> bool {
     match config {
         Some(cfg) => {
@@ -347,6 +352,7 @@ unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                 "memory@90000000\0".as_ptr(),
             );
             fdt_add_timer(dtb, 0x8);
+            fdt_add_vm_service(dtb, HVC_IRQ as u32 - 0x20);
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
             fdt_setup_gic(
@@ -579,9 +585,9 @@ pub fn vmm_init() {
     }
     drop(vm_cfg_table);
 
-    if !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
-        panic!("vmm_init: failed to register ipi vmm");
-    }
+    // if cpu_id() == 0 && !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
+    //     panic!("vmm_init: failed to register ipi vmm");
+    // }
 
     if cpu_id() == 0 {
         println!("Sybilla Hypervisor init ok\n\nStart booting VMs ...");
@@ -591,6 +597,7 @@ pub fn vmm_init() {
 }
 
 use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle, vcpu_run};
+
 pub fn vmm_boot() {
     if cpu_assigned() && active_vcpu_id() == 0 {
         let vcpu_pool = cpu_vcpu_pool();

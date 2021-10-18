@@ -329,6 +329,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                     count: req.iov_total() / SECTOR_BSIZE,
                     iov_list: iov_list,
                 };
+                println!("blk_t_in before ipi_send_msg");
                 ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
             } else {
                 todo!();
@@ -393,6 +394,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                     count: req.iov_total() / SECTOR_BSIZE,
                     iov_list: iov_list,
                 };
+                println!("blk_t_out before ipi_send_msg");
                 ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
             } else {
                 todo!();

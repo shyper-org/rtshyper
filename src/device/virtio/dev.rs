@@ -184,12 +184,12 @@ impl VirtDevInner {
                 self.desc = DevDesc::NetDesc(net_desc);
 
                 self.features |= net_features();
-                if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
-                    panic!(
-                        "virtio_dev_init: failed to register ipi {:?}",
-                        IpiType::IpiTEthernetMsg,
-                    );
-                }
+                // if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
+                //     panic!(
+                //         "virtio_dev_init: failed to register ipi {:?}",
+                //         IpiType::IpiTEthernetMsg,
+                //     );
+                // }
                 // if !ipi_register(IpiType::IpiTEthernetAck, ethernet_ipi_ack_handler) {
                 //     panic!(
                 //         "virtio_dev_init: failed to register ipi {:?}",
