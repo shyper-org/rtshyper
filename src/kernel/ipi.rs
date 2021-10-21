@@ -6,6 +6,7 @@ use crate::vmm::VmmEvent;
 use alloc::vec::Vec;
 use spin::Mutex;
 use crate::device::BlkIov;
+use crate::device::{Virtq, VirtioMmio};
 
 #[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
@@ -64,11 +65,8 @@ pub struct IpiVmmMsg {
 #[derive(Clone)]
 pub struct IpiMediatedMsg {
     pub src_id: usize,
-    pub req_type: usize,
-    pub blk_id: usize,
-    pub sector: usize,
-    pub count: usize,
-    pub iov_list: Vec<BlkIov>,
+    pub vq: Virtq,
+    pub blk: VirtioMmio,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -80,6 +78,7 @@ pub enum IpiType {
     IpiTHvc = 4,
     IpiTVMM = 5,
     IpiTMediatedDev = 6,
+    IpiTMediatedNotify = 7,
 }
 
 #[derive(Clone)]
@@ -115,7 +114,6 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
-    println!("Core[{}] ipi_irq_handler", cpu_id());
     let cpu_id = cpu_id();
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
@@ -133,7 +131,7 @@ pub fn ipi_irq_handler() {
         if len <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
-            println!("ipi type is {:#?}", ipi_msg.ipi_type);
+            // println!("ipi type is {:#?}", ipi_msg.ipi_type);
             handler(&ipi_msg);
         }
         let mut cpu_if_list = CPU_IF_LIST.lock();

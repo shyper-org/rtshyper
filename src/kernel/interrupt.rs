@@ -131,9 +131,6 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     }
 
     if interrupt_is_reserved(int_id) {
-        if int_id != 27 {
-            println!("is reserved int {}", int_id);
-        }
         let irq_handler_list = INTERRUPT_HANDLERS.lock();
         let irq_handler = irq_handler_list[int_id].clone();
         drop(irq_handler_list);

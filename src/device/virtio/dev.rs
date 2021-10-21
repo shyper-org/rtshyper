@@ -105,6 +105,11 @@ impl VirtDev {
         let mut inner = self.inner.lock();
         inner.activated = activated;
     }
+
+    pub fn mediated(&self) -> bool {
+        let inner = self.inner.lock();
+        inner.mediated()
+    }
 }
 
 pub struct VirtDevInner {
@@ -133,6 +138,17 @@ impl VirtDevInner {
             req: DevReq::None,
             cache: None,
             stat: DevStat::None,
+        }
+    }
+
+    pub fn mediated(&self) -> bool {
+        match &self.req {
+            DevReq::BlkReq(req) => {
+                req.mediated()
+            }
+            DevReq::None => {
+                false
+            }
         }
     }
 

@@ -47,7 +47,6 @@ pub fn interrupt_arch_enable(int_id: usize, en: bool) {
 
 pub fn interrupt_arch_ipi_send(cpu_id: usize, ipi_id: usize) {
     if ipi_id < GIC_SGIS_NUM {
-        println!("interrupt_arch_ipi_send: send ipi to cpu {}", cpu_id);
         GICD.send_sgi(platform_cpuid_to_cpuif(cpu_id), ipi_id);
     }
 }

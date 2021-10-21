@@ -623,7 +623,8 @@ pub fn config_init() {
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
-        cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
+        // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
+        cfg_list: vec![0, 67108864],
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });

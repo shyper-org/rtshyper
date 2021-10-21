@@ -2,14 +2,14 @@
 // pub const VIRTIO_MMIO_DEVICE_ID: usize = 0x008;
 // pub const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
 use crate::config::VmEmulatedDeviceConfig;
-use crate::device::EmuContext;
+use crate::device::{EmuContext, virtio_mediated_blk_notify_handler};
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::vm_ipa2pa;
+use crate::kernel::{IpiType, vm_ipa2pa};
 use crate::kernel::Vm;
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::{context_get_gpr, context_set_gpr};
@@ -107,7 +107,12 @@ impl VirtioQueue for VirtioMmio {
                 inner.vq.push(Virtq::default());
                 inner.vq[0].reset(0);
                 use crate::device::virtio_blk_notify_handler;
-                inner.vq[0].set_notify_handler(virtio_blk_notify_handler);
+                if inner.dev.mediated() {
+                    use crate::kernel::IpiMediatedMsg;
+                    inner.vq[0].set_notify_handler(virtio_mediated_blk_notify_handler);
+                } else {
+                    inner.vq[0].set_notify_handler(virtio_blk_notify_handler);
+                }
             }
             VirtioDeviceType::Net => {
                 self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
@@ -615,7 +620,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
 }
 
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
-    println!("emu_virtio_mmio_handler");
+    // println!("emu_virtio_mmio_handler");
     let vm = match active_vm() {
         Some(vm) => vm,
         None => {
@@ -641,26 +646,27 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
         let q_sel = mmio.q_sel();
-        println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
+        // println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
+
         if !mmio.notify_handler(q_sel as usize) {
             println!("Failed to handle virtio mmio request!");
         }
     } else if offset == VIRTIO_MMIO_INTERRUPT_STATUS && !write {
-        println!("in VIRTIO_MMIO_INTERRUPT_STATUS");
+        // println!("in VIRTIO_MMIO_INTERRUPT_STATUS");
         context_set_gpr(emu_ctx.reg, mmio.irt_stat() as usize);
     } else if offset == VIRTIO_MMIO_INTERRUPT_ACK && write {
-        println!("in VIRTIO_MMIO_INTERRUPT_ACK");
+        // println!("in VIRTIO_MMIO_INTERRUPT_ACK");
         mmio.set_irt_ack(context_get_gpr(emu_ctx.reg) as u32);
     } else if (VIRTIO_MMIO_MAGIC_VALUE <= offset && offset <= VIRTIO_MMIO_GUEST_FEATURES_SEL)
         || offset == VIRTIO_MMIO_STATUS
     {
-        println!("in virtio_mmio_prologue_access");
+        // println!("in virtio_mmio_prologue_access");
         virtio_mmio_prologue_access(mmio.clone(), emu_ctx, offset, write);
     } else if VIRTIO_MMIO_QUEUE_SEL <= offset && offset <= VIRTIO_MMIO_QUEUE_USED_HIGH {
-        println!("in virtio_mmio_queue_access");
+        // println!("in virtio_mmio_queue_access");
         virtio_mmio_queue_access(mmio.clone(), emu_ctx, offset, write);
     } else if VIRTIO_MMIO_CONFIG_GENERATION <= offset && offset <= VIRTIO_MMIO_REGS_END {
-        println!("in virtio_mmio_cfg_access");
+        // println!("in virtio_mmio_cfg_access");
         virtio_mmio_cfg_access(mmio.clone(), emu_ctx, offset, write);
     } else {
         println!(

@@ -318,6 +318,24 @@ impl Vm {
         return EmuDevs::None;
     }
 
+    pub fn emu_blk_dev(&self, id: usize) -> EmuDevs {
+        let vm_inner = self.inner.lock();
+        let mut dev_num = 0;
+
+        for i in 0..vm_inner.emu_devs.len() {
+            match vm_inner.emu_devs[i] {
+                EmuDevs::VirtioBlk(_) => {
+                    if dev_num == id {
+                        return vm_inner.emu_devs[i].clone();
+                    }
+                    dev_num += 1;
+                }
+                _ => {}
+            }
+        }
+        return EmuDevs::None;
+    }
+
     pub fn ncpu(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.ncpu

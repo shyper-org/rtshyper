@@ -148,7 +148,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
         return false;
     }
     unsafe {
-        memcpy(target_addr as *const u8, &guest_msg as *const _ as *const u8, size_of::<HvcGuestMsg>());
+        memcpy(target_addr as *const u8, guest_msg as *const _ as *const u8, size_of::<HvcGuestMsg>());
     }
 
     let cpu_trgt = vm_if_list_get_cpu_id(vm_id);

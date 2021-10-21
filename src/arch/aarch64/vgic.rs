@@ -1866,15 +1866,27 @@ fn vgic_get_state(interrupt: VgicInt) -> usize {
 
 fn vgic_int_yield_owner(vcpu: Vcpu, interrupt: VgicInt) {
     if !vgic_owns(vcpu.clone(), interrupt.clone()) {
+        // if interrupt.id() == 48 {
+        //     println!("vgic_owns");
+        // }
         return;
     }
     if gic_is_priv(interrupt.id() as usize) || interrupt.in_lr() {
+        // if interrupt.id() == 48 {
+        //     println!("gic_is_priv");
+        // }
         return;
     }
 
     if vgic_get_state(interrupt.clone()) & 2 == 0 {
+        // if interrupt.id() == 48 {
+        //     println!("vgic_get_state");
+        // }
         interrupt.clear_owner();
     }
+    // if interrupt.id() == 48 {
+    //     println!("end vgic_int_yield_owner");
+    // }
 }
 
 fn vgic_int_is_hw(interrupt: VgicInt) -> bool {
@@ -1941,17 +1953,14 @@ pub fn gic_maintenance_handler(arg: usize, source: usize) {
     let vgic = vm.vgic();
 
     if misr & 1 != 0 {
-        // println!("handle_trapped_eoir");
         vgic.handle_trapped_eoir(active_vcpu().unwrap());
     }
 
     if misr & (1 << 3) != 0 {
-        // println!("refill_lrs");
         vgic.refill_lrs(active_vcpu().unwrap());
     }
 
     if misr & (1 << 2) != 0 {
-        // println!("eoir_highest_spilled_active");
         let mut hcr = GICH.hcr();
         while hcr & (0b11111 << 27) != 0 {
             vgic.eoir_highest_spilled_active(active_vcpu().unwrap());
@@ -1960,7 +1969,6 @@ pub fn gic_maintenance_handler(arg: usize, source: usize) {
             hcr = GICH.hcr();
         }
     }
-    // println!("end gic_maintenance_handler");
 }
 
 const VGICD_REG_OFFSET_PREFIX_CTLR: usize = 0x0;

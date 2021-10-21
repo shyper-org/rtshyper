@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, add_task, IoMediatedMsg, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, Task, TaskType, Vm, vm_ipa2pa};
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
@@ -254,9 +254,77 @@ impl VirtioBlkReq {
         let inner = self.inner.lock();
         inner.iov[idx].len
     }
+
+    pub fn mediated_req_push(&self, req_type: usize, blk_id: usize, sector: usize, count: usize, iov: Vec<BlkIov>) {
+        let mut inner = self.inner.lock();
+        println!("### new mediated req: type {}, blkid {}, sector {}, count {}", req_type, blk_id, sector, count);
+        inner.mediated_req.push(MediatedBlkReq::new(req_type, blk_id, sector, count, iov));
+    }
+
+    pub fn mediated_notify_push(&self, req: MediatedBlkReq) {
+        let mut inner = self.inner.lock();
+        inner.mediated_notify.push(req);
+    }
+
+    pub fn mediated_req_num(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.mediated_req.len()
+    }
+
+    pub fn mediated_notify_num(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.mediated_notify.len()
+    }
+
+    pub fn mediated_req_pop_head(&self) -> MediatedBlkReq {
+        let mut inner = self.inner.lock();
+        if inner.mediated_req.len() <= 0 {
+            panic!("mediated_req_remove failed");
+        }
+        inner.mediated_req.remove(0)
+    }
+
+    pub fn mediated_notify_pop_head(&self) -> MediatedBlkReq {
+        let mut inner = self.inner.lock();
+        if inner.mediated_notify.len() <= 0 {
+            panic!("mediated_notify_remove failed");
+        }
+        inner.mediated_notify.remove(0)
+    }
 }
 
-// TODO: maybe should not use Vec, but [BlkIov; 64]
+#[derive(Clone)]
+pub struct MediatedBlkReq {
+    pub inner: Arc<MediatedBlkReqInner>,
+}
+
+impl MediatedBlkReq {
+    pub fn new(req_type: usize,
+               blk_id: usize,
+               sector: usize,
+               count: usize,
+               iov: Vec<BlkIov>) -> MediatedBlkReq {
+        MediatedBlkReq {
+            inner: Arc::new(MediatedBlkReqInner {
+                req_type,
+                blk_id,
+                sector,
+                count,
+                iov,
+            })
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MediatedBlkReqInner {
+    pub req_type: usize,
+    pub blk_id: usize,
+    pub sector: usize,
+    pub count: usize,
+    pub iov: Vec<BlkIov>,
+}
+
 #[repr(C)]
 struct VirtioBlkReqInner {
     req_type: u32,
@@ -266,6 +334,9 @@ struct VirtioBlkReqInner {
     iov_total: usize,
     region: BlkReqRegion,
     mediated: bool,
+    mediated_req: Vec<MediatedBlkReq>,
+    mediated_notify: Vec<MediatedBlkReq>,
+    process_list: Vec<usize>,
 }
 
 impl VirtioBlkReqInner {
@@ -278,6 +349,9 @@ impl VirtioBlkReqInner {
             iov_total: 0,
             region: BlkReqRegion { start: 0, size: 0 },
             mediated: false,
+            mediated_req: Vec::new(),
+            mediated_notify: Vec::new(),
+            process_list: Vec::new(),
         }
     }
 
@@ -314,23 +388,26 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     match req.req_type() as usize {
         VIRTIO_BLK_T_IN => {
             if req.mediated() {
-                let mut iov_list = Vec::new();
+                let mut iov_list = vec![];
                 for iov_idx in 0..req.iovn() {
-                    iov_list.push(BlkIov {
-                        data_bg: req.iov_data_bg(iov_idx),
-                        len: req.iov_len(iov_idx),
-                    });
+                    iov_list.push(
+                        BlkIov {
+                            data_bg: req.iov_data_bg(iov_idx),
+                            len: req.iov_len(iov_idx),
+                        });
                 }
-                let m = IpiMediatedMsg {
-                    src_id: active_vm().unwrap().vm_id(),
-                    req_type: VIRTIO_BLK_T_IN,
-                    blk_id: 0,
-                    sector: sector + region_start,
-                    count: req.iov_total() / SECTOR_BSIZE,
-                    iov_list: iov_list,
-                };
-                println!("blk_t_in before ipi_send_msg");
-                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
+                // mediated blk read
+                add_task(Task {
+                    task_type: TaskType::MediatedIoTask(
+                        IoMediatedMsg {
+                            io_type: VIRTIO_BLK_T_IN,
+                            blk_id: 0,
+                            sector: sector + region_start,
+                            count: req.iov_total() / SECTOR_BSIZE,
+                            cache,
+                            iov_list: Arc::new(iov_list),
+                        })
+                });
             } else {
                 todo!();
                 // platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
@@ -338,13 +415,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
             for iov_idx in 0..req.iovn() {
                 let data_bg = req.iov_data_bg(iov_idx);
                 let len = req.iov_len(iov_idx) as usize;
-                // println!(
-                //     "data_bg {:x} cache {:x} data before {:x}, len {}",
-                //     data_bg,
-                //     cache_ptr,
-                //     unsafe { *(data_bg as *mut u64) },
-                //     len
-                // );
+
                 if len < SECTOR_BSIZE {
                     println!("blk_req_handler: read len < SECTOR_BSIZE");
                     return 0;
@@ -356,10 +427,6 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 }
                 cache_ptr += len;
                 total_byte += len;
-                // println!("data_bg after");
-                // for i in 0..len {
-                //     print!("{:x}", unsafe { *((data_bg + i) as *mut u8) });
-                // }
             }
         }
         VIRTIO_BLK_T_OUT => {
@@ -379,23 +446,26 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 total_byte += len;
             }
             if req.mediated() {
-                let mut iov_list = Vec::new();
+                let mut iov_list = vec![];
                 for iov_idx in 0..req.iovn() {
-                    iov_list.push(BlkIov {
-                        data_bg: req.iov_data_bg(iov_idx),
-                        len: req.iov_len(iov_idx),
-                    });
+                    iov_list.push(
+                        BlkIov {
+                            data_bg: req.iov_data_bg(iov_idx),
+                            len: req.iov_len(iov_idx),
+                        });
                 }
-                let m = IpiMediatedMsg {
-                    src_id: active_vm().unwrap().vm_id(),
-                    req_type: VIRTIO_BLK_T_OUT,
-                    blk_id: 0,
-                    sector: sector + region_start,
-                    count: req.iov_total() / SECTOR_BSIZE,
-                    iov_list: iov_list,
-                };
-                println!("blk_t_out before ipi_send_msg");
-                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
+                // mediated blk write
+                add_task(Task {
+                    task_type: TaskType::MediatedIoTask(
+                        IoMediatedMsg {
+                            io_type: VIRTIO_BLK_T_OUT,
+                            blk_id: 0,
+                            sector: sector + region_start,
+                            count: req.iov_total() / SECTOR_BSIZE,
+                            cache,
+                            iov_list: Arc::new(iov_list),
+                        })
+                });
             } else {
                 todo!();
                 // platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
@@ -417,12 +487,24 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     return total_byte;
 }
 
-use crate::device::{VirtioMmio, Virtq};
+use crate::device::{mediated_blk_list_get, mediated_blk_read, mediated_blk_write, MediatedBlk, VirtioMmio, Virtq};
 
-pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
+pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, Vm: Vm) -> bool {
+    add_task(Task {
+        task_type: TaskType::MediatedIpiTask(
+            IpiMediatedMsg {
+                src_id: active_vm_id(),
+                vq: vq.clone(),
+                blk: blk.clone(),
+            })
+    });
+    true
+}
+
+pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     // println!("in virtio_blk_notify_handler");
-    use crate::kernel::active_vm;
-    let vm = active_vm().unwrap();
+    // use crate::kernel::active_vm;
+    // let vm = active_vm().unwrap();
 
     if vq.ready() == 0 {
         println!("blk virt_queue is not ready!");
@@ -541,40 +623,55 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio) -> bool {
             }
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
-        let total = blk_req_handler(req.clone(), dev.cache());
+
+        let total = if !req.mediated() {
+            blk_req_handler(req.clone(), dev.cache())
+        } else {
+            let mediated_blk = mediated_blk_list_get(0);
+            let cache = mediated_blk.cache_pa();
+            blk_req_handler(req.clone(), cache)
+        };
         if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size) {
             return false;
         }
         // println!("finish blk req handler");
-        match dev.stat() {
-            super::DevStat::BlkStat(stat) => match req.req_type() as usize {
-                VIRTIO_BLK_T_IN => {
-                    let read_req = stat.read_req() + 1;
-                    stat.set_read_req(read_req);
-                    let read_byte = stat.read_byte() + total;
-                    stat.set_read_byte(read_byte);
-                }
-                VIRTIO_BLK_T_OUT => {
-                    let write_req = stat.write_req() + 1;
-                    stat.set_write_req(write_req);
-                    let write_byte = stat.write_byte() + total;
-                    stat.set_write_byte(write_byte);
-                }
-                _ => {}
-            },
-            _ => {
-                panic!("virtio_blk_notify_handler: illegal dev stat type");
-            }
-        }
+        // match dev.stat() {
+        //     super::DevStat::BlkStat(stat) => match req.req_type() as usize {
+        //         VIRTIO_BLK_T_IN => {
+        //             let read_req = stat.read_req() + 1;
+        //             stat.set_read_req(read_req);
+        //             let read_byte = stat.read_byte() + total;
+        //             stat.set_read_byte(read_byte);
+        //         }
+        //         VIRTIO_BLK_T_OUT => {
+        //             let write_req = stat.write_req() + 1;
+        //             stat.set_write_req(write_req);
+        //             let write_byte = stat.write_byte() + total;
+        //             stat.set_write_byte(write_byte);
+        //         }
+        //         _ => {}
+        //     },
+        //     _ => {
+        //         panic!("virtio_blk_notify_handler: illegal dev stat type");
+        //     }
+        // }
 
         process_count += 1;
         next_desc_idx_opt = vq.pop_avail_desc_idx();
     }
 
     if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
+        panic!("err1");
         vq.notify(dev.int_id());
     }
+    if vq.avail_flags() != 0 || process_count <= 0 {
+        panic!("err2");
+    }
 
+    // if req.mediated() {
+    //     let m = IpiMediatedMsg { src_id: active_vm_id() };
+    //     ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(m));
+    // }
     // if vm.vm_id() == 1 {
     // use crate::arch::GICH;
     // println!("hcr {:x}", GICH.hcr());

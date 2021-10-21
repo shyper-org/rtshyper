@@ -1,6 +1,6 @@
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::active_vm;
+use crate::kernel::{active_vm, Vm};
 use alloc::sync::Arc;
 use core::slice;
 use spin::Mutex;
@@ -172,7 +172,7 @@ impl Virtq {
         }
     }
 
-    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio) -> bool) {
+    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio, Vm) -> bool) {
         let mut inner = self.inner.lock();
         inner.notify_handler = Some(handler);
     }
@@ -182,7 +182,7 @@ impl Virtq {
         match inner.notify_handler {
             Some(handler) => {
                 drop(inner);
-                return handler(self.clone(), mmio);
+                return handler(self.clone(), mmio, active_vm().unwrap());
             }
             None => {
                 println!("call_notify_handler: virtq notify handler is None");
@@ -369,7 +369,7 @@ pub struct VirtqInner<'a> {
     avail_addr: usize,
     used_addr: usize,
 
-    notify_handler: Option<fn(Virtq, VirtioMmio) -> bool>,
+    notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>,
 }
 
 impl VirtqInner<'_> {

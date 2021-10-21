@@ -21,20 +21,34 @@ const VIRTIO_F_VERSION_1: usize = 1 << 32;
 const VIRTIO_NET_F_CSUM: usize = 1 << 0;
 const VIRTIO_NET_F_GUEST_CSUM: usize = 1 << 1;
 const VIRTIO_NET_F_MAC: usize = 1 << 5;
-const VIRTIO_NET_F_GSO_DEPREC: usize = 1 << 6; // deprecated: host handles GSO
-const VIRTIO_NET_F_GUEST_TSO4: usize = 1 << 7; // guest can rcv TSOv4 *
-const VIRTIO_NET_F_GUEST_TSO6: usize = 1 << 8; // guest can rcv TSOv6
-const VIRTIO_NET_F_GUEST_ECN: usize = 1 << 9; // guest can rcv TSO with ECN
-const VIRTIO_NET_F_GUEST_UFO: usize = 1 << 10; // guest can rcv UFO *
-const VIRTIO_NET_F_HOST_TSO4: usize = 1 << 11; // host can rcv TSOv4 *
-const VIRTIO_NET_F_HOST_TSO6: usize = 1 << 12; // host can rcv TSOv6
-const VIRTIO_NET_F_HOST_ECN: usize = 1 << 13; // host can rcv TSO with ECN
-const VIRTIO_NET_F_HOST_UFO: usize = 1 << 14; // host can rcv UFO *
-const VIRTIO_NET_F_MRG_RXBUF: usize = 1 << 15; // host can merge RX buffers *
-const VIRTIO_NET_F_STATUS: usize = 1 << 16; // config status field available *
-const VIRTIO_NET_F_CTRL_VQ: usize = 1 << 17; // control channel available
-const VIRTIO_NET_F_CTRL_RX: usize = 1 << 18; // control channel RX mode support
-const VIRTIO_NET_F_CTRL_VLAN: usize = 1 << 19; // control channel VLAN filtering
+const VIRTIO_NET_F_GSO_DEPREC: usize = 1 << 6;
+// deprecated: host handles GSO
+const VIRTIO_NET_F_GUEST_TSO4: usize = 1 << 7;
+// guest can rcv TSOv4 *
+const VIRTIO_NET_F_GUEST_TSO6: usize = 1 << 8;
+// guest can rcv TSOv6
+const VIRTIO_NET_F_GUEST_ECN: usize = 1 << 9;
+// guest can rcv TSO with ECN
+const VIRTIO_NET_F_GUEST_UFO: usize = 1 << 10;
+// guest can rcv UFO *
+const VIRTIO_NET_F_HOST_TSO4: usize = 1 << 11;
+// host can rcv TSOv4 *
+const VIRTIO_NET_F_HOST_TSO6: usize = 1 << 12;
+// host can rcv TSOv6
+const VIRTIO_NET_F_HOST_ECN: usize = 1 << 13;
+// host can rcv TSO with ECN
+const VIRTIO_NET_F_HOST_UFO: usize = 1 << 14;
+// host can rcv UFO *
+const VIRTIO_NET_F_MRG_RXBUF: usize = 1 << 15;
+// host can merge RX buffers *
+const VIRTIO_NET_F_STATUS: usize = 1 << 16;
+// config status field available *
+const VIRTIO_NET_F_CTRL_VQ: usize = 1 << 17;
+// control channel available
+const VIRTIO_NET_F_CTRL_RX: usize = 1 << 18;
+// control channel RX mode support
+const VIRTIO_NET_F_CTRL_VLAN: usize = 1 << 19;
+// control channel VLAN filtering
 const VIRTIO_NET_F_GUEST_ANNOUN: usize = 1 << 21; // guest can send gratuitous pkts
 
 const VIRTIO_NET_HDR_F_DATA_VALID: usize = 2;
@@ -112,7 +126,8 @@ pub fn net_features() -> usize {
 }
 
 use crate::device::{VirtioMmio, Virtq};
-pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio) -> bool {
+
+pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
     // if vm.vm_id() == 1 {
     //     println!("virtio_net_notify_handler");
     // }
@@ -235,6 +250,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio) -> bool {
 
 use crate::kernel::IpiMessage;
 use crate::lib::byte2page;
+
 pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::EnternetMsg(ethernet_msg) => {
