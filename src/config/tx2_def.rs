@@ -19,13 +19,13 @@ use alloc::vec::Vec;
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 2;
+    vm_config.vm_num = 1;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("intc@8000000"),
-        base_ipa: 0x8000000,
+        name: Some("intc@3881000"),
+        base_ipa: PLATFORM_GICD_BASE,
         length: 0x1000,
         irq_id: 0,
         cfg_list: Vec::new(),
@@ -50,24 +50,24 @@ pub fn config_init() {
     //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
     //     mediated: false,
     // });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a001000"),
-        base_ipa: 0xa001000,
-        length: 0x1000,
-        irq_id: 32 + 0x11,
-        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("shyper"),
-        base_ipa: 0,
-        length: 0,
-        irq_id: 32 + 0x20,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTShyper,
-        mediated: false,
-    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_mmio@a001000"),
+    //     base_ipa: 0xa001000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x11,
+    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+    //     mediated: false,
+    // });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("shyper"),
+    //     base_ipa: 0,
+    //     length: 0,
+    //     irq_id: 32 + 0x20,
+    //     cfg_list: Vec::new(),
+    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
+    //     mediated: false,
+    // });
 
     // vm0 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -186,6 +186,11 @@ pub fn config_init() {
             ipa: 0x03010000,
             pa: 0x03010000,
             length: 0xe0000,
+        },
+        PassthroughRegion {
+            ipa: 0x03100000,
+            pa: 0x03100000,
+            length: 0x1000,
         },
         PassthroughRegion {
             ipa: 0x03110000,
@@ -339,9 +344,14 @@ pub fn config_init() {
             length: 0xa0000,
         },
         PassthroughRegion {
-            ipa: 0x08010000,
+            ipa: PLATFORM_GICC_BASE,
             pa: PLATFORM_GICV_BASE,
             length: 0x2000,
+        },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: 0x8010000,
+            length: 0x1000,
         },
         PassthroughRegion {
             ipa: 0x08030000,
@@ -399,6 +409,16 @@ pub fn config_init() {
             length: 0x1000,
         },
         PassthroughRegion {
+            ipa: 0x0b000000,
+            pa: 0x0b000000,
+            length: 0x1000,
+        },
+        PassthroughRegion {
+            ipa: 0x0b040000,
+            pa: 0x0b040000,
+            length: 0x20000,
+        },
+        PassthroughRegion {
             ipa: 0x0b150000,
             pa: 0x0b150000,
             length: 0x90000,
@@ -427,11 +447,6 @@ pub fn config_init() {
             ipa: 0x0c260000,
             pa: 0x0c260000,
             length: 0x10000,
-        },
-        PassthroughRegion {
-            ipa: 0x03100000,
-            pa: 0x03100000,
-            length: 0x1000,
         },
         PassthroughRegion {
             ipa: 0x0c2a0000,
@@ -505,9 +520,19 @@ pub fn config_init() {
             length: 0x40000,
         },
         PassthroughRegion {
+            ipa: 0x15040000,
+            pa: 0x15040000,
+            length: 0x40000,
+        },
+        PassthroughRegion {
             ipa: 0x150c0000,
             pa: 0x150c0000,
             length: 0x80000,
+        },
+        PassthroughRegion {
+            ipa: 0x15210000,
+            pa: 0x15210000,
+            length: 0x10000,
         },
         PassthroughRegion {
             ipa: 0x15340000,
@@ -518,6 +543,11 @@ pub fn config_init() {
             ipa: 0x15480000,
             pa: 0x15480000,
             length: 0xc0000,
+        },
+        PassthroughRegion {
+            ipa: 0x15580000,
+            pa: 0x15580000,
+            length: 0x40000,
         },
         PassthroughRegion {
             ipa: 0x15600000,
@@ -557,9 +587,9 @@ pub fn config_init() {
         108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
         126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, UART_0_INT, 151, 152,
         153, 154, 155, 156, 157, 158, 159, 165, 166, 167, 168, 173, 174, 175, 176, 177, 178, 179,
-        185, 186, 187, 190, 191, 192, 193, 194, 196, 198, 199, 202, 203, 208, 212, 218, 219, 220,
-        221, 222, 223, 224, 225, 226, 227, 229, 230, 233, 234, 235, 237, 238, 242, 255, 256, 295,
-        297, 315, 322, 328, 329, 330, 331, 352, 353,
+        185, 186, 187, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 208,
+        212, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 229, 230, 233, 234, 235, 237, 238,
+        242, 255, 256, 295, 297, 315, 322, 328, 329, 330, 331, 352, 353, 366,
     ];
     pt_dev_config.streams_ids = vec![
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 25, 26, 27, 28,
@@ -573,10 +603,6 @@ pub fn config_init() {
         ipa_start: 0x90000000,
         length: 0x60000000,
     });
-    // vm_region.push(VmRegion {
-    //     ipa_start: 0xf0200000,
-    //     length: 0x100000000,
-    // });
 
     // vm0 config
     vm_config.entries.push(Arc::new(VmConfigEntry {
@@ -628,15 +654,15 @@ pub fn config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a001000"),
-        base_ipa: 0xa001000,
-        length: 0x1000,
-        irq_id: 32 + 0x11,
-        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-        mediated: false,
-    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_mmio@a001000"),
+    //     base_ipa: 0xa001000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x11,
+    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+    //     mediated: false,
+    // });
 
     // vm1 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -729,7 +755,7 @@ pub fn config_init() {
             // device_tree_filename: Some("virt213.bin"),
             device_tree_load_ipa: 0x80000000,
             // ramdisk_filename: None,
-            ramdisk_load_ipa: 0,//0x83000000,
+            ramdisk_load_ipa: 0, //0x83000000,
         },
         cpu: VmCpuConfig {
             num: 1,

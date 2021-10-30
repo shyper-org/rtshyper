@@ -34,9 +34,13 @@ pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         "power_arch_cpu_on, {:x}, {:x}, {:x}",
         PSCI_CPU_ON_AARCH64, mpidr, entry
     );
-    smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0
+    // let r = unsafe { crate::arch::smc(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0 };
+    let r = smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0;
+    println!("smc return val is {}", r);
+    r
 }
 
+#[inline(never)]
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     // println!(
     //     "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
@@ -62,8 +66,9 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             r = result.0;
             // println!("x1 0x{:x}, x2 0x{:x}, x3 0x{:x}", x1, x2, x3);
             println!(
-                "result.0 0x{:x}, result.1 0x{:x}, result.1 0x{:x}",
-                result.0, result.1, result.2
+                "result.0 0x{:x}, result.1 0x{:x}, result.2 0x{:x}, sub {:x}",
+                result.0, result.1, result.2,
+                if result.1 > result.2 { result.1 - result.2 } else { result.2 - result.1 }
             );
             context_set_gpr(1, result.1);
             context_set_gpr(2, result.2);
@@ -158,7 +163,7 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     #[cfg(feature = "tx2")]
         {
             let cluster = (mpidr >> 8) & 0xff;
-            if vm.vm_id() == 0 && cluster != 1 {
+            if vm.id() == 0 && cluster != 1 {
                 println!("psci_guest_cpu_on: L4T only support cluster #1");
                 return usize::MAX - 1;
             }

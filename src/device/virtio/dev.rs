@@ -1,9 +1,8 @@
-use crate::arch::PAGE_SIZE;
+// use crate::arch::PAGE_SIZE;
 use crate::config::VmEmulatedDeviceConfig;
 // use crate::device::add_mediated_dev;
-use crate::device::{ethernet_ipi_rev_handler, net_features, NetDesc};
+use crate::device::{net_features, NetDesc};
 use crate::device::{BlkDesc, VirtioBlkReq, BLOCKIF_IOV_MAX};
-use crate::kernel::{ipi_register, IpiType};
 use crate::mm::PageFrame;
 use alloc::sync::Arc;
 use spin::Mutex;

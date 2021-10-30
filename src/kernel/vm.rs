@@ -1,4 +1,3 @@
-use super::active_vm;
 use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
 use crate::config::DEF_VM_CONFIG_TABLE;
@@ -248,7 +247,7 @@ impl Vm {
         vm_inner.cpu_num
     }
 
-    pub fn vm_id(&self) -> usize {
+    pub fn id(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.id
     }
@@ -359,7 +358,7 @@ impl Vm {
 
     pub fn emu_has_interrupt(&self, int_id: usize) -> bool {
         let vm_config = DEF_VM_CONFIG_TABLE.lock();
-        let vm_id = self.vm_id();
+        let vm_id = self.id();
         match &vm_config.entries[vm_id].vm_emu_dev_confg {
             Some(emu_devs) => {
                 for emu_dev in emu_devs {
@@ -540,6 +539,6 @@ pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
         }
     }
 
-    println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.vm_id(), ipa);
+    println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
     return 0;
 }

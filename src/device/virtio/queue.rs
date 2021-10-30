@@ -64,7 +64,7 @@ impl Virtq {
 
     pub fn notify(&self, int_id: usize) {
         let inner = self.inner.lock();
-        use crate::kernel::{active_vm, interrupt_vm_inject};
+        use crate::kernel::interrupt_vm_inject;
         if inner.to_notify {
             interrupt_vm_inject(active_vm().unwrap(), int_id, 0);
         }

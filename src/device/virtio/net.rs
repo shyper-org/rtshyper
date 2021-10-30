@@ -1,20 +1,13 @@
 use crate::config::{vm_num, vm_type};
-use crate::device::DevStat;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::mem_heap_alloc;
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::kernel::{
-    active_vm, active_vm_id, cpu_id, mem_pages_free, vm_if_list_cmp_mac, vm_if_list_get_cpu_id,
-    vm_ipa2pa,
-};
+use crate::kernel::{active_vm, active_vm_id, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
-use crate::lib::memcpy;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem::size_of;
-use core::slice::from_raw_parts;
 use spin::Mutex;
 
 const VIRTIO_F_VERSION_1: usize = 1 << 32;
@@ -200,7 +193,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
             let vm = vm(trgt_vmid);
-            if vm.vm_id() == active_vm_id() {
+            if vm.id() == active_vm_id() {
                 let nic = match vm.emu_net_dev(0) {
                     EmuDevs::VirtioNet(x) => x,
                     _ => {
@@ -213,7 +206,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
                     Err(_) => {
                         println!(
                             "virtio_net_notify_handler: vm[{}] failed to get virtio net rx virt queue",
-                            vm.vm_id()
+                            vm.id()
                         );
                         return false;
                     }
@@ -222,7 +215,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
                     rx_vq.notify(nic.dev().int_id());
                 }
             } else {
-                let mut msg = IpiEthernetMsg {
+                let msg = IpiEthernetMsg {
                     src_vmid: active_vm_id(),
                     trgt_vmid,
                 };
@@ -249,7 +242,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
 }
 
 use crate::kernel::IpiMessage;
-use crate::lib::byte2page;
 
 pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     match msg.ipi_message {
@@ -261,7 +253,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
                 _ => {
                     println!(
                         "ethernet_ipi_rev_handler: vm[{}] failed to get virtio net dev",
-                        vm.vm_id()
+                        vm.id()
                     );
                     return;
                 }
@@ -271,7 +263,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
                 Err(_) => {
                     println!(
                         "ethernet_ipi_rev_handler: vm[{}] failed to get virtio net rx virt queue",
-                        vm.vm_id()
+                        vm.id()
                     );
                     return;
                 }
@@ -381,13 +373,13 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         Err(_) => {
             println!(
                 "ethernet_send_to: vm[{}] failed to get virtio net rx virt queue",
-                vm.vm_id()
+                vm.id()
             );
             return false;
         }
     };
 
-    let mut desc_header_idx_opt = rx_vq.pop_avail_desc_idx();
+    let desc_header_idx_opt = rx_vq.pop_avail_desc_idx();
     if !rx_vq.avail_is_avail() {
         println!("ethernet_send_to: receive invalid avail desc idx");
         return false;
@@ -400,7 +392,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let rx_iov = VirtioIov::default();
     let mut rx_len = 0;
 
-    while true {
+    loop {
         let dst = vm_ipa2pa(vm.clone(), rx_vq.desc_addr(desc_idx));
         if dst == 0 {
             println!("ethernet_send_to: failed to get dst");

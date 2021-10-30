@@ -3,6 +3,8 @@ global_asm!(include_str!("start.S"));
 use super::interface::*;
 use tock_registers::*;
 use tock_registers::interfaces::*;
+use crate::arch::pt_lvl2_idx;
+use crate::arch::TableDescriptor::TYPE::Value::Block;
 
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 // const PAGE_SIZE: usize = 4096;
@@ -77,11 +79,19 @@ impl BlockDescriptor {
                 + PageDescriptorS1::TYPE::Block
                 + PageDescriptorS1::VALID::True
                 + if device {
-                    PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
-                } else {
-                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::OuterShareable
-                })
-            .value,
+                PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
+            } else {
+                PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::OuterShareable
+            })
+                .value,
+        )
+    }
+
+    fn table(output_addr: usize) -> BlockDescriptor {
+        BlockDescriptor(
+            (PageDescriptorS1::OUTPUT_PPN.val((output_addr >> PAGE_SHIFT) as u64)
+                + PageDescriptorS1::VALID::True
+                + PageDescriptorS1::TYPE::Table).value
         )
     }
     const fn invalid() -> BlockDescriptor {
@@ -96,25 +106,44 @@ pub struct PageTables {
 }
 
 use crate::board::PLAT_DESC;
+use crate::lib::memset;
+
 const LVL1_SHIFT: usize = 30;
 const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
-pub unsafe extern "C" fn pt_populate(pt: &mut PageTables) {
+pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
+    let lvl1_base = lvl1_pt as *const _ as usize;
+    let lvl2_base = lvl2_pt as *const _ as usize;
+    unsafe { memset(lvl1_base as *mut u8, 0, PAGE_SIZE); }
+    unsafe { memset(lvl2_base as *mut u8, 0, PAGE_SIZE); }
+
     for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
         let output_addr = i << LVL1_SHIFT;
-        pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
+        lvl1_pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
             BlockDescriptor::new(output_addr, false)
         } else {
-            BlockDescriptor::new(output_addr, true)
+            BlockDescriptor::invalid()
         }
     }
-    // pt.lvl1[0] = BlockDescriptor::new(0, true);
-    // pt.lvl1[1] = BlockDescriptor::new(0x40000000, false);
-    // pt.lvl1[2] = BlockDescriptor::new(0x80000000, false);
-    for i in PLATFORM_PHYSICAL_LIMIT_GB..ENTRY_PER_PAGE {
-        pt.lvl1[i] = BlockDescriptor::invalid();
+    // for i in PLATFORM_PHYSICAL_LIMIT_GB..ENTRY_PER_PAGE {
+    //     pt.lvl1[i] = BlockDescriptor::invalid();
+    // }
+
+    lvl1_pt.lvl1[0] = BlockDescriptor::table(lvl2_base);
+    // 0x200000 ~ 2MB
+    // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
+    // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
+    // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
+    // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
+    lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
+    lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
+    lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
+    lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
+    for i in 0..8 {
+        let addr = 0x12000000 + i * 0x200000;
+        lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
     }
 }
 

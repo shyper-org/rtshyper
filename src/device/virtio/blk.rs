@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::kernel::{active_vm, active_vm_id, add_task, IoMediatedMsg, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, Task, TaskType, Vm, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, IoMediatedMsg, IpiMediatedMsg, Task, TaskType, Vm, vm_ipa2pa};
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
@@ -255,66 +255,66 @@ impl VirtioBlkReq {
         inner.iov[idx].len
     }
 
-    pub fn mediated_req_push(&self, req_type: usize, blk_id: usize, sector: usize, count: usize, iov: Vec<BlkIov>) {
-        let mut inner = self.inner.lock();
-        println!("### new mediated req: type {}, blkid {}, sector {}, count {}", req_type, blk_id, sector, count);
-        inner.mediated_req.push(MediatedBlkReq::new(req_type, blk_id, sector, count, iov));
-    }
-
-    pub fn mediated_notify_push(&self, req: MediatedBlkReq) {
-        let mut inner = self.inner.lock();
-        inner.mediated_notify.push(req);
-    }
-
-    pub fn mediated_req_num(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.mediated_req.len()
-    }
-
-    pub fn mediated_notify_num(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.mediated_notify.len()
-    }
-
-    pub fn mediated_req_pop_head(&self) -> MediatedBlkReq {
-        let mut inner = self.inner.lock();
-        if inner.mediated_req.len() <= 0 {
-            panic!("mediated_req_remove failed");
-        }
-        inner.mediated_req.remove(0)
-    }
-
-    pub fn mediated_notify_pop_head(&self) -> MediatedBlkReq {
-        let mut inner = self.inner.lock();
-        if inner.mediated_notify.len() <= 0 {
-            panic!("mediated_notify_remove failed");
-        }
-        inner.mediated_notify.remove(0)
-    }
+    // pub fn mediated_req_push(&self, req_type: usize, blk_id: usize, sector: usize, count: usize, iov: Vec<BlkIov>) {
+    //     let mut inner = self.inner.lock();
+    //     println!("### new mediated req: type {}, blkid {}, sector {}, count {}", req_type, blk_id, sector, count);
+    //     inner.mediated_req.push(MediatedBlkReq::new(req_type, blk_id, sector, count, iov));
+    // }
+    //
+    // pub fn mediated_notify_push(&self, req: MediatedBlkReq) {
+    //     let mut inner = self.inner.lock();
+    //     inner.mediated_notify.push(req);
+    // }
+    //
+    // pub fn mediated_req_num(&self) -> usize {
+    //     let inner = self.inner.lock();
+    //     inner.mediated_req.len()
+    // }
+    //
+    // pub fn mediated_notify_num(&self) -> usize {
+    //     let inner = self.inner.lock();
+    //     inner.mediated_notify.len()
+    // }
+    //
+    // pub fn mediated_req_pop_head(&self) -> MediatedBlkReq {
+    //     let mut inner = self.inner.lock();
+    //     if inner.mediated_req.len() <= 0 {
+    //         panic!("mediated_req_remove failed");
+    //     }
+    //     inner.mediated_req.remove(0)
+    // }
+    //
+    // pub fn mediated_notify_pop_head(&self) -> MediatedBlkReq {
+    //     let mut inner = self.inner.lock();
+    //     if inner.mediated_notify.len() <= 0 {
+    //         panic!("mediated_notify_remove failed");
+    //     }
+    //     inner.mediated_notify.remove(0)
+    // }
 }
 
-#[derive(Clone)]
-pub struct MediatedBlkReq {
-    pub inner: Arc<MediatedBlkReqInner>,
-}
-
-impl MediatedBlkReq {
-    pub fn new(req_type: usize,
-               blk_id: usize,
-               sector: usize,
-               count: usize,
-               iov: Vec<BlkIov>) -> MediatedBlkReq {
-        MediatedBlkReq {
-            inner: Arc::new(MediatedBlkReqInner {
-                req_type,
-                blk_id,
-                sector,
-                count,
-                iov,
-            })
-        }
-    }
-}
+// #[derive(Clone)]
+// pub struct MediatedBlkReq {
+//     pub inner: Arc<MediatedBlkReqInner>,
+// }
+//
+// impl MediatedBlkReq {
+//     pub fn new(req_type: usize,
+//                blk_id: usize,
+//                sector: usize,
+//                count: usize,
+//                iov: Vec<BlkIov>) -> MediatedBlkReq {
+//         MediatedBlkReq {
+//             inner: Arc::new(MediatedBlkReqInner {
+//                 req_type,
+//                 blk_id,
+//                 sector,
+//                 count,
+//                 iov,
+//             })
+//         }
+//     }
+// }
 
 #[derive(Clone)]
 pub struct MediatedBlkReqInner {
@@ -334,8 +334,8 @@ struct VirtioBlkReqInner {
     iov_total: usize,
     region: BlkReqRegion,
     mediated: bool,
-    mediated_req: Vec<MediatedBlkReq>,
-    mediated_notify: Vec<MediatedBlkReq>,
+    // mediated_req: Vec<MediatedBlkReq>,
+    // mediated_notify: Vec<MediatedBlkReq>,
     process_list: Vec<usize>,
 }
 
@@ -349,8 +349,8 @@ impl VirtioBlkReqInner {
             iov_total: 0,
             region: BlkReqRegion { start: 0, size: 0 },
             mediated: false,
-            mediated_req: Vec::new(),
-            mediated_notify: Vec::new(),
+            // mediated_req: Vec::new(),
+            // mediated_notify: Vec::new(),
             process_list: Vec::new(),
         }
     }
@@ -367,7 +367,7 @@ impl VirtioBlkReqInner {
 use crate::lib::memcpy;
 
 pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
-    println!("blk req handler");
+    // println!("vm[{}] blk req handler", active_vm_id());
     let sector = req.sector();
     let region_start = req.region_start();
     let region_size = req.region_size();
@@ -472,6 +472,19 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
             }
         }
         VIRTIO_BLK_T_GET_ID => {
+            if req.mediated() {
+                add_task(Task {
+                    task_type: TaskType::MediatedIoTask(
+                        IoMediatedMsg {
+                            io_type: VIRTIO_BLK_T_IN,
+                            blk_id: 0,
+                            sector: region_start,
+                            count: 0,
+                            cache,
+                            iov_list: Arc::new(Vec::new()),
+                        })
+                });
+            }
             let data_bg = req.iov_data_bg(0);
             let name = "virtio-blk".as_ptr();
             unsafe {
@@ -487,9 +500,9 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     return total_byte;
 }
 
-use crate::device::{mediated_blk_list_get, mediated_blk_read, mediated_blk_write, MediatedBlk, VirtioMmio, Virtq};
+use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
 
-pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, Vm: Vm) -> bool {
+pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm) -> bool {
     add_task(Task {
         task_type: TaskType::MediatedIpiTask(
             IpiMediatedMsg {
@@ -661,11 +674,14 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     }
 
     if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
-        panic!("err1");
         vq.notify(dev.int_id());
+        panic!("err1");
     }
     if vq.avail_flags() != 0 || process_count <= 0 {
-        panic!("err2");
+        // maybe need check avail_flags
+        if process_count == 0 {
+            finish_task();
+        }
     }
 
     // if req.mediated() {

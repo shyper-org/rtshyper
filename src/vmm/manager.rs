@@ -1,5 +1,5 @@
 use crate::arch::gicc_clear_current_irq;
-use crate::kernel::{active_vm, vcpu_pool_pop_through_vmid, vm_ipa2pa};
+use crate::kernel::{active_vm, vm_ipa2pa};
 use crate::kernel::{active_vcpu, active_vm_id, vm_if_list_get_cpu_id, vm_num};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::vmm_boot;

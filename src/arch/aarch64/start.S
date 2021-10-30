@@ -54,6 +54,7 @@ _start:
     cbnz x0, 5f
 
     adrp x0, lvl1_page_table
+    adrp x1, lvl2_page_table
     bl  pt_populate
 
     ldr x0, =_bss_begin

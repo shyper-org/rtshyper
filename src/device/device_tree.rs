@@ -16,7 +16,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         let r = fdt_del_mem_rsv(dtb, 0);
         assert_eq!(r, 0);
         // fdt_add_mem_rsv(fdt, 0x80000000, 0x10000000);
-        let r = fdt_clear_initrd(dtb);
+        fdt_clear_initrd(dtb);
         let r = fdt_remove_node(dtb, "/cpus/cpu-map/cluster0/core0\0".as_ptr());
         assert_eq!(r, 0);
         let r = fdt_remove_node(dtb, "/cpus/cpu-map/cluster0/core1\0".as_ptr());
@@ -39,8 +39,8 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/trusty\0".as_ptr());
         assert_eq!(r, 0);
-        let r = fdt_disable_node(dtb, "/host1x/nvdisplay@15210000\0".as_ptr());
-        assert_eq!(r, 0);
+        // let r = fdt_disable_node(dtb, "/host1x/nvdisplay@15210000\0".as_ptr());
+        // assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/reserved-memory/ramoops_carveout\0".as_ptr());
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/watchdog@30c0000\0".as_ptr());
@@ -90,7 +90,7 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
             for dev in vm_dtb_devs {
                 match dev.dev_type {
                     DtbDevType::DevVirtio => {
-                        create_virtio_node(&mut fdt, dev.name, dev.irqs[0], dev.addr_region.ipa);
+                        create_virtio_node(&mut fdt, dev.name, dev.irqs[0], dev.addr_region.ipa)?;
                     }
                     _ => {}
                 }
@@ -116,7 +116,7 @@ fn create_memory_node(fdt: &mut FdtWriter, config: &VmMemoryConfig) -> FdtWriter
         addr.push(region.ipa_start as u64);
         addr.push(region.length as u64);
     }
-    fdt.property_array_u64("reg", addr.as_slice());
+    fdt.property_array_u64("reg", addr.as_slice())?;
     fdt.end_node(memory)?;
     Ok(())
 }
@@ -154,10 +154,10 @@ fn create_cpu_node(fdt: &mut FdtWriter, config: &VmCpuConfig) -> FdtWriterResult
     for cpu_id in 0..cpu_num {
         let cpu_name = format!("cpu@{:x}", cpu_id);
         let cpu_node = fdt.begin_node(&cpu_name)?;
-        fdt.property_string("compatible", "arm,cortex-a57");
-        fdt.property_string("device_type", "cpu");
-        fdt.property_string("enable-method", "psci");
-        fdt.property_array_u32("reg", &[0, cpu_id as u32]);
+        fdt.property_string("compatible", "arm,cortex-a57")?;
+        fdt.property_string("device_type", "cpu")?;
+        fdt.property_string("enable-method", "psci")?;
+        fdt.property_array_u32("reg", &[0, cpu_id as u32])?;
         fdt.end_node(cpu_node)?;
     }
 
@@ -222,10 +222,10 @@ fn create_virtio_node(
     address: usize,
 ) -> FdtWriterResult<()> {
     let virtio = fdt.begin_node(name)?;
-    fdt.property_null("dma-coherent");
+    fdt.property_null("dma-coherent")?;
     fdt.property_string("compatible", "virtio,mmio")?;
-    fdt.property_array_u32("interrupts", &[0, irq as u32 - 32, 0x1]);
-    fdt.property_array_u64("reg", &[address as u64, 0x400]);
+    fdt.property_array_u32("interrupts", &[0, irq as u32 - 32, 0x1])?;
+    fdt.property_array_u64("reg", &[address as u64, 0x400])?;
     fdt.end_node(virtio)?;
 
     Ok(())

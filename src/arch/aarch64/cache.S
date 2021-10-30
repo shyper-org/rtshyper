@@ -25,4 +25,3 @@ cache_clean_invalidate_d:
 	mov x0, xzr
 	dsb sy
 	ret
-

@@ -200,10 +200,10 @@ pub fn active_vcpu_id() -> usize {
 
 pub fn active_vm_id() -> usize {
     let vm = active_vm().unwrap();
-    vm.vm_id()
+    vm.id()
 }
 
-use crate::lib::time_current_us;
+// use crate::lib::time_current_us;
 pub fn active_vm() -> Option<Vm> {
     match active_vcpu() {
         None => {

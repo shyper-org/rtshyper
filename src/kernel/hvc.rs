@@ -1,7 +1,7 @@
 use core::mem::size_of;
 use crate::vmm::{get_vm_id, vmm_boot_vm};
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
-use crate::kernel::{active_vm_id, cpu_id, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
+use crate::kernel::{cpu_id, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::arch::PAGE_SIZE;
 use crate::lib::memcpy;
 
@@ -116,7 +116,7 @@ fn hvc_mediated_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize
         }
         // HVC_DEVICE_USER_NOTIFY
         49 => {
-            println!("mediated notify");
+            // println!("mediated notify");
             mediated_blk_notify_handler(x0);
         }
         _ => {

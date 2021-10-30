@@ -32,13 +32,13 @@ impl Vcpu {
         crate::arch::vcpu_arch_init(vm.clone(), self.clone());
     }
 
-    pub fn ptr_eq(&self, vcpu: Vcpu) -> bool {
-        Arc::ptr_eq(&self.inner, &vcpu.inner())
-    }
+    // pub fn ptr_eq(&self, vcpu: Vcpu) -> bool {
+    //     Arc::ptr_eq(&self.inner, &vcpu.inner())
+    // }
 
-    pub fn inner(&self) -> Arc<Mutex<VcpuInner>> {
-        self.inner().clone()
-    }
+    // pub fn inner(&self) -> Arc<Mutex<VcpuInner>> {
+    //     self.inner().clone()
+    // }
 
     pub fn set_phys_id(&self, phys_id: usize) {
         let mut inner = self.inner.lock();
@@ -79,7 +79,7 @@ impl Vcpu {
         let inner = self.inner.lock();
         let vm = inner.vm.clone().unwrap();
         drop(inner);
-        vm.vm_id()
+        vm.id()
     }
 
     #[allow(dead_code)]
@@ -150,7 +150,7 @@ impl VcpuInner {
 
     fn vm_id(&self) -> usize {
         let vm = self.vm.as_ref().unwrap();
-        vm.vm_id()
+        vm.id()
     }
 
     fn vm_pt_dir(&self) -> usize {
@@ -224,6 +224,7 @@ impl VcpuInner {
 }
 
 use crate::board::PLATFORM_VCPU_NUM_MAX;
+
 static VCPU_LIST: Mutex<Vec<Vcpu>> = Mutex::new(Vec::new());
 
 pub fn vcpu_alloc() -> Option<Vcpu> {
@@ -245,6 +246,7 @@ use crate::kernel::vm_if_list_set_state;
 use crate::kernel::{
     active_vcpu, active_vcpu_id, active_vm_id, cpu_id, cpu_stack, set_cpu_state, CPU_STACK_SIZE,
 };
+
 pub fn vcpu_run() {
     println!(
         "Core {} (vm {}, vcpu {}) start running",
@@ -253,7 +255,7 @@ pub fn vcpu_run() {
         active_vcpu_id()
     );
 
-    let vm = crate::kernel::active_vm().unwrap();
+    // let vm = crate::kernel::active_vm().unwrap();
     // vm.show_pagetable(0x17000000);
     let sp = cpu_stack() + CPU_STACK_SIZE;
     let ctx = active_vcpu().unwrap().vcpu_ctx_addr();

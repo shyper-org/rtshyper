@@ -1,17 +1,16 @@
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
+use crate::board::*;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
 use crate::device::create_fdt;
-use crate::kernel::{HVC_IRQ, Vm};
 use crate::kernel::{
     cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign,
     vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
 };
-use crate::kernel::{ipi_register, IpiType};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{vm, VM_LIST};
+use crate::kernel::{Vm, HVC_IRQ};
 use crate::lib::barrier;
-use crate::vmm::vmm_ipi_handler;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -95,7 +94,7 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
         let offset = load_ipa - region[idx].ipa_start;
         println!(
             "VM {} loads kernel: ipa=<0x{:x}>, pa=<0x{:x}>, size=<{}K>",
-            vm.vm_id(),
+            vm.id(),
             load_ipa,
             vm.pa_start(idx) + offset,
             size / 1024
@@ -122,18 +121,18 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     vm.set_entry_point(config.kernel_entry_point);
-    if vm.vm_id() == 0 {
+    if vm.id() == 0 {
         vmm_load_image(
             config.kernel_load_ipa,
             vm.clone(),
-            include_bytes!("../../image/Image_tegra"),
+            include_bytes!("../../image/L4T"),
         );
     } else {
-        vmm_load_image(
-            config.kernel_load_ipa,
-            vm.clone(),
-            include_bytes!("../../image/Image_vanilla"),
-        );
+        // vmm_load_image(
+        //     config.kernel_load_ipa,
+        //     vm.clone(),
+        //     include_bytes!("../../image/Image_vanilla"),
+        // );
     }
 
     match &vm.config().os_type {
@@ -153,23 +152,23 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-            {
-                use crate::arch::PAGE_SIZE;
-                let offset = config.device_tree_load_ipa
-                    - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
-                unsafe {
-                    let src = SYSTEM_FDT.get().unwrap();
-                    let len = src.len();
-                    let dst =
-                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                    dst.clone_from_slice(&src);
-                }
-                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        {
+            let offset = config.device_tree_load_ipa
+                - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+            unsafe {
+                let src = SYSTEM_FDT.get().unwrap();
+                let len = src.len();
+                let dst =
+                    core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                dst.clone_from_slice(&src);
             }
+            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        }
     } else {
         println!(
             "VM {} id {} device tree not found",
-            vm.vm_id(),
+            vm.id(),
             vm.config().name.unwrap()
         );
     }
@@ -183,7 +182,7 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     } else {
         println!(
             "VM {} id {} ramdisk not found",
-            vm.vm_id(),
+            vm.id(),
             vm.config().name.unwrap()
         );
     }
@@ -207,7 +206,7 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
     vm.set_ncpu(0);
     println!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<0b{:b}>",
-        vm.vm_id(),
+        vm.id(),
         config.num,
         config.allocate_bitmap
     );
@@ -224,7 +223,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
     if config.is_none() {
         println!(
             "vmm_init_emulated_device: VM {} emu config is NULL",
-            vm.vm_id()
+            vm.id()
         );
         return true;
     }
@@ -236,7 +235,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                 dev_name = "interrupt controller";
                 vm.set_intc_dev_id(idx);
                 emu_register_dev(
-                    vm.vm_id(),
+                    vm.id(),
                     idx,
                     emu_dev.base_ipa,
                     emu_dev.length,
@@ -247,7 +246,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             EmuDeviceTVirtioBlk => {
                 dev_name = "virtio block";
                 emu_register_dev(
-                    vm.vm_id(),
+                    vm.id(),
                     idx,
                     emu_dev.base_ipa,
                     emu_dev.length,
@@ -260,7 +259,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             EmuDeviceTVirtioNet => {
                 dev_name = "virtio net";
                 emu_register_dev(
-                    vm.vm_id(),
+                    vm.id(),
                     idx,
                     emu_dev.base_ipa,
                     emu_dev.length,
@@ -269,7 +268,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
-                let mut vm_if_list = VM_IF_LIST[vm.vm_id()].lock();
+                let mut vm_if_list = VM_IF_LIST[vm.id()].lock();
                 for i in 0..6 {
                     vm_if_list.mac[i] = emu_dev.cfg_list[i] as u8;
                 }
@@ -285,7 +284,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
         }
         println!(
             "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
-            vm.vm_id(),
+            vm.id(),
             idx,
             dev_name,
             emu_dev.base_ipa
@@ -307,7 +306,7 @@ fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: V
 
                 println!(
                     "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>",
-                    vm.vm_id(),
+                    vm.id(),
                     region.ipa,
                     region.pa,
                 );
@@ -321,7 +320,7 @@ fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: V
         None => {
             println!(
                 "vmm_init_passthrough_device: VM {} passthrough config is NULL",
-                vm.vm_id()
+                vm.id()
             );
             return true;
         }
@@ -352,14 +351,14 @@ unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                 "memory@90000000\0".as_ptr(),
             );
             fdt_add_timer(dtb, 0x8);
-            fdt_add_vm_service(dtb, HVC_IRQ as u32 - 0x20);
+            // fdt_add_vm_service(dtb, HVC_IRQ as u32 - 0x20);
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
             fdt_setup_gic(
                 dtb,
-                0x8000000,
-                0x8010000,
-                "interrupt-controller@8000000\0".as_ptr(),
+                PLATFORM_GICD_BASE as u64,
+                PLATFORM_GICC_BASE as u64,
+                "interrupt-controller@3881000\0".as_ptr(),
             );
         }
     }
@@ -367,7 +366,7 @@ unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
 
 fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
     let cpu_id = cpu_id();
-    let vm_id = vm.vm_id();
+    let vm_id = vm.id();
 
     if cpu_id == 0 {
         if vm_id >= VM_NUM_MAX {
@@ -402,6 +401,17 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
             }
         } else {
             unsafe {
+                // let dtb = include_bytes!("../../dts/vm0.dtb");
+                // let offset = config.image.device_tree_load_ipa
+                //     - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                // unsafe {
+                //     crate::lib::memcpy(
+                //         (vm.pa_start(0) + offset) as *const u8,
+                //         dtb.as_ptr(),
+                //         dtb.len(),
+                //     );
+                // }
+                // println!("vm0 use new dtb");
                 vmm_setup_fdt(config.clone(), vm.clone());
             }
         }
@@ -416,7 +426,7 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         if !vmm_init_passthrough_device(&config.vm_pt_dev_confg, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_passthrough_device failed");
         }
-        println!("VM {} id {} init ok", vm.vm_id(), vm.config().name.unwrap());
+        println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
     }
 }
 

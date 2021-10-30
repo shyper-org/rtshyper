@@ -5,7 +5,6 @@ use crate::kernel::{cpu_id, interrupt_cpu_ipi_send, CPU_IF_LIST};
 use crate::vmm::VmmEvent;
 use alloc::vec::Vec;
 use spin::Mutex;
-use crate::device::BlkIov;
 use crate::device::{Virtq, VirtioMmio};
 
 #[derive(Copy, Clone, Debug)]

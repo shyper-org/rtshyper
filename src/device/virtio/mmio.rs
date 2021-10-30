@@ -9,7 +9,7 @@ use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::{IpiType, vm_ipa2pa};
+use crate::kernel::vm_ipa2pa;
 use crate::kernel::Vm;
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::{context_get_gpr, context_set_gpr};
@@ -108,7 +108,6 @@ impl VirtioQueue for VirtioMmio {
                 inner.vq[0].reset(0);
                 use crate::device::virtio_blk_notify_handler;
                 if inner.dev.mediated() {
-                    use crate::kernel::IpiMediatedMsg;
                     inner.vq[0].set_notify_handler(virtio_mediated_blk_notify_handler);
                 } else {
                     inner.vq[0].set_notify_handler(virtio_blk_notify_handler);

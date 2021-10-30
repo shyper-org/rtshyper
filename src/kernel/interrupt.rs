@@ -1,6 +1,6 @@
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
-use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::kernel::{cpu_id, ipi_irq_handler};
+use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
 
@@ -98,10 +98,10 @@ use crate::vmm::vmm_ipi_handler;
 pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     // println!("VM {} register interrupt {}", vm.vm_id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
-    if glb_bitmap_lock.get(id) != 0 && id > GIC_PRIVINT_NUM {
+    if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
         println!(
             "interrupt_vm_register: VM {} interrupts conflict, id = {}",
-            vm.vm_id(),
+            vm.id(),
             id
         );
         return false;
@@ -148,14 +148,14 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                 unimplemented!();
             }
         }
-        drop(irq_handler);
-        return true;
+        // drop(irq_handler);
+        true
     } else {
         println!(
             "interrupt_handler: core {} receive unsupported int {}",
             cpu_id(),
             int_id
         );
-        return false;
+        false
     }
 }
