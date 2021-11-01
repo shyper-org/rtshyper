@@ -55,7 +55,7 @@ pub fn exception_iss() -> usize {
 
 #[inline(always)]
 pub fn exception_data_abort_handleable() -> bool {
-    ((exception_iss() & (1 << 10)) | (exception_iss() & (1 << 24))) != 0
+    (!(exception_iss() & (1 << 10)) | (exception_iss() & (1 << 24))) != 0
 }
 
 #[inline(always)]

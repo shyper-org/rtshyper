@@ -451,6 +451,8 @@ impl Vgic {
         }
 
         let gic_lrs_num = GIC_LRS_NUM.lock();
+        let gic_lrs = *gic_lrs_num;
+        drop(gic_lrs_num);
         let mut lr_ind = None;
 
         // for i in 0..4 {
@@ -462,7 +464,7 @@ impl Vgic {
         // println!("add_lr: interrupt {}", interrupt.id());
         // println!("gic_lrs_num {}", *gic_lrs_num);
 
-        for i in 0..*gic_lrs_num {
+        for i in 0..gic_lrs {
             if (GICH.elsr(i / 32) & (1 << (i % 32))) != 0 {
                 lr_ind = Some(i);
                 break;
@@ -479,7 +481,7 @@ impl Vgic {
                 let mut act_ind = None;
                 let mut pend_ind = None;
 
-                for i in 0..*gic_lrs_num {
+                for i in 0..gic_lrs {
                     let lr = GICH.lr(i);
                     let lr_prio = (lr >> 23) & 0b11111;
                     let lr_state = (lr >> 28) & 0b11;
@@ -629,6 +631,8 @@ impl Vgic {
         interrupt.set_lr(lr_ind as u16);
         self.set_cpu_priv_curr_lrs(vcpu_id, lr_ind, int_id as u16);
         // cpu_priv[vcpu_id].curr_lrs[lr_ind] = int_id as u16;
+
+        // println!("set in {} lr {}", interrupt.id(), lr_ind);
         GICH.set_lr(lr_ind, lr as u32);
     }
 
@@ -1598,9 +1602,20 @@ impl Vgic {
 
     fn refill_lrs(&self, vcpu: Vcpu) {
         // println!("refill lrs");
-        let gic_lrs = GIC_LRS_NUM.lock();
+        // for i in 0..4 {
+        //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+        // }
+        // println!(
+        //     "gich.ELSR {:x}, gic max spi {}",
+        //     GICH.elsr(0),
+        //     gic_max_spi()
+        // );
+        let gic_lrs_num = GIC_LRS_NUM.lock();
+        let gic_lrs = *gic_lrs_num;
+        drop(gic_lrs_num);
         let mut has_pending = false;
-        for i in 0..*gic_lrs {
+
+        for i in 0..gic_lrs {
             let lr = GICH.lr(i) as usize;
             if bit_extract(lr, 28, 2) & 1 != 0 {
                 has_pending = true;
@@ -1608,14 +1623,14 @@ impl Vgic {
         }
 
         let mut lr_idx_opt = bitmap_find_nth(
-            GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
+            GICH.elsr(0) as usize | ((GICH.elsr(1) as usize) << 32),
             0,
-            *gic_lrs,
+            gic_lrs,
             1,
             true,
         );
-        let mut interrupt_opt: Option<VgicInt> = None;
         while lr_idx_opt.is_some() {
+            let mut interrupt_opt: Option<VgicInt> = None;
             let lr_idx = lr_idx_opt.unwrap();
             let mut state = 0;
 
@@ -1628,7 +1643,7 @@ impl Vgic {
                         let temp_int_clone = temp_int.clone();
                         let temp_int_lock = temp_int_clone.lock.lock();
 
-                        if vgic_int_get_owner(vcpu.clone(), temp_int.clone()) {
+                        if !temp_int.in_lr() && vgic_int_get_owner(vcpu.clone(), temp_int.clone()) {
                             let temp_state = vgic_get_state(temp_int.clone());
                             let cpu_is_target =
                                 self.get_trgt(vcpu.clone(), i) & (1 << cpu_id()) != 0;
@@ -1644,6 +1659,7 @@ impl Vgic {
                                             && ((temp_state & 2 != 0) && (state & 1 != 0)))
                                             || (has_pending && temp_int.prio() < interrupt.prio())
                                         {
+                                            // println!("Some: refill int {}", temp_int.id());
                                             let aux = interrupt.clone();
                                             interrupt_opt = Some(temp_int.clone());
                                             state = vgic_get_state(temp_int.clone());
@@ -1651,6 +1667,7 @@ impl Vgic {
                                         }
                                     }
                                     None => {
+                                        // println!("None: refill int {}", temp_int.id());
                                         interrupt_opt = Some(temp_int.clone());
                                         state = vgic_get_state(temp_int.clone());
                                         temp_int_opt = None;
@@ -1675,6 +1692,12 @@ impl Vgic {
                 if state & 1 != 0 {
                     has_pending = true;
                 }
+                // println!(
+                //     "int id {} write lr {}, elsr {}",
+                //     interrupt.id(),
+                //     lr_idx,
+                //     GICH.elsr(0)
+                // );
             } else {
                 let hcr = GICH.hcr();
                 GICH.set_hcr(hcr & !(1 << 3));
@@ -1682,13 +1705,20 @@ impl Vgic {
             }
 
             lr_idx_opt = bitmap_find_nth(
-                GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
+                GICH.elsr(0) as usize | ((GICH.elsr(1) as usize) << 32),
                 0,
-                *gic_lrs,
+                gic_lrs,
                 1,
                 true,
             );
+
+            // println!("end write lr");
+            // for i in 0..4 {
+            //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+            // }
+            // println!("gich.ELSR {:x}", GICH.elsr(0));
         }
+        // println!("end refill lrs");
     }
 
     fn eoir_highest_spilled_active(&self, vcpu: Vcpu) {
@@ -1701,7 +1731,6 @@ impl Vgic {
                     // ugly
                     let temp_int_clone = temp_int.clone();
                     let temp_int_lock = temp_int_clone.lock.lock();
-                    // let temp_int_lock = temp_int.lock.lock();
                     if vgic_int_get_owner(vcpu.clone(), temp_int.clone())
                         && (temp_int.state().to_num() & 2 != 0)
                     {
@@ -1837,15 +1866,9 @@ fn vgic_get_state(interrupt: VgicInt) -> usize {
 
 fn vgic_int_yield_owner(vcpu: Vcpu, interrupt: VgicInt) {
     if !vgic_owns(vcpu.clone(), interrupt.clone()) {
-        // if interrupt.id() == 48 {
-        println!("vgic_int_yield_owner: vgic owns");
-        // }
         return;
     }
     if gic_is_priv(interrupt.id() as usize) || interrupt.in_lr() {
-        // if interrupt.id() == 48 {
-        //     println!("gic_is_priv");
-        // }
         return;
     }
 

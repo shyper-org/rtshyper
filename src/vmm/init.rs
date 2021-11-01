@@ -3,10 +3,7 @@ use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
 use crate::device::create_fdt;
-use crate::kernel::{
-    cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign,
-    vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
-};
+use crate::kernel::{cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, vm_if_list_set_cpu_id, CPU, VM_IF_LIST, active_vm, active_vm_id};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{vm, VM_LIST};
 use crate::kernel::{Vm, HVC_IRQ};
@@ -152,19 +149,19 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-        {
-            let offset = config.device_tree_load_ipa
-                - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
-            unsafe {
-                let src = SYSTEM_FDT.get().unwrap();
-                let len = src.len();
-                let dst =
-                    core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                dst.clone_from_slice(&src);
+            {
+                let offset = config.device_tree_load_ipa
+                    - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                unsafe {
+                    let src = SYSTEM_FDT.get().unwrap();
+                    let len = src.len();
+                    let dst =
+                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                    dst.clone_from_slice(&src);
+                }
+                println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
             }
-            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
-        }
     } else {
         println!(
             "VM {} id {} device tree not found",
@@ -609,7 +606,7 @@ pub fn vmm_init() {
 use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle, vcpu_run};
 
 pub fn vmm_boot() {
-    if cpu_assigned() && active_vcpu_id() == 0 {
+    if cpu_assigned() && active_vm_id() == 0 {
         let vcpu_pool = cpu_vcpu_pool();
         for i in 0..cpu_vcpu_pool_size() {
             let vcpu = vcpu_pool.content[i].vcpu.clone();

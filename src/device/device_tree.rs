@@ -27,8 +27,8 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/sdhci@3460000\0".as_ptr());
         assert_eq!(r, 0);
-        let r = fdt_disable_node(dtb, "/sdhci@3440000\0".as_ptr());
-        assert_eq!(r, 0);
+        // let r = fdt_disable_node(dtb, "/sdhci@3440000\0".as_ptr());
+        // assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/serial@c280000\0".as_ptr());
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/serial@3110000\0".as_ptr());
