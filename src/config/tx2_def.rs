@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 1;
+    vm_config.vm_num = 2;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -622,9 +622,9 @@ pub fn config_init() {
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig {
-            num: 2,
-            allocate_bitmap: 0b0011,
-            master: -1,
+            num: 1,
+            allocate_bitmap: 0b0001,
+            master: 0,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),

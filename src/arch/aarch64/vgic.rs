@@ -450,9 +450,7 @@ impl Vgic {
             return false;
         }
 
-        let gic_lrs_num = GIC_LRS_NUM.lock();
-        let gic_lrs = *gic_lrs_num;
-        drop(gic_lrs_num);
+        let gic_lrs = gic_lrs();
         let mut lr_ind = None;
 
         // for i in 0..4 {
@@ -462,7 +460,7 @@ impl Vgic {
         // println!("eisr[0] {:x}", GICH.eisr(0));
         // println!("hcr 0x{:x}", GICH.hcr());
         // println!("add_lr: interrupt {}", interrupt.id());
-        // println!("gic_lrs_num {}", *gic_lrs_num);
+        // println!("gic_lrs {}", *gic_lrs);
 
         for i in 0..gic_lrs {
             if (GICH.elsr(i / 32) & (1 << (i % 32))) != 0 {
@@ -1556,11 +1554,11 @@ impl Vgic {
     }
 
     fn handle_trapped_eoir(&self, vcpu: Vcpu) {
-        let gic_lrs = GIC_LRS_NUM.lock();
+        let gic_lrs = gic_lrs();
         let mut lr_idx_opt = bitmap_find_nth(
             GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
             0,
-            *gic_lrs,
+            gic_lrs,
             1,
             true,
         );
@@ -1593,7 +1591,7 @@ impl Vgic {
             lr_idx_opt = bitmap_find_nth(
                 GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
                 0,
-                *gic_lrs,
+                gic_lrs,
                 1,
                 true,
             );
@@ -1610,9 +1608,7 @@ impl Vgic {
         //     GICH.elsr(0),
         //     gic_max_spi()
         // );
-        let gic_lrs_num = GIC_LRS_NUM.lock();
-        let gic_lrs = *gic_lrs_num;
-        drop(gic_lrs_num);
+        let gic_lrs = gic_lrs();
         let mut has_pending = false;
 
         for i in 0..gic_lrs {

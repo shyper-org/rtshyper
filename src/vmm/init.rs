@@ -125,11 +125,11 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
             include_bytes!("../../image/L4T"),
         );
     } else {
-        // vmm_load_image(
-        //     config.kernel_load_ipa,
-        //     vm.clone(),
-        //     include_bytes!("../../image/Image_vanilla"),
-        // );
+        vmm_load_image(
+            config.kernel_load_ipa,
+            vm.clone(),
+            include_bytes!("../../image/Image_vanilla"),
+        );
     }
 
     match &vm.config().os_type {
@@ -348,7 +348,7 @@ unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                 "memory@90000000\0".as_ptr(),
             );
             fdt_add_timer(dtb, 0x8);
-            // fdt_add_vm_service(dtb, HVC_IRQ as u32 - 0x20);
+            fdt_add_vm_service(dtb, HVC_IRQ as u32 - 0x20);
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
             fdt_setup_gic(
@@ -606,7 +606,7 @@ pub fn vmm_init() {
 use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle, vcpu_run};
 
 pub fn vmm_boot() {
-    if cpu_assigned() && active_vm_id() == 0 {
+    if cpu_assigned() && active_vcpu_id() == 0 {
         let vcpu_pool = cpu_vcpu_pool();
         for i in 0..cpu_vcpu_pool_size() {
             let vcpu = vcpu_pool.content[i].vcpu.clone();

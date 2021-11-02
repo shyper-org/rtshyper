@@ -515,3 +515,12 @@ pub fn gicc_get_current_irq() -> (usize, usize) {
     let src = bit_extract(iar as usize, 10, 3);
     (id, src)
 }
+
+pub fn gic_lrs() -> usize {
+    *GIC_LRS_NUM.lock()
+}
+
+pub fn set_gic_lrs(lrs: usize) {
+    let mut gic_lrs = GIC_LRS_NUM.lock();
+    *gic_lrs = lrs;
+}
