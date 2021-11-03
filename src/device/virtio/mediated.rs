@@ -1,4 +1,4 @@
-use crate::kernel::{active_vm, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject, io_task_head, IpiInnerMsg, TaskType, vm, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject, io_task_head, IpiInnerMsg, TaskType, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use alloc::vec::Vec;
 use spin::Mutex;

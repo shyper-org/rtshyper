@@ -128,7 +128,8 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         vmm_load_image(
             config.kernel_load_ipa,
             vm.clone(),
-            include_bytes!("../../image/Image_vanilla"),
+            include_bytes!("../../image/vm1_arch_Image"),
+            // include_bytes!("../../image/Image_vanilla"),
         );
     }
 

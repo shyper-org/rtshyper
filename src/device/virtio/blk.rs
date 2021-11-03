@@ -610,9 +610,9 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                     vq.notify(dev.int_id());
                     return false;
                 }
-                let vstatus_addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(next_desc_idx));
+                let vstatus_addr = vm_ipa2pa(vm.clone(), vq.desc_addr(next_desc_idx));
                 if vstatus_addr == 0 {
-                    println!("virtio_blk_notify_handler: failed to vstatus");
+                    println!("virtio_blk_notify_handler: vm[{}] failed to vstatus", vm.id());
                     return false;
                 }
                 let vstatus = unsafe { &mut *(vstatus_addr as *mut u8) };
