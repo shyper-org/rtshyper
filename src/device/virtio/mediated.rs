@@ -1,9 +1,12 @@
-use crate::kernel::{active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject, io_task_head, IpiInnerMsg, TaskType, vm, vm_ipa2pa};
+use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
+use crate::kernel::{
+    active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, interrupt_vm_inject, io_task_head,
+    vm, vm_ipa2pa, HvcGuestMsg, IpiInnerMsg, TaskType,
+};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
+use crate::lib::memcpy;
 use alloc::vec::Vec;
 use spin::Mutex;
-use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::lib::memcpy;
 
 const BLK_IRQ: usize = 0x20 + 0x10;
 static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
@@ -25,9 +28,7 @@ pub struct MediatedBlk {
 
 impl MediatedBlk {
     pub fn content(&self) -> &mut MediatedBlkContent {
-        unsafe {
-            &mut *(self.base_addr as *mut MediatedBlkContent)
-        }
+        unsafe { &mut *(self.base_addr as *mut MediatedBlkContent) }
     }
 
     pub fn nreq(&self) -> usize {
@@ -108,7 +109,11 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     mediated_blk.set_nreq(0);
 
     let cache_pa = vm_ipa2pa(vm.clone(), mediated_blk.cache_ipa());
-    println!("mediated_dev_append: cache ipa {:x}, cache_pa {:x}", mediated_blk.cache_ipa(), cache_pa);
+    println!(
+        "mediated_dev_append: cache ipa {:x}, cache_pa {:x}",
+        mediated_blk.cache_ipa(),
+        cache_pa
+    );
     mediated_blk.set_cache_pa(cache_pa);
     mediated_blk_list_push(mediated_blk);
     true
@@ -127,15 +132,17 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
         TaskType::MediatedIoTask(task) => {
             match task.io_type {
                 VIRTIO_BLK_T_IN => {
+                    // let mut sum = 0;
                     for idx in 0..task.iov_list.len() {
                         let data_bg = task.iov_list[idx].data_bg;
                         let len = task.iov_list[idx].len as usize;
                         unsafe {
                             memcpy(data_bg as *mut u8, cache_ptr as *mut u8, len);
                         }
-                        // println!("read check_sum is {:x}", check_sum(data_bg, len));
+                        // sum |= check_sum(data_bg, len);
                         cache_ptr += len;
                     }
+                    // println!("read check_sum is {:x}", sum);
                 }
                 VIRTIO_BLK_T_OUT => {
                     // println!("notify write");
@@ -151,22 +158,18 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
 }
 
 pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
-    // let mediated_blk = mediated_blk_list_get(0);
-    // let mut cache_ptr = mediated_blk.cache_pa();
-    // println!("mediated_ipi_handler cache ipa {:x}, cache pa {:x}", blk.cache_ipa(), blk.cache_pa());
-
     let vm = active_vm().unwrap();
     interrupt_vm_inject(vm, BLK_IRQ, 0);
 }
 
-// fn check_sum(addr: usize, len: usize) -> usize {
-//     let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
-//     let mut sum = 0;
-//     for num in slice {
-//         sum ^= num;
-//     }
-//     sum
-// }
+fn check_sum(addr: usize, len: usize) -> usize {
+    let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
+    let mut sum = 0;
+    for num in slice {
+        sum ^= num;
+    }
+    sum
+}
 
 pub fn mediated_ipi_handler(msg: &IpiMessage) {
     // println!("vm {} mediated_ipi_handler", active_vm_id());
@@ -174,7 +177,7 @@ pub fn mediated_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::MediatedMsg(mediated_msg) => {
             let src_id = mediated_msg.src_id;
             let vm = vm(src_id);
-            virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm);
+            virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm, mediated_msg.avail_idx);
         }
         _ => {}
     }
@@ -191,8 +194,8 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
     // println!("mediated blk read: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_IN, sector, count);
 
     let med_read_msg = HvcGuestMsg {
-        fid: 3,     // HVC_MEDIATED
-        event: 50,  // HVC_MEDIATED_DEV_NOTIFY
+        fid: 3,    // HVC_MEDIATED
+        event: 50, // HVC_MEDIATED_DEV_NOTIFY
     };
 
     // println!("mediated_blk_read send msg to vm0");
@@ -211,8 +214,8 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     // println!("mediated blk write: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_OUT, sector, count);
 
     let med_read_msg = HvcGuestMsg {
-        fid: 3,     // HVC_MEDIATED
-        event: 50,  // HVC_MEDIATED_DRV_NOTIFY
+        fid: 3,    // HVC_MEDIATED
+        event: 50, // HVC_MEDIATED_DRV_NOTIFY
     };
 
     // println!("mediated_blk_write send msg to vm0");

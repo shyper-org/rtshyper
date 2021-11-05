@@ -6,6 +6,7 @@ use crate::SYSTEM_FDT;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use vm_fdt::{Error, FdtWriter, FdtWriterResult};
+use crate::device::EmuDeviceType;
 
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
     unsafe {
@@ -85,18 +86,29 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
         None => {}
     }
     create_gic_node(&mut fdt, config.gicc_addr(), config.gicd_addr())?;
-    match &config.vm_dtb_devs {
-        Some(vm_dtb_devs) => {
-            for dev in vm_dtb_devs {
-                match dev.dev_type {
-                    DtbDevType::DevVirtio => {
-                        create_virtio_node(&mut fdt, dev.name, dev.irqs[0], dev.addr_region.ipa)?;
-                    }
-                    _ => {}
-                }
+    // match &config.vm_dtb_devs {
+    //     Some(vm_dtb_devs) => {
+    //         for dev in vm_dtb_devs {
+    //             match dev.dev_type {
+    //                 DtbDevType::DevVirtio => {
+    //                     create_virtio_node(&mut fdt, dev.name, dev.irqs[0], dev.addr_region.ipa)?;
+    //                 }
+    //                 _ => {}
+    //             }
+    //         }
+    //     }
+    //     None => {}
+    // }
+
+    for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
+        match emu_cfg.emu_type {
+            EmuDeviceType::EmuDeviceTVirtioBlk |
+            EmuDeviceType::EmuDeviceTVirtioNet => {
+                println!("virtio fdt node init {:x}", emu_cfg.base_ipa);
+                create_virtio_node(&mut fdt, emu_cfg.name.unwrap(), emu_cfg.irq_id, emu_cfg.base_ipa)?;
             }
+            _ => {}
         }
-        None => {}
     }
 
     fdt.end_node(root_node)?;

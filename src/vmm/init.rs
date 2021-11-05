@@ -2,11 +2,14 @@ use crate::arch::PageTable;
 use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
-use crate::device::create_fdt;
-use crate::kernel::{cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu, set_cpu_assign, vm_if_list_set_cpu_id, CPU, VM_IF_LIST, active_vm, active_vm_id};
+use crate::device::{create_fdt, EmuDeviceType};
+use crate::kernel::{
+    active_vm, active_vm_id, cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu,
+    set_cpu_assign, vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
+};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{vm, VM_LIST};
-use crate::kernel::{Vm, HVC_IRQ};
+use crate::kernel::Vm;
 use crate::lib::barrier;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -128,8 +131,8 @@ fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         vmm_load_image(
             config.kernel_load_ipa,
             vm.clone(),
-            include_bytes!("../../image/vm1_arch_Image"),
-            // include_bytes!("../../image/Image_vanilla"),
+            // include_bytes!("../../image/vm1_arch_Image"),
+            include_bytes!("../../image/Image_vanilla"),
         );
     }
 
@@ -349,15 +352,33 @@ unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                 "memory@90000000\0".as_ptr(),
             );
             fdt_add_timer(dtb, 0x8);
-            fdt_add_vm_service(dtb, HVC_IRQ as u32 - 0x20);
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
-            fdt_setup_gic(
-                dtb,
-                PLATFORM_GICD_BASE as u64,
-                PLATFORM_GICC_BASE as u64,
-                "interrupt-controller@3881000\0".as_ptr(),
-            );
+
+
+            if config.vm_emu_dev_confg.is_some() {
+                for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
+                    match emu_cfg.emu_type {
+                        EmuDeviceTGicd => {
+                            fdt_setup_gic(
+                                dtb,
+                                PLATFORM_GICD_BASE as u64,
+                                PLATFORM_GICC_BASE as u64,
+                                emu_cfg.name.unwrap().as_ptr(),
+                            );
+                        }
+                        EmuDeviceTVirtioNet => {
+                            fdt_add_virtio(dtb, emu_cfg.name.unwrap().as_ptr(), emu_cfg.irq_id as u32 - 0x20, emu_cfg.base_ipa as u64);
+                        }
+                        EmuDeviceTShyper => {
+                            fdt_add_vm_service(dtb, emu_cfg.irq_id as u32 - 0x20);
+                        }
+                        _ => {
+                            todo!();
+                        }
+                    }
+                }
+            }
         }
     }
 }

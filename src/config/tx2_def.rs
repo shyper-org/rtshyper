@@ -5,7 +5,7 @@ use super::{
 use crate::board::*;
 use crate::config::PassthroughRegion;
 use crate::device::EmuDeviceType;
-use crate::kernel::VmType;
+use crate::kernel::{VmType, HVC_IRQ};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -24,7 +24,7 @@ pub fn config_init() {
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("intc@3881000"),
+        name: Some("interrupt-controller@3881000"),
         base_ipa: PLATFORM_GICD_BASE,
         length: 0x1000,
         irq_id: 0,
@@ -50,24 +50,24 @@ pub fn config_init() {
     //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
     //     mediated: false,
     // });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("virtio_mmio@a001000"),
-    //     base_ipa: 0xa001000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x11,
-    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-    //     mediated: false,
-    // });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("shyper"),
-    //     base_ipa: 0,
-    //     length: 0,
-    //     irq_id: 32 + 0x20,
-    //     cfg_list: Vec::new(),
-    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
-    //     mediated: false,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_mmio@a001000"),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("shyper"),
+        base_ipa: 0,
+        length: 0,
+        irq_id: HVC_IRQ,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTShyper,
+        mediated: false,
+    });
 
     // vm0 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -631,6 +631,7 @@ pub fn config_init() {
         vm_dtb_devs: None,
         cmdline:
         "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
     // vm1 emu
@@ -645,7 +646,7 @@ pub fn config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a000000"),
+        name: Some("virtio_blk@a000000"),
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
@@ -654,15 +655,15 @@ pub fn config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("virtio_mmio@a001000"),
-    //     base_ipa: 0xa001000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x11,
-    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-    //     mediated: false,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_net@a001000"),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
 
     // vm1 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -730,15 +731,15 @@ pub fn config_init() {
             length: 0x1000,
         },
     });
-    vm_dtb_devs.push(VmDtbDev {
-        name: "virtio_blk@a000000",
-        dev_type: DtbDevType::DevVirtio,
-        irqs: vec![0x20 + 0x10],
-        addr_region: AddrRegions {
-            ipa: 0xa000000,
-            length: 0x1000,
-        },
-    });
+    // vm_dtb_devs.push(VmDtbDev {
+    //     name: "virtio_blk@a000000",
+    //     dev_type: DtbDevType::DevVirtio,
+    //     irqs: vec![0x20 + 0x10],
+    //     addr_region: AddrRegions {
+    //         ipa: 0xa000000,
+    //         length: 0x1000,
+    //     },
+    // });
 
     // vm1 config
     vm_config.entries.push(Arc::new(VmConfigEntry {

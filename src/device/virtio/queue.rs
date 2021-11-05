@@ -1,6 +1,6 @@
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, Vm};
+use crate::kernel::{active_vm, active_vm_id, Vm};
 use alloc::sync::Arc;
 use core::slice;
 use spin::Mutex;
@@ -29,7 +29,7 @@ struct VringDesc {
 struct VringAvail {
     flags: u16,
     idx: u16,
-    ring: [u16; 256],
+    ring: [u16; 512],
 }
 
 #[repr(C)]
@@ -42,7 +42,7 @@ struct VringUsedElem {
 struct VringUsed {
     flags: u16,
     idx: u16,
-    ring: [VringUsedElem; 256],
+    ring: [VringUsedElem; 512],
 }
 
 pub trait VirtioQueue {
@@ -62,11 +62,14 @@ impl Virtq {
         }
     }
 
-    pub fn notify(&self, int_id: usize) {
+    pub fn notify(&self, int_id: usize, vm: Vm) {
         let inner = self.inner.lock();
         use crate::kernel::interrupt_vm_inject;
+        if vm.id() != active_vm_id() {
+            panic!("target vm{} should not notify at vm{}", vm.id(), active_vm_id());
+        }
         if inner.to_notify {
-            interrupt_vm_inject(active_vm().unwrap(), int_id, 0);
+            interrupt_vm_inject(vm.clone(), int_id, 0);
         }
     }
 
@@ -75,11 +78,11 @@ impl Virtq {
         inner.reset(index);
     }
 
-    pub fn pop_avail_desc_idx(&self) -> Option<u16> {
+    pub fn pop_avail_desc_idx(&self, avail_idx: u16) -> Option<u16> {
         let mut inner = self.inner.lock();
         match &inner.avail {
             Some(avail) => {
-                if avail.idx == inner.last_avail_idx {
+                if avail_idx == inner.last_avail_idx {
                     return None;
                 }
                 // println!("avail idx is {}", avail.idx);
@@ -134,9 +137,9 @@ impl Virtq {
         inner.used_flags &= !VRING_USED_F_NO_NOTIFY as u16;
     }
 
-    pub fn check_avail_idx(&self) -> bool {
+    pub fn check_avail_idx(&self, avail_idx: u16) -> bool {
         let inner = self.inner.lock();
-        return inner.last_avail_idx == inner.avail.as_ref().unwrap().idx;
+        return inner.last_avail_idx == avail_idx;
     }
 
     pub fn desc_is_writable(&self, idx: usize) -> bool {
@@ -159,6 +162,12 @@ impl Virtq {
                 used.flags = flag;
                 used.ring[used.idx as usize % num].id = desc_chain_head_idx;
                 used.ring[used.idx as usize % num].len = len;
+                // println!(
+                //     "update used ring, idx {} len {} desc_chain_head_idx {}",
+                //     used.idx as usize % num,
+                //     len,
+                //     desc_chain_head_idx
+                // );
                 // unsafe {
                 //     llvm_asm!("dsb ish");
                 // }
@@ -172,7 +181,7 @@ impl Virtq {
         }
     }
 
-    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio, Vm) -> bool) {
+    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio, Vm, u16) -> bool) {
         let mut inner = self.inner.lock();
         inner.notify_handler = Some(handler);
     }
@@ -182,7 +191,7 @@ impl Virtq {
         match inner.notify_handler {
             Some(handler) => {
                 drop(inner);
-                return handler(self.clone(), mmio, active_vm().unwrap());
+                return handler(self.clone(), mmio, active_vm().unwrap(), self.avail_idx());
             }
             None => {
                 println!("call_notify_handler: virtq notify handler is None");
@@ -346,6 +355,12 @@ impl Virtq {
         avail.flags
     }
 
+    pub fn avail_idx(&self) -> u16 {
+        let inner = self.inner.lock();
+        let avail = inner.avail.as_ref().unwrap();
+        avail.idx
+    }
+
     pub fn used_idx(&self) -> u16 {
         let inner = self.inner.lock();
         let used = inner.used.as_ref().unwrap();
@@ -369,7 +384,7 @@ pub struct VirtqInner<'a> {
     avail_addr: usize,
     used_addr: usize,
 
-    notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>,
+    notify_handler: Option<fn(Virtq, VirtioMmio, Vm, u16) -> bool>,
 }
 
 impl VirtqInner<'_> {

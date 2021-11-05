@@ -120,7 +120,7 @@ pub fn net_features() -> usize {
 
 use crate::device::{VirtioMmio, Virtq};
 
-pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
+pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: u16) -> bool {
     // if vm.vm_id() == 1 {
     //     println!("virtio_net_notify_handler");
     // }
@@ -140,7 +140,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
     let dev = nic.dev();
     // let buf = dev.cache();
     let vq_size = vq.num();
-    let mut next_desc_idx_opt = vq.pop_avail_desc_idx();
+    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
 
     while next_desc_idx_opt.is_some() {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
@@ -179,7 +179,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
             return false;
         }
 
-        next_desc_idx_opt = vq.pop_avail_desc_idx();
+        next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     }
 
     if !vq.avail_is_avail() {
@@ -187,12 +187,12 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
         return false;
     }
 
-    vq.notify(dev.int_id());
+    vq.notify(dev.int_id(), vm.clone());
 
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
-            let vm = vm(trgt_vmid);
+            let vm = crate::kernel::vm(trgt_vmid);
             if vm.id() == active_vm_id() {
                 let nic = match vm.emu_net_dev(0) {
                     EmuDevs::VirtioNet(x) => x,
@@ -212,7 +212,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, _vm: Vm) -> bool {
                     }
                 };
                 if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                    rx_vq.notify(nic.dev().int_id());
+                    rx_vq.notify(nic.dev().int_id(), vm.clone());
                 }
             } else {
                 let msg = IpiEthernetMsg {
@@ -270,7 +270,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             };
 
             if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                rx_vq.notify(nic.dev().int_id());
+                rx_vq.notify(nic.dev().int_id(), active_vm().unwrap());
             }
         }
         _ => {
@@ -359,7 +359,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let nic = match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(x) => x,
         _ => {
-            println!("ethernet_send_to: failed to get virtio net dev");
+            println!("ethernet_send_to: vm[{}] failed to get virtio net dev", vmid);
             return false;
         }
     };
@@ -379,7 +379,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         }
     };
 
-    let desc_header_idx_opt = rx_vq.pop_avail_desc_idx();
+    let desc_header_idx_opt = rx_vq.pop_avail_desc_idx(rx_vq.avail_idx());
     if !rx_vq.avail_is_avail() {
         println!("ethernet_send_to: receive invalid avail desc idx");
         return false;
