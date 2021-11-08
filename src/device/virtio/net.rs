@@ -157,10 +157,10 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
             tx_iov.push_data(addr, vq.desc_len(idx) as usize);
 
             len += vq.desc_len(idx) as usize;
-            idx = vq.desc_next(idx) as usize;
             if vq.desc_flags(idx) == 0 {
                 break;
             }
+            idx = vq.desc_next(idx) as usize;
         }
 
         let trgt_vmid_map = ethernet_transmit(tx_iov.clone(), len).1;
@@ -296,7 +296,8 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
 
 fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
     // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]
-    if len - size_of::<VirtioNetHdr>() < 6 + 6 + 2 {
+    if len < size_of::<VirtioNetHdr>() || len - size_of::<VirtioNetHdr>() < 6 + 6 + 2 {
+        println!("Too short for an ethernet frame, len {}, size of head {}", len, size_of::<VirtioNetHdr>());
         return (false, 0);
     }
 

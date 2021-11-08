@@ -159,6 +159,7 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
 
 pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
     let vm = active_vm().unwrap();
+    // println!("vm[{}] inject blk irq", vm.id());
     interrupt_vm_inject(vm, BLK_IRQ, 0);
 }
 

@@ -36,24 +36,37 @@ impl VirtioIov {
         inner.vector[idx].len
     }
 
-    pub fn get_ptr(&self, size: usize) -> &[u8] {
+    pub fn get_ptr(&self, size: usize) -> &'static [u8] {
         let inner = self.inner.lock();
-        let mut iov_idx = 0;
-        let mut idx = size as isize;
-        while idx >= 0 {
-            if inner.vector[iov_idx].len > idx as usize {
+        // let mut iov_idx = 0;
+        let mut idx = size;
+
+        for iov_data in &inner.vector {
+            if iov_data.len > idx {
                 return unsafe {
-                    from_raw_parts((inner.vector[iov_idx].buf + idx as usize) as *const u8, 14)
+                    from_raw_parts((iov_data.buf + idx) as *const u8, 14)
                 };
             } else {
-                iov_idx += 1;
-                idx -= inner.vector[iov_idx].len as isize;
-            }
-            if iov_idx == inner.vector.len() {
-                break;
+                idx -= iov_data.len;
             }
         }
+
+        // while idx >= 0 {
+        //     if inner.vector[iov_idx].len > idx {
+        //         return unsafe {
+        //             from_raw_parts((inner.vector[iov_idx].buf + idx) as *const u8, 14)
+        //         };
+        //     } else {
+        //         iov_idx += 1;
+        //         idx -= inner.vector[iov_idx].len;
+        //     }
+        //     if iov_idx == inner.vector.len() {
+        //         break;
+        //     }
+        // }
         println!("iov get_ptr failed");
+        println!("get_ptr iov {:#?}", inner.vector);
+        println!("size {}, idx {}", size, idx);
         return &[0];
     }
 
@@ -122,11 +135,13 @@ impl VirtioIov {
     }
 }
 
+#[derive(Debug)]
 struct VirtioIovData {
     buf: usize,
     len: usize,
 }
 
+#[derive(Debug)]
 struct VirtioIovInner {
     vector: Vec<VirtioIovData>,
 }

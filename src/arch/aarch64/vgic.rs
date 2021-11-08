@@ -509,15 +509,15 @@ impl Vgic {
                     let spilled_int = self
                         .get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111)
                         .unwrap();
-                    let spilled_int_lock = spilled_int.lock.lock();
-                    // println!(
-                    //     "add_lr: Core {} get int {} lock",
-                    //     cpu_id(),
-                    //     spilled_int.id()
-                    // );
+                    let spilled_int_lock;
+                    if spilled_int.id() != interrupt.id() {
+                        spilled_int_lock = spilled_int.lock.lock();
+                    }
                     self.remove_lr(vcpu.clone(), spilled_int.clone());
                     vgic_int_yield_owner(vcpu.clone(), spilled_int.clone());
-                    drop(spilled_int_lock);
+                    // if spilled_int.id() != interrupt.id() {
+                    //     drop(spilled_int_lock);
+                    // }
                 }
             }
         }

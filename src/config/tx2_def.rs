@@ -630,8 +630,8 @@ pub fn config_init() {
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: None,
         cmdline:
-        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
     // vm1 emu
@@ -651,7 +651,8 @@ pub fn config_init() {
         length: 0x1000,
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-        cfg_list: vec![0, 67108864],
+        // cfg_list: vec![0, 67108864], // 32G
+        cfg_list: vec![0, 104857600],    // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });

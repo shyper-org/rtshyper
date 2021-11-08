@@ -69,6 +69,7 @@ impl Virtq {
             panic!("target vm{} should not notify at vm{}", vm.id(), active_vm_id());
         }
         if inner.to_notify {
+            drop(inner);
             interrupt_vm_inject(vm.clone(), int_id, 0);
         }
     }
