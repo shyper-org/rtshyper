@@ -3,10 +3,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::kernel::{
-    active_vm, active_vm_id, add_task, finish_ipi_task, finish_task, io_list_len, ipi_list_len,
-    vm_ipa2pa, IoMediatedMsg, IpiMediatedMsg, Task, TaskType, Vm,
-};
+use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, ipi_list_len, vm_ipa2pa, IoMediatedMsg, IpiMediatedMsg, Task, TaskType, Vm, push_used_info};
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
@@ -411,6 +408,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
             }
         }
         VIRTIO_BLK_T_GET_ID => {
+            panic!("blk get id");
             if req.mediated() {
                 add_task(Task {
                     task_type: TaskType::MediatedIoTask(IoMediatedMsg {
@@ -441,17 +439,8 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
 
 #[no_mangle]
-pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm, _idx: u16) -> bool {
-    // if vq.avail_flags() != 0 {
-    let idx = vq.avail_idx();
+pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm, idx: u16) -> bool {
     let flag = vq.avail_flags();
-    // println!(
-    //     "vm{} add ipi task, vq avail_idx {}, avail_flag {}",
-    //     active_vm_id(),
-    //     idx,
-    //     flag
-    // );
-    // }
     add_task(Task {
         task_type: TaskType::MediatedIpiTask(IpiMediatedMsg {
             src_id: active_vm_id(),
@@ -586,8 +575,14 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
             let cache = mediated_blk.cache_pa();
             blk_req_handler(req.clone(), cache)
         };
-        if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size) {
-            return false;
+
+        // should not update at this time?
+        if !req.mediated() {
+            if !vq.update_used_ring(total as u32, desc_chain_head_idx as u32, vq_size) {
+                return false;
+            }
+        } else {
+            push_used_info(desc_chain_head_idx as u32, total as u32);
         }
         // println!("finish blk req handler");
         // match dev.stat() {
@@ -620,7 +615,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
         vq.notify(dev.int_id(), vm.clone());
     }
     if req.mediated() && process_count <= 0 {
-        finish_ipi_task();
+        finish_task(true);
     }
 
     return true;

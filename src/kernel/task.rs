@@ -1,5 +1,5 @@
 use crate::device::{
-    mediated_blk_read, mediated_blk_write, BlkIov, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
+    mediated_blk_read, mediated_blk_write, Virtq, BlkIov, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
 };
 use crate::kernel::{ipi_send_msg, vm_if_list_get_cpu_id, IpiInnerMsg, IpiMediatedMsg, IpiType};
 use crate::lib::memcpy;
@@ -11,6 +11,11 @@ use spin::Mutex;
 pub enum TaskType {
     MediatedIpiTask(IpiMediatedMsg),
     MediatedIoTask(IoMediatedMsg),
+}
+
+pub struct UsedInfo {
+    pub desc_chain_head_idx: u32,
+    pub used_len: u32,
 }
 
 #[derive(Clone)]
@@ -63,6 +68,7 @@ impl Task {
     }
 }
 
+static MEDIATED_USED_INFO_LIST: Mutex<Vec<UsedInfo>> = Mutex::new(Vec::new());
 static MEDIATED_IPI_TASK_LIST: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 static MEDIATED_IO_TASK_LIST: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 
@@ -92,73 +98,82 @@ pub fn add_task(task: Task) {
     }
 }
 
-pub fn finish_task() {
+pub fn finish_task(check: bool) {
     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
     let mut io_list = MEDIATED_IO_TASK_LIST.lock();
-    if io_list.is_empty() {
-        ipi_list.remove(0);
+    if check && !io_list.is_empty() {
+        panic!("finish_task: io list should be empty");
+    }
+
+    // if io_list.is_empty() {
+    //     ipi_list.remove(0);
+    //     if !ipi_list.is_empty() {
+    //         let task = ipi_list[0].clone();
+    //         drop(ipi_list);
+    //         drop(io_list);
+    //         task.handler();
+    //     }
+    // } else {
+    if !io_list.is_empty() {
+        io_list.remove(0);
+    }
+    if !io_list.is_empty() {
+        let task = io_list[0].clone();
+        drop(ipi_list);
+        drop(io_list);
+        // println!("finish io task, io len {}", io_list.len());
+        task.handler();
+    } else {
+        match ipi_list.remove(0).task_type {
+            TaskType::MediatedIpiTask(task) => {
+                if ipi_list.is_empty() {
+                    handle_used_info(task.vq.clone());
+                    // println!("notify");
+                    let target_id = vm_if_list_get_cpu_id(task.src_id);
+                    ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
+                }
+            }
+            TaskType::MediatedIoTask(_) => {
+                panic!("illegal ipi task");
+            }
+        }
+
+        // println!(
+        //     "finish last io task, and ipi task, ipi len {}",
+        //     ipi_list.len()
+        // );
+        // println!("finish io and ipi task, io len {}, ipi len {}", 0, ipi_list.len());
         if !ipi_list.is_empty() {
             let task = ipi_list[0].clone();
             drop(ipi_list);
             drop(io_list);
             task.handler();
         }
-    } else {
-        io_list.remove(0);
-        if !io_list.is_empty() {
-            let task = io_list[0].clone();
-            drop(ipi_list);
-            drop(io_list);
-            // println!("finish io task, io len {}", io_list.len());
-            task.handler();
-        } else {
-            match ipi_list.remove(0).task_type {
-                TaskType::MediatedIpiTask(task) => {
-                    if ipi_list.is_empty() {
-                        // println!("notify");
-                        let target_id = vm_if_list_get_cpu_id(task.src_id);
-                        ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
-                    }
-                }
-                TaskType::MediatedIoTask(_) => {
-                    panic!("illegal ipi task");
-                }
-            }
-
-            // println!(
-            //     "finish last io task, and ipi task, ipi len {}",
-            //     ipi_list.len()
-            // );
-            // println!("finish io and ipi task, io len {}, ipi len {}", 0, ipi_list.len());
-            if !ipi_list.is_empty() {
-                let task = ipi_list[0].clone();
-                drop(ipi_list);
-                drop(io_list);
-                task.handler();
-            }
-        }
     }
+    // }
 }
 
-pub fn finish_ipi_task() {
-    let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-    let mut io_list = MEDIATED_IO_TASK_LIST.lock();
-    if io_list.len() != 0 {
-        panic!("illegle finish ipi task, len {}", io_list.len());
-    }
-    io_list.clear();
-    let task = ipi_list.remove(0);
-    // println!("finish ipi task, ipi len {}", ipi_list.len());
-    if !ipi_list.is_empty() {
-        ipi_list[0].handler();
-    } else {
-        // println!("notify");
-        if let TaskType::MediatedIpiTask(ipi_task) = task.task_type {
-            let target_id = vm_if_list_get_cpu_id(ipi_task.src_id);
-            ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
-        }
-    }
-}
+// pub fn finish_ipi_task() {
+//     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
+//     let mut io_list = MEDIATED_IO_TASK_LIST.lock();
+//     if io_list.len() != 0 {
+//         panic!("illegle finish ipi task, len {}", io_list.len());
+//     }
+//     io_list.clear();
+//     let task = ipi_list.remove(0);
+//     // println!("finish ipi task, ipi len {}", ipi_list.len());
+//     if !ipi_list.is_empty() {
+//         ipi_list[0].handler();
+//     } else {
+//         // println!("notify");
+//         if let TaskType::MediatedIpiTask(ipi_task) = task.task_type {
+//             let target_id = vm_if_list_get_cpu_id(ipi_task.src_id);
+//             // if ipi_task.notify {
+//             ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
+//             // }
+//         }
+//     }
+// }
 
 pub fn io_task_head() -> Task {
     let io_list = MEDIATED_IO_TASK_LIST.lock();
@@ -192,3 +207,38 @@ pub fn ipi_list_len() -> usize {
     let ipi_list = MEDIATED_IPI_TASK_LIST.lock();
     ipi_list.len()
 }
+
+pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32) {
+    let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
+    used_info_list.push(UsedInfo {
+        desc_chain_head_idx,
+        used_len,
+    });
+}
+
+pub fn handle_used_info(vq: Virtq) {
+    let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
+    let vq_size = vq.num();
+    for info in &*used_info_list {
+        if info.used_len == 0 {
+            println!("used_len {}, chain_head_idx {}", info.used_len, info.desc_chain_head_idx);
+        }
+        vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
+    }
+    used_info_list.clear();
+}
+
+// pub fn set_used_len(len: u32, idx: usize) {
+//     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
+//     if ipi_list.len() <= idx {
+//         panic!("set_ipi_notify: illegal idx for ipi task list");
+//     }
+//     match &mut ipi_list[idx].task_type {
+//         TaskType::MediatedIpiTask(task) => {
+//             task.notify = notify;
+//         }
+//         TaskType::MediatedIoTask(_) => {
+//             panic!("illegal ipi task");
+//         }
+//     }
+// }

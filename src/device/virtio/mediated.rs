@@ -152,7 +152,7 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
         }
     }
 
-    finish_task();
+    finish_task(false);
     true
     // interrupt_vm_inject(vm, BLK_IRQ, 0);
 }
@@ -199,7 +199,6 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
         event: 50, // HVC_MEDIATED_DEV_NOTIFY
     };
 
-    // println!("mediated_blk_read send msg to vm0");
     if !hvc_send_msg_to_vm(0, &med_read_msg) {
         println!("mediated_blk_read: failed to notify VM 0");
     }

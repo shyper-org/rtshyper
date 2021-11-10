@@ -652,7 +652,7 @@ pub fn config_init() {
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
         // cfg_list: vec![0, 67108864], // 32G
-        cfg_list: vec![0, 104857600],    // 100G
+        cfg_list: vec![0, 209715200],    // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });

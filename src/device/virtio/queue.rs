@@ -163,12 +163,6 @@ impl Virtq {
                 used.flags = flag;
                 used.ring[used.idx as usize % num].id = desc_chain_head_idx;
                 used.ring[used.idx as usize % num].len = len;
-                // println!(
-                //     "update used ring, idx {} len {} desc_chain_head_idx {}",
-                //     used.idx as usize % num,
-                //     len,
-                //     desc_chain_head_idx
-                // );
                 // unsafe {
                 //     llvm_asm!("dsb ish");
                 // }
@@ -201,16 +195,16 @@ impl Virtq {
         }
     }
 
-    pub fn show_desc_info(&self, size: usize) {
+    pub fn show_desc_info(&self, size: usize, vm: Vm) {
         let inner = self.inner.lock();
         let desc = inner.desc_table.as_ref().unwrap();
         println!("[*desc_ring*]");
         for i in 0..size {
             use crate::kernel::vm_ipa2pa;
-            let desc_addr = vm_ipa2pa(active_vm().unwrap(), desc[i].addr);
+            let desc_addr = vm_ipa2pa(vm.clone(), desc[i].addr);
             println!(
-                "index {}   desc_addr 0x{:x}   len 0x{:x}   flags {}  next {}",
-                i, desc[i].addr, desc[i].len, desc[i].flags, desc[i].next
+                "index {}   desc_addr_ipa 0x{:x}   desc_addr_pa 0x{:x}   len 0x{:x}   flags {}  next {}",
+                i, desc[i].addr, desc_addr, desc[i].len, desc[i].flags, desc[i].next
             );
         }
     }
