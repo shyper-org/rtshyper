@@ -33,7 +33,7 @@ impl Vcpu {
     }
 
     pub fn shutdown(&self) {
-        println!("Core {} (vm {} vcpu {}) shutdown ok", cpu_id(), active_vm_id(), active_vcpu_id());
+        println!("Core {} (vm {} vcpu {}) shutdown ok", current_cpu().id, active_vm_id(), active_vcpu_id());
         crate::board::platform_cpu_shutdown();
     }
 
@@ -247,30 +247,31 @@ pub fn vcpu_idle() {
     crate::kernel::cpu_idle();
 }
 
-use crate::kernel::vm_if_list_set_state;
+use crate::kernel::{current_cpu, vm_if_list_set_state};
 use crate::kernel::{
-    active_vcpu, active_vcpu_id, active_vm_id, cpu_id, cpu_stack, set_cpu_state, CPU_STACK_SIZE,
+    active_vcpu_id, active_vm_id, CPU_STACK_SIZE,
 };
 
 pub fn vcpu_run() {
     println!(
         "Core {} (vm {}, vcpu {}) start running",
-        cpu_id(),
+        current_cpu().id,
         active_vm_id(),
         active_vcpu_id()
     );
 
     // let vm = crate::kernel::active_vm().unwrap();
     // vm.show_pagetable(0x17000000);
-    let sp = cpu_stack() + CPU_STACK_SIZE;
-    let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
+    let sp = &(current_cpu().stack) as *const _ as usize + CPU_STACK_SIZE;
+    let ctx = current_cpu().active_vcpu.clone().unwrap().vcpu_ctx_addr();
 
     use crate::lib::memcpy_safe;
     use core::mem::size_of;
     let size = size_of::<Aarch64ContextFrame>();
     memcpy_safe((sp - size) as *mut u8, ctx as *mut u8, size);
 
-    set_cpu_state(CpuState::CpuRun);
+    let state = CpuState::CpuRun;
+    current_cpu().cpu_state = state;
     vm_if_list_set_state(active_vm_id(), super::VmState::VmActive);
     // TODO: vcpu_run
     extern "C" {

@@ -1,6 +1,6 @@
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
 // use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{cpu_id, InterruptHandler};
+use crate::kernel::{current_cpu, InterruptHandler};
 
 // #[derive(Copy, Clone)]
 // struct Timer(bool);
@@ -23,7 +23,7 @@ pub fn timer_init() {
     timer_enable(false);
 
     crate::lib::barrier();
-    if cpu_id() == 0 {
+    if current_cpu().id == 0 {
         crate::kernel::interrupt_reserve_int(
             INTERRUPT_IRQ_HYPERVISOR_TIMER,
             InterruptHandler::TimeIrqHandler(timer_irq_handler),
@@ -39,7 +39,7 @@ pub fn timer_init() {
 pub fn timer_enable(val: bool) {
     println!(
         "Core {} {} EL2 timer",
-        cpu_id(),
+        current_cpu().id,
         if val { "enable" } else { "disable" }
     );
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
@@ -51,7 +51,7 @@ fn timer_irq_handler(_arg: usize, _: usize) {
     };
     println!(
         "timer_irq_handler: core {} count 0x{:x}",
-        cpu_id(),
+        current_cpu().id,
         timer_arch_get_counter()
     );
     timer_arch_disable_irq();

@@ -9,10 +9,9 @@ use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::vm_ipa2pa;
+use crate::kernel::{current_cpu, vm_ipa2pa};
 use crate::kernel::Vm;
 use crate::kernel::{active_vm, active_vm_id};
-use crate::kernel::{context_get_gpr, context_set_gpr};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -363,9 +362,12 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
                 return;
             }
         }
-        context_set_gpr(emu_ctx.reg, value as usize);
+        let idx = emu_ctx.reg;
+        let val = value as usize;
+        current_cpu().set_gpr(idx, val);
     } else {
-        let value = context_get_gpr(emu_ctx.reg) as u32;
+        let idx = emu_ctx.reg;
+        let value = current_cpu().get_gpr(idx) as u32;
         match offset {
             VIRTIO_MMIO_HOST_FEATURES_SEL => {
                 mmio.set_dev_feature_sel(value);
@@ -427,9 +429,12 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 return;
             }
         }
-        context_set_gpr(emu_ctx.reg, value as usize);
+        let idx = emu_ctx.reg;
+        let val = value as usize;
+        current_cpu().set_gpr(idx, val);
     } else {
-        let value = context_get_gpr(emu_ctx.reg);
+        let idx = emu_ctx.reg;
+        let value = current_cpu().get_gpr(idx);
         let q_sel = mmio.q_sel() as usize;
         match offset {
             VIRTIO_MMIO_QUEUE_SEL => mmio.set_q_sel(value as u32),
@@ -578,7 +583,9 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
                 return;
             }
         }
-        context_set_gpr(emu_ctx.reg, value as usize);
+        let idx = emu_ctx.reg;
+        let val = value as usize;
+        current_cpu().set_gpr(idx, val);
     } else {
         println!(
             "virtio_mmio_cfg_access: wrong reg write 0x{:x}",
@@ -652,10 +659,13 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
         }
     } else if offset == VIRTIO_MMIO_INTERRUPT_STATUS && !write {
         // println!("in VIRTIO_MMIO_INTERRUPT_STATUS");
-        context_set_gpr(emu_ctx.reg, mmio.irt_stat() as usize);
+        let idx = emu_ctx.reg;
+        let val = mmio.irt_stat() as usize;
+        current_cpu().set_gpr(idx, val);
     } else if offset == VIRTIO_MMIO_INTERRUPT_ACK && write {
         // println!("in VIRTIO_MMIO_INTERRUPT_ACK");
-        mmio.set_irt_ack(context_get_gpr(emu_ctx.reg) as u32);
+        let idx = emu_ctx.reg;
+        mmio.set_irt_ack(current_cpu().get_gpr(idx) as u32);
     } else if (VIRTIO_MMIO_MAGIC_VALUE <= offset && offset <= VIRTIO_MMIO_GUEST_FEATURES_SEL)
         || offset == VIRTIO_MMIO_STATUS
     {

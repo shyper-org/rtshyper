@@ -1,7 +1,7 @@
 use crate::arch::{gic_cpu_reset, gicc_clear_current_irq};
 use super::GICD;
 use super::GIC_SGIS_NUM;
-use crate::kernel::{Vcpu, Vm};
+use crate::kernel::{Vcpu, Vm, current_cpu};
 
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
 pub const INTERRUPT_IRQ_IPI: usize = 1;
@@ -14,7 +14,7 @@ pub fn interrupt_arch_init() {
 
     crate::lib::barrier();
 
-    if crate::kernel::cpu_id() == 0 {
+    if current_cpu().id == 0 {
         gic_glb_init();
     }
 
@@ -31,7 +31,7 @@ pub fn interrupt_arch_init() {
 }
 
 pub fn interrupt_arch_enable(int_id: usize, en: bool) {
-    let cpu_id = crate::kernel::cpu_id();
+    let cpu_id = current_cpu().id;
     // println!(
     //     "interrupt_arch_enable: cpu_id {}, int_id {}, en {}",
     //     cpu_id, int_id, en

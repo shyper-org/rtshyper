@@ -1,6 +1,6 @@
 use crate::board::{PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE};
 use crate::kernel::INTERRUPT_NUM_MAX;
-use crate::kernel::{cpu_current_irq, cpu_id, set_cpu_current_irq};
+use crate::kernel::{current_cpu};
 use crate::lib::{bit_extract, trace};
 use spin::Mutex;
 use tock_registers::interfaces::*;
@@ -241,7 +241,7 @@ impl GicDistributor {
             let reg_ind = int_id / 4;
             let off = (int_id % 4) * 8;
             if pend {
-                self.SPENDSGIR[reg_ind].set(1 << (off + cpu_id()));
+                self.SPENDSGIR[reg_ind].set(1 << (off + current_cpu().id));
             } else {
                 self.CPENDSGIR[reg_ind].set(0b11111111 << off);
             }
@@ -508,7 +508,7 @@ pub fn gic_is_sgi(int_id: usize) -> bool {
 }
 
 pub fn gicc_clear_current_irq(for_hypervisor: bool) {
-    let irq = cpu_current_irq() as u32;
+    let irq = current_cpu().current_irq as u32;
     if irq == 0 {
         return;
     }
@@ -522,12 +522,14 @@ pub fn gicc_clear_current_irq(for_hypervisor: bool) {
         // }
         gicc.DIR.set(irq);
     }
-    set_cpu_current_irq(0);
+    let irq = 0;
+    current_cpu().current_irq = irq;
 }
 
 pub fn gicc_get_current_irq() -> (usize, usize) {
     let iar = GICC.IAR.get();
-    set_cpu_current_irq(iar as usize);
+    let irq = iar as usize;
+    current_cpu().current_irq = irq;
     let id = bit_extract(iar as usize, 0, 10);
     let src = bit_extract(iar as usize, 10, 3);
     (id, src)

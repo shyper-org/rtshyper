@@ -15,6 +15,11 @@ extern crate alloc;
 extern crate log;
 // extern crate rlibc;
 
+// #[macro_export]
+// macro_rules! cpu {
+//     () => ($crate::kernel::cpu())
+// }
+
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ($crate::lib::_print(format_args!($($arg)*)));
@@ -72,7 +77,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     timer_init();
 
     vmm_init();
-    
+
     crate::lib::barrier();
     if cpu_id != 0 {
         crate::kernel::cpu_idle();

@@ -167,6 +167,15 @@ impl Cpu {
             None => {}
         }
     }
+
+    pub fn set_active_vcpu(&mut self, idx: usize) {
+        let vcpu_pool = self.vcpu_pool.as_mut().unwrap();
+        let vcpu = vcpu_pool.content[idx].vcpu.clone();
+        vcpu_pool.active_idx = idx;
+
+        vcpu.set_state(VcpuState::VcpuAct);
+        self.active_vcpu = Some(vcpu);
+    }
 }
 
 #[no_mangle]
@@ -187,27 +196,14 @@ pub static mut CPU: Cpu = Cpu {
     stack: [0; CPU_STACK_SIZE],
 };
 
-// set/get CPU
-pub fn cpu_id() -> usize {
-    unsafe { CPU.id }
-}
-
-pub fn cpu_assigned() -> bool {
-    unsafe { CPU.assigned }
-}
-
-pub fn active_vcpu() -> Option<Vcpu> {
+pub fn current_cpu() -> &'static mut Cpu {
     unsafe {
-        CPU.active_vcpu.clone()
-        // if CPU.active_vcpu.is_none() {
-        //     return Err(());
-        // }
-        // Ok(CPU.active_vcpu.as_ref().unwrap().clone())
+        &mut CPU
     }
 }
 
 pub fn active_vcpu_id() -> usize {
-    let active_vcpu = active_vcpu().unwrap();
+    let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
     active_vcpu.id()
 }
 
@@ -216,9 +212,8 @@ pub fn active_vm_id() -> usize {
     vm.id()
 }
 
-// use crate::lib::time_current_us;
 pub fn active_vm() -> Option<Vm> {
-    match active_vcpu() {
+    match current_cpu().active_vcpu.clone() {
         None => {
             return None;
         }
@@ -226,22 +221,6 @@ pub fn active_vm() -> Option<Vm> {
             return active_vcpu.vm();
         }
     }
-    // return active_vcpu().unwrap().vm();
-    // if active_vcpu().is_err() {
-    //     return Err(());
-    // }
-    // let active_vcpu = active_vcpu().unwrap();
-
-    // let time1 = time_current_us();
-    // return active_vcpu.vm();
-    // match active_vcpu.vm() {
-    //     Ok(vm) => {
-    //         let time2 = time_current_us();
-    //         println!("stage0[{}] stage1[{}]", time1 - time0, time2 - time1);
-    //         return Ok(vm.clone());
-    //     }
-    //     Err(_) => Err(()),
-    // }
 }
 
 pub fn active_vm_ncpu() -> usize {
@@ -251,102 +230,8 @@ pub fn active_vm_ncpu() -> usize {
     }
 }
 
-pub fn cpu_vcpu_pool_size() -> usize {
-    unsafe {
-        let vcpu_pool = CPU.vcpu_pool.as_ref().unwrap();
-        vcpu_pool.content.len()
-    }
-}
-
-pub fn cpu_vcpu_pool() -> &'static Box<VcpuPool> {
-    unsafe {
-        let vcpu_pool = CPU.vcpu_pool.as_ref().unwrap();
-        vcpu_pool
-    }
-}
-
-pub fn cpu_current_irq() -> usize {
-    unsafe { CPU.current_irq }
-}
-
-pub fn context_get_gpr(idx: usize) -> usize {
-    unsafe { CPU.get_gpr(idx) }
-}
-
-pub fn get_cpu_ctx_elr() -> usize {
-    unsafe { CPU.get_elr() }
-}
-
-pub fn set_cpu_assign(assigned: bool) {
-    unsafe {
-        CPU.assigned = assigned;
-    }
-}
-
-pub fn set_cpu_vcpu_pool(pool: Box<VcpuPool>) {
-    unsafe {
-        CPU.vcpu_pool = Some(pool);
-    }
-}
-
-pub fn set_cpu_state(state: CpuState) {
-    unsafe {
-        CPU.cpu_state = state;
-    }
-}
-
-pub fn set_active_vcpu(idx: usize) {
-    unsafe {
-        let vcpu_pool = CPU.vcpu_pool.as_mut().unwrap();
-        let vcpu = vcpu_pool.content[idx].vcpu.clone();
-        vcpu_pool.active_idx = idx;
-
-        vcpu.set_state(VcpuState::VcpuAct);
-        CPU.active_vcpu = Some(vcpu);
-    }
-}
-
-pub fn set_cpu_current_irq(irq: usize) {
-    unsafe {
-        CPU.current_irq = irq;
-    }
-}
-
-pub fn set_cpu_ctx(ctx: *mut ContextFrame) {
-    unsafe {
-        CPU.set_ctx(ctx);
-    }
-}
-
-pub fn cpu_ctx() -> Option<usize> {
-    unsafe { CPU.ctx }
-}
-
-pub fn clear_cpu_ctx() {
-    unsafe {
-        CPU.clear_ctx();
-    }
-}
-
-pub fn context_set_gpr(idx: usize, val: usize) {
-    unsafe {
-        CPU.set_gpr(idx, val);
-    }
-}
-
-pub fn set_cpu_ctx_elr(val: usize) {
-    unsafe {
-        CPU.set_elr(val);
-    }
-}
-
-pub fn cpu_stack() -> usize {
-    unsafe { &(CPU.stack) as *const _ as usize }
-}
-// end set/get CPU
-
 pub fn cpu_init() {
-    let cpu_id = cpu_id();
+    let cpu_id = current_cpu().id;
     if cpu_id == 0 {
         use crate::arch::power_arch_init;
         use crate::board::platform_power_on_secondary_cores;
@@ -355,7 +240,8 @@ pub fn cpu_init() {
         cpu_if_init();
     }
 
-    set_cpu_state(CpuState::CpuIdle);
+    let state = CpuState::CpuIdle;
+    current_cpu().cpu_state = state;
     println!("Core {} init ok", cpu_id);
 
     crate::lib::barrier();
@@ -368,7 +254,8 @@ pub fn cpu_init() {
 }
 
 pub fn cpu_idle() {
-    set_cpu_state(CpuState::CpuIdle);
+    let state = CpuState::CpuIdle;
+    current_cpu().cpu_state = state;
     cpu_interrupt_unmask();
     loop {
         unsafe {

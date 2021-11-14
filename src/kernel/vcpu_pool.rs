@@ -1,4 +1,4 @@
-use crate::kernel::{Vcpu, VcpuState};
+use crate::kernel::{current_cpu, Vcpu, VcpuState};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -29,9 +29,11 @@ impl VcpuPool {
     }
 }
 
-use crate::kernel::{cpu_vcpu_pool, cpu_vcpu_pool_size, set_cpu_vcpu_pool, CPU};
+use crate::kernel::{CPU};
+
 pub fn vcpu_pool_init() {
-    set_cpu_vcpu_pool(Box::new(VcpuPool::default()));
+    let pool = Box::new(VcpuPool::default());
+    current_cpu().vcpu_pool = Some(pool);
 }
 
 pub fn vcpu_pool_append(vcpu: Vcpu) -> bool {
@@ -50,8 +52,9 @@ pub fn vcpu_pool_append(vcpu: Vcpu) -> bool {
 }
 
 pub fn vcpu_pool_pop_through_vmid(vm_id: usize) -> Option<Vcpu> {
-    let vcpu_pool = cpu_vcpu_pool();
-    let size = cpu_vcpu_pool_size();
+    let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
+    let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
+    let size = vcpu_pool.content.len();
     if size == 0 {
         println!("vcpu pool is empty");
         return None;

@@ -3,10 +3,7 @@ use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
 use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
 use crate::device::{create_fdt, EmuDeviceType};
-use crate::kernel::{
-    active_vm, active_vm_id, cpu_assigned, cpu_id, cpu_vcpu_pool_size, set_active_vcpu,
-    set_cpu_assign, vm_if_list_set_cpu_id, CPU, VM_IF_LIST,
-};
+use crate::kernel::{active_vm, active_vm_id, vm_if_list_set_cpu_id, CPU, VM_IF_LIST, current_cpu};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{vm, VM_LIST};
 use crate::kernel::Vm;
@@ -387,7 +384,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
 }
 
 fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
-    let cpu_id = cpu_id();
+    let cpu_id = current_cpu().id;
     let vm_id = vm.id();
 
     if cpu_id == 0 {
@@ -460,8 +457,9 @@ static VM_ASSIGN: Mutex<Vec<Mutex<VmAssignment>>> = Mutex::new(Vec::new());
 fn vmm_assign_vcpu() {
     vcpu_pool_init();
 
-    let cpu_id = cpu_id();
-    set_cpu_assign(false);
+    let cpu_id = current_cpu().id;
+    let assigned = false;
+    current_cpu().assigned = assigned;
     let def_vm_config = DEF_VM_CONFIG_TABLE.lock();
     let vm_num = def_vm_config.vm_num;
     drop(def_vm_config);
@@ -505,7 +503,8 @@ fn vmm_assign_vcpu() {
                 vm_assigned.has_master = true;
                 vm_assigned.cpu_num += 1;
                 vm_assigned.cpus |= 1 << cpu_id;
-                set_cpu_assign(true);
+                let assigned = true;
+                current_cpu().assigned = assigned;
                 println!(
                     "* Core {} is assigned => vm {}, vcpu {}",
                     cpu_id, vm_id, vcpu_id
@@ -525,7 +524,8 @@ fn vmm_assign_vcpu() {
                     panic!("core {} too many vcpu", cpu_id);
                 }
                 println!("core {} after vcpu_pool_append1", cpu_id);
-                set_cpu_assign(true);
+                let assigned = true;
+                current_cpu().assigned = assigned;
                 vm_assigned.cpu_num += 1;
                 vm_assigned.cpus |= 1 << cpu_id;
                 println!(
@@ -536,7 +536,7 @@ fn vmm_assign_vcpu() {
         }
     }
     barrier();
-    if cpu_assigned() {
+    if current_cpu().assigned {
         if let Some(vcpu_pool) = unsafe { &mut CPU.vcpu_pool } {
             for i in 0..vcpu_pool.content.len() {
                 let vcpu = vcpu_pool.content[i].vcpu.clone();
@@ -550,8 +550,10 @@ fn vmm_assign_vcpu() {
                 vm.set_cpu_num(vm_assigned.cpu_num);
             }
         }
-        let size = cpu_vcpu_pool_size();
-        set_active_vcpu(size - 1);
+        let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
+        let size = vcpu_pool.content.len();
+        let idx = size - 1;
+        current_cpu().set_active_vcpu(idx);
     }
     barrier();
 
@@ -564,7 +566,7 @@ fn vmm_assign_vcpu() {
 pub fn vmm_init() {
     barrier();
 
-    if cpu_id() == 0 {
+    if current_cpu().id == 0 {
         super::vmm_init_config();
 
         let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
@@ -608,24 +610,25 @@ pub fn vmm_init() {
     //     panic!("vmm_init: failed to register ipi vmm");
     // }
 
-    if cpu_id() == 0 {
+    if current_cpu().id == 0 {
         println!("Sybilla Hypervisor init ok\n\nStart booting VMs ...");
     }
 
     barrier();
 }
 
-use crate::kernel::{active_vcpu_id, cpu_vcpu_pool, vcpu_idle, vcpu_run};
+use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
 
 pub fn vmm_boot() {
-    if cpu_assigned() && active_vcpu_id() == 0 {
-        let vcpu_pool = cpu_vcpu_pool();
-        for i in 0..cpu_vcpu_pool_size() {
+    if current_cpu().assigned && active_vcpu_id() == 0 {
+        let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
+        let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
+        for i in 0..vcpu_pool.content.len() {
             let vcpu = vcpu_pool.content[i].vcpu.clone();
             // Before running, every vcpu need to reset context state
             vcpu.reset_state();
         }
-        println!("Core {} start running", cpu_id());
+        println!("Core {} start running", current_cpu().id);
         vcpu_run();
 
         // // test
@@ -635,7 +638,7 @@ pub fn vmm_boot() {
         // // end test
     } else {
         // If there is no available vm(vcpu), just go idle
-        println!("Core {} idle", cpu_id());
+        println!("Core {} idle", current_cpu().id);
         vcpu_idle();
     }
 }

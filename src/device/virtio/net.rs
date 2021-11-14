@@ -249,7 +249,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
 }
 
 use crate::kernel::IpiMessage;
-use crate::lib::{time_current_us, trace};
+use crate::lib::trace;
 
 pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     // let begin = time_current_us();

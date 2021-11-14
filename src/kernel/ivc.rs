@@ -1,4 +1,4 @@
-use crate::kernel::{active_vm, context_set_gpr, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX};
+use crate::kernel::{active_vm, current_cpu, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX};
 use crate::arch::PAGE_SIZE;
 
 pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
@@ -15,7 +15,9 @@ pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
     vm_if_list_set_ivc_arg(vm_id, cfg_pa);
     vm_if_list_set_ivc_arg_ptr(vm_id, cfg_pa - PAGE_SIZE / VM_NUM_MAX);
 
-    context_set_gpr(0, vm_id);
+    let idx = 0;
+    let val = vm_id;
+    current_cpu().set_gpr(idx, val);
     println!("VM {} update message", vm_id);
     true
 }

@@ -1,6 +1,6 @@
 use crate::arch::gicc_clear_current_irq;
-use crate::kernel::{active_vcpu_id, active_vm, cpu_id, vcpu_run, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
-use crate::kernel::{active_vcpu, active_vm_id, vm_if_list_get_cpu_id, vm_num};
+use crate::kernel::{active_vcpu_id, active_vm, current_cpu, vcpu_run, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
+use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id, vm_num};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::{vmm_boot, vmm_init_image, vmm_setup_fdt};
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
@@ -22,7 +22,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
 
     let phys_id = vm_if_list_get_cpu_id(vm_id);
 
-    if active_vcpu().is_some() && vm_id == active_vm_id() {
+    if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
         gicc_clear_current_irq(true);
         vmm_boot();
     } else {
@@ -40,10 +40,10 @@ pub fn vmm_reboot_vm(vm: Vm) {
     if vm.id() == 0 {
         todo!();
     }
-    let vcpu = active_vcpu().unwrap();
+    let vcpu = current_cpu().active_vcpu.clone().unwrap();
     println!("VM {} reset...", vm.id());
     power_arch_vm_shutdown_secondary_cores(vm.clone());
-    println!("Core {} (vm {} vcpu {}) shutdown ok", cpu_id(), vm.id(), active_vcpu_id());
+    println!("Core {} (vm {} vcpu {}) shutdown ok", current_cpu().id, vm.id(), active_vcpu_id());
 
     let config = vm_cfg_entry(vm.id());
     if !vmm_init_image(&config.image, vm.clone()) {

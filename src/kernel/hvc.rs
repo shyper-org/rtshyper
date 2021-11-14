@@ -1,7 +1,7 @@
 use core::mem::size_of;
 use crate::vmm::{get_vm_id, vmm_boot_vm};
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
-use crate::kernel::{cpu_id, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
+use crate::kernel::{current_cpu, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::arch::PAGE_SIZE;
 use crate::lib::{memcpy_safe, trace};
 
@@ -154,7 +154,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
     memcpy_safe(target_addr as *const u8, guest_msg as *const _ as *const u8, size_of::<HvcGuestMsg>());
 
     let cpu_trgt = vm_if_list_get_cpu_id(vm_id);
-    if cpu_trgt != cpu_id() {
+    if cpu_trgt != current_cpu().id {
         todo!();
     } else {
         hvc_guest_notify(vm_id);

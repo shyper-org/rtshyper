@@ -1,5 +1,5 @@
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
-use crate::kernel::{cpu_id, ipi_irq_handler, Vcpu};
+use crate::kernel::{current_cpu, ipi_irq_handler, Vcpu};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
@@ -63,7 +63,7 @@ pub fn interrupt_init() {
     use crate::arch::interrupt_arch_init;
     interrupt_arch_init();
 
-    let cpu_id = super::cpu_id();
+    let cpu_id = current_cpu().id;
     if cpu_id == 0 {
         interrupt_reserve_int(
             INTERRUPT_IRQ_IPI,
@@ -153,7 +153,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     } else {
         println!(
             "interrupt_handler: core {} receive unsupported int {}",
-            cpu_id(),
+            current_cpu().id,
             int_id
         );
         false

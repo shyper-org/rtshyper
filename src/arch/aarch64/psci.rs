@@ -1,8 +1,8 @@
 use super::smc::smc_call;
 use crate::arch::{Aarch64ContextFrame, gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
-use crate::kernel::{context_set_gpr, cpu_idle, ipi_intra_broadcast_msg, timer_enable, Vm};
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vm};
 use crate::kernel::{
-    active_vcpu, active_vcpu_id, active_vm_id, cpu_ctx, cpu_id, set_cpu_assign, set_cpu_state, CpuState,
+    active_vcpu_id, active_vm_id, CpuState,
 };
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 
@@ -98,8 +98,12 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
                 result.0, result.1, result.2,
                 if result.1 > result.2 { result.1 - result.2 } else { result.2 - result.1 }
             );
-            context_set_gpr(1, result.1);
-            context_set_gpr(2, result.2);
+            let idx = 1;
+            let val = result.1;
+            current_cpu().set_gpr(idx, val);
+            let idx = 2;
+            let val = result.2;
+            current_cpu().set_gpr(idx, val);
         }
         PSCI_FEATURES => match x1 {
             PSCI_VERSION | PSCI_CPU_ON_AARCH64 | PSCI_FEATURES => {
@@ -115,20 +119,24 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
         }
     }
 
-    context_set_gpr(0, r);
+    let idx = 0;
+    let val = r;
+    current_cpu().set_gpr(idx, val);
 
     true
 }
 
 fn psci_vcpu_on(entry: usize, ctx: usize) {
-    set_cpu_assign(true);
-    set_cpu_state(CpuState::CpuRun);
-    let vcpu = active_vcpu().unwrap();
+    let assigned = true;
+    current_cpu().assigned = assigned;
+    let state = CpuState::CpuRun;
+    current_cpu().cpu_state = state;
+    let vcpu = current_cpu().active_vcpu.clone().unwrap();
     vcpu.set_gpr(0, ctx);
     vcpu.set_elr(entry);
 
     vcpu.reset_state();
-    match cpu_ctx() {
+    match current_cpu().ctx {
         Some(ctx) => {
             use crate::lib::memcpy_safe;
             use core::mem::size_of;
@@ -139,7 +147,7 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
             }
             memcpy_safe(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
 
-            println!("cpu_ctx {:x}", cpu_ctx().unwrap());
+            println!("cpu_ctx {:x}", current_cpu().ctx.unwrap());
         }
         None => {
             panic!("psci_vcpu_on: cpu_ctx is NULL");
@@ -157,7 +165,7 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
             PowerEvent::PsciIpiCpuOn => {
                 println!(
                     "Core {} (vm {}, vcpu {}) is woke up",
-                    cpu_id(),
+                    current_cpu().id,
                     active_vm_id(),
                     active_vcpu_id()
                 );
@@ -168,16 +176,16 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
                 psci_vcpu_on(power_msg.entry, power_msg.context);
             }
             PowerEvent::PsciIpiCpuOff => {
-                active_vcpu().unwrap().shutdown();
+                current_cpu().active_vcpu.clone().unwrap().shutdown();
             }
             PowerEvent::PsciIpiCpuReset => {
-                vcpu_arch_init(active_vm().unwrap(), active_vcpu().unwrap());
+                vcpu_arch_init(active_vm().unwrap(), current_cpu().active_vcpu.clone().unwrap());
             }
         },
         _ => {
             panic!(
                 "psci_ipi_handler: cpu{} receive illegal psci ipi type",
-                cpu_id()
+                current_cpu().id
             );
         }
     }

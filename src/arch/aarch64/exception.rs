@@ -2,7 +2,7 @@ use crate::arch::ContextFrame;
 use crate::arch::{data_abort_handler, hvc_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
-use crate::kernel::{active_vm_id, clear_cpu_ctx, cpu_id, set_cpu_ctx};
+use crate::kernel::{current_cpu, active_vm_id};
 use tock_registers::interfaces::*;
 // use crate::lib::time_current_us;
 
@@ -127,7 +127,7 @@ unsafe extern "C" fn current_el_spx_serror() {
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
-    set_cpu_ctx(ctx);
+    current_cpu().set_ctx(ctx);
     // println!("exception class {}", exception_class());
     match exception_class() {
         0x24 => {
@@ -143,7 +143,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
         _ => {
             panic!(
                 "core {} vm {}: handler not presents for EC_{} @ipa 0x{:x}, @pc 0x{:x}",
-                cpu_id(),
+                current_cpu().id,
                 active_vm_id(),
                 exception_class(),
                 exception_fault_ipa(),
@@ -151,13 +151,13 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             );
         }
     }
-    clear_cpu_ctx();
+    current_cpu().clear_ctx();
 }
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     // println!("Core[{}] lower_aarch64_irq", cpu_id());
-    set_cpu_ctx(ctx);
+    current_cpu().set_ctx(ctx);
     let (id, src) = gicc_get_current_irq();
 
     if id >= 1022 {
@@ -169,7 +169,7 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     // let end = time_current_us();
 
     gicc_clear_current_irq(handled_by_hypervisor);
-    clear_cpu_ctx();
+    current_cpu().clear_ctx();
 }
 
 #[no_mangle]

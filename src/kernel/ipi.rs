@@ -1,7 +1,7 @@
 use super::Vm;
 use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
-use crate::kernel::{cpu_id, interrupt_cpu_ipi_send, CPU_IF_LIST};
+use crate::kernel::{interrupt_cpu_ipi_send, CPU_IF_LIST, current_cpu};
 use crate::vmm::VmmEvent;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -115,7 +115,7 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
-    let cpu_id = cpu_id();
+    let cpu_id = current_cpu().id;
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
     drop(cpu_if_list);
@@ -198,7 +198,7 @@ pub fn ipi_intra_broadcast_msg(vm: Vm, ipi_type: IpiType, msg: IpiInnerMsg) -> b
     let mut i = 0;
     let mut n = 0;
     while n < (vm.cpu_num() - 1) {
-        if ((1 << i) & vm.ncpu()) != 0 && i != cpu_id() {
+        if ((1 << i) & vm.ncpu()) != 0 && i != current_cpu().id {
             n += 1;
             if !ipi_send_msg(i, ipi_type, msg.clone()) {
                 println!(
