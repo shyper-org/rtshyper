@@ -1,4 +1,17 @@
 use crate::arch::PAGE_SIZE;
+use spin::Mutex;
+
+pub static TRACE: Mutex<bool> = Mutex::new(true);
+
+pub fn set_trace(value: bool) {
+    let mut trace = TRACE.lock();
+    *trace = value;
+}
+
+pub fn trace() -> bool {
+    let trace = TRACE.lock();
+    *trace
+}
 
 #[inline(always)]
 pub fn round_up(value: usize, to: usize) -> usize {

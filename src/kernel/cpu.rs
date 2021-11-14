@@ -9,6 +9,7 @@ use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 use crate::kernel::IpiMessage;
 use spin::Mutex;
+use crate::lib::trace;
 
 pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
@@ -113,6 +114,9 @@ impl Cpu {
         }
         match self.ctx {
             Some(ctx_addr) => {
+                if trace() && ctx_addr < 0x1000 {
+                    panic!("illegal ctx addr {:x}", ctx_addr);
+                }
                 let ctx = ctx_addr as *mut ContextFrame;
                 unsafe {
                     (*ctx).set_gpr(idx, val);
@@ -128,6 +132,9 @@ impl Cpu {
         }
         match self.ctx {
             Some(ctx_addr) => {
+                if trace() && ctx_addr < 0x1000 {
+                    panic!("illegal ctx addr {:x}", ctx_addr);
+                }
                 let ctx = ctx_addr as *mut ContextFrame;
                 unsafe { (*ctx).gpr(idx) }
             }
@@ -138,6 +145,9 @@ impl Cpu {
     pub fn get_elr(&self) -> usize {
         match self.ctx {
             Some(ctx_addr) => {
+                if trace() && ctx_addr < 0x1000 {
+                    panic!("illegal ctx addr {:x}", ctx_addr);
+                }
                 let ctx = ctx_addr as *mut ContextFrame;
                 unsafe { (*ctx).exception_pc() }
             }
@@ -148,6 +158,9 @@ impl Cpu {
     pub fn set_elr(&self, val: usize) {
         match self.ctx {
             Some(ctx_addr) => {
+                if trace() && ctx_addr < 0x1000 {
+                    panic!("illegal ctx addr {:x}", ctx_addr);
+                }
                 let ctx = ctx_addr as *mut ContextFrame;
                 unsafe { (*ctx).set_exception_pc(val) }
             }

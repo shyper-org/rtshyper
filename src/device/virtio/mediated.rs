@@ -1,14 +1,13 @@
-use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
+use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
     active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, interrupt_vm_inject, io_task_head,
     vm, vm_ipa2pa, HvcGuestMsg, IpiInnerMsg, TaskType,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
-use crate::lib::memcpy;
+use crate::lib::{memcpy_safe, trace};
 use alloc::vec::Vec;
 use spin::Mutex;
 
-const BLK_IRQ: usize = 0x20 + 0x10;
 static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
 pub fn mediated_blk_list_push(blk: MediatedBlk) {
@@ -28,6 +27,9 @@ pub struct MediatedBlk {
 
 impl MediatedBlk {
     pub fn content(&self) -> &mut MediatedBlkContent {
+        if trace() && self.base_addr < 0x1000 {
+            panic!("illeagal addr {:x}", self.base_addr);
+        }
         unsafe { &mut *(self.base_addr as *mut MediatedBlkContent) }
     }
 
@@ -136,9 +138,10 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
                     for idx in 0..task.iov_list.len() {
                         let data_bg = task.iov_list[idx].data_bg;
                         let len = task.iov_list[idx].len as usize;
-                        unsafe {
-                            memcpy(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                        if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
+                            panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
                         }
+                        memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
                         // sum |= check_sum(data_bg, len);
                         cache_ptr += len;
                     }
@@ -160,17 +163,17 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
 pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
     let vm = active_vm().unwrap();
     // println!("vm[{}] inject blk irq", vm.id());
-    interrupt_vm_inject(vm, BLK_IRQ, 0);
+    interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
 }
 
-fn check_sum(addr: usize, len: usize) -> usize {
-    let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
-    let mut sum = 0;
-    for num in slice {
-        sum ^= num;
-    }
-    sum
-}
+// fn check_sum(addr: usize, len: usize) -> usize {
+//     let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
+//     let mut sum = 0;
+//     for num in slice {
+//         sum ^= num;
+//     }
+//     sum
+// }
 
 pub fn mediated_ipi_handler(msg: &IpiMessage) {
     // println!("vm {} mediated_ipi_handler", active_vm_id());

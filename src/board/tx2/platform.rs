@@ -103,6 +103,10 @@ fn platform_cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
     power_arch_cpu_on(arch_core_id, entry, ctx);
 }
 
+pub fn platform_cpu_shutdown() {
+    crate::arch::power_arch_cpu_shutdown();
+}
+
 pub fn platform_power_on_secondary_cores() {
     for i in 1..PLAT_DESC.cpu_desc.num {
         platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], KERNEL_ENTRY, 0);

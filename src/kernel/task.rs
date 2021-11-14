@@ -1,8 +1,8 @@
 use crate::device::{
-    mediated_blk_read, mediated_blk_write, Virtq, BlkIov, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
+    mediated_blk_read, mediated_blk_write, Virtq, BlkIov, BLK_IRQ, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
 };
-use crate::kernel::{ipi_send_msg, vm_if_list_get_cpu_id, IpiInnerMsg, IpiMediatedMsg, IpiType};
-use crate::lib::memcpy;
+use crate::kernel::{vm, ipi_send_msg, vm_if_list_get_cpu_id, IpiInnerMsg, IpiMediatedMsg, IpiType, interrupt_vm_inject, active_vm_id};
+use crate::lib::memcpy_safe;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -53,9 +53,11 @@ impl Task {
                     for idx in 0..msg.iov_list.len() {
                         let data_bg = msg.iov_list[idx].data_bg;
                         let len = msg.iov_list[idx].len as usize;
-                        unsafe {
-                            memcpy(cache_ptr as *mut u8, data_bg as *mut u8, len);
+
+                        if cache_ptr < 0x1000 || data_bg < 0x1000 {
+                            panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
                         }
+                        memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
                         cache_ptr += len;
                     }
                     mediated_blk_write(msg.blk_id, msg.sector, msg.count);

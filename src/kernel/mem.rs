@@ -1,6 +1,6 @@
 use crate::arch::PAGE_SIZE;
 use crate::board::*;
-use crate::lib::{memset, round_up};
+use crate::lib::{memset_safe, round_up};
 
 use super::mem_region::*;
 
@@ -29,10 +29,8 @@ fn mem_heap_region_init() {
     ) / PAGE_SIZE;
 
     println!("init memory, please waiting...");
-    unsafe {
-        memset(base as *mut u8, 0, size as usize * PAGE_SIZE);
-        // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
-    }
+    memset_safe(base as *mut u8, 0, size as usize * PAGE_SIZE);
+    // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
 
     let mut heap_lock = HEAPREGION.lock();
     (*heap_lock).region_init(0, base, size, size, 0);

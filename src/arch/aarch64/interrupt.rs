@@ -1,6 +1,7 @@
+use crate::arch::{gic_cpu_reset, gicc_clear_current_irq};
 use super::GICD;
 use super::GIC_SGIS_NUM;
-use crate::kernel::Vm;
+use crate::kernel::{Vcpu, Vm};
 
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
 pub const INTERRUPT_IRQ_IPI: usize = 1;
@@ -55,7 +56,12 @@ pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
     super::vgic_set_hw_int(vm.clone(), id);
 }
 
-pub fn interrupt_arch_vm_inject(vm: Vm, id: usize, source: usize) {
+pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, id: usize, source: usize) {
     let vgic = vm.vgic();
-    vgic.inject(id, source);
+    vgic.inject(vcpu, id, source);
+}
+
+pub fn interrupt_arch_clear() {
+    gic_cpu_reset();
+    gicc_clear_current_irq(true);
 }

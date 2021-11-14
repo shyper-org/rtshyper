@@ -4,6 +4,7 @@ use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::kernel::interrupt_handler;
 use crate::kernel::{active_vm_id, clear_cpu_ctx, cpu_id, set_cpu_ctx};
 use tock_registers::interfaces::*;
+// use crate::lib::time_current_us;
 
 global_asm!(include_str!("exception.S"));
 

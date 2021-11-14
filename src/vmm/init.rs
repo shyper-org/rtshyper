@@ -10,7 +10,7 @@ use crate::kernel::{
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{vm, VM_LIST};
 use crate::kernel::Vm;
-use crate::lib::barrier;
+use crate::lib::{barrier, trace};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -99,6 +99,9 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
             vm.pa_start(idx) + offset,
             size / 1024
         );
+        if trace() && vm.pa_start(idx) + offset < 0x1000 {
+            panic!("illegal addr {:x}", vm.pa_start(idx) + offset);
+        }
         let dst = unsafe {
             core::slice::from_raw_parts_mut((vm.pa_start(idx) + offset) as *mut u8, size)
         };
@@ -109,7 +112,7 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     panic!("vmm_load_image: Image config conflicts with memory config");
 }
 
-fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
+pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     // if config.kernel_name.is_none() {
     //     println!("vmm_init_image: filename is missed");
     //     return false;
@@ -333,7 +336,7 @@ fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: V
 use crate::config::VmConfigEntry;
 use crate::kernel::VM_NUM_MAX;
 
-unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
+pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     use fdt::*;
     match vm.dtb() {
         None => return,
@@ -406,13 +409,11 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
                         - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
                     println!("dtb size {}", dtb.len());
                     println!("pa 0x{:x}", vm.pa_start(0) + offset);
-                    unsafe {
-                        crate::lib::memcpy(
-                            (vm.pa_start(0) + offset) as *const u8,
-                            dtb.as_ptr(),
-                            dtb.len(),
-                        );
-                    }
+                    crate::lib::memcpy_safe(
+                        (vm.pa_start(0) + offset) as *const u8,
+                        dtb.as_ptr(),
+                        dtb.len(),
+                    );
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
@@ -420,17 +421,6 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
             }
         } else {
             unsafe {
-                // let dtb = include_bytes!("../../dts/vm0.dtb");
-                // let offset = config.image.device_tree_load_ipa
-                //     - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
-                // unsafe {
-                //     crate::lib::memcpy(
-                //         (vm.pa_start(0) + offset) as *const u8,
-                //         dtb.as_ptr(),
-                //         dtb.len(),
-                //     );
-                // }
-                // println!("vm0 use new dtb");
                 vmm_setup_fdt(config.clone(), vm.clone());
             }
         }

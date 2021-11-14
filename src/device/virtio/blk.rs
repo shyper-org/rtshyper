@@ -5,6 +5,8 @@ use spin::Mutex;
 
 use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, ipi_list_len, vm_ipa2pa, IoMediatedMsg, IpiMediatedMsg, Task, TaskType, Vm, push_used_info};
 
+pub const BLK_IRQ: usize = 0x20 + 0x10;
+
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 
@@ -92,7 +94,12 @@ impl BlkDesc {
     pub fn offset_data(&self, offset: usize) -> u32 {
         let inner = self.inner.lock();
         let start_addr = &inner.capacity as *const _ as usize;
-        let value = unsafe { *((start_addr + offset) as *const u32) };
+        let value = unsafe {
+            if trace() && start_addr + offset < 0x1000 {
+                panic!("illegal addr {:x}", start_addr + offset);
+            }
+            *((start_addr + offset) as *const u32)
+        };
         return value;
     }
 }
@@ -304,7 +311,7 @@ impl VirtioBlkReqInner {
     }
 }
 
-use crate::lib::memcpy;
+use crate::lib::{memcpy_safe, trace};
 
 pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     // println!("vm[{}] blk req handler", active_vm_id());
@@ -359,9 +366,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                     return 0;
                 }
                 if !req.mediated() {
-                    unsafe {
-                        memcpy(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                    if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
+                        panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
                     }
+                    memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
                 }
                 cache_ptr += len;
                 total_byte += len;
@@ -376,9 +384,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                     return 0;
                 }
                 if !req.mediated() {
-                    unsafe {
-                        memcpy(cache_ptr as *mut u8, data_bg as *mut u8, len);
+                    if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
+                        panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
                     }
+                    memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
                 }
                 cache_ptr += len;
                 total_byte += len;
@@ -408,7 +417,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
             }
         }
         VIRTIO_BLK_T_GET_ID => {
-            panic!("blk get id");
+            // panic!("blk get id");
             if req.mediated() {
                 add_task(Task {
                     task_type: TaskType::MediatedIoTask(IoMediatedMsg {
@@ -423,9 +432,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
             }
             let data_bg = req.iov_data_bg(0);
             let name = "virtio-blk".as_ptr();
-            unsafe {
-                memcpy(data_bg as *mut u8, name, 20);
+            if trace() && (data_bg < 0x1000) {
+                panic!("illegal des addr {:x}", cache_ptr);
             }
+            memcpy_safe(data_bg as *mut u8, name, 20);
             total_byte = 20;
         }
         _ => {

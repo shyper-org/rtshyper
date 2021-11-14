@@ -32,6 +32,11 @@ impl Vcpu {
         crate::arch::vcpu_arch_init(vm.clone(), self.clone());
     }
 
+    pub fn shutdown(&self) {
+        println!("Core {} (vm {} vcpu {}) shutdown ok", cpu_id(), active_vm_id(), active_vcpu_id());
+        crate::board::platform_cpu_shutdown();
+    }
+
     // pub fn ptr_eq(&self, vcpu: Vcpu) -> bool {
     //     Arc::ptr_eq(&self.inner, &vcpu.inner())
     // }
@@ -260,12 +265,10 @@ pub fn vcpu_run() {
     let sp = cpu_stack() + CPU_STACK_SIZE;
     let ctx = active_vcpu().unwrap().vcpu_ctx_addr();
 
-    use crate::lib::memcpy;
+    use crate::lib::memcpy_safe;
     use core::mem::size_of;
     let size = size_of::<Aarch64ContextFrame>();
-    unsafe {
-        memcpy((sp - size) as *mut u8, ctx as *mut u8, size);
-    }
+    memcpy_safe((sp - size) as *mut u8, ctx as *mut u8, size);
 
     set_cpu_state(CpuState::CpuRun);
     vm_if_list_set_state(active_vm_id(), super::VmState::VmActive);

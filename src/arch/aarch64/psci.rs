@@ -1,6 +1,6 @@
 use super::smc::smc_call;
-use crate::arch::Aarch64ContextFrame;
-use crate::kernel::context_set_gpr;
+use crate::arch::{Aarch64ContextFrame, gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
+use crate::kernel::{context_set_gpr, cpu_idle, ipi_intra_broadcast_msg, timer_enable, Vm};
 use crate::kernel::{
     active_vcpu, active_vcpu_id, active_vm_id, cpu_ctx, cpu_id, set_cpu_assign, set_cpu_state, CpuState,
 };
@@ -13,6 +13,8 @@ pub const PSCI_FEATURES: usize = 0x8400000A;
 // pub const PSCI_CPU_OFF: usize = 0xc4000002;
 pub const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
 pub const PSCI_AFFINITY_INFO_AARCH64: usize = 0xc4000004;
+pub const PSCI_SYSTEM_OFF: usize = 0x84000008;
+pub const PSCI_SYSTEM_RESET: usize = 0x84000009;
 
 pub const PSCI_E_SUCCESS: usize = 0;
 pub const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
@@ -29,23 +31,45 @@ pub fn power_arch_init() {
     }
 }
 
+pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
+    let m = IpiPowerMessage {
+        event: PowerEvent::PsciIpiCpuReset,
+        entry: 0,
+        context: 0,
+    };
+
+    if !ipi_intra_broadcast_msg(vm, IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
+        println!("power_arch_vm_shutdown_secondary_cores: fail to ipi_intra_broadcast_msg");
+    }
+}
+
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     println!(
         "power_arch_cpu_on, {:x}, {:x}, {:x}",
         PSCI_CPU_ON_AARCH64, mpidr, entry
     );
-    // let r = unsafe { crate::arch::smc(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0 };
     let r = smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0;
     println!("smc return val is {}", r);
     r
 }
 
+pub fn power_arch_cpu_shutdown() {
+    gic_cpu_init();
+    gicc_clear_current_irq(true);
+    timer_enable(false);
+    cpu_idle();
+}
+
+fn psci_guest_sys_reset() {
+    vmm_reboot_vm(active_vm().unwrap());
+}
+
 #[inline(never)]
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
-    // println!(
-    //     "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
-    //     fid, x1, x2, x3
-    // );
+    println!(
+        "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
+        fid, x1, x2, x3
+    );
     let r;
     match fid {
         PSCI_VERSION => {
@@ -58,6 +82,10 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             r = psci_guest_cpu_on(x1, x2, x3);
         }
         PSCI_AFFINITY_INFO_AARCH64 => {
+            r = 0;
+        }
+        PSCI_SYSTEM_RESET => {
+            psci_guest_sys_reset();
             r = 0;
         }
         #[cfg(feature = "tx2")]
@@ -102,12 +130,15 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
     vcpu.reset_state();
     match cpu_ctx() {
         Some(ctx) => {
-            use crate::lib::memcpy;
+            use crate::lib::memcpy_safe;
             use core::mem::size_of;
             let size = size_of::<Aarch64ContextFrame>();
-            unsafe {
-                memcpy(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
+
+            if trace() && (ctx < 0x1000 || vcpu.vcpu_ctx_addr() < 0x1000) {
+                panic!("illegal des ctx addr {} vcpu ctx {}", ctx, vcpu.vcpu_ctx_addr());
             }
+            memcpy_safe(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
+
             println!("cpu_ctx {:x}", cpu_ctx().unwrap());
         }
         None => {
@@ -117,6 +148,8 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
 }
 
 use crate::kernel::IpiMessage;
+use crate::lib::trace;
+use crate::vmm::vmm_reboot_vm;
 
 pub fn psci_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
@@ -135,10 +168,10 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
                 psci_vcpu_on(power_msg.entry, power_msg.context);
             }
             PowerEvent::PsciIpiCpuOff => {
-                unimplemented!();
+                active_vcpu().unwrap().shutdown();
             }
             PowerEvent::PsciIpiCpuReset => {
-                unimplemented!();
+                vcpu_arch_init(active_vm().unwrap(), active_vcpu().unwrap());
             }
         },
         _ => {

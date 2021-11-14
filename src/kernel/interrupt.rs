@@ -1,5 +1,5 @@
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
-use crate::kernel::{cpu_id, ipi_irq_handler};
+use crate::kernel::{cpu_id, ipi_irq_handler, Vcpu};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use spin::Mutex;
@@ -113,8 +113,8 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     true
 }
 
-pub fn interrupt_vm_inject(vm: Vm, id: usize, source: usize) {
-    interrupt_arch_vm_inject(vm, id, source);
+pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, id: usize, source: usize) {
+    interrupt_arch_vm_inject(vm, vcpu, id, source);
 }
 
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
@@ -123,7 +123,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     match active_vm() {
         Some(vm) => {
             if vm.has_interrupt(int_id) {
-                interrupt_vm_inject(vm.clone(), int_id, src);
+                interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, src);
                 return false;
             }
         }

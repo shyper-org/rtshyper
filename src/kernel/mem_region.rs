@@ -1,6 +1,6 @@
 use super::AllocError;
 use crate::arch::PAGE_SIZE;
-use crate::lib::memset;
+use crate::lib::memset_safe;
 use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
@@ -78,9 +78,7 @@ impl HeapRegion {
 
         let addr = self.region.base + bit * PAGE_SIZE;
         // println!("alloc page addr 0x{:x}", addr);
-        unsafe {
-            memset(addr as *mut u8, 0, PAGE_SIZE);
-        }
+        memset_safe(addr as *mut u8, 0, PAGE_SIZE);
         return Ok(PageFrame::new(addr));
     }
 
@@ -119,9 +117,7 @@ impl HeapRegion {
         }
 
         let addr = self.region.base + bit * PAGE_SIZE;
-        unsafe {
-            memset(addr as *mut u8, 0, size * PAGE_SIZE);
-        }
+        memset_safe(addr as *mut u8, 0, size * PAGE_SIZE);
         return Ok(PageFrame::new(addr));
     }
 

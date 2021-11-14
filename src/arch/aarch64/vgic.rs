@@ -1076,8 +1076,8 @@ impl Vgic {
         return interrupt_option.unwrap().targets();
     }
 
-    pub fn inject(&self, id: usize, _src: usize) {
-        let vcpu = active_vcpu().unwrap();
+    pub fn inject(&self, vcpu: Vcpu, id: usize, _src: usize) {
+        // let vcpu = active_vcpu().unwrap();
         let interrupt_option = self.get_int(vcpu.clone(), bit_extract(id, 0, 10));
         if let Some(interrupt) = interrupt_option {
             if interrupt.hw() {

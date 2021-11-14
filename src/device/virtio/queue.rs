@@ -4,6 +4,7 @@ use crate::kernel::{active_vm, active_vm_id, Vm};
 use alloc::sync::Arc;
 use core::slice;
 use spin::Mutex;
+use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
 pub const VIRTQ_DESC_F_NEXT: usize = 1;
@@ -66,11 +67,12 @@ impl Virtq {
         let inner = self.inner.lock();
         use crate::kernel::interrupt_vm_inject;
         if vm.id() != active_vm_id() {
-            panic!("target vm{} should not notify at vm{}", vm.id(), active_vm_id());
+            println!("vm{} notify int {} to vm{}", active_vm_id(), int_id, vm.id());
+            // panic!("target vm{} should not notify at vm{}", vm.id(), active_vm_id());
         }
         if inner.to_notify {
             drop(inner);
-            interrupt_vm_inject(vm.clone(), int_id, 0);
+            interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, 0);
         }
     }
 
@@ -271,16 +273,25 @@ impl Virtq {
     pub fn set_desc_table(&self, addr: usize) {
         let mut inner = self.inner.lock();
         inner.desc_table = Some(unsafe {
+            if trace() && addr < 0x1000 {
+                panic!("illegal desc ring addr {:x}", addr);
+            }
             slice::from_raw_parts_mut(addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE)
         });
     }
 
     pub fn set_avail(&self, addr: usize) {
+        if trace() && addr < 0x1000 {
+            panic!("illegal avail ring addr {:x}", addr);
+        }
         let mut inner = self.inner.lock();
         inner.avail = Some(unsafe { &mut *(addr as *mut VringAvail) });
     }
 
     pub fn set_used(&self, addr: usize) {
+        if trace() && addr < 0x1000 {
+            panic!("illegal used ring addr {:x}", addr);
+        }
         let mut inner = self.inner.lock();
         inner.used = Some(unsafe { &mut *(addr as *mut VringUsed) });
     }

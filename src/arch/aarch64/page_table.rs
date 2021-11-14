@@ -3,7 +3,7 @@ use crate::arch::ArchPageTableEntryTrait;
 use crate::arch::WORD_SIZE;
 use crate::kernel::Cpu;
 use crate::lib::round_up;
-use crate::lib::{memcpy, memset};
+use crate::lib::{memcpy_safe, memset_safe};
 use crate::mm::PageFrame;
 use alloc::vec::Vec;
 // use rlibc::{memcpy, memset};
@@ -74,9 +74,11 @@ pub const fn pte_s1_field_attr_indx(idx: usize) -> usize {
 pub fn pt_lvl1_idx(va: usize) -> usize {
     (va >> LVL1_SHIFT) & (PTE_PER_PAGE - 1)
 }
+
 pub fn pt_lvl2_idx(va: usize) -> usize {
     (va >> LVL2_SHIFT) & (PTE_PER_PAGE - 1)
 }
+
 pub fn pt_lvl3_idx(va: usize) -> usize {
     (va >> LVL3_SHIFT) & (PTE_PER_PAGE - 1)
 }
@@ -87,15 +89,13 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     }
     let addr: usize = lvl1_page_table as usize;
 
-    unsafe {
-        memcpy(
-            &(cpu.cpu_pt.lvl1) as *const _ as *mut u8,
-            addr as *mut u8,
-            PAGE_SIZE,
-        );
-        memset(&(cpu.cpu_pt.lvl2) as *const _ as *mut u8, 0, PAGE_SIZE);
-        memset(&(cpu.cpu_pt.lvl3) as *const _ as *mut u8, 0, PAGE_SIZE);
-    }
+    memcpy_safe(
+        &(cpu.cpu_pt.lvl1) as *const _ as *mut u8,
+        addr as *mut u8,
+        PAGE_SIZE,
+    );
+    memset_safe(&(cpu.cpu_pt.lvl2) as *const _ as *mut u8, 0, PAGE_SIZE);
+    memset_safe(&(cpu.cpu_pt.lvl3) as *const _ as *mut u8, 0, PAGE_SIZE);
 
     let cpu_addr = cpu as *const _ as usize;
     let lvl2_addr = &(cpu.cpu_pt.lvl2) as *const _ as usize;

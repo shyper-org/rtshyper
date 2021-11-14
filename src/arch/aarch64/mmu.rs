@@ -106,7 +106,7 @@ pub struct PageTables {
 }
 
 use crate::board::PLAT_DESC;
-use crate::lib::memset;
+use crate::lib::memset_safe;
 
 const LVL1_SHIFT: usize = 30;
 const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
@@ -116,8 +116,8 @@ const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl1_base = lvl1_pt as *const _ as usize;
     let lvl2_base = lvl2_pt as *const _ as usize;
-    unsafe { memset(lvl1_base as *mut u8, 0, PAGE_SIZE); }
-    unsafe { memset(lvl2_base as *mut u8, 0, PAGE_SIZE); }
+    memset_safe(lvl1_base as *mut u8, 0, PAGE_SIZE);
+    memset_safe(lvl2_base as *mut u8, 0, PAGE_SIZE);
 
     for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
         let output_addr = i << LVL1_SHIFT;

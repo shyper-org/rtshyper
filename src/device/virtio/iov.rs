@@ -1,4 +1,4 @@
-use crate::lib::memcpy;
+use crate::lib::{memcpy_safe, trace};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::slice::from_raw_parts;
@@ -44,6 +44,9 @@ impl VirtioIov {
         for iov_data in &inner.vector {
             if iov_data.len > idx {
                 return unsafe {
+                    if trace() && iov_data.buf + idx < 0x1000 {
+                        panic!("illegal addr {:x}", iov_data.buf + idx);
+                    }
                     from_raw_parts((iov_data.buf + idx) as *const u8, 14)
                 };
             } else {
@@ -51,19 +54,6 @@ impl VirtioIov {
             }
         }
 
-        // while idx >= 0 {
-        //     if inner.vector[iov_idx].len > idx {
-        //         return unsafe {
-        //             from_raw_parts((inner.vector[iov_idx].buf + idx) as *const u8, 14)
-        //         };
-        //     } else {
-        //         iov_idx += 1;
-        //         idx -= inner.vector[iov_idx].len;
-        //     }
-        //     if iov_idx == inner.vector.len() {
-        //         break;
-        //     }
-        // }
         println!("iov get_ptr failed");
         println!("get_ptr iov {:#?}", inner.vector);
         println!("size {}, idx {}", size, idx);
@@ -93,9 +83,10 @@ impl VirtioIov {
             let mut written = 0;
             if dst_vlen_remain > src_vlen_remain {
                 written = src_vlen_remain;
-                unsafe {
-                    memcpy(dst_ptr as *const u8, src_ptr as *const u8, written);
+                if trace() && (dst_ptr < 0x1000 || src_ptr < 0x1000) {
+                    panic!("illegal des addr {:x}, src addr {:x}", dst_ptr, src_ptr);
                 }
+                memcpy_safe(dst_ptr as *const u8, src_ptr as *const u8, written);
                 src_iov_idx += 1;
                 if src_iov_idx < inner.vector.len() {
                     src_ptr = inner.vector[src_iov_idx].buf;
@@ -110,9 +101,10 @@ impl VirtioIov {
                 // }
             } else {
                 written = dst_vlen_remain;
-                unsafe {
-                    memcpy(dst_ptr as *const u8, src_ptr as *const u8, written);
+                if trace() && (dst_ptr < 0x1000 || src_ptr < 0x1000) {
+                    panic!("illegal des addr {:x}, src addr {:x}", dst_ptr, src_ptr);
                 }
+                memcpy_safe(dst_ptr as *const u8, src_ptr as *const u8, written);
                 dst_iov_idx += 1;
                 if dst_iov_idx < dst.num() {
                     dst_ptr = dst.get_buf(dst_iov_idx);

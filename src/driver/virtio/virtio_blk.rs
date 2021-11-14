@@ -123,6 +123,9 @@ struct VirtioMmio {
 impl core::ops::Deref for VirtioMmio {
     type Target = VirtioMmioBlock;
     fn deref(&self) -> &Self::Target {
+        if trace() && self.base_addr < 0x1000 {
+            panic!("illegal addr {:x}", self.base_addr);
+        }
         unsafe { &*self.ptr() }
     }
 }
@@ -233,6 +236,7 @@ const VRING_DESC_F_WRITE: u16 = 2;
 const VRING_DESC_F_INDIRECT: u16 = 4;
 
 use Operation::*;
+use crate::lib::trace;
 
 pub fn read(sector: usize, count: usize, buf: usize) {
     io(sector, count, buf, Read);

@@ -226,3 +226,8 @@ pub fn vm_type(id: usize) -> VmType {
     let vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.entries[id].os_type
 }
+
+pub fn vm_cfg_entry(id: usize) -> Arc<VmConfigEntry> {
+    let table = DEF_VM_CONFIG_TABLE.lock();
+    table.entries[id].clone()
+}

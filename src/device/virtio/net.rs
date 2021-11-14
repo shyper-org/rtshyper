@@ -84,7 +84,12 @@ impl NetDesc {
     pub fn offset_data(&self, offset: usize) -> u32 {
         let inner = self.inner.lock();
         let start_addr = &inner.mac[0] as *const _ as usize;
-        let value = unsafe { *((start_addr + offset) as *const u32) };
+        let value = unsafe {
+            if trace() && start_addr + offset < 0x1000 {
+                println!("value addr is {}", start_addr + offset);
+            }
+            *((start_addr + offset) as *const u32)
+        };
         return value;
     }
 }
@@ -121,9 +126,7 @@ pub fn net_features() -> usize {
 use crate::device::{VirtioMmio, Virtq};
 
 pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: u16) -> bool {
-    // if vm.vm_id() == 1 {
-    //     println!("virtio_net_notify_handler");
-    // }
+    // let time_begin = time_current_us();
     if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
         return false;
@@ -182,13 +185,14 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
         next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     }
 
+    // let time0 = time_current_us();
     if !vq.avail_is_avail() {
         println!("invalid descriptor table index");
         return false;
     }
 
     vq.notify(dev.int_id(), vm.clone());
-
+    // let time1 = time_current_us();
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
@@ -236,14 +240,19 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
         trgt_vmid += 1;
         vms_to_notify = vms_to_notify >> 1;
     }
-
+    // let time_end = time_current_us();
+    // if active_vm_id() == 1 {
+    //     println!("virtio_net_notify_handler: handler desc ring {}us, vq notify {}us, ipi {}us", time0 - time_begin, time1 - time0, time_end - time1);
+    // }
     // panic!("end virtio_net_notify_handler");
     true
 }
 
 use crate::kernel::IpiMessage;
+use crate::lib::{time_current_us, trace};
 
 pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
+    // let begin = time_current_us();
     match msg.ipi_message {
         IpiInnerMsg::EnternetMsg(ethernet_msg) => {
             let trgt_vmid = ethernet_msg.trgt_vmid;
@@ -277,6 +286,10 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             panic!("illegal ipi message type in ethernet_ipi_rev_handler");
         }
     }
+    // let end = time_current_us();
+    // if active_vm_id() == 1 {
+    //     println!("ethernet_ipi_rev_handler time {}us", end - begin);
+    // }
 }
 
 // fn ethernet_ipi_send_msg(msg: &IpiEthernetMsg, ack: &IpiEthernetAckMsg, npage: usize) {
@@ -416,7 +429,12 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         println!("ethernet_send_to: rx_len smaller than tx_len");
         return false;
     }
-    let header = unsafe { &mut *(tx_iov.get_buf(0) as *mut VirtioNetHdr) };
+    let header = unsafe {
+        if trace() && tx_iov.get_buf(0) < 0x1000 {
+            panic!("illegal header addr {}", tx_iov.get_buf(0));
+        }
+        &mut *(tx_iov.get_buf(0) as *mut VirtioNetHdr)
+    };
     header.num_buffers = 1;
 
     if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {

@@ -3,7 +3,7 @@ use crate::vmm::{get_vm_id, vmm_boot_vm};
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{cpu_id, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::arch::PAGE_SIZE;
-use crate::lib::memcpy;
+use crate::lib::{memcpy_safe, trace};
 
 pub const HVC_SYS: usize = 0;
 pub const HVC_VMM: usize = 1;
@@ -147,9 +147,11 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
         println!("hvc_send_msg_to_vm: target VM{} interface is not prepared", vm_id);
         return false;
     }
-    unsafe {
-        memcpy(target_addr as *const u8, guest_msg as *const _ as *const u8, size_of::<HvcGuestMsg>());
+
+    if trace() && (target_addr < 0x1000 || (guest_msg as *const _ as usize) < 0x1000) {
+        panic!("illegal des addr {:x}, src addr {:x}", target_addr, guest_msg as *const _ as usize);
     }
+    memcpy_safe(target_addr as *const u8, guest_msg as *const _ as *const u8, size_of::<HvcGuestMsg>());
 
     let cpu_trgt = vm_if_list_get_cpu_id(vm_id);
     if cpu_trgt != cpu_id() {
@@ -164,5 +166,5 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 
 pub fn hvc_guest_notify(vm_id: usize) {
     let vm = vm(vm_id);
-    interrupt_vm_inject(vm, HVC_IRQ, 0);
+    interrupt_vm_inject(vm.clone(), vm.vcpu(0), HVC_IRQ, 0);
 }

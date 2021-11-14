@@ -1,7 +1,7 @@
 use crate::board::{PLATFORM_GICC_BASE, PLATFORM_GICD_BASE, PLATFORM_GICH_BASE};
 use crate::kernel::INTERRUPT_NUM_MAX;
 use crate::kernel::{cpu_current_irq, cpu_id, set_cpu_current_irq};
-use crate::lib::bit_extract;
+use crate::lib::{bit_extract, trace};
 use spin::Mutex;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
@@ -108,7 +108,12 @@ pub struct GicDistributor {
 impl core::ops::Deref for GicDistributor {
     type Target = GicDistributorBlock;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.ptr() }
+        unsafe {
+            if trace() && self.base_addr < 0x1000 {
+                panic!("illegal gicd addr {}", self.base_addr);
+            }
+            &*self.ptr()
+        }
     }
 }
 
@@ -343,7 +348,12 @@ pub struct GicCpuInterface {
 impl core::ops::Deref for GicCpuInterface {
     type Target = GicCpuInterfaceBlock;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.ptr() }
+        unsafe {
+            if trace() && self.base_addr < 0x1000 {
+                panic!("illegal gicc addr {}", self.base_addr);
+            }
+            &*self.ptr()
+        }
     }
 }
 
@@ -409,6 +419,9 @@ pub struct GicHypervisorInterface {
 impl core::ops::Deref for GicHypervisorInterface {
     type Target = GicHypervisorInterfaceBlock;
     fn deref(&self) -> &Self::Target {
+        if trace() && self.base_addr < 0x1000 {
+            panic!("");
+        }
         unsafe { &*self.ptr() }
     }
 }
@@ -479,6 +492,10 @@ pub fn gic_glb_init() {
 
 pub fn gic_cpu_init() {
     GICD.cpu_init();
+    GICC.init();
+}
+
+pub fn gic_cpu_reset() {
     GICC.init();
 }
 

@@ -1,8 +1,11 @@
 use crate::arch::gicc_clear_current_irq;
-use crate::kernel::{active_vm, vm_ipa2pa};
+use crate::kernel::{active_vcpu_id, active_vm, cpu_id, vcpu_run, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
 use crate::kernel::{active_vcpu, active_vm_id, vm_if_list_get_cpu_id, vm_num};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
-use crate::vmm::vmm_boot;
+use crate::vmm::{vmm_boot, vmm_init_image, vmm_setup_fdt};
+use crate::arch::power_arch_vm_shutdown_secondary_cores;
+use crate::config::vm_cfg_entry;
+use crate::device::create_fdt;
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
@@ -33,9 +36,55 @@ pub fn vmm_boot_vm(vm_id: usize) {
     }
 }
 
+pub fn vmm_reboot_vm(vm: Vm) {
+    if vm.id() == 0 {
+        todo!();
+    }
+    let vcpu = active_vcpu().unwrap();
+    println!("VM {} reset...", vm.id());
+    power_arch_vm_shutdown_secondary_cores(vm.clone());
+    println!("Core {} (vm {} vcpu {}) shutdown ok", cpu_id(), vm.id(), active_vcpu_id());
+
+    let config = vm_cfg_entry(vm.id());
+    if !vmm_init_image(&config.image, vm.clone()) {
+        panic!("vmm_reboot_vm: vmm_init_image failed");
+    }
+    if vm.id() != 0 {
+        // init vm1 dtb
+        match create_fdt(config.clone()) {
+            Ok(dtb) => {
+                let offset = config.image.device_tree_load_ipa
+                    - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                println!("dtb size {}", dtb.len());
+                println!("pa 0x{:x}", vm.pa_start(0) + offset);
+                crate::lib::memcpy_safe(
+                    (vm.pa_start(0) + offset) as *const u8,
+                    dtb.as_ptr(),
+                    dtb.len(),
+                );
+            }
+            _ => {
+                panic!("vmm_setup_config: create fdt for vm{} fail", vm.id());
+            }
+        }
+    } else {
+        unsafe {
+            vmm_setup_fdt(config.clone(), vm.clone());
+        }
+    }
+    vm_if_list_set_ivc_arg(vm.id(), 0);
+    vm_if_list_set_ivc_arg_ptr(vm.id(), 0);
+
+    crate::arch::interrupt_arch_clear();
+    crate::arch::vcpu_arch_init(vm.clone(), vm.vcpu(0));
+    vcpu.reset_state();
+    vcpu_run();
+}
+
 pub fn get_vm_id(id_ipa: usize) -> bool {
     let id_pa = vm_ipa2pa(active_vm().unwrap(), id_ipa);
     if id_pa == 0 {
+        println!("illegal id_pa {:x}", id_pa);
         return false;
     }
     unsafe { *(id_pa as *mut usize) = active_vm_id(); }
