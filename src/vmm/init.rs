@@ -1,16 +1,27 @@
-use crate::arch::PageTable;
-use crate::arch::PTE_S2_NORMAL;
-use crate::board::*;
-use crate::config::{VmCpuConfig, VmImageConfig, VmMemoryConfig, DEF_VM_CONFIG_TABLE};
-use crate::device::{create_fdt, EmuDeviceType};
-use crate::kernel::{active_vm, active_vm_id, vm_if_list_set_cpu_id, CPU, VM_IF_LIST, current_cpu};
-use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
-use crate::kernel::{vm, VM_LIST};
-use crate::kernel::Vm;
-use crate::lib::{barrier, trace};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
 use spin::Mutex;
+
+use crate::arch::{emu_intc_handler, emu_intc_init};
+use crate::arch::PageTable;
+use crate::arch::PTE_S2_DEVICE;
+use crate::arch::PTE_S2_NORMAL;
+use crate::board::*;
+use crate::config::{DEF_VM_CONFIG_TABLE, VmCpuConfig, VmImageConfig, VmMemoryConfig};
+use crate::config::VmConfigEntry;
+use crate::config::VmEmulatedDeviceConfig;
+use crate::config::VmPassthroughDeviceConfig;
+use crate::device::{create_fdt, EmuDeviceType};
+use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
+use crate::device::EmuDeviceType::*;
+use crate::kernel::{active_vm, active_vm_id, CPU, current_cpu, VM_IF_LIST, vm_if_list_set_cpu_id};
+use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
+use crate::kernel::{Vm, vm, VM_LIST};
+use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
+use crate::kernel::interrupt_vm_register;
+use crate::kernel::VM_NUM_MAX;
+use crate::lib::{barrier, trace};
 
 fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
     let result = mem_page_alloc();
@@ -215,11 +226,6 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
     true
 }
 
-use crate::arch::{emu_intc_handler, emu_intc_init};
-use crate::config::VmEmulatedDeviceConfig;
-use crate::device::EmuDeviceType::*;
-use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
-
 fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm) -> bool {
     if config.is_none() {
         println!(
@@ -295,10 +301,6 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
     true
 }
 
-use crate::arch::PTE_S2_DEVICE;
-use crate::config::VmPassthroughDeviceConfig;
-use crate::kernel::interrupt_vm_register;
-
 fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: Vm) -> bool {
     match config {
         Some(cfg) => {
@@ -330,8 +332,6 @@ fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: V
     true
 }
 
-use crate::config::VmConfigEntry;
-use crate::kernel::VM_NUM_MAX;
 
 pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     use fdt::*;
@@ -354,7 +354,6 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
             fdt_add_timer(dtb, 0x8);
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
-
 
             if config.vm_emu_dev_confg.is_some() {
                 for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
@@ -616,8 +615,6 @@ pub fn vmm_init() {
 
     barrier();
 }
-
-use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
 
 pub fn vmm_boot() {
     if current_cpu().assigned && active_vcpu_id() == 0 {

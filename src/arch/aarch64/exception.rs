@@ -1,9 +1,11 @@
-use crate::arch::ContextFrame;
+use tock_registers::interfaces::*;
+
 use crate::arch::{data_abort_handler, hvc_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
+use crate::arch::ContextFrame;
+use crate::kernel::{active_vm_id, current_cpu};
 use crate::kernel::interrupt_handler;
-use crate::kernel::{current_cpu, active_vm_id};
-use tock_registers::interfaces::*;
+
 // use crate::lib::time_current_us;
 
 global_asm!(include_str!("exception.S"));

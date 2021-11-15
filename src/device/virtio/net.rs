@@ -1,14 +1,19 @@
-use crate::config::{vm_num, vm_type};
-use crate::device::EmuDevs;
-use crate::device::VirtioIov;
-use crate::kernel::vm;
-use crate::kernel::Vm;
-use crate::kernel::{active_vm, active_vm_id, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
-use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem::size_of;
+
 use spin::Mutex;
+
+use crate::config::{vm_num, vm_type};
+use crate::device::{VirtioMmio, Virtq};
+use crate::device::EmuDevs;
+use crate::device::VirtioIov;
+use crate::kernel::{active_vm, active_vm_id, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
+use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
+use crate::kernel::IpiMessage;
+use crate::kernel::vm;
+use crate::kernel::Vm;
+use crate::lib::trace;
 
 const VIRTIO_F_VERSION_1: usize = 1 << 32;
 const VIRTIO_NET_F_CSUM: usize = 1 << 0;
@@ -122,8 +127,6 @@ pub fn net_features() -> usize {
         | VIRTIO_NET_F_HOST_UFO
         | VIRTIO_NET_F_HOST_ECN
 }
-
-use crate::device::{VirtioMmio, Virtq};
 
 pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: u16) -> bool {
     // let time_begin = time_current_us();
@@ -247,9 +250,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
     // panic!("end virtio_net_notify_handler");
     true
 }
-
-use crate::kernel::IpiMessage;
-use crate::lib::trace;
 
 pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     // let begin = time_current_us();

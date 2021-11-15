@@ -1,4 +1,5 @@
 use core::fmt::{Arguments, Write};
+
 use spin::Mutex;
 
 pub struct Writer;

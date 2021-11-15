@@ -1,11 +1,13 @@
-use crate::device::{
-    mediated_blk_read, mediated_blk_write, Virtq, BlkIov, BLK_IRQ, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
-};
-use crate::kernel::{vm, ipi_send_msg, vm_if_list_get_cpu_id, IpiInnerMsg, IpiMediatedMsg, IpiType, interrupt_vm_inject, active_vm_id};
-use crate::lib::memcpy_safe;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
 use spin::Mutex;
+
+use crate::device::{
+    BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+};
+use crate::kernel::{active_vm_id, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::lib::memcpy_safe;
 
 #[derive(Clone)]
 pub enum TaskType {
@@ -185,21 +187,6 @@ pub fn io_task_head() -> Task {
     io_list[0].clone()
 }
 
-// pub fn set_ipi_notify(idx: usize, notify: bool) {
-//     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-//     if ipi_list.len() <= idx {
-//         panic!("set_ipi_notify: illegal idx for ipi task list");
-//     }
-//     match &mut ipi_list[idx].task_type {
-//         TaskType::MediatedIpiTask(task) => {
-//             task.notify = notify;
-//         }
-//         TaskType::MediatedIoTask(_) => {
-//             panic!("illegal ipi task");
-//         }
-//     }
-// }
-
 pub fn io_list_len() -> usize {
     let io_list = MEDIATED_IO_TASK_LIST.lock();
     io_list.len()
@@ -229,18 +216,3 @@ pub fn handle_used_info(vq: Virtq) {
     }
     used_info_list.clear();
 }
-
-// pub fn set_used_len(len: u32, idx: usize) {
-//     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-//     if ipi_list.len() <= idx {
-//         panic!("set_ipi_notify: illegal idx for ipi task list");
-//     }
-//     match &mut ipi_list[idx].task_type {
-//         TaskType::MediatedIpiTask(task) => {
-//             task.notify = notify;
-//         }
-//         TaskType::MediatedIoTask(_) => {
-//             panic!("illegal ipi task");
-//         }
-//     }
-// }

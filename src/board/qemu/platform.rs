@@ -1,3 +1,9 @@
+// TODO: move these core name to device
+use crate::arch::GicDesc;
+use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
+use crate::device::ARM_CORTEX_A57;
+use crate::driver::{read, write};
+
 pub const KERNEL_ENTRY: usize = 0x43000000;
 
 pub const TIMER_FREQUENCY: usize = 62500000;
@@ -22,12 +28,6 @@ pub const DISK_PARTITION_TOTAL_SIZE: usize = 18481152;
 pub const DISK_PARTITION_0_SIZE: usize = 524288;
 pub const DISK_PARTITION_1_SIZE: usize = 8192000;
 pub const DISK_PARTITION_2_SIZE: usize = 8192000;
-
-// TODO: move these core name to device
-use crate::arch::GicDesc;
-use crate::board::{ArchDesc, PlatCpuConfig, PlatMemRegion, PlatMemoryConfig, PlatformConfig};
-use crate::device::ARM_CORTEX_A57;
-use crate::driver::{read, write};
 
 // holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {

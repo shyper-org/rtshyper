@@ -1,5 +1,3 @@
-use crate::arch::exception_next_instruction_step;
-use crate::arch::smc_guest_handler;
 use crate::arch::{
     exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write,
     exception_data_abort_access_reg, exception_data_abort_access_reg_width,
@@ -7,6 +5,8 @@ use crate::arch::{
     exception_data_abort_is_translate_fault,
 };
 use crate::arch::{exception_esr, exception_fault_ipa};
+use crate::arch::exception_next_instruction_step;
+use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, EmuContext};
 use crate::kernel::{current_cpu, hvc_guest_handler};
 

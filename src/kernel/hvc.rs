@@ -1,9 +1,10 @@
 use core::mem::size_of;
-use crate::vmm::{get_vm_id, vmm_boot_vm};
-use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
-use crate::kernel::{current_cpu, interrupt_vm_inject, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
+
 use crate::arch::PAGE_SIZE;
+use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
+use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::lib::{memcpy_safe, trace};
+use crate::vmm::{get_vm_id, vmm_boot_vm};
 
 pub const HVC_SYS: usize = 0;
 pub const HVC_VMM: usize = 1;
@@ -155,7 +156,19 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 
     let cpu_trgt = vm_if_list_get_cpu_id(vm_id);
     if cpu_trgt != current_cpu().id {
-        todo!();
+        // println!("cpu {} send hvc msg to cpu {}", current_cpu().id, cpu_trgt);
+        let ipi_msg = IpiHvcMsg {
+            src_vmid: 0,
+            trgt_vmid: vm_id,
+            fid: guest_msg.fid,
+            event: guest_msg.event,
+        };
+        if !ipi_send_msg(cpu_trgt, IpiType::IpiTHvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
+            println!(
+                "hvc_send_msg_to_vm: Failed to send ipi message, target {} type {:#?}",
+                cpu_trgt, IpiType::IpiTHvc
+            );
+        }
     } else {
         hvc_guest_notify(vm_id);
         return true;
@@ -167,4 +180,33 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 pub fn hvc_guest_notify(vm_id: usize) {
     let vm = vm(vm_id);
     interrupt_vm_inject(vm.clone(), vm.vcpu(0), HVC_IRQ, 0);
+}
+
+
+pub fn hvc_ipi_handler(msg: &IpiMessage) {
+    match &msg.ipi_message {
+        IpiInnerMsg::HvcMsg(msg) => {
+            match msg.fid {
+                HVC_MEDIATED => {
+                    hvc_guest_notify(msg.trgt_vmid);
+                }
+                _ => {
+                    todo!();
+                }
+            }
+        }
+        _ => {
+            println!("vgic_ipi_handler: illegal ipi");
+            return;
+        }
+    }
+}
+
+pub fn hvc_init() {
+    if !ipi_register(IpiType::IpiTHvc, hvc_ipi_handler) {
+        panic!(
+            "hvc_init: failed to register hvc ipi {}",
+            IpiType::IpiTHvc as usize
+        )
+    }
 }

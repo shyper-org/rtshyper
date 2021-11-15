@@ -1,12 +1,14 @@
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
+use vm_fdt::{Error, FdtWriter, FdtWriterResult};
+
 use crate::board::PLAT_DESC;
 use crate::config::{DtbDevType, VmDtbDev};
 use crate::config::{VmConfigEntry, VmCpuConfig, VmMemoryConfig};
+use crate::device::EmuDeviceType;
 use crate::lib::bit_num;
 use crate::SYSTEM_FDT;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use vm_fdt::{Error, FdtWriter, FdtWriterResult};
-use crate::device::EmuDeviceType;
 
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
     unsafe {

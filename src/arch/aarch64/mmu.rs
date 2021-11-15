@@ -1,10 +1,14 @@
-global_asm!(include_str!("start.S"));
-
-use super::interface::*;
 use tock_registers::*;
 use tock_registers::interfaces::*;
+
 use crate::arch::pt_lvl2_idx;
 use crate::arch::TableDescriptor::TYPE::Value::Block;
+use crate::board::PLAT_DESC;
+use crate::lib::memset_safe;
+
+use super::interface::*;
+
+global_asm!(include_str!("start.S"));
 
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 // const PAGE_SIZE: usize = 4096;
@@ -104,9 +108,6 @@ impl BlockDescriptor {
 pub struct PageTables {
     lvl1: [BlockDescriptor; ENTRY_PER_PAGE],
 }
-
-use crate::board::PLAT_DESC;
-use crate::lib::memset_safe;
 
 const LVL1_SHIFT: usize = 30;
 const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;

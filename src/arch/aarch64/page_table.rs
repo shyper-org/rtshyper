@@ -1,13 +1,16 @@
-use super::{PAGE_SIZE, PTE_PER_PAGE};
+use alloc::vec::Vec;
+
+// use rlibc::{memcpy, memset};
+use spin::Mutex;
+
 use crate::arch::ArchPageTableEntryTrait;
 use crate::arch::WORD_SIZE;
 use crate::kernel::Cpu;
-use crate::lib::round_up;
 use crate::lib::{memcpy_safe, memset_safe};
+use crate::lib::round_up;
 use crate::mm::PageFrame;
-use alloc::vec::Vec;
-// use rlibc::{memcpy, memset};
-use spin::Mutex;
+
+use super::{PAGE_SIZE, PTE_PER_PAGE};
 
 // page_table const
 pub const LVL1_SHIFT: usize = 30;

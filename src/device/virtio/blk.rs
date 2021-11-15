@@ -1,9 +1,12 @@
-use crate::arch::PAGE_SIZE;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
 use spin::Mutex;
 
-use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, ipi_list_len, vm_ipa2pa, IoMediatedMsg, IpiMediatedMsg, Task, TaskType, Vm, push_used_info};
+use crate::arch::PAGE_SIZE;
+use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
+use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, IoMediatedMsg, ipi_list_len, IpiMediatedMsg, push_used_info, Task, TaskType, Vm, vm_ipa2pa};
+use crate::lib::{memcpy_safe, time_current_us, trace};
 
 pub const BLK_IRQ: usize = 0x20 + 0x10;
 
@@ -311,8 +314,6 @@ impl VirtioBlkReqInner {
     }
 }
 
-use crate::lib::{memcpy_safe, trace};
-
 pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     // println!("vm[{}] blk req handler", active_vm_id());
     let sector = req.sector();
@@ -446,8 +447,6 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
     return total_byte;
 }
 
-use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
-
 #[no_mangle]
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm, idx: u16) -> bool {
     let flag = vq.avail_flags();
@@ -468,6 +467,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
     // use crate::kernel::active_vm;
     // let vm = active_vm().unwrap();
 
+    let begin = time_current_us();
     if vq.ready() == 0 {
         println!("blk virt_queue is not ready!");
         return false;
@@ -486,6 +486,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     let mut process_count: i32 = 0;
     let mut desc_chain_head_idx;
+
+    let time0 = time_current_us();
 
     while next_desc_idx_opt.is_some() {
         let mut next_desc_idx = next_desc_idx_opt.unwrap() as usize;
@@ -620,6 +622,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
         next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     }
 
+    let time1 = time_current_us();
+
     if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
         panic!("illegal");
         vq.notify(dev.int_id(), vm.clone());
@@ -628,5 +632,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
         finish_task(true);
     }
 
+    let end = time_current_us();
+    // println!("init time {}us, while handle desc ring time {}us, finish task {}us", time0 - begin, time1 - time0, end - time1);
     return true;
 }

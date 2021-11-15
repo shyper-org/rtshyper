@@ -1,9 +1,11 @@
+use alloc::sync::Arc;
+use core::slice;
+
+use spin::Mutex;
+
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
 use crate::kernel::{active_vm, active_vm_id, Vm};
-use alloc::sync::Arc;
-use core::slice;
-use spin::Mutex;
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;

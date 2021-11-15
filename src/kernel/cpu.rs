@@ -1,14 +1,16 @@
-use crate::arch::{pt_map_banked_cpu, PAGE_SIZE, PTE_PER_PAGE};
-use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{Vcpu, VcpuPool, VcpuState, Vm};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-// use core::ops::{Deref, DerefMut};
-use crate::arch::cpu_interrupt_unmask;
+
+use spin::Mutex;
+
+use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE};
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
+// use core::ops::{Deref, DerefMut};
+use crate::arch::cpu_interrupt_unmask;
+use crate::board::PLATFORM_CPU_NUM_MAX;
+use crate::kernel::{Vcpu, VcpuPool, VcpuState, Vm};
 use crate::kernel::IpiMessage;
-use spin::Mutex;
 use crate::lib::trace;
 
 pub const CPU_MASTER: usize = 0;

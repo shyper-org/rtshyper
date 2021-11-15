@@ -1,5 +1,5 @@
-use crate::kernel::{active_vm, current_cpu, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX};
 use crate::arch::PAGE_SIZE;
+use crate::kernel::{active_vm, current_cpu, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX};
 
 pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
     let vm = active_vm().unwrap();

@@ -1,6 +1,6 @@
 use crate::arch::traits::ContextFrameTrait;
-use crate::kernel::VmType;
 use crate::kernel::{Vcpu, Vm};
+use crate::kernel::VmType;
 
 pub fn vcpu_arch_init(vm: Vm, vcpu: Vcpu) {
     let vm_inner = vm.inner.lock();

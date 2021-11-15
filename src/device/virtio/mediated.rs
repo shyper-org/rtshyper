@@ -1,12 +1,14 @@
+use alloc::vec::Vec;
+
+use spin::Mutex;
+
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
-    active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, interrupt_vm_inject, io_task_head,
-    vm, vm_ipa2pa, HvcGuestMsg, IpiInnerMsg, TaskType,
+    active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject,
+    io_task_head, IpiInnerMsg, TaskType, vm, vm_ipa2pa,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::{memcpy_safe, trace};
-use alloc::vec::Vec;
-use spin::Mutex;
 
 static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 

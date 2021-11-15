@@ -1,20 +1,22 @@
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
+use spin::Mutex;
+
 // pub const VIRTIO_MMIO_MAGIC_VALUE: usize = 0x000;
 // pub const VIRTIO_MMIO_DEVICE_ID: usize = 0x008;
 // pub const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext, virtio_mediated_blk_notify_handler};
-use crate::device::VirtDev;
-use crate::device::VIRTQ_READY;
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
+use crate::device::VirtDev;
+use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
 use crate::kernel::{current_cpu, vm_ipa2pa};
-use crate::kernel::Vm;
 use crate::kernel::{active_vm, active_vm_id};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use spin::Mutex;
+use crate::kernel::Vm;
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
 

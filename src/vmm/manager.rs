@@ -1,17 +1,21 @@
 use crate::arch::gicc_clear_current_irq;
+use crate::arch::power_arch_vm_shutdown_secondary_cores;
+use crate::config::vm_cfg_entry;
+use crate::device::create_fdt;
 use crate::kernel::{active_vcpu_id, active_vm, current_cpu, vcpu_run, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
 use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id, vm_num};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::{vmm_boot, vmm_init_image, vmm_setup_fdt};
-use crate::arch::power_arch_vm_shutdown_secondary_cores;
-use crate::config::vm_cfg_entry;
-use crate::device::create_fdt;
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
     VmmBoot,
     VmmReboot,
     VmmShutdown,
+}
+
+pub fn vmm_shutdown_secondary_vm() {
+    println!("Shutting down all VMs...");
 }
 
 pub fn vmm_boot_vm(vm_id: usize) {
@@ -38,7 +42,8 @@ pub fn vmm_boot_vm(vm_id: usize) {
 
 pub fn vmm_reboot_vm(vm: Vm) {
     if vm.id() == 0 {
-        todo!();
+        vmm_shutdown_secondary_vm();
+        crate::board::platform_sys_reboot();
     }
     let vcpu = current_cpu().active_vcpu.clone().unwrap();
     println!("VM {} reset...", vm.id());

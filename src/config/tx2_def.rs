@@ -1,13 +1,15 @@
-use super::{
-    AddrRegions, DtbDevType, VmConfigEntry, VmCpuConfig, VmDtbDev, VmEmulatedDeviceConfig,
-    VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion, DEF_VM_CONFIG_TABLE,
-};
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
 use crate::board::*;
 use crate::config::PassthroughRegion;
 use crate::device::EmuDeviceType;
-use crate::kernel::{VmType, HVC_IRQ};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use crate::kernel::{HVC_IRQ, VmType};
+
+use super::{
+    AddrRegions, DEF_VM_CONFIG_TABLE, DtbDevType, VmConfigEntry, VmCpuConfig, VmDtbDev,
+    VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
+};
 
 // pub fn vm_num() -> usize {
 //     let vm_config = DEF_VM_CONFIG_TABLE.lock();
@@ -760,8 +762,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0, //0x83000000,
         },
         cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b1000,
+            num: 3,
+            allocate_bitmap: 0b1110,
             master: -1,
         },
         vm_emu_dev_confg: Some(emu_dev_config),

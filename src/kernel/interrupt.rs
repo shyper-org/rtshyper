@@ -1,8 +1,11 @@
+use spin::Mutex;
+
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
+use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
 use crate::kernel::{current_cpu, ipi_irq_handler, Vcpu};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
-use spin::Mutex;
+use crate::vmm::vmm_ipi_handler;
 
 pub const INTERRUPT_NUM_MAX: usize = 1024;
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
@@ -92,9 +95,6 @@ pub fn interrupt_init() {
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
 
-use crate::arch::{interrupt_arch_vm_register, GIC_PRIVINT_NUM};
-use crate::vmm::vmm_ipi_handler;
-
 pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     // println!("VM {} register interrupt {}", vm.vm_id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
@@ -123,7 +123,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     match active_vm() {
         Some(vm) => {
             if vm.has_interrupt(int_id) {
-                interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, src);
+                interrupt_vm_inject(vm.clone(), current_cpu().active_vcpu.clone().unwrap(), int_id, src);
                 return false;
             }
         }

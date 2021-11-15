@@ -1,8 +1,11 @@
-use super::{round_down, round_up};
-use crate::arch::PAGE_SIZE;
 use core_io as io;
-use io::prelude::*;
 use io::{Read, SeekFrom};
+use io::prelude::*;
+
+use crate::arch::PAGE_SIZE;
+use crate::board::{DISK_PARTITION_0_START, platform_blk_read};
+
+use super::{round_down, round_up};
 
 struct Disk {
     pointer: usize,
@@ -19,7 +22,6 @@ impl Disk {
     }
 }
 
-use crate::board::{platform_blk_read, DISK_PARTITION_0_START};
 // TODO: add fatfs read
 impl core_io::Read for Disk {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {

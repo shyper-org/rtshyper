@@ -1,9 +1,17 @@
-use super::{CpuState, Vm, VmType};
-use crate::arch::tlb_invalidate_guest_all;
-use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
 use spin::Mutex;
+
+use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
+use crate::arch::tlb_invalidate_guest_all;
+use crate::board::PLATFORM_VCPU_NUM_MAX;
+use crate::kernel::{current_cpu, vm_if_list_set_state};
+use crate::kernel::{
+    active_vcpu_id, active_vm_id, CPU_STACK_SIZE,
+};
+
+use super::{CpuState, Vm, VmType};
 
 pub enum VcpuState {
     VcpuInv = 0,
@@ -228,8 +236,6 @@ impl VcpuInner {
     }
 }
 
-use crate::board::PLATFORM_VCPU_NUM_MAX;
-
 static VCPU_LIST: Mutex<Vec<Vcpu>> = Mutex::new(Vec::new());
 
 pub fn vcpu_alloc() -> Option<Vcpu> {
@@ -246,11 +252,6 @@ pub fn vcpu_alloc() -> Option<Vcpu> {
 pub fn vcpu_idle() {
     crate::kernel::cpu_idle();
 }
-
-use crate::kernel::{current_cpu, vm_if_list_set_state};
-use crate::kernel::{
-    active_vcpu_id, active_vm_id, CPU_STACK_SIZE,
-};
 
 pub fn vcpu_run() {
     println!(

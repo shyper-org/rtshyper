@@ -1,10 +1,17 @@
-use super::mem::VM_MEM_REGION_MAX;
-use super::vcpu::Vcpu;
-use crate::config::DEF_VM_CONFIG_TABLE;
-use crate::lib::*;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
 use spin::Mutex;
+
+use crate::arch::PageTable;
+use crate::arch::Vgic;
+use crate::config::DEF_VM_CONFIG_TABLE;
+use crate::config::VmConfigEntry;
+use crate::device::EmuDevs;
+use crate::lib::*;
+
+use super::mem::VM_MEM_REGION_MAX;
+use super::vcpu::Vcpu;
 
 pub const VM_NUM_MAX: usize = 8;
 pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
@@ -129,15 +136,11 @@ impl VmPa {
     }
 }
 
-use crate::config::VmConfigEntry;
-
 // #[repr(align(4096))]
 #[derive(Clone)]
 pub struct Vm {
     pub inner: Arc<Mutex<VmInner>>,
 }
-
-use crate::arch::Vgic;
 
 impl Vm {
     pub fn inner(&self) -> Arc<Mutex<VmInner>> {
@@ -421,9 +424,6 @@ impl Vm {
         vm_inner.pt.as_ref().unwrap().show_pt(ipa);
     }
 }
-
-use crate::arch::PageTable;
-use crate::device::EmuDevs;
 
 #[repr(align(4096))]
 pub struct VmInner {

@@ -1,6 +1,8 @@
-use crate::kernel::{current_cpu, Vcpu, VcpuState};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+
+use crate::kernel::{current_cpu, Vcpu, VcpuState};
+use crate::kernel::CPU;
 
 pub const VCPU_POOL_MAX: usize = 4;
 
@@ -28,8 +30,6 @@ impl VcpuPool {
         self.running += 1;
     }
 }
-
-use crate::kernel::{CPU};
 
 pub fn vcpu_pool_init() {
     let pool = Box::new(VcpuPool::default());

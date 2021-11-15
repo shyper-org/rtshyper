@@ -1,13 +1,16 @@
-use super::{
-    VmConfigEntry, VmConfigTable, VmCpuConfig, VmEmulatedDeviceConfig, VmImageConfig,
-    VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion, DEF_VM_CONFIG_TABLE,
-};
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
+use spin::Mutex;
+
 use crate::board::*;
 use crate::device::EmuDeviceType;
 use crate::kernel::VmType;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use spin::Mutex;
+
+use super::{
+    DEF_VM_CONFIG_TABLE, VmConfigEntry, VmConfigTable, VmCpuConfig, VmEmulatedDeviceConfig,
+    VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
+};
 
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();

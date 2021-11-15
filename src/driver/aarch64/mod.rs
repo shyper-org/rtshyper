@@ -1,3 +1,4 @@
+pub use self::uart::*;
+
 mod uart;
 
-pub use self::uart::*;

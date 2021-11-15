@@ -1,10 +1,13 @@
-use super::AllocError;
-use crate::arch::PAGE_SIZE;
-use crate::lib::memset_safe;
-use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
-use crate::mm::PageFrame;
 use alloc::vec::Vec;
+
 use spin::Mutex;
+
+use crate::arch::PAGE_SIZE;
+use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
+use crate::lib::memset_safe;
+use crate::mm::PageFrame;
+
+use super::AllocError;
 
 const TOTAL_MEM_REGION_MAX: usize = 16;
 

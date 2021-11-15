@@ -1,13 +1,19 @@
-// use crate::device::*;
-use super::virtio::*;
 use alloc::boxed::Box;
 use core::mem::size_of;
+
 // use register::mmio::*;
 // use register::*;
 use spin::Mutex;
 use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
+
+use Operation::*;
+
+use crate::lib::trace;
+
+// use crate::device::*;
+use super::virtio::*;
 
 const VIRTIO_MMIO_BASE: usize = 0x0a000000;
 const QUEUE_SIZE: usize = 8;
@@ -234,9 +240,6 @@ pub struct VirtioBlkOutHdr {
 const VRING_DESC_F_NEXT: u16 = 1;
 const VRING_DESC_F_WRITE: u16 = 2;
 const VRING_DESC_F_INDIRECT: u16 = 4;
-
-use Operation::*;
-use crate::lib::trace;
 
 pub fn read(sector: usize, count: usize, buf: usize) {
     io(sector, count, buf, Read);

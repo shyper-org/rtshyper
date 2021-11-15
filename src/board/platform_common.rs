@@ -1,6 +1,9 @@
+use crate::arch::GicDesc;
+
 pub const PLATFORM_CPU_NUM_MAX: usize = 8;
 pub const TOTAL_MEM_REGION_MAX: usize = 16;
 pub const PLATFORM_VCPU_NUM_MAX: usize = 8;
+
 #[repr(C)]
 pub struct PlatMemRegion {
     pub base: usize,
@@ -20,8 +23,6 @@ pub struct PlatCpuConfig {
     pub name: [u8; PLATFORM_CPU_NUM_MAX],
     pub mpidr_list: [usize; PLATFORM_CPU_NUM_MAX],
 }
-
-use crate::arch::GicDesc;
 
 #[repr(C)]
 pub struct ArchDesc {

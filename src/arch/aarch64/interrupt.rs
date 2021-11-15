@@ -1,12 +1,12 @@
 use crate::arch::{gic_cpu_reset, gicc_clear_current_irq};
-use super::GICD;
+use crate::board::platform_cpuid_to_cpuif;
+use crate::kernel::{current_cpu, Vcpu, Vm};
+
 use super::GIC_SGIS_NUM;
-use crate::kernel::{Vcpu, Vm, current_cpu};
+use super::GICD;
 
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
 pub const INTERRUPT_IRQ_IPI: usize = 1;
-
-use crate::board::platform_cpuid_to_cpuif;
 
 pub fn interrupt_arch_init() {
     use crate::arch::{gic_cpu_init, gic_glb_init, gic_maintenance_handler};

@@ -1,11 +1,14 @@
-use super::Vm;
+use alloc::vec::Vec;
+
+use spin::Mutex;
+
 use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
-use crate::kernel::{interrupt_cpu_ipi_send, CPU_IF_LIST, current_cpu};
+use crate::device::{VirtioMmio, Virtq};
+use crate::kernel::{CPU_IF_LIST, current_cpu, interrupt_cpu_ipi_send};
 use crate::vmm::VmmEvent;
-use alloc::vec::Vec;
-use spin::Mutex;
-use crate::device::{Virtq, VirtioMmio};
+
+use super::Vm;
 
 #[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
@@ -70,6 +73,14 @@ pub struct IpiMediatedMsg {
     pub avail_idx: u16,
 }
 
+#[derive(Clone)]
+pub struct IpiHvcMsg {
+    pub src_vmid: usize,
+    pub trgt_vmid: usize,
+    pub fid: usize,
+    pub event: usize,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum IpiType {
     IpiTIntc = 0,
@@ -89,6 +100,7 @@ pub enum IpiInnerMsg {
     EnternetMsg(IpiEthernetMsg),
     VmmMsg(IpiVmmMsg),
     MediatedMsg(IpiMediatedMsg),
+    HvcMsg(IpiHvcMsg),
     None,
 }
 

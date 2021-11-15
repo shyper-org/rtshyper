@@ -1,10 +1,14 @@
-use super::smc::smc_call;
 use crate::arch::{Aarch64ContextFrame, gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
 use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vm};
 use crate::kernel::{
     active_vcpu_id, active_vm_id, CpuState,
 };
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
+use crate::kernel::IpiMessage;
+use crate::lib::trace;
+use crate::vmm::vmm_reboot_vm;
+
+use super::smc::smc_call;
 
 pub const PSCI_VERSION: usize = 0x84000000;
 pub const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
@@ -58,6 +62,14 @@ pub fn power_arch_cpu_shutdown() {
     gicc_clear_current_irq(true);
     timer_enable(false);
     cpu_idle();
+}
+
+pub fn power_arch_sys_reset() {
+    smc_call(PSCI_SYSTEM_RESET, 0, 0, 0);
+}
+
+pub fn power_arch_sys_shutdown() {
+    smc_call(PSCI_SYSTEM_OFF, 0, 0, 0);
 }
 
 fn psci_guest_sys_reset() {
@@ -154,10 +166,6 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
         }
     }
 }
-
-use crate::kernel::IpiMessage;
-use crate::lib::trace;
-use crate::vmm::vmm_reboot_vm;
 
 pub fn psci_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {

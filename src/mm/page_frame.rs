@@ -1,6 +1,6 @@
-use crate::lib::{memset_safe, trace};
-
 use crate::arch::PAGE_SIZE;
+use crate::kernel::mem_pages_free;
+use crate::lib::{memset_safe, trace};
 
 #[derive(Clone, Debug)]
 pub struct PageFrame {
@@ -40,8 +40,6 @@ impl PageFrame {
         }
     }
 }
-
-use crate::kernel::mem_pages_free;
 
 impl Drop for PageFrame {
     fn drop(&mut self) {

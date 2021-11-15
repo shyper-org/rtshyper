@@ -8,17 +8,25 @@
 #![feature(const_fn_trait_bound)]
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate alloc;
+extern crate fdt;
+#[macro_use]
+extern crate lazy_static;
 extern crate log;
+
 // extern crate rlibc;
 
 // #[macro_export]
 // macro_rules! cpu {
 //     () => ($crate::kernel::cpu())
 // }
+
+use device::{init_vm0_dtb, mediated_dev_init};
+use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
+use mm::heap_init;
+use vmm::{vmm_boot, vmm_init};
+
+use crate::kernel::hvc_init;
 
 #[macro_export]
 macro_rules! print {
@@ -42,13 +50,7 @@ mod mm;
 mod panic;
 mod vmm;
 
-use device::{init_vm0_dtb, mediated_dev_init};
-use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
-use mm::heap_init;
-use vmm::{vmm_boot, vmm_init};
 // use lib::{BitAlloc, BitAlloc256};
-
-extern crate fdt;
 
 pub static SYSTEM_FDT: spin::Once<alloc::vec::Vec<u8>> = spin::Once::new();
 
@@ -71,6 +73,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         // kernel::logger_init();
         init_vm0_dtb(dtb);
         mediated_dev_init();
+        hvc_init();
     }
     cpu_init();
     interrupt_init();

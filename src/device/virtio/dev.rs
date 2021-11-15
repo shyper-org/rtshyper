@@ -1,13 +1,16 @@
+use alloc::sync::Arc;
+
+use spin::Mutex;
+
 // use crate::arch::PAGE_SIZE;
 use crate::config::VmEmulatedDeviceConfig;
 // use crate::device::add_mediated_dev;
 use crate::device::{net_features, NetDesc};
-use crate::device::{BlkDesc, VirtioBlkReq, BLOCKIF_IOV_MAX};
-use crate::mm::PageFrame;
-use alloc::sync::Arc;
-use spin::Mutex;
-
+use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
+use crate::device::{BlkStat, NicStat};
+use crate::kernel::mem_pages_alloc;
+use crate::mm::PageFrame;
 
 #[derive(Copy, Clone)]
 pub enum VirtioDeviceType {
@@ -15,8 +18,6 @@ pub enum VirtioDeviceType {
     Net = 1,
     Block = 2,
 }
-
-use crate::device::{BlkStat, NicStat};
 
 #[derive(Clone)]
 pub enum DevStat {
@@ -122,8 +123,6 @@ pub struct VirtDevInner {
     cache: Option<PageFrame>,
     stat: DevStat,
 }
-
-use crate::kernel::mem_pages_alloc;
 
 impl VirtDevInner {
     pub fn default() -> VirtDevInner {

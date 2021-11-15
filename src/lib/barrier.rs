@@ -1,7 +1,9 @@
 use volatile::Volatile;
-global_asm!(include_str!("../arch/aarch64/barrier.S"));
 
 use crate::board::PLAT_DESC;
+use crate::lib::round_up;
+
+global_asm!(include_str!("../arch/aarch64/barrier.S"));
 
 #[repr(C)]
 struct CpuSyncToken {
@@ -17,8 +19,6 @@ static mut CPU_GLB_SYNC: CpuSyncToken = CpuSyncToken {
     count: 0,
     ready: true,
 };
-
-use crate::lib::round_up;
 
 extern "C" {
     pub fn spin_lock(lock: usize);

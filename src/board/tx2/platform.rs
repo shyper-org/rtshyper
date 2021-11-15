@@ -1,3 +1,10 @@
+use crate::arch::GicDesc;
+use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
+use crate::device::ARM_CORTEX_A57;
+#[allow(unused_imports)]
+use crate::device::ARM_NVIDIA_DENVER;
+use crate::kernel::mem_heap_reset;
+
 pub const KERNEL_ENTRY: usize = 0x83000000;
 
 // pub const TIMER_FREQUENCY: usize = 62500000;
@@ -42,12 +49,6 @@ extern "C" {
     fn tegra_emmc_blk_read(sector: usize, count: usize, buf: *mut u8);
     fn tegra_emmc_blk_write(sector: usize, count: usize, buf: *const u8);
 }
-
-use crate::arch::GicDesc;
-use crate::board::{ArchDesc, PlatCpuConfig, PlatMemRegion, PlatMemoryConfig, PlatformConfig};
-use crate::device::ARM_CORTEX_A57;
-#[allow(unused_imports)]
-use crate::device::ARM_NVIDIA_DENVER;
 
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
@@ -111,6 +112,13 @@ pub fn platform_power_on_secondary_cores() {
     for i in 1..PLAT_DESC.cpu_desc.num {
         platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], KERNEL_ENTRY, 0);
     }
+}
+
+pub fn platform_sys_reboot() {
+    println!("Hypervisor reset...");
+    mem_heap_reset();
+    crate::arch::power_arch_sys_reset();
+    loop {}
 }
 
 // TODO

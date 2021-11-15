@@ -1,6 +1,7 @@
+use buddy_system_allocator::LockedHeap;
+
 // rCore buddy system allocator
 use crate::arch::PAGE_SIZE;
-use buddy_system_allocator::LockedHeap;
 
 const HEAP_SIZE: usize = 1024 * PAGE_SIZE;
 

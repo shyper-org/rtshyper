@@ -1,8 +1,11 @@
 use crate::arch::PAGE_SIZE;
 use crate::board::*;
 use crate::lib::{memset_safe, round_up};
+use crate::mm::PageFrame;
 
 use super::mem_region::*;
+
+use self::AllocError::*;
 
 pub const VM_MEM_REGION_MAX: usize = 4;
 
@@ -89,8 +92,10 @@ pub enum AllocError {
     OutOfFrame,
 }
 
-use self::AllocError::*;
-use crate::mm::PageFrame;
+pub fn mem_heap_reset() {
+    let mut heap = HEAPREGION.lock();
+    memset_safe(heap.region.base as *mut u8, 0, heap.region.size * PAGE_SIZE);
+}
 
 pub fn mem_heap_alloc(page_num: usize, _aligned: bool) -> Result<PageFrame, AllocError> {
     if page_num == 0 {

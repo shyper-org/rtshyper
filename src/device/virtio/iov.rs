@@ -1,8 +1,10 @@
-use crate::lib::{memcpy_safe, trace};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::slice::from_raw_parts;
+
 use spin::Mutex;
+
+use crate::lib::{memcpy_safe, trace};
 
 #[derive(Clone)]
 pub struct VirtioIov {

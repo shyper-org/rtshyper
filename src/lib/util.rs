@@ -1,5 +1,6 @@
-use crate::arch::PAGE_SIZE;
 use spin::Mutex;
+
+use crate::arch::PAGE_SIZE;
 
 pub static TRACE: Mutex<bool> = Mutex::new(true);
 
