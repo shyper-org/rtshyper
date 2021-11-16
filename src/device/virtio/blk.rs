@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
-use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, IoMediatedMsg, ipi_list_len, IpiMediatedMsg, push_used_info, Task, TaskType, Vm, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, IoMediatedMsg, ipi_list_len, IpiMediatedMsg, merge_io_task, push_used_info, Task, TaskType, Vm, vm_ipa2pa};
 use crate::lib::{memcpy_safe, time_current_us, trace};
 
 pub const BLK_IRQ: usize = 0x20 + 0x10;
@@ -314,7 +314,7 @@ impl VirtioBlkReqInner {
     }
 }
 
-pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
+pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) -> usize {
     // println!("vm[{}] blk req handler", active_vm_id());
     let sector = req.sector();
     let region_start = req.region_start();
@@ -346,6 +346,8 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 // mediated blk read
                 add_task(Task {
                     task_type: TaskType::MediatedIoTask(IoMediatedMsg {
+                        src_vmid: vmid,
+                        vq: vq.clone(),
                         io_type: VIRTIO_BLK_T_IN,
                         blk_id: 0,
                         sector: sector + region_start,
@@ -404,6 +406,8 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
                 // mediated blk write
                 add_task(Task {
                     task_type: TaskType::MediatedIoTask(IoMediatedMsg {
+                        src_vmid: vmid,
+                        vq: vq.clone(),
                         io_type: VIRTIO_BLK_T_OUT,
                         blk_id: 0,
                         sector: sector + region_start,
@@ -419,18 +423,20 @@ pub fn blk_req_handler(req: VirtioBlkReq, cache: usize) -> usize {
         }
         VIRTIO_BLK_T_GET_ID => {
             // panic!("blk get id");
-            if req.mediated() {
-                add_task(Task {
-                    task_type: TaskType::MediatedIoTask(IoMediatedMsg {
-                        io_type: VIRTIO_BLK_T_IN,
-                        blk_id: 0,
-                        sector: region_start,
-                        count: 0,
-                        cache,
-                        iov_list: Arc::new(Vec::new()),
-                    }),
-                });
-            }
+            // if req.mediated() {
+            //     add_task(Task {
+            //         task_type: TaskType::MediatedIoTask(IoMediatedMsg {
+            //             src_vmid: vmid,
+            //             vq: vq.clone(),
+            //             io_type: VIRTIO_BLK_T_IN,
+            //             blk_id: 0,
+            //             sector: region_start,
+            //             count: 0,
+            //             cache,
+            //             iov_list: Arc::new(Vec::new()),
+            //         }),
+            //     });
+            // }
             let data_bg = req.iov_data_bg(0);
             let name = "virtio-blk".as_ptr();
             if trace() && (data_bg < 0x1000) {
@@ -455,17 +461,17 @@ pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm, i
             src_id: active_vm_id(),
             vq: vq.clone(),
             blk: blk.clone(),
-            notify: flag == 0,
             avail_idx: idx,
         }),
     });
     true
 }
 
-pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: u16) -> bool {
-    // println!("vm[{}] in virtio_blk_notify_handler, avail idx {}", active_vm_id(), avail_idx);
+pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, _avail_idx: u16) -> bool {
+    // println!("vm[{}] in virtio_blk_notify_handler, avail idx {}", vm.id(), avail_idx);
     // use crate::kernel::active_vm;
     // let vm = active_vm().unwrap();
+    let avail_idx = vq.avail_idx();
 
     let begin = time_current_us();
     if vq.ready() == 0 {
@@ -509,8 +515,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
                 if head {
                     if vq.desc_is_writable(next_desc_idx) {
                         println!(
-                            "Failed to get virt blk queue desc header, idx = {}",
-                            next_desc_idx
+                            "Failed to get virt blk queue desc header, idx = {}, flag = {:x}",
+                            next_desc_idx, vq.desc_flags(next_desc_idx)
                         );
                         vq.notify(dev.int_id(), vm.clone());
                         return false;
@@ -581,11 +587,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
         }
 
         let total = if !req.mediated() {
-            blk_req_handler(req.clone(), dev.cache())
+            blk_req_handler(req.clone(), vq.clone(), dev.cache(), vm.id())
         } else {
             let mediated_blk = mediated_blk_list_get(0);
             let cache = mediated_blk.cache_pa();
-            blk_req_handler(req.clone(), cache)
+            blk_req_handler(req.clone(), vq.clone(), cache, vm.id())
         };
 
         // should not update at this time?
@@ -596,27 +602,6 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
         } else {
             push_used_info(desc_chain_head_idx as u32, total as u32);
         }
-        // println!("finish blk req handler");
-        // match dev.stat() {
-        //     super::DevStat::BlkStat(stat) => match req.req_type() as usize {
-        //         VIRTIO_BLK_T_IN => {
-        //             let read_req = stat.read_req() + 1;
-        //             stat.set_read_req(read_req);
-        //             let read_byte = stat.read_byte() + total;
-        //             stat.set_read_byte(read_byte);
-        //         }
-        //         VIRTIO_BLK_T_OUT => {
-        //             let write_req = stat.write_req() + 1;
-        //             stat.set_write_req(write_req);
-        //             let write_byte = stat.write_byte() + total;
-        //             stat.set_write_byte(write_byte);
-        //         }
-        //         _ => {}
-        //     },
-        //     _ => {
-        //         panic!("virtio_blk_notify_handler: illegal dev stat type");
-        //     }
-        // }
 
         process_count += 1;
         next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
@@ -628,9 +613,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, avail_idx: 
         panic!("illegal");
         vq.notify(dev.int_id(), vm.clone());
     }
-    if req.mediated() && process_count <= 0 {
+
+    if req.mediated() {
         finish_task(true);
     }
+
 
     let end = time_current_us();
     // println!("init time {}us, while handle desc ring time {}us, finish task {}us", time0 - begin, time1 - time0, end - time1);

@@ -35,6 +35,10 @@ impl MediatedBlk {
         unsafe { &mut *(self.base_addr as *mut MediatedBlkContent) }
     }
 
+    pub fn dma_block_max(&self) -> usize {
+        self.content().cfg.dma_block_max
+    }
+
     pub fn nreq(&self) -> usize {
         self.content().nreq
     }
@@ -128,8 +132,11 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
     let mediated_blk = mediated_blk_list_get(0);
     let mut cache_ptr = mediated_blk.cache_pa();
     let io_task = io_task_head();
+    if io_task.is_none() {
+        return false;
+    }
 
-    match io_task.task_type {
+    match io_task.unwrap().task_type {
         TaskType::MediatedIpiTask(_) => {
             panic!("illegal io task type");
         }
@@ -159,7 +166,6 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
 
     finish_task(false);
     true
-    // interrupt_vm_inject(vm, BLK_IRQ, 0);
 }
 
 pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
@@ -168,14 +174,14 @@ pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
     interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
 }
 
-// fn check_sum(addr: usize, len: usize) -> usize {
-//     let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
-//     let mut sum = 0;
-//     for num in slice {
-//         sum ^= num;
-//     }
-//     sum
-// }
+fn check_sum(addr: usize, len: usize) -> usize {
+    let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
+    let mut sum = 0;
+    for num in slice {
+        sum ^= num;
+    }
+    sum
+}
 
 pub fn mediated_ipi_handler(msg: &IpiMessage) {
     // println!("vm {} mediated_ipi_handler", active_vm_id());

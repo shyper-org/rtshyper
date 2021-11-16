@@ -1,12 +1,13 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
-use crate::kernel::{active_vm_id, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::kernel::{active_vm_id, current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
 use crate::lib::memcpy_safe;
 
 #[derive(Clone)]
@@ -22,6 +23,8 @@ pub struct UsedInfo {
 
 #[derive(Clone)]
 pub struct IoMediatedMsg {
+    pub src_vmid: usize,
+    pub vq: Virtq,
     pub io_type: usize,
     pub blk_id: usize,
     pub sector: usize,
@@ -40,10 +43,16 @@ impl Task {
         match self.task_type.clone() {
             TaskType::MediatedIpiTask(msg) => {
                 // todo: if cpu_id == target_id (0)
-                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
+                // println!("ipi handler");
+                if current_cpu().id == 0 {
+                    virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id), msg.avail_idx);
+                } else {
+                    ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
+                }
             }
             TaskType::MediatedIoTask(msg) => match msg.io_type {
                 VIRTIO_BLK_T_IN => {
+                    // println!("read handler");
                     // println!(
                     //     "blk read {} sector {} count {}",
                     //     msg.blk_id, msg.sector, msg.count
@@ -51,6 +60,7 @@ impl Task {
                     mediated_blk_read(msg.blk_id, msg.sector, msg.count);
                 }
                 VIRTIO_BLK_T_OUT => {
+                    // println!("write handler");
                     let mut cache_ptr = msg.cache;
                     for idx in 0..msg.iov_list.len() {
                         let data_bg = msg.iov_list[idx].data_bg;
@@ -84,107 +94,94 @@ pub fn add_task(task: Task) {
         TaskType::MediatedIpiTask(_) => {
             ipi_list.push(task.clone());
             // println!("add ipi task, len {}", ipi_list.len());
-            if ipi_list.len() == 1 && io_list.is_empty() {
+            if current_cpu().id != 0 && ipi_list.len() == 1 && io_list.is_empty() {
                 drop(ipi_list);
                 drop(io_list);
+                // println!("add and run ipi task");
                 task.handler();
             }
         }
         TaskType::MediatedIoTask(_) => {
+            // let len = io_list.len();
+            // let last_task_opt =
+            //     if len > 0 {
+            //         Some(io_list[len - 1].clone())
+            //     } else {
+            //         None
+            //     };
+            // match last_task_opt {
+            //     None => { io_list.push(task.clone()); }
+            //     Some(last_task) => {
+            //         match merge_io_task(last_task.clone(), task.clone())
+            //         {
+            //             None => {
+            //                 io_list.push(task.clone());
+            //             }
+            //             Some(new_task) => {
+            //                 io_list.pop();
+            //                 io_list.push(new_task.clone());
+            //             }
+            //         }
+            //     }
+            // }
             io_list.push(task.clone());
-            // println!("add io task, len {}", io_list.len());
-            if io_list.len() == 1 {
+
+            // println!("add io task, io list len {}", io_list.len());
+            if io_list.len() == 1 && ipi_list.is_empty() {
                 drop(ipi_list);
                 drop(io_list);
+                // println!("add and run io task");
                 task.handler();
             }
         }
     }
 }
 
-pub fn finish_task(check: bool) {
+pub fn finish_task(ipi: bool) {
     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
     let mut io_list = MEDIATED_IO_TASK_LIST.lock();
-    if check && !io_list.is_empty() {
-        panic!("finish_task: io list should be empty");
-    }
 
-    // if io_list.is_empty() {
-    //     ipi_list.remove(0);
-    //     if !ipi_list.is_empty() {
-    //         let task = ipi_list[0].clone();
-    //         drop(ipi_list);
-    //         drop(io_list);
-    //         task.handler();
-    //     }
-    // } else {
-    if !io_list.is_empty() {
-        io_list.remove(0);
-    }
-    if !io_list.is_empty() {
-        let task = io_list[0].clone();
-        drop(ipi_list);
+    let task_finish = if ipi {
+        ipi_list.remove(0)
+    } else {
+        io_list.remove(0)
+    };
+    // println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
+
+    if !ipi_list.is_empty() {
+        let task = ipi_list[0].clone();
+        // println!("run ipi task, ipi len {}", ipi_list.len());
         drop(io_list);
-        // println!("finish io task, io len {}", io_list.len());
+        drop(ipi_list);
+        task.handler();
+    } else if !io_list.is_empty() {
+        let task = io_list[0].clone();
+        // println!("run io task, io len {}", io_list.len());
+        drop(io_list);
+        drop(ipi_list);
         task.handler();
     } else {
-        match ipi_list.remove(0).task_type {
+        match task_finish.task_type {
+            TaskType::MediatedIoTask(task) => {
+                let target_id = vm_if_list_get_cpu_id(task.src_vmid);
+                // println!("notify target {}", target_id);
+                handle_used_info(task.vq.clone());
+                ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
+            }
             TaskType::MediatedIpiTask(task) => {
-                if ipi_list.is_empty() {
-                    handle_used_info(task.vq.clone());
-                    // println!("notify");
-                    let target_id = vm_if_list_get_cpu_id(task.src_id);
-                    ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
-                }
+                println!("do nothing");
             }
-            TaskType::MediatedIoTask(_) => {
-                panic!("illegal ipi task");
-            }
-        }
-
-        // println!(
-        //     "finish last io task, and ipi task, ipi len {}",
-        //     ipi_list.len()
-        // );
-        // println!("finish io and ipi task, io len {}, ipi len {}", 0, ipi_list.len());
-        if !ipi_list.is_empty() {
-            let task = ipi_list[0].clone();
-            drop(ipi_list);
-            drop(io_list);
-            task.handler();
         }
     }
-    // }
 }
 
-// pub fn finish_ipi_task() {
-//     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-//     let mut io_list = MEDIATED_IO_TASK_LIST.lock();
-//     if io_list.len() != 0 {
-//         panic!("illegle finish ipi task, len {}", io_list.len());
-//     }
-//     io_list.clear();
-//     let task = ipi_list.remove(0);
-//     // println!("finish ipi task, ipi len {}", ipi_list.len());
-//     if !ipi_list.is_empty() {
-//         ipi_list[0].handler();
-//     } else {
-//         // println!("notify");
-//         if let TaskType::MediatedIpiTask(ipi_task) = task.task_type {
-//             let target_id = vm_if_list_get_cpu_id(ipi_task.src_id);
-//             // if ipi_task.notify {
-//             ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
-//             // }
-//         }
-//     }
-// }
-
-pub fn io_task_head() -> Task {
+pub fn io_task_head() -> Option<Task> {
     let io_list = MEDIATED_IO_TASK_LIST.lock();
     if io_list.is_empty() {
-        panic!("io task list is empty");
+        println!("io task list is empty");
+        return None;
     }
-    io_list[0].clone()
+    Some(io_list[0].clone())
 }
 
 pub fn io_list_len() -> usize {
@@ -215,4 +212,45 @@ pub fn handle_used_info(vq: Virtq) {
         vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
     }
     used_info_list.clear();
+}
+
+pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
+    let mediated_blk = mediated_blk_list_get(0);
+
+    if let TaskType::MediatedIoTask(src_io_task) = src_task.task_type
+    {
+        if let TaskType::MediatedIoTask(des_io_task) = des_task.task_type {
+            if des_io_task.src_vmid == src_io_task.src_vmid &&
+                des_io_task.sector + des_io_task.count == src_io_task.sector &&
+                des_io_task.count + src_io_task.sector < mediated_blk.dma_block_max() &&
+                des_io_task.io_type == src_io_task.io_type &&
+                des_io_task.blk_id == src_io_task.blk_id {
+                let mut iov_list = Vec::new();
+                for iov in &*des_io_task.iov_list {
+                    iov_list.push(iov.clone());
+                }
+                for iov in &*src_io_task.iov_list {
+                    iov_list.push(iov.clone());
+                }
+                return Some(
+                    Task {
+                        task_type: TaskType::MediatedIoTask(IoMediatedMsg {
+                            src_vmid: des_io_task.src_vmid,
+                            vq: des_io_task.vq.clone(),
+                            io_type: des_io_task.io_type,
+                            blk_id: des_io_task.blk_id,
+                            sector: des_io_task.sector,
+                            count: des_io_task.count + src_io_task.count,
+                            cache: des_io_task.cache,
+                            iov_list: Arc::new(iov_list),
+                        })
+                    });
+            }
+        } else {
+            panic!("merge_io_task: des task is not an io task");
+        }
+    } else {
+        panic!("merge_io_task: src task is not an io task");
+    }
+    return None;
 }

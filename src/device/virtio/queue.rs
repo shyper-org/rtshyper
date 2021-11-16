@@ -66,6 +66,7 @@ impl Virtq {
     }
 
     pub fn notify(&self, int_id: usize, vm: Vm) {
+        // panic!("should not notify");
         let inner = self.inner.lock();
         use crate::kernel::interrupt_vm_inject;
         if vm.id() != active_vm_id() {

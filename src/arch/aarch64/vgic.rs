@@ -1081,6 +1081,9 @@ impl Vgic {
     }
 
     pub fn inject(&self, vcpu: Vcpu, id: usize, _src: usize) {
+        // if id == 64 {
+        //     println!("inject int {} to vm{}", id, vcpu.vm_id());
+        // }
         // let vcpu = active_vcpu().unwrap();
         let interrupt_option = self.get_int(vcpu.clone(), bit_extract(id, 0, 10));
         if let Some(interrupt) = interrupt_option {
