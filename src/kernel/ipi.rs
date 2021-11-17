@@ -69,7 +69,7 @@ pub struct IpiMediatedMsg {
     pub src_id: usize,
     pub vq: Virtq,
     pub blk: VirtioMmio,
-    pub avail_idx: u16,
+    // pub avail_idx: u16,
 }
 
 #[derive(Clone)]

@@ -3,10 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::kernel::{
-    active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject,
-    io_task_head, IpiInnerMsg, TaskType, vm, vm_ipa2pa,
-};
+use crate::kernel::{active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject, io_task_head, IpiInnerMsg, Task, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::{memcpy_safe, trace};
 
@@ -136,11 +133,11 @@ pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
         return false;
     }
 
-    match io_task.unwrap().task_type {
-        TaskType::MediatedIpiTask(_) => {
+    match io_task.unwrap() {
+        Task::MediatedIpiTask(_) => {
             panic!("illegal io task type");
         }
-        TaskType::MediatedIoTask(task) => {
+        Task::MediatedIoTask(task) => {
             match task.io_type {
                 VIRTIO_BLK_T_IN => {
                     // let mut sum = 0;
@@ -189,7 +186,7 @@ pub fn mediated_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::MediatedMsg(mediated_msg) => {
             let src_id = mediated_msg.src_id;
             let vm = vm(src_id);
-            virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm, mediated_msg.avail_idx);
+            virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm);
         }
         _ => {}
     }

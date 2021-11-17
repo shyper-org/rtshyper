@@ -18,6 +18,11 @@ impl VirtioIov {
         }
     }
 
+    pub fn clear(&self) {
+        let mut inner = self.inner.lock();
+        inner.vector.clear();
+    }
+
     pub fn push_data(&self, buf: usize, len: usize) {
         let mut inner = self.inner.lock();
         inner.vector.push(VirtioIovData { buf, len });
@@ -121,6 +126,10 @@ impl VirtioIov {
                         src_vlen_remain = inner.vector[src_iov_idx].len;
                     }
                 }
+            }
+            if remain < written {
+                println!("remain {} less than writter {}", remain, written);
+                return 1;
             }
             remain -= written;
         }

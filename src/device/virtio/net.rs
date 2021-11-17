@@ -128,7 +128,7 @@ pub fn net_features() -> usize {
         | VIRTIO_NET_F_HOST_ECN
 }
 
-pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: u16) -> bool {
+pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     // let time_begin = time_current_us();
     if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
@@ -146,15 +146,14 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
     let dev = nic.dev();
     // let buf = dev.cache();
     let vq_size = vq.num();
-    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
+    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
 
     while next_desc_idx_opt.is_some() {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
         let mut len = 0;
+        tx_iov.clear();
+
         loop {
-            // if vm.vm_id() == 1 {
-            // vq.show_desc_info(2);
-            // }
             let addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_notify_handler: failed to desc addr");
@@ -174,9 +173,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
             vms_to_notify |= trgt_vmid_map;
         }
 
-        // let frame = buf + size_of::<VirtioNetHdr>();
-        // let len = ptr - frame;
-
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
             next_desc_idx_opt.unwrap() as u32,
@@ -185,7 +181,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm, avail_idx: 
             return false;
         }
 
-        next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
+        next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
 
     // let time0 = time_current_us();

@@ -91,10 +91,6 @@ impl Virtq {
                 if avail_idx == inner.last_avail_idx {
                     return None;
                 }
-                // println!("avail idx is {}", avail.idx);
-                // if avail.idx == 200 {
-                //     panic! {"End"};
-                // }
                 // unsafe {
                 //     llvm_asm!("dsb ish");
                 // }
@@ -181,7 +177,7 @@ impl Virtq {
         }
     }
 
-    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio, Vm, u16) -> bool) {
+    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio, Vm) -> bool) {
         let mut inner = self.inner.lock();
         inner.notify_handler = Some(handler);
     }
@@ -191,7 +187,7 @@ impl Virtq {
         match inner.notify_handler {
             Some(handler) => {
                 drop(inner);
-                return handler(self.clone(), mmio, active_vm().unwrap(), self.avail_idx());
+                return handler(self.clone(), mmio, active_vm().unwrap());
             }
             None => {
                 println!("call_notify_handler: virtq notify handler is None");
@@ -393,7 +389,7 @@ pub struct VirtqInner<'a> {
     avail_addr: usize,
     used_addr: usize,
 
-    notify_handler: Option<fn(Virtq, VirtioMmio, Vm, u16) -> bool>,
+    notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>,
 }
 
 impl VirtqInner<'_> {

@@ -10,12 +10,6 @@ use crate::device::{
 use crate::kernel::{active_vm_id, current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
 use crate::lib::memcpy_safe;
 
-#[derive(Clone)]
-pub enum TaskType {
-    MediatedIpiTask(IpiMediatedMsg),
-    MediatedIoTask(IoMediatedMsg),
-}
-
 pub struct UsedInfo {
     pub desc_chain_head_idx: u32,
     pub used_len: u32,
@@ -33,34 +27,32 @@ pub struct IoMediatedMsg {
     pub iov_list: Arc<Vec<BlkIov>>,
 }
 
+// #[derive(Clone)]
+// pub struct Task {
+//     pub task_type: TaskType,
+// }
+
 #[derive(Clone)]
-pub struct Task {
-    pub task_type: TaskType,
+pub enum Task {
+    MediatedIpiTask(IpiMediatedMsg),
+    MediatedIoTask(IoMediatedMsg),
 }
 
 impl Task {
     pub fn handler(&self) {
-        match self.task_type.clone() {
-            TaskType::MediatedIpiTask(msg) => {
-                // todo: if cpu_id == target_id (0)
-                // println!("ipi handler");
+        match self {
+            Task::MediatedIpiTask(msg) => {
                 if current_cpu().id == 0 {
-                    virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id), msg.avail_idx);
+                    virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id));
                 } else {
-                    ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
+                    ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
                 }
             }
-            TaskType::MediatedIoTask(msg) => match msg.io_type {
+            Task::MediatedIoTask(msg) => match msg.io_type {
                 VIRTIO_BLK_T_IN => {
-                    // println!("read handler");
-                    // println!(
-                    //     "blk read {} sector {} count {}",
-                    //     msg.blk_id, msg.sector, msg.count
-                    // );
                     mediated_blk_read(msg.blk_id, msg.sector, msg.count);
                 }
                 VIRTIO_BLK_T_OUT => {
-                    // println!("write handler");
                     let mut cache_ptr = msg.cache;
                     for idx in 0..msg.iov_list.len() {
                         let data_bg = msg.iov_list[idx].data_bg;
@@ -90,8 +82,8 @@ pub fn add_task(task: Task) {
     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
     let mut io_list = MEDIATED_IO_TASK_LIST.lock();
 
-    match task.task_type {
-        TaskType::MediatedIpiTask(_) => {
+    match task {
+        Task::MediatedIpiTask(_) => {
             ipi_list.push(task.clone());
             // println!("add ipi task, len {}", ipi_list.len());
             if current_cpu().id != 0 && ipi_list.len() == 1 && io_list.is_empty() {
@@ -101,31 +93,25 @@ pub fn add_task(task: Task) {
                 task.handler();
             }
         }
-        TaskType::MediatedIoTask(_) => {
-            // let len = io_list.len();
-            // let last_task_opt =
-            //     if len > 0 {
-            //         Some(io_list[len - 1].clone())
-            //     } else {
-            //         None
-            //     };
-            // match last_task_opt {
-            //     None => { io_list.push(task.clone()); }
-            //     Some(last_task) => {
-            //         match merge_io_task(last_task.clone(), task.clone())
-            //         {
-            //             None => {
-            //                 io_list.push(task.clone());
-            //             }
-            //             Some(new_task) => {
-            //                 io_list.pop();
-            //                 io_list.push(new_task.clone());
-            //             }
-            //         }
-            //     }
-            // }
-            io_list.push(task.clone());
+        Task::MediatedIoTask(_) => {
+            let len = io_list.len();
+            if len == 0 {
+                io_list.push(task.clone());
+            } else {
+                let last_task = io_list[len - 1].clone();
+                match merge_io_task(last_task.clone(), task.clone()) {
+                    None => {
+                        io_list.push(task.clone());
+                    }
+                    Some(new_task) => {
+                        // println!("merge success");
+                        io_list.pop();
+                        io_list.push(new_task.clone());
+                    }
+                }
+            }
 
+            // io_list.push(task.clone());
             // println!("add io task, io list len {}", io_list.len());
             if io_list.len() == 1 && ipi_list.is_empty() {
                 drop(ipi_list);
@@ -161,14 +147,14 @@ pub fn finish_task(ipi: bool) {
         drop(ipi_list);
         task.handler();
     } else {
-        match task_finish.task_type {
-            TaskType::MediatedIoTask(task) => {
+        match task_finish {
+            Task::MediatedIoTask(task) => {
                 let target_id = vm_if_list_get_cpu_id(task.src_vmid);
                 // println!("notify target {}", target_id);
                 handle_used_info(task.vq.clone());
                 ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
             }
-            TaskType::MediatedIpiTask(task) => {
+            Task::MediatedIpiTask(task) => {
                 println!("do nothing");
             }
         }
@@ -217,12 +203,12 @@ pub fn handle_used_info(vq: Virtq) {
 pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
     let mediated_blk = mediated_blk_list_get(0);
 
-    if let TaskType::MediatedIoTask(src_io_task) = src_task.task_type
+    if let Task::MediatedIoTask(src_io_task) = src_task
     {
-        if let TaskType::MediatedIoTask(des_io_task) = des_task.task_type {
+        if let Task::MediatedIoTask(des_io_task) = des_task {
             if des_io_task.src_vmid == src_io_task.src_vmid &&
                 des_io_task.sector + des_io_task.count == src_io_task.sector &&
-                des_io_task.count + src_io_task.sector < mediated_blk.dma_block_max() &&
+                des_io_task.count + src_io_task.count < mediated_blk.dma_block_max() &&
                 des_io_task.io_type == src_io_task.io_type &&
                 des_io_task.blk_id == src_io_task.blk_id {
                 let mut iov_list = Vec::new();
@@ -233,18 +219,17 @@ pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
                     iov_list.push(iov.clone());
                 }
                 return Some(
-                    Task {
-                        task_type: TaskType::MediatedIoTask(IoMediatedMsg {
-                            src_vmid: des_io_task.src_vmid,
-                            vq: des_io_task.vq.clone(),
-                            io_type: des_io_task.io_type,
-                            blk_id: des_io_task.blk_id,
-                            sector: des_io_task.sector,
-                            count: des_io_task.count + src_io_task.count,
-                            cache: des_io_task.cache,
-                            iov_list: Arc::new(iov_list),
-                        })
-                    });
+                    Task::MediatedIoTask(IoMediatedMsg {
+                        src_vmid: des_io_task.src_vmid,
+                        vq: des_io_task.vq.clone(),
+                        io_type: des_io_task.io_type,
+                        blk_id: des_io_task.blk_id,
+                        sector: des_io_task.sector,
+                        count: des_io_task.count + src_io_task.count,
+                        cache: des_io_task.cache,
+                        iov_list: Arc::new(iov_list),
+                    })
+                );
             }
         } else {
             panic!("merge_io_task: des task is not an io task");

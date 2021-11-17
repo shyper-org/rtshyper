@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
-use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, IoMediatedMsg, ipi_list_len, IpiMediatedMsg, merge_io_task, push_used_info, Task, TaskType, Vm, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, add_task, finish_task, io_list_len, IoMediatedMsg, ipi_list_len, IpiMediatedMsg, merge_io_task, push_used_info, Task, Vm, vm_ipa2pa};
 use crate::lib::{memcpy_safe, time_current_us, trace};
 
 pub const BLK_IRQ: usize = 0x20 + 0x10;
@@ -344,8 +344,8 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
                     });
                 }
                 // mediated blk read
-                add_task(Task {
-                    task_type: TaskType::MediatedIoTask(IoMediatedMsg {
+                add_task(
+                    Task::MediatedIoTask(IoMediatedMsg {
                         src_vmid: vmid,
                         vq: vq.clone(),
                         io_type: VIRTIO_BLK_T_IN,
@@ -355,7 +355,7 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
                         cache,
                         iov_list: Arc::new(iov_list),
                     }),
-                });
+                );
             } else {
                 todo!();
                 // platform_blk_read(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
@@ -404,18 +404,17 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
                     });
                 }
                 // mediated blk write
-                add_task(Task {
-                    task_type: TaskType::MediatedIoTask(IoMediatedMsg {
-                        src_vmid: vmid,
-                        vq: vq.clone(),
-                        io_type: VIRTIO_BLK_T_OUT,
-                        blk_id: 0,
-                        sector: sector + region_start,
-                        count: req.iov_total() / SECTOR_BSIZE,
-                        cache,
-                        iov_list: Arc::new(iov_list),
-                    }),
-                });
+                add_task(Task::MediatedIoTask(IoMediatedMsg {
+                    src_vmid: vmid,
+                    vq: vq.clone(),
+                    io_type: VIRTIO_BLK_T_OUT,
+                    blk_id: 0,
+                    sector: sector + region_start,
+                    count: req.iov_total() / SECTOR_BSIZE,
+                    cache,
+                    iov_list: Arc::new(iov_list),
+                }),
+                );
             } else {
                 todo!();
                 // platform_blk_write(sector + region_start, req.iov_total() / SECTOR_BSIZE, cache);
@@ -454,20 +453,20 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
 }
 
 #[no_mangle]
-pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm, idx: u16) -> bool {
+pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm) -> bool {
     let flag = vq.avail_flags();
-    add_task(Task {
-        task_type: TaskType::MediatedIpiTask(IpiMediatedMsg {
+    add_task(
+        Task::MediatedIpiTask(IpiMediatedMsg {
             src_id: active_vm_id(),
             vq: vq.clone(),
             blk: blk.clone(),
-            avail_idx: idx,
+            // avail_idx: idx,
         }),
-    });
+    );
     true
 }
 
-pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm, _avail_idx: u16) -> bool {
+pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     // println!("vm[{}] in virtio_blk_notify_handler, avail idx {}", vm.id(), avail_idx);
     // use crate::kernel::active_vm;
     // let vm = active_vm().unwrap();
