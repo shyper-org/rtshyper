@@ -127,10 +127,10 @@ impl VirtioIov {
                     }
                 }
             }
-            if remain < written {
-                println!("remain {} less than writter {}", remain, written);
-                return 1;
-            }
+            // if remain < written {
+            //     println!("remain {} less than writter {}", remain, written);
+            //     return 1;
+            // }
             remain -= written;
         }
 

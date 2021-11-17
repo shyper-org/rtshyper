@@ -411,7 +411,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
         rx_iov.push_data(dst, desc_len);
         rx_len += desc_len;
-        if rx_len > len {
+        if rx_len >= len {
             break;
         }
         if rx_vq.desc_flags(desc_idx) & 0x1 == 0 {
@@ -441,20 +441,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
         return false;
     }
-    // let cpu_trgt = vm_if_list_get_cpu_id(vmid);
-
-    // if !ipi_send_msg(
-    //     cpu_trgt,
-    //     IpiType::IpiTEthernetMsg,
-    //     IpiInnerMsg::EnternetMsg(m),
-    // ) {
-    //     println!(
-    //         "ethernet_send_to: Failed to send ipi message, target {} type {:#?}",
-    //         cpu_trgt,
-    //         IpiType::IpiTEthernetMsg
-    //     );
-    // }
-    // panic!("end ethernet send to");
+    
     return true;
 }
 

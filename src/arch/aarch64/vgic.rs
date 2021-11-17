@@ -266,10 +266,9 @@ impl Vgicd {
     }
 }
 
-// #[derive(Clone)]
-struct Sgis {
-    pend: u8,
-    act: u8,
+// #[derive(Clone)] struct Sgis {
+pend: u8,
+act: u8,
 }
 
 impl Sgis {
@@ -508,9 +507,7 @@ impl Vgic {
             }
 
             if let Some(idx) = lr_ind {
-                let spilled_int = self
-                    .get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111)
-                    .unwrap();
+                let spilled_int = self.get_int(vcpu.clone(), GICH.lr(idx) as usize & 0b1111111111).unwrap();
                 let spilled_int_lock;
                 if spilled_int.id() != interrupt.id() {
                     spilled_int_lock = spilled_int.lock.lock();
@@ -1462,9 +1459,7 @@ impl Vgic {
                 let mut trgtlist = 0;
                 match sgir_trglstflt {
                     0 => {
-                        trgtlist =
-                            vgic_target_translate(vm.clone(), bit_extract(val, 16, 8) as u32, true)
-                                as usize;
+                        trgtlist = vgic_target_translate(vm.clone(), bit_extract(val, 16, 8) as u32, true) as usize;
                     }
                     1 => {
                         trgtlist = active_vm_ncpu() & !(1 << current_cpu().id);
@@ -1543,8 +1538,7 @@ impl Vgic {
             }
         } else {
             for i in 0..emu_ctx.width {
-                val |= (self.get_prio(current_cpu().active_vcpu.clone().unwrap(), first_int + i) as usize)
-                    << (GIC_PRIO_BITS * i);
+                val |= (self.get_prio(current_cpu().active_vcpu.clone().unwrap(), first_int + i) as usize) << (GIC_PRIO_BITS * i);
             }
             let idx = emu_ctx.reg;
             current_cpu().set_gpr(idx, val);
@@ -1574,8 +1568,7 @@ impl Vgic {
             // println!("read, first_int {}, width {}", first_int, emu_ctx.width);
             for i in 0..emu_ctx.width {
                 // println!("{}", self.get_trgt(active_vcpu().unwrap(), first_int + i));
-                val |= (self.get_trgt(current_cpu().active_vcpu.clone().unwrap(), first_int + i) as usize)
-                    << (GIC_TARGET_BITS * i);
+                val |= (self.get_trgt(current_cpu().active_vcpu.clone().unwrap(), first_int + i) as usize) << (GIC_TARGET_BITS * i);
             }
             // println!("after read val {}", val);
             val = vgic_target_translate(active_vm().unwrap(), val as u32, false) as usize;
@@ -1673,20 +1666,11 @@ impl Vgic {
 
                         if !temp_int.in_lr() && vgic_int_get_owner(vcpu.clone(), temp_int.clone()) {
                             let temp_state = vgic_get_state(temp_int.clone());
-                            let cpu_is_target =
-                                self.get_trgt(vcpu.clone(), i) & (1 << current_cpu().id) != 0;
+                            let cpu_is_target = self.get_trgt(vcpu.clone(), i) & (1 << current_cpu().id) != 0;
                             if cpu_is_target && temp_state != 0 && !temp_int.in_lr() {
                                 match interrupt_opt {
                                     Some(ref interrupt) => {
-                                        if (!has_pending
-                                            && ((temp_state & 1 != 0)
-                                            && ((state & 2 != 0)
-                                            || ((state & 1 != 0)
-                                            && temp_int.prio() < interrupt.prio()))))
-                                            || (has_pending
-                                            && ((temp_state & 2 != 0) && (state & 1 != 0)))
-                                            || (has_pending && temp_int.prio() < interrupt.prio())
-                                        {
+                                        if (!has_pending && ((temp_state & 1 != 0) && ((state & 2 != 0) || ((state & 1 != 0) && temp_int.prio() < interrupt.prio())))) || (has_pending && ((temp_state & 2 != 0) && (state & 1 != 0))) || (has_pending && temp_int.prio() < interrupt.prio()) {
                                             // println!("Some: refill int {}", temp_int.id());
                                             let aux = interrupt.clone();
                                             interrupt_opt = Some(temp_int.clone());
@@ -1759,9 +1743,7 @@ impl Vgic {
                     // ugly
                     let temp_int_clone = temp_int.clone();
                     let temp_int_lock = temp_int_clone.lock.lock();
-                    if vgic_int_get_owner(vcpu.clone(), temp_int.clone())
-                        && (temp_int.state().to_num() & 2 != 0)
-                    {
+                    if vgic_int_get_owner(vcpu.clone(), temp_int.clone()) && (temp_int.state().to_num() & 2 != 0) {
                         match interrupt_opt {
                             Some(ref interrupt) => {
                                 if interrupt.prio() < temp_int.prio() {
@@ -1805,27 +1787,21 @@ impl Vgic {
 }
 
 fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) -> u32 {
-    // println!("in vgic_target_translate");
-    let mut to = [0; 4];
-    let mut from = [0; 4];
-    for i in 0..4 {
-        from[i] = (trgt >> (8 * i)) & 0xff;
-        to[i] = if v2p {
-            vm.vcpu_to_pcpu_mask(from[i] as usize, 8) as u32
-        } else {
-            vm.pcpu_to_vcpu_mask(from[i] as usize, 8) as u32
-        };
-    }
+    let mut from = trgt.to_le_bytes();
 
-    // println!(
-    //     "finish vgic_target_translate: from {:x} to {:x}",
-    //     trgt,
-    //     (to[0] & 0xff) | ((to[1] & 0xff) << 8) | ((to[2] & 0xff) << 16) | ((to[3] & 0xff) << 24)
-    // );
-    return (to[0] & 0xff)
-        | ((to[1] & 0xff) << 8)
-        | ((to[2] & 0xff) << 16)
-        | ((to[3] & 0xff) << 24);
+    let mut result = 0;
+    for (idx, val) in from.map(|x|
+        if v2p {
+            vm.vcpu_to_pcpu_mask(x as usize, 8) as u32
+        } else {
+            vm.pcpu_to_vcpu_mask(x as usize, 8) as u32
+        }).iter().enumerate() {
+        result |= (*val as u32) << (8 * idx);
+        if idx >= 4 {
+            panic!("illegal idx, from len {}", from.len());
+        }
+    }
+    result
 }
 
 fn vgic_owns(vcpu: Vcpu, interrupt: VgicInt) -> bool {
@@ -1996,12 +1972,7 @@ pub fn gic_maintenance_handler(_arg: usize, _source: usize) {
 }
 
 const VGICD_REG_OFFSET_PREFIX_CTLR: usize = 0x0;
-// same as TYPER & IIDR
-const VGICD_REG_OFFSET_PREFIX_ISENABLER: usize = 0x2;
-const VGICD_REG_OFFSET_PREFIX_ICENABLER: usize = 0x3;
-const VGICD_REG_OFFSET_PREFIX_ISPENDR: usize = 0x4;
-const VGICD_REG_OFFSET_PREFIX_ICPENDR: usize = 0x5;
-const VGICD_REG_OFFSET_PREFIX_ISACTIVER: usize = 0x6;
+// same as TYPER & IIDR const VGICD_REG_OFFSET_PREFIX_ISENABLER: usize = 0x2; const VGICD_REG_OFFSET_PREFIX_ICENABLER: usize = 0x3; const VGICD_REG_OFFSET_PREFIX_ISPENDR: usize = 0x4; const VGICD_REG_OFFSET_PREFIX_ICPENDR: usize = 0x5; const VGICD_REG_OFFSET_PREFIX_ISACTIVER: usize = 0x6;
 const VGICD_REG_OFFSET_PREFIX_ICACTIVER: usize = 0x7;
 const VGICD_REG_OFFSET_PREFIX_ICFGR: usize = 0x18;
 const VGICD_REG_OFFSET_PREFIX_SGIR: usize = 0x1e;
@@ -2025,31 +1996,20 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     //     vgicd_offset_prefix, offset
     // );
     match vgicd_offset_prefix {
-        VGICD_REG_OFFSET_PREFIX_CTLR
-        | VGICD_REG_OFFSET_PREFIX_ISENABLER
-        | VGICD_REG_OFFSET_PREFIX_ISPENDR
-        | VGICD_REG_OFFSET_PREFIX_ISACTIVER
-        | VGICD_REG_OFFSET_PREFIX_ICENABLER
-        | VGICD_REG_OFFSET_PREFIX_ICPENDR
-        | VGICD_REG_OFFSET_PREFIX_ICACTIVER
-        | VGICD_REG_OFFSET_PREFIX_ICFGR => {
+        VGICD_REG_OFFSET_PREFIX_CTLR | VGICD_REG_OFFSET_PREFIX_ISENABLER | VGICD_REG_OFFSET_PREFIX_ISPENDR | VGICD_REG_OFFSET_PREFIX_ISACTIVER | VGICD_REG_OFFSET_PREFIX_ICENABLER | VGICD_REG_OFFSET_PREFIX_ICPENDR | VGICD_REG_OFFSET_PREFIX_ICACTIVER | VGICD_REG_OFFSET_PREFIX_ICFGR => {
             if emu_ctx.width != 4 || emu_ctx.address & 0x3 != 0 {
                 return false;
             }
         }
         VGICD_REG_OFFSET_PREFIX_SGIR => {
-            if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0)
-                || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0)
-            {
+            if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0) || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0) {
                 return false;
             }
         }
         _ => {
             // TODO: hard code to rebuild (gicd IPRIORITYR and ITARGETSR)
             if offset >= 0x400 && offset < 0xc00 {
-                if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0)
-                    || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0)
-                {
+                if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0) || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0) {
                     return false;
                 }
             }
@@ -2175,8 +2135,7 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
                 vgic.set_trgt(current_cpu().active_vcpu.clone().unwrap(), int_id as usize, val);
             }
             InitcEvent::VgicdRoute => {
-                let interrupt_option =
-                    vgic.get_int(current_cpu().active_vcpu.clone().unwrap(), bit_extract(int_id as usize, 0, 10));
+                let interrupt_option = vgic.get_int(current_cpu().active_vcpu.clone().unwrap(), bit_extract(int_id as usize, 0, 10));
                 if let Some(interrupt) = interrupt_option {
                     let interrupt_lock = interrupt.lock.lock();
                     // println!("vgic_ipi_handler: Core {} get int {}", current_cpu().id, interrupt.id());
@@ -2214,8 +2173,7 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     let vgic = Arc::new(Vgic::default());
 
     let mut vgicd = vgic.vgicd.lock();
-    vgicd.typer = (GICD.typer() & GICD_TYPER_CPUNUM_MSK as u32)
-        | (((vm.cpu_num() - 1) << GICD_TYPER_CPUNUM_OFF) & GICD_TYPER_CPUNUM_MSK) as u32;
+    vgicd.typer = (GICD.typer() & GICD_TYPER_CPUNUM_MSK as u32) | (((vm.cpu_num() - 1) << GICD_TYPER_CPUNUM_OFF) & GICD_TYPER_CPUNUM_MSK) as u32;
     vgicd.iidr = GICD.iidr();
 
     for i in 0..GIC_SPI_MAX {

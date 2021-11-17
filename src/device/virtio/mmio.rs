@@ -19,7 +19,6 @@ use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
-
 pub const VIRTIO_MMIO_VERSION: usize = 0x004;
 pub const VIRTIO_MMIO_DEVICE_ID: usize = 0x008;
 pub const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
