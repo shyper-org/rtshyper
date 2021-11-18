@@ -110,7 +110,7 @@ impl core::ops::Deref for GicDistributor {
     type Target = GicDistributorBlock;
     fn deref(&self) -> &Self::Target {
         unsafe {
-            if trace() && self.base_addr < 0x1000 {
+            if self.base_addr < 0x1000 {
                 panic!("illegal gicd addr {}", self.base_addr);
             }
             &*self.ptr()
@@ -179,8 +179,7 @@ impl GicDistributor {
 
     pub fn send_sgi(&self, cpu_if: usize, sgi_num: usize) {
         // println!("Core {} send ipi to cpu {}", cpu_id(), cpu_if);
-        self.SGIR
-            .set(((1 << (16 + cpu_if)) | (sgi_num & 0b1111)) as u32);
+        self.SGIR.set(((1 << (16 + cpu_if)) | (sgi_num & 0b1111)) as u32);
     }
 
     #[allow(dead_code)]
@@ -350,7 +349,7 @@ impl core::ops::Deref for GicCpuInterface {
     type Target = GicCpuInterfaceBlock;
     fn deref(&self) -> &Self::Target {
         unsafe {
-            if trace() && self.base_addr < 0x1000 {
+            if self.base_addr < 0x1000 {
                 panic!("illegal gicc addr {}", self.base_addr);
             }
             &*self.ptr()
@@ -379,8 +378,7 @@ impl GicCpuInterface {
         //     ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOImodeNS_BIT as u32,
         //     gich_lrs_num()
         // );
-        self.CTLR
-            .set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOIMODENS_BIT as u32);
+        self.CTLR.set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOIMODENS_BIT as u32);
 
         let hcr_prev = GICH.HCR.get();
         GICH.HCR.set(hcr_prev | GICH_HCR_LRENPIE_BIT as u32);

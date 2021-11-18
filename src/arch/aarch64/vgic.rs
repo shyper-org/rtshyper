@@ -266,9 +266,10 @@ impl Vgicd {
     }
 }
 
-// #[derive(Clone)] struct Sgis {
-pend: u8,
-act: u8,
+#[derive(Clone)]
+struct Sgis {
+    pend: u8,
+    act: u8,
 }
 
 impl Sgis {
@@ -1972,7 +1973,12 @@ pub fn gic_maintenance_handler(_arg: usize, _source: usize) {
 }
 
 const VGICD_REG_OFFSET_PREFIX_CTLR: usize = 0x0;
-// same as TYPER & IIDR const VGICD_REG_OFFSET_PREFIX_ISENABLER: usize = 0x2; const VGICD_REG_OFFSET_PREFIX_ICENABLER: usize = 0x3; const VGICD_REG_OFFSET_PREFIX_ISPENDR: usize = 0x4; const VGICD_REG_OFFSET_PREFIX_ICPENDR: usize = 0x5; const VGICD_REG_OFFSET_PREFIX_ISACTIVER: usize = 0x6;
+// same as TYPER & IIDR
+const VGICD_REG_OFFSET_PREFIX_ISENABLER: usize = 0x2;
+const VGICD_REG_OFFSET_PREFIX_ICENABLER: usize = 0x3;
+const VGICD_REG_OFFSET_PREFIX_ISPENDR: usize = 0x4;
+const VGICD_REG_OFFSET_PREFIX_ICPENDR: usize = 0x5;
+const VGICD_REG_OFFSET_PREFIX_ISACTIVER: usize = 0x6;
 const VGICD_REG_OFFSET_PREFIX_ICACTIVER: usize = 0x7;
 const VGICD_REG_OFFSET_PREFIX_ICFGR: usize = 0x18;
 const VGICD_REG_OFFSET_PREFIX_SGIR: usize = 0x1e;
