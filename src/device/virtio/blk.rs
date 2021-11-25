@@ -314,7 +314,7 @@ impl VirtioBlkReqInner {
     }
 }
 
-pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) -> usize {
+pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) -> usize {
     // println!("vm[{}] blk req handler", active_vm_id());
     let sector = req.sector();
     let region_start = req.region_start();
@@ -346,10 +346,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
                 // mediated blk read
                 add_task(
                     Task::MediatedIoTask(IoMediatedMsg {
-                        src_vmid: vmid,
+                        src_vmid: vm.id(),
                         vq: vq.clone(),
                         io_type: VIRTIO_BLK_T_IN,
-                        blk_id: 0,
+                        blk_id: vm.med_blk_id(),
                         sector: sector + region_start,
                         count: req.iov_total() / SECTOR_BSIZE,
                         cache,
@@ -405,10 +405,10 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
                 }
                 // mediated blk write
                 add_task(Task::MediatedIoTask(IoMediatedMsg {
-                    src_vmid: vmid,
+                    src_vmid: vm.id(),
                     vq: vq.clone(),
                     io_type: VIRTIO_BLK_T_OUT,
-                    blk_id: 0,
+                    blk_id: vm.med_blk_id(),
                     sector: sector + region_start,
                     count: req.iov_total() / SECTOR_BSIZE,
                     cache,
@@ -421,21 +421,6 @@ pub fn blk_req_handler(req: VirtioBlkReq, vq: Virtq, cache: usize, vmid: usize) 
             }
         }
         VIRTIO_BLK_T_GET_ID => {
-            // panic!("blk get id");
-            // if req.mediated() {
-            //     add_task(Task {
-            //         task_type: TaskType::MediatedIoTask(IoMediatedMsg {
-            //             src_vmid: vmid,
-            //             vq: vq.clone(),
-            //             io_type: VIRTIO_BLK_T_IN,
-            //             blk_id: 0,
-            //             sector: region_start,
-            //             count: 0,
-            //             cache,
-            //             iov_list: Arc::new(Vec::new()),
-            //         }),
-            //     });
-            // }
             let data_bg = req.iov_data_bg(0);
             let name = "virtio-blk".as_ptr();
             if trace() && (data_bg < 0x1000) {
@@ -470,6 +455,10 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     // println!("vm[{}] in virtio_blk_notify_handler, avail idx {}", vm.id(), avail_idx);
     // use crate::kernel::active_vm;
     // let vm = active_vm().unwrap();
+    if vm.id() == 0 && active_vm_id() == 0 {
+        panic!("src vm should not be 0");
+    }
+
     let avail_idx = vq.avail_idx();
 
     let begin = time_current_us();
@@ -586,11 +575,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
         }
 
         let total = if !req.mediated() {
-            blk_req_handler(req.clone(), vq.clone(), dev.cache(), vm.id())
+            blk_req_handler(req.clone(), vq.clone(), dev.cache(), vm.clone())
         } else {
-            let mediated_blk = mediated_blk_list_get(0);
+            let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
             let cache = mediated_blk.cache_pa();
-            blk_req_handler(req.clone(), vq.clone(), cache, vm.id())
+            blk_req_handler(req.clone(), vq.clone(), cache, vm.clone())
         };
 
         // should not update at this time?
@@ -599,7 +588,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                 return false;
             }
         } else {
-            push_used_info(desc_chain_head_idx as u32, total as u32);
+            push_used_info(desc_chain_head_idx as u32, total as u32, vm.id());
         }
 
         process_count += 1;

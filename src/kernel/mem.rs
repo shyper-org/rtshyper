@@ -1,5 +1,6 @@
 use crate::arch::PAGE_SIZE;
 use crate::board::*;
+use crate::kernel::mem_shared_mem_init;
 use crate::lib::{memset_safe, round_up};
 use crate::mm::PageFrame;
 
@@ -12,6 +13,7 @@ pub const VM_MEM_REGION_MAX: usize = 4;
 pub fn mem_init() {
     mem_heap_region_init();
     mem_vm_region_init();
+    mem_shared_mem_init();
     println!("Mem init ok");
 }
 

@@ -142,6 +142,7 @@ pub struct VmConfigEntry {
     pub vm_pt_dev_confg: Option<VmPassthroughDeviceConfig>,
     pub vm_dtb_devs: Option<Vec<VmDtbDev>>,
     pub cmdline: &'static str,
+    pub med_blk_idx: Option<usize>,
 }
 
 impl VmConfigEntry {
@@ -157,6 +158,7 @@ impl VmConfigEntry {
             vm_pt_dev_confg: None,
             vm_dtb_devs: None,
             cmdline: "",
+            med_blk_idx: None,
         }
     }
 

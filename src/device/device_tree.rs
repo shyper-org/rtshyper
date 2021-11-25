@@ -30,8 +30,10 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/sdhci@3460000\0".as_ptr());
         assert_eq!(r, 0);
-        // let r = fdt_disable_node(dtb, "/sdhci@3440000\0".as_ptr());
+        // fdt_disable_node(dtb, "iommu@12000000\0".as_ptr());
         // assert_eq!(r, 0);
+        let r = fdt_disable_node(dtb, "/sdhci@3440000\0".as_ptr());
+        assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/serial@c280000\0".as_ptr());
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/serial@3110000\0".as_ptr());
@@ -42,8 +44,8 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/trusty\0".as_ptr());
         assert_eq!(r, 0);
-        // let r = fdt_disable_node(dtb, "/host1x/nvdisplay@15210000\0".as_ptr());
-        // assert_eq!(r, 0);
+        let r = fdt_disable_node(dtb, "/host1x/nvdisplay@15210000\0".as_ptr());
+        assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/reserved-memory/ramoops_carveout\0".as_ptr());
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/watchdog@30c0000\0".as_ptr());
@@ -104,10 +106,24 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
 
     for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
         match emu_cfg.emu_type {
-            EmuDeviceType::EmuDeviceTVirtioBlk |
-            EmuDeviceType::EmuDeviceTVirtioNet => {
+            EmuDeviceType::EmuDeviceTVirtioBlk | EmuDeviceType::EmuDeviceTVirtioNet => {
                 println!("virtio fdt node init {:x}", emu_cfg.base_ipa);
-                create_virtio_node(&mut fdt, emu_cfg.name.unwrap(), emu_cfg.irq_id, emu_cfg.base_ipa)?;
+                create_virtio_node(
+                    &mut fdt,
+                    emu_cfg.name.unwrap(),
+                    emu_cfg.irq_id,
+                    emu_cfg.base_ipa,
+                )?;
+            }
+            EmuDeviceType::EmuDeviceTShyper => {
+                println!("shyper fdt node init {:x}", emu_cfg.base_ipa);
+                create_shyper_node(
+                    &mut fdt,
+                    emu_cfg.name.unwrap(),
+                    emu_cfg.irq_id,
+                    emu_cfg.base_ipa,
+                    emu_cfg.length,
+                )?;
             }
             _ => {}
         }
@@ -241,6 +257,24 @@ fn create_virtio_node(
     fdt.property_array_u32("interrupts", &[0, irq as u32 - 32, 0x1])?;
     fdt.property_array_u64("reg", &[address as u64, 0x400])?;
     fdt.end_node(virtio)?;
+
+    Ok(())
+}
+
+fn create_shyper_node(
+    fdt: &mut FdtWriter,
+    name: &'static str,
+    irq: usize,
+    address: usize,
+    len: usize,
+) -> FdtWriterResult<()> {
+    let shyper = fdt.begin_node(name)?;
+    fdt.property_string("compatible", "shyper")?;
+    fdt.property_array_u32("interrupts", &[0, irq as u32 - 32, 0x1])?;
+    if address != 0 && len != 0 {
+        fdt.property_array_u64("reg", &[address as u64, len as u64])?;
+    }
+    fdt.end_node(shyper)?;
 
     Ok(())
 }

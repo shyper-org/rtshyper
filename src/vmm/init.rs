@@ -1,6 +1,7 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::arch::{emu_intc_handler, emu_intc_init};
@@ -15,7 +16,7 @@ use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{create_fdt, EmuDeviceType};
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm, active_vm_id, CPU, current_cpu, VM_IF_LIST, vm_if_list_set_cpu_id};
+use crate::kernel::{active_vm, active_vm_id, CPU, current_cpu, shyper_init, VM_IF_LIST, vm_if_list_set_cpu_id};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{Vm, vm, VM_LIST};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
@@ -283,6 +284,9 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             }
             EmuDeviceTShyper => {
                 dev_name = "shyper";
+                if !shyper_init(vm.clone(), emu_dev.base_ipa, emu_dev.length) {
+                    return false;
+                }
             }
             _ => {
                 println!("vmm_init_emulated_device: unknown emulated device");
@@ -336,7 +340,6 @@ fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: V
 pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     use fdt::*;
     match vm.dtb() {
-        None => return,
         Some(dtb) => {
             let mut mr = Vec::new();
             for r in config.memory.region.as_ref().unwrap() {
@@ -370,7 +373,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                             fdt_add_virtio(dtb, emu_cfg.name.unwrap().as_ptr(), emu_cfg.irq_id as u32 - 0x20, emu_cfg.base_ipa as u64);
                         }
                         EmuDeviceTShyper => {
-                            fdt_add_vm_service(dtb, emu_cfg.irq_id as u32 - 0x20);
+                            fdt_add_vm_service(dtb, emu_cfg.irq_id as u32 - 0x20, emu_cfg.base_ipa as u64, emu_cfg.length as u64);
                         }
                         _ => {
                             todo!();
@@ -379,6 +382,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                 }
             }
         }
+        None => {}
     }
 }
 
@@ -518,11 +522,11 @@ fn vmm_assign_vcpu() {
                 let vcpu = vm_inner.vcpu_list[trgt_id].clone();
                 let vcpu_id = vcpu.id();
 
-                println!("core {} before vcpu_pool_append1", cpu_id);
+                // println!("core {} before vcpu_pool_append1", cpu_id);
                 if !vcpu_pool_append(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
                 }
-                println!("core {} after vcpu_pool_append1", cpu_id);
+                // println!("core {} after vcpu_pool_append1", cpu_id);
                 let assigned = true;
                 current_cpu().assigned = assigned;
                 vm_assigned.cpu_num += 1;

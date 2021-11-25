@@ -54,7 +54,10 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     for emu_dev in &*emu_devs_list {
         let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
         if active_vcpu.vm_id() == emu_dev.vm_id && in_range(ipa, emu_dev.ipa, emu_dev.size - 1) {
-            return (emu_dev.handler)(emu_dev.id, emu_ctx);
+            let handler = emu_dev.handler;
+            let id = emu_dev.id;
+            drop(emu_devs_list);
+            return handler(id, emu_ctx);
         }
     }
     println!(

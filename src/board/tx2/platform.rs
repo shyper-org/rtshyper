@@ -116,7 +116,7 @@ pub fn platform_power_on_secondary_cores() {
 
 pub fn platform_sys_reboot() {
     println!("Hypervisor reset...");
-    mem_heap_reset();
+    // mem_heap_reset();
     crate::arch::power_arch_sys_reset();
     loop {}
 }

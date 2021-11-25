@@ -160,6 +160,14 @@ impl Vm {
         }
     }
 
+    pub fn med_blk_id(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        match vm_inner.config.as_ref().unwrap().med_blk_idx {
+            None => { panic!("vm {} do not have mediated blk", vm_inner.id); }
+            Some(idx) => { idx }
+        }
+    }
+
     pub fn dtb(&self) -> Option<*mut fdt::myctypes::c_void> {
         let vm_inner = self.inner.lock();
         vm_inner.dtb.map(|x| x as *mut fdt::myctypes::c_void)
@@ -512,7 +520,7 @@ pub fn vm(id: usize) -> Vm {
     vm_list[id].clone()
 }
 
-pub fn vm_num() -> usize {
+pub fn vm_list_size() -> usize {
     let vm_list = VM_LIST.lock();
     vm_list.len()
 }

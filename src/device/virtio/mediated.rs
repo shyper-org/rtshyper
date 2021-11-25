@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::kernel::{active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject, io_task_head, IpiInnerMsg, Task, vm, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, init_mediated_used_info, interrupt_vm_inject, io_task_head, IpiInnerMsg, Task, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::{memcpy_safe, trace};
 
@@ -17,6 +17,16 @@ pub fn mediated_blk_list_push(blk: MediatedBlk) {
 pub fn mediated_blk_list_get(idx: usize) -> MediatedBlk {
     let list = MEDIATED_BLK_LIST.lock();
     list[idx].clone()
+}
+
+pub fn mediated_blk_list_get_from_pa(pa: usize) -> Option<MediatedBlk> {
+    let list = MEDIATED_BLK_LIST.lock();
+    for blk in &*list {
+        if blk.base_addr == pa {
+            return Some(blk.clone());
+        }
+    }
+    None
 }
 
 #[derive(Clone)]
@@ -105,8 +115,11 @@ pub fn mediated_dev_init() {
     if !ipi_register(IpiType::IpiTMediatedNotify, mediated_notify_ipi_handler) {
         panic!("mediated_dev_init: failed to register ipi IpiTMediatedNotify");
     }
+
+    init_mediated_used_info();
 }
 
+// only run in vm0
 pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     let vm = active_vm().unwrap();
     let blk_pa = vm_ipa2pa(vm.clone(), mmio_ipa);
@@ -115,7 +128,8 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
 
     let cache_pa = vm_ipa2pa(vm.clone(), mediated_blk.cache_ipa());
     println!(
-        "mediated_dev_append: cache ipa {:x}, cache_pa {:x}",
+        "mediated_dev_append: dev_ipa_reg {:x}, cache ipa {:x}, cache_pa {:x}",
+        mmio_ipa,
         mediated_blk.cache_ipa(),
         cache_pa
     );
@@ -124,9 +138,18 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     true
 }
 
-pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
-    // println!("mediated_blk notify");
-    let mediated_blk = mediated_blk_list_get(0);
+pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
+    // vm1 _dev_ipa_reg: 3043164160 = 0xB5630000
+    // println!("mediated_blk notify, ipa reg {:x}", dev_ipa_reg);
+    let dev_pa_reg = vm_ipa2pa(active_vm().unwrap(), dev_ipa_reg);
+
+    let mediated_blk = match mediated_blk_list_get_from_pa(dev_pa_reg) {
+        Some(blk) => { blk }
+        None => {
+            println!("illegal mediated blk pa {:x} ipa {:x}", dev_pa_reg, dev_ipa_reg);
+            return false;
+        }
+    };
     let mut cache_ptr = mediated_blk.cache_pa();
     let io_task = io_task_head();
     if io_task.is_none() {

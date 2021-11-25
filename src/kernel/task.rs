@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use cortex_a::asm::ret;
 use spin::Mutex;
 
+use crate::config::vm_num;
 use crate::device::{
     BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
@@ -74,7 +75,7 @@ impl Task {
     }
 }
 
-static MEDIATED_USED_INFO_LIST: Mutex<Vec<UsedInfo>> = Mutex::new(Vec::new());
+static MEDIATED_USED_INFO_LIST: Mutex<Vec<Vec<UsedInfo>>> = Mutex::new(vec![]);
 static MEDIATED_IPI_TASK_LIST: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 static MEDIATED_IO_TASK_LIST: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 
@@ -132,32 +133,28 @@ pub fn finish_task(ipi: bool) {
     } else {
         io_list.remove(0)
     };
-    // println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
 
-    if !ipi_list.is_empty() {
-        let task = ipi_list[0].clone();
-        // println!("run ipi task, ipi len {}", ipi_list.len());
-        drop(io_list);
-        drop(ipi_list);
-        task.handler();
+    let task_next = if !ipi_list.is_empty() {
+        Some(ipi_list[0].clone())
     } else if !io_list.is_empty() {
-        let task = io_list[0].clone();
-        // println!("run io task, io len {}", io_list.len());
-        drop(io_list);
-        drop(ipi_list);
-        task.handler();
+        Some(io_list[0].clone())
     } else {
-        match task_finish {
-            Task::MediatedIoTask(task) => {
-                let target_id = vm_if_list_get_cpu_id(task.src_vmid);
-                // println!("notify target {}", target_id);
-                handle_used_info(task.vq.clone());
-                ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
-            }
-            Task::MediatedIpiTask(task) => {
-                println!("do nothing");
-            }
+        None
+    };
+    // println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
+    drop(ipi_list);
+    drop(io_list);
+
+    if let Task::MediatedIoTask(task_msg) = task_finish {
+        if last_vm_io_task(task_msg.src_vmid) {
+            let target_id = vm_if_list_get_cpu_id(task_msg.src_vmid);
+            handle_used_info(task_msg.vq.clone(), task_msg.src_vmid);
+            ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
         }
+    }
+
+    if let Some(task) = task_next {
+        task.handler();
     }
 }
 
@@ -180,53 +177,91 @@ pub fn ipi_list_len() -> usize {
     ipi_list.len()
 }
 
-pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32) {
+pub fn last_vm_io_task(vm_id: usize) -> bool {
+    let io_list = MEDIATED_IO_TASK_LIST.lock();
+    for io_task in &*io_list {
+        match io_task {
+            Task::MediatedIoTask(task) => {
+                if task.src_vmid == vm_id {
+                    return false;
+                }
+            }
+            Task::MediatedIpiTask(task) => {
+                panic!("last_vm_io_task: illegal io task type");
+            }
+        }
+    }
+    true
+}
+
+pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
     let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
-    used_info_list.push(UsedInfo {
+    if src_vmid >= used_info_list.len() {
+        println!("push_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());
+        return;
+    }
+    used_info_list[src_vmid].push(UsedInfo {
         desc_chain_head_idx,
         used_len,
     });
 }
 
-pub fn handle_used_info(vq: Virtq) {
+pub fn handle_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
+    if src_vmid >= used_info_list.len() {
+        println!("handle_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());
+        return;
+    }
     let vq_size = vq.num();
-    for info in &*used_info_list {
+    for info in &*used_info_list[src_vmid] {
         if info.used_len == 0 {
             println!("used_len {}, chain_head_idx {}", info.used_len, info.desc_chain_head_idx);
         }
         vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
     }
+    used_info_list[src_vmid].clear();
+}
+
+pub fn init_mediated_used_info() {
+    let vm_num = vm_num();
+    let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
     used_info_list.clear();
+
+    for i in 0..vm_num {
+        used_info_list.push(Vec::new());
+    }
+    println!("vm num {}", vm_num);
+    println!("after init, info list len {}", used_info_list.len());
 }
 
 pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
-    let mediated_blk = mediated_blk_list_get(0);
-
-    if let Task::MediatedIoTask(src_io_task) = src_task
+    if let Task::MediatedIoTask(io_task_src) = src_task
     {
-        if let Task::MediatedIoTask(des_io_task) = des_task {
-            if des_io_task.src_vmid == src_io_task.src_vmid &&
-                des_io_task.sector + des_io_task.count == src_io_task.sector &&
-                des_io_task.count + src_io_task.count < mediated_blk.dma_block_max() &&
-                des_io_task.io_type == src_io_task.io_type &&
-                des_io_task.blk_id == src_io_task.blk_id {
+        if let Task::MediatedIoTask(io_task_des) = des_task {
+            let des_vm = vm(io_task_des.src_vmid);
+            let mediated_blk = mediated_blk_list_get(des_vm.med_blk_id());
+
+            if io_task_des.src_vmid == io_task_src.src_vmid &&
+                io_task_des.sector + io_task_des.count == io_task_src.sector &&
+                io_task_des.count + io_task_src.count < mediated_blk.dma_block_max() &&
+                io_task_des.io_type == io_task_src.io_type &&
+                io_task_des.blk_id == io_task_src.blk_id {
                 let mut iov_list = Vec::new();
-                for iov in &*des_io_task.iov_list {
+                for iov in &*io_task_des.iov_list {
                     iov_list.push(iov.clone());
                 }
-                for iov in &*src_io_task.iov_list {
+                for iov in &*io_task_src.iov_list {
                     iov_list.push(iov.clone());
                 }
                 return Some(
                     Task::MediatedIoTask(IoMediatedMsg {
-                        src_vmid: des_io_task.src_vmid,
-                        vq: des_io_task.vq.clone(),
-                        io_type: des_io_task.io_type,
-                        blk_id: des_io_task.blk_id,
-                        sector: des_io_task.sector,
-                        count: des_io_task.count + src_io_task.count,
-                        cache: des_io_task.cache,
+                        src_vmid: io_task_des.src_vmid,
+                        vq: io_task_des.vq.clone(),
+                        io_type: io_task_des.io_type,
+                        blk_id: io_task_des.blk_id,
+                        sector: io_task_des.sector,
+                        count: io_task_des.count + io_task_src.count,
+                        cache: io_task_des.cache,
                         iov_list: Arc::new(iov_list),
                     })
                 );

@@ -72,7 +72,6 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         mem_init();
         // kernel::logger_init();
         init_vm0_dtb(dtb);
-        mediated_dev_init();
         hvc_init();
     }
     cpu_init();
@@ -80,6 +79,9 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     timer_init();
 
     vmm_init();
+    if cpu_id == 0 {
+        mediated_dev_init();
+    }
 
     crate::lib::barrier();
     if cpu_id != 0 {
