@@ -74,6 +74,14 @@ impl IrqState {
     }
 }
 
+pub struct GicDesc {
+    pub gicd_addr: usize,
+    pub gicc_addr: usize,
+    pub gich_addr: usize,
+    pub gicv_addr: usize,
+    pub maintenance_int_id: usize,
+}
+
 register_structs! {
     #[allow(non_snake_case)]
     pub GicDistributorBlock {
@@ -463,9 +471,12 @@ impl GicHypervisorInterface {
     }
 }
 
-pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE);
-pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE);
-pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(PLATFORM_GICH_BASE);
+// pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE);
+// pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE);
+// pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(PLATFORM_GICH_BASE);
+pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE + 0x8_0000_0000);
+pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE + 0x8_0000_0000);
+pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(PLATFORM_GICH_BASE + 0x8_0000_0000);
 
 #[inline(always)]
 pub fn gich_lrs_num() -> usize {
@@ -481,11 +492,7 @@ pub fn gic_max_spi() -> usize {
 }
 
 pub fn gic_glb_init() {
-    let mut gic_lrs = GIC_LRS_NUM.lock();
-    *gic_lrs = gich_lrs_num();
-    // println!("gic lrs is {}", *gic_lrs);
-    drop(gic_lrs);
-
+    set_gic_lrs(gich_lrs_num());
     GICD.global_init();
 }
 

@@ -21,7 +21,7 @@ use super::{
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 4;
+    vm_config.vm_num = 2;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -203,8 +203,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0001,
+            num: 2,
+            allocate_bitmap: 0b0011,
             master: 0,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
@@ -260,11 +260,11 @@ pub fn config_init() {
     // vm1 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
-        // PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
+        PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
         PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
     ];
-    // pt_dev_config.irqs = vec![UART_1_INT, 27];
-    pt_dev_config.irqs = vec![27];
+    pt_dev_config.irqs = vec![UART_1_INT, 27];
+    // pt_dev_config.irqs = vec![27];
 
     // vm1 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
@@ -292,15 +292,15 @@ pub fn config_init() {
             length: 0x2000,
         },
     });
-    // vm_dtb_devs.push(VmDtbDev {
-    //     name: "serial",
-    //     dev_type: DtbDevType::DevSerial,
-    //     irqs: vec![UART_1_INT],
-    //     addr_region: AddrRegions {
-    //         ipa: UART_1_ADDR,
-    //         length: 0x1000,
-    //     },
-    // });
+    vm_dtb_devs.push(VmDtbDev {
+        name: "serial",
+        dev_type: DtbDevType::DevSerial,
+        irqs: vec![UART_1_INT],
+        addr_region: AddrRegions {
+            ipa: UART_1_ADDR,
+            length: 0x1000,
+        },
+    });
 
     // vm1 config
     vm_config.entries.push(Arc::new(VmConfigEntry {
@@ -317,16 +317,16 @@ pub fn config_init() {
             ramdisk_load_ipa: 0, //0x83000000,
         },
         cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0010,
+            num: 2,
+            allocate_bitmap: 0b1100,
             master: -1,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: Some(vm_dtb_devs),
         med_blk_idx: Some(0),
-        // cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
-        cmdline: "root=/dev/vda rw audit=0",
+        cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
+        // cmdline: "root=/dev/vda rw audit=0",
     }));
 
     // #################### vm2 emu ######################

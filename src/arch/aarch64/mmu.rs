@@ -132,20 +132,21 @@ pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
     //     pt.lvl1[i] = BlockDescriptor::invalid();
     // }
 
-    lvl1_pt.lvl1[0] = BlockDescriptor::table(lvl2_base);
+    lvl1_pt.lvl1[32] = BlockDescriptor::table(lvl2_base);
     // 0x200000 ~ 2MB
     // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
     // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
     // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
     // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
+    // SMMU ~ 0x12000000 - 0x13000000
     lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
     lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
-    lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
+    // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
     lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
-    for i in 0..8 {
-        let addr = 0x12000000 + i * 0x200000;
-        lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
-    }
+    // for i in 0..8 {
+    //     let addr = 0x12000000 + i * 0x200000;
+    //     lvl2_pt.lvl1[pt_lvl2_idx(addr) + 32] = BlockDescriptor::new(addr, true);
+    // }
 }
 
 #[no_mangle]

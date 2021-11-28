@@ -17,8 +17,8 @@ pub const UART_1_INT: usize = 32 + 0x72;
 
 pub const PLATFORM_GICD_BASE: usize = 0x3881000;
 pub const PLATFORM_GICC_BASE: usize = 0x3882000;
-pub const PLATFORM_GICH_BASE: usize = 0x03884000;
-pub const PLATFORM_GICV_BASE: usize = 0x03886000;
+pub const PLATFORM_GICH_BASE: usize = 0x3884000;
+pub const PLATFORM_GICV_BASE: usize = 0x3886000;
 
 // pub const DISK_PARTITION_1_ADDR_SIZE: usize = 0x400;
 // pub const DISK_PARTITION_1_ADDR: usize = 0xa000000;
