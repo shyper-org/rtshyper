@@ -147,7 +147,6 @@ impl Vm {
         self.inner.clone()
     }
 
-    #[allow(dead_code)]
     pub fn default() -> Vm {
         Vm {
             inner: Arc::new(Mutex::new(VmInner::default())),

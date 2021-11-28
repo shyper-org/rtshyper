@@ -1,7 +1,6 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::arch::{emu_intc_handler, emu_intc_init};
@@ -13,10 +12,10 @@ use crate::config::{DEF_VM_CONFIG_TABLE, VmCpuConfig, VmImageConfig, VmMemoryCon
 use crate::config::VmConfigEntry;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::config::VmPassthroughDeviceConfig;
-use crate::device::{create_fdt, EmuDeviceType};
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
+use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm, active_vm_id, CPU, current_cpu, shyper_init, VM_IF_LIST, vm_if_list_set_cpu_id};
+use crate::kernel::{CPU, current_cpu, shyper_init, VM_IF_LIST, vm_if_list_set_cpu_id};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
 use crate::kernel::{Vm, vm, VM_LIST};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
@@ -622,7 +621,7 @@ pub fn vmm_init() {
 
 pub fn vmm_boot() {
     if current_cpu().assigned && active_vcpu_id() == 0 {
-        let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
+        // let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
         let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
         for i in 0..vcpu_pool.content.len() {
             let vcpu = vcpu_pool.content[i].vcpu.clone();

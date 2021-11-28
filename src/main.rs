@@ -39,15 +39,25 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
+#[allow(dead_code)]
 mod arch;
+#[allow(dead_code)]
 mod board;
+#[allow(dead_code)]
 mod config;
+#[allow(dead_code)]
 mod device;
+#[allow(dead_code)]
 mod driver;
+#[allow(dead_code)]
 mod kernel;
+#[allow(dead_code)]
 mod lib;
+#[allow(dead_code)]
 mod mm;
+#[allow(dead_code)]
 mod panic;
+#[allow(dead_code)]
 mod vmm;
 
 // use lib::{BitAlloc, BitAlloc256};

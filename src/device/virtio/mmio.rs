@@ -307,7 +307,6 @@ struct VirtioMmioInner {
     dev: VirtDev,
 
     vq: Vec<Virtq>,
-    mediated: bool,
 }
 
 impl VirtioMmioInner {
@@ -319,7 +318,6 @@ impl VirtioMmioInner {
             regs: VirtMmioRegs::default(),
             dev: VirtDev::default(),
             vq: Vec::new(),
-            mediated: false,
         }
     }
 
@@ -596,7 +594,7 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
 }
 
 pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
-    let mut virt_dev_type: VirtioDeviceType = VirtioDeviceType::None;
+    let virt_dev_type: VirtioDeviceType;
     let vm_cfg = vm.config();
     let mmio = VirtioMmio::new(emu_dev_id);
     match vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].emu_type {

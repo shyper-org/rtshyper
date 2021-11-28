@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::{arch::GICH, kernel::IpiInitcMessage};
-use crate::board::{platform_cpuid_to_cpuif, platform_cpuif_to_cpuid};
+use crate::board::platform_cpuid_to_cpuif;
 use crate::board::PLATFORM_GICD_BASE;
 use crate::device::EmuContext;
 use crate::device::EmuDevs;
@@ -1783,12 +1783,13 @@ impl Vgic {
                     self.add_lr(vcpu.clone(), interrupt.clone());
                 }
             }
+            drop(interrupt_lock);
         }
     }
 }
 
 fn vgic_target_translate(vm: Vm, trgt: u32, v2p: bool) -> u32 {
-    let mut from = trgt.to_le_bytes();
+    let from = trgt.to_le_bytes();
 
     let mut result = 0;
     for (idx, val) in from.map(|x|

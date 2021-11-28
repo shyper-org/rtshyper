@@ -109,7 +109,7 @@ impl Virtq {
     pub fn put_back_avail_desc_idx(&self) {
         let mut inner = self.inner.lock();
         match &inner.avail {
-            Some(avail) => {
+            Some(_) => {
                 inner.last_avail_idx -= 1;
             }
             None => {
@@ -119,7 +119,7 @@ impl Virtq {
     }
 
     pub fn avail_is_avail(&self) -> bool {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         inner.avail.is_some()
     }
 
@@ -296,7 +296,7 @@ impl Virtq {
     }
 
     pub fn last_used_idx(&self) -> u16 {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         inner.last_used_idx
     }
 

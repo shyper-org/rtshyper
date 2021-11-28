@@ -1,14 +1,13 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::config::vm_num;
 use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+    BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
-use crate::kernel::{active_vm_id, current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
 use crate::lib::memcpy_safe;
 
 pub struct UsedInfo {
@@ -167,15 +166,15 @@ pub fn io_task_head() -> Option<Task> {
     Some(io_list[0].clone())
 }
 
-pub fn io_list_len() -> usize {
-    let io_list = MEDIATED_IO_TASK_LIST.lock();
-    io_list.len()
-}
-
-pub fn ipi_list_len() -> usize {
-    let ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-    ipi_list.len()
-}
+// pub fn io_list_len() -> usize {
+//     let io_list = MEDIATED_IO_TASK_LIST.lock();
+//     io_list.len()
+// }
+//
+// pub fn ipi_list_len() -> usize {
+//     let ipi_list = MEDIATED_IPI_TASK_LIST.lock();
+//     ipi_list.len()
+// }
 
 pub fn last_vm_io_task(vm_id: usize) -> bool {
     let io_list = MEDIATED_IO_TASK_LIST.lock();
@@ -186,7 +185,7 @@ pub fn last_vm_io_task(vm_id: usize) -> bool {
                     return false;
                 }
             }
-            Task::MediatedIpiTask(task) => {
+            Task::MediatedIpiTask(_) => {
                 panic!("last_vm_io_task: illegal io task type");
             }
         }
@@ -227,7 +226,7 @@ pub fn init_mediated_used_info() {
     let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
     used_info_list.clear();
 
-    for i in 0..vm_num {
+    for _ in 0..vm_num {
         used_info_list.push(Vec::new());
     }
     println!("vm num {}", vm_num);

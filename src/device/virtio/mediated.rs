@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::kernel::{active_vm, active_vm_id, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, init_mediated_used_info, interrupt_vm_inject, io_task_head, IpiInnerMsg, Task, vm, vm_ipa2pa};
+use crate::kernel::{active_vm, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, init_mediated_used_info, interrupt_vm_inject, io_task_head, IpiInnerMsg, Task, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::{memcpy_safe, trace};
 
@@ -194,14 +194,14 @@ pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
     interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
 }
 
-fn check_sum(addr: usize, len: usize) -> usize {
-    let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
-    let mut sum = 0;
-    for num in slice {
-        sum ^= num;
-    }
-    sum
-}
+// fn check_sum(addr: usize, len: usize) -> usize {
+//     let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
+//     let mut sum = 0;
+//     for num in slice {
+//         sum ^= num;
+//     }
+//     sum
+// }
 
 pub fn mediated_ipi_handler(msg: &IpiMessage) {
     // println!("vm {} mediated_ipi_handler", active_vm_id());

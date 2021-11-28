@@ -53,7 +53,6 @@ pub fn vcpu_pool_append(vcpu: Vcpu) -> bool {
 
 pub fn vcpu_pool_pop_through_vmid(vm_id: usize) -> Option<Vcpu> {
     let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
-    let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
     let size = vcpu_pool.content.len();
     if size == 0 {
         println!("vcpu pool is empty");

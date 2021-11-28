@@ -2,7 +2,6 @@ use tock_registers::*;
 use tock_registers::interfaces::*;
 
 use crate::arch::pt_lvl2_idx;
-use crate::arch::TableDescriptor::TYPE::Value::Block;
 use crate::board::PLAT_DESC;
 use crate::lib::memset_safe;
 

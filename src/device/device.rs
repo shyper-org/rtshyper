@@ -104,12 +104,12 @@ impl NicStat {
     }
 
     pub fn receive_req(&self) -> usize {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         inner.receive_req
     }
 
     pub fn receive_byte(&self) -> usize {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         inner.receive_byte
     }
 

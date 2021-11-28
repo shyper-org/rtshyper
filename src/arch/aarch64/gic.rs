@@ -135,12 +135,10 @@ impl GicDistributor {
         self.base_addr as *const GicDistributorBlock
     }
 
-    #[allow(dead_code)]
     pub fn is_enabler(&self, idx: usize) -> u32 {
         self.ISENABLER[idx].get()
     }
 
-    #[allow(dead_code)]
     pub fn ic_enabler(&self, idx: usize) -> u32 {
         self.ICENABLER[idx].get()
     }
@@ -165,7 +163,7 @@ impl GicDistributor {
 
     fn cpu_init(&self) {
         for i in 0..GIC_PRIVINT_NUM / 32 {
-            /**
+            /*
              * Make sure all private interrupts are not enabled, non pending,
              * non active.
              */
@@ -190,7 +188,6 @@ impl GicDistributor {
         self.SGIR.set(((1 << (16 + cpu_if)) | (sgi_num & 0b1111)) as u32);
     }
 
-    #[allow(dead_code)]
     pub fn prio(&self, int_id: usize) -> usize {
         let idx = (int_id * 8) / 32;
         let off = (int_id * 8) % 32;
@@ -209,7 +206,6 @@ impl GicDistributor {
         drop(lock);
     }
 
-    #[allow(dead_code)]
     pub fn trgt(&self, int_id: usize) -> usize {
         let idx = (int_id * 8) / 32;
         let off = (int_id * 8) % 32;
@@ -392,7 +388,6 @@ impl GicCpuInterface {
         GICH.HCR.set(hcr_prev | GICH_HCR_LRENPIE_BIT as u32);
     }
 
-    #[allow(dead_code)]
     pub fn set_dir(&self, dir: u32) {
         self.DIR.set(dir);
     }

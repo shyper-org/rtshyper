@@ -3,7 +3,6 @@ use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, Pl
 use crate::device::ARM_CORTEX_A57;
 #[allow(unused_imports)]
 use crate::device::ARM_NVIDIA_DENVER;
-use crate::kernel::mem_heap_reset;
 
 pub const KERNEL_ENTRY: usize = 0x83000000;
 
@@ -118,6 +117,13 @@ pub fn platform_sys_reboot() {
     println!("Hypervisor reset...");
     // mem_heap_reset();
     crate::arch::power_arch_sys_reset();
+    loop {}
+}
+
+pub fn platform_sys_shutdown() {
+    println!("Hypervisor shutdown...");
+    // mem_heap_reset();
+    crate::arch::power_arch_sys_shutdown();
     loop {}
 }
 

@@ -95,7 +95,7 @@ pub enum AllocError {
 }
 
 pub fn mem_heap_reset() {
-    let mut heap = HEAPREGION.lock();
+    let heap = HEAPREGION.lock();
     memset_safe(heap.region.base as *mut u8, 0, heap.region.size * PAGE_SIZE);
 }
 

@@ -172,13 +172,11 @@ pub static VMREGION: Mutex<VmRegion> = Mutex::new(VmRegion {
     region: Vec::<MemRegion>::new(),
 });
 
-#[allow(dead_code)]
 pub fn bits_to_pages(bits: usize) -> usize {
     use crate::lib::round_up;
     round_up(bits, PAGE_SIZE)
 }
 
-#[allow(dead_code)]
 pub fn pa_in_heap_region(pa: usize) -> bool {
     let heap_region = HEAPREGION.lock();
     pa > heap_region.region.base

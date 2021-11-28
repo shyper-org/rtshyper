@@ -18,14 +18,14 @@ pub fn timer_arch_set(num: usize) {
 pub fn timer_arch_enable_irq() {
     let val = 1;
     unsafe {
-        asm!("msr CNTHP_CTL_EL2, {0}", "isb", in(reg) val);
+        asm!("msr CNTHP_CTL_EL2, {0:x}", "isb", in(reg) val);
     };
 }
 
 pub fn timer_arch_disable_irq() {
     let val = 2;
     unsafe {
-        asm!("msr CNTHP_CTL_EL2, {0}", "isb", in(reg) val);
+        asm!("msr CNTHP_CTL_EL2, {0:x}", "isb", in(reg) val);
     };
 }
 

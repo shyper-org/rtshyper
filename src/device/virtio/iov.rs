@@ -87,7 +87,7 @@ impl VirtioIov {
                 break;
             }
 
-            let mut written = 0;
+            let written;
             if dst_vlen_remain > src_vlen_remain {
                 written = src_vlen_remain;
                 if trace() && (dst_ptr < 0x1000 || src_ptr < 0x1000) {

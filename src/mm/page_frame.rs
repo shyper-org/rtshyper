@@ -17,7 +17,6 @@ impl PageFrame {
         self.pa
     }
 
-    #[allow(dead_code)]
     pub fn zero(&self) {
         memset_safe(self.pa as *mut u8, 0, PAGE_SIZE);
     }
@@ -30,7 +29,7 @@ impl PageFrame {
             core::slice::from_raw_parts(self.pa as *const T, PAGE_SIZE / core::mem::size_of::<T>())
         }
     }
-    #[allow(dead_code)]
+
     pub fn as_mut_slice<T>(&self) -> &'static mut [T] {
         if trace() && self.pa() < 0x1000 {
             panic!("illegal addr {:x}", self.pa());
