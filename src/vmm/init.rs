@@ -33,14 +33,14 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
 
         vm_id = vm_inner.id;
         vm_inner.pt = Some(PageTable::new(pt_dir_frame));
-        vm_inner.mem_region_num = config.num as usize;
+        vm_inner.mem_region_num = config.region.len() as usize;
     } else {
         println!("vmm_init_memory: page alloc failed");
         return false;
     }
 
-    for i in 0..config.num as usize {
-        let vm_region = &config.region.as_ref().unwrap()[i];
+    for i in 0..config.region.len() as usize {
+        let vm_region = &config.region[i];
         let pa = mem_vm_region_alloc(vm_region.length);
 
         if pa == 0 {
@@ -90,9 +90,9 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
 fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     let size = bin.len();
     let config = vm.config();
-    for i in 0..config.memory.num {
+    for i in 0..config.memory.region.len() {
         let idx = i as usize;
-        let region = config.memory.region.as_ref().unwrap();
+        let region = &config.memory.region;
         if load_ipa < region[idx].ipa_start
             || load_ipa + size > region[idx].ipa_start + region[idx].length
         {
@@ -166,7 +166,7 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         #[cfg(feature = "tx2")]
             {
                 let offset = config.device_tree_load_ipa
-                    - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                    - vm.config().memory.region[0].ipa_start;
                 unsafe {
                     let src = SYSTEM_FDT.get().unwrap();
                     let len = src.len();
@@ -341,7 +341,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     match vm.dtb() {
         Some(dtb) => {
             let mut mr = Vec::new();
-            for r in config.memory.region.as_ref().unwrap() {
+            for r in &config.memory.region {
                 mr.push(region {
                     ipa_start: r.ipa_start as u64,
                     length: r.length as u64,
@@ -405,7 +405,7 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
             match create_fdt(config.clone()) {
                 Ok(dtb) => {
                     let offset = config.image.device_tree_load_ipa
-                        - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                        - vm.config().memory.region[0].ipa_start;
                     println!("dtb size {}", dtb.len());
                     println!("pa 0x{:x}", vm.pa_start(0) + offset);
                     crate::lib::memcpy_safe(

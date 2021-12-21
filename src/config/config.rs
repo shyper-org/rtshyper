@@ -62,15 +62,13 @@ impl VmRegion {
 }
 
 pub struct VmMemoryConfig {
-    pub num: u32,
-    pub region: Option<Vec<VmRegion>>,
+    pub region: Vec<VmRegion>,
 }
 
 impl VmMemoryConfig {
     pub const fn default() -> VmMemoryConfig {
         VmMemoryConfig {
-            num: 0,
-            region: None,
+            region: vec![],
         }
     }
 }

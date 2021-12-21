@@ -79,7 +79,7 @@ fn psci_guest_sys_reset() {
 #[inline(never)]
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     println!(
-        "smc_guest_handler: fid {:x}, x1 {}, x2 {}, x3 {}",
+        "smc_guest_handler: fid 0x{:x}, x1 0x{:x}, x2 0x{:x}, x3 0x{:x}",
         fid, x1, x2, x3
     );
     let r;

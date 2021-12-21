@@ -13,7 +13,7 @@ pub fn vcpu_arch_init(vm: Vm, vcpu: Vcpu) {
                     .set_argument(config.image.device_tree_load_ipa);
             }
             _ => {
-                let arg = &config.memory.region.as_ref().unwrap()[0];
+                let arg = &config.memory.region[0];
                 vcpu_inner.vcpu_ctx.set_argument(arg.ipa_start + arg.length);
             }
         }

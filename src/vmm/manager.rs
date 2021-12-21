@@ -59,7 +59,7 @@ pub fn vmm_reboot_vm(vm: Vm) {
         match create_fdt(config.clone()) {
             Ok(dtb) => {
                 let offset = config.image.device_tree_load_ipa
-                    - vm.config().memory.region.as_ref().unwrap()[0].ipa_start;
+                    - vm.config().memory.region[0].ipa_start;
                 println!("dtb size {}", dtb.len());
                 println!("pa 0x{:x}", vm.pa_start(0) + offset);
                 crate::lib::memcpy_safe(

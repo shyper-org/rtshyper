@@ -1,3 +1,4 @@
+use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -41,6 +42,26 @@ impl VgicInt {
             ))),
             lock: Arc::new(Mutex::new(())),
         }
+    }
+
+    fn set_in_pend_state(&self, is_pend: bool) {
+        let mut vgic_int = self.inner.lock();
+        vgic_int.in_pend = is_pend;
+    }
+
+    fn set_in_act_state(&self, is_act: bool) {
+        let mut vgic_int = self.inner.lock();
+        vgic_int.in_act = is_act;
+    }
+
+    fn in_pend(&self) -> bool {
+        let vgic_int = self.inner.lock();
+        vgic_int.in_pend
+    }
+
+    fn in_act(&self) -> bool {
+        let vgic_int = self.inner.lock();
+        vgic_int.in_act
     }
 
     fn set_enabled(&self, enabled: bool) {
@@ -209,6 +230,9 @@ struct VgicIntInner {
     prio: u8,
     targets: u8,
     cfg: u8,
+
+    in_pend: bool,
+    in_act: bool,
 }
 
 impl VgicIntInner {
@@ -224,6 +248,8 @@ impl VgicIntInner {
             prio: 0xff,
             targets: 0,
             cfg: 0,
+            in_pend: false,
+            in_act: false,
         }
     }
 
@@ -239,6 +265,8 @@ impl VgicIntInner {
             prio: 0xff,
             targets: targets as u8,
             cfg: 0,
+            in_pend: false,
+            in_act: false,
         }
     }
 
@@ -283,6 +311,9 @@ struct VgicCpuPriv {
     curr_lrs: [u16; GIC_LIST_REGS_NUM],
     sgis: [Sgis; GIC_SGIS_NUM],
     interrupts: Vec<VgicInt>,
+
+    pend_list: VecDeque<VgicInt>,
+    act_list: VecDeque<VgicInt>,
 }
 
 impl VgicCpuPriv {
@@ -308,6 +339,8 @@ impl VgicCpuPriv {
                 Sgis::default(),
             ],
             interrupts: Vec::new(),
+            pend_list: VecDeque::new(),
+            act_list: VecDeque::new(),
         }
     }
 }
@@ -322,6 +355,92 @@ impl Vgic {
         Vgic {
             vgicd: Mutex::new(Vgicd::default()),
             cpu_priv: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn remove_int_list(&self, vcpu: Vcpu, interrupt: VgicInt, is_pend: bool) {
+        let mut cpu_priv = self.cpu_priv.lock();
+        let vcpu_id = vcpu.id();
+        let int_id = interrupt.id();
+        if is_pend {
+            if !interrupt.in_pend() {
+                // println!("why int {} in pend is false but in pend list", int_id);
+                return;
+            }
+            for i in 0..cpu_priv[vcpu_id].pend_list.len() {
+                if cpu_priv[vcpu_id].pend_list[i].id() == int_id {
+                    // if int_id == 297 {
+                    //     println!("remove int {} in pend list[{}]", int_id, i);
+                    // }
+                    cpu_priv[vcpu_id].pend_list.remove(i);
+                    break;
+                }
+            }
+            interrupt.set_in_pend_state(false);
+        } else {
+            if !interrupt.in_act() {
+                return;
+            }
+            for i in 0..cpu_priv[vcpu_id].act_list.len() {
+                if cpu_priv[vcpu_id].act_list[i].id() == int_id {
+                    cpu_priv[vcpu_id].act_list.remove(i);
+                    break;
+                }
+            }
+            interrupt.set_in_act_state(false);
+        };
+    }
+
+    fn add_int_list(&self, vcpu: Vcpu, interrupt: VgicInt, is_pend: bool) {
+        let mut cpu_priv = self.cpu_priv.lock();
+        let vcpu_id = vcpu.id();
+        if is_pend {
+            interrupt.set_in_pend_state(true);
+            cpu_priv[vcpu_id].pend_list.push_back(interrupt);
+        } else {
+            interrupt.set_in_act_state(true);
+            cpu_priv[vcpu_id].act_list.push_back(interrupt);
+        }
+    }
+
+    fn update_int_list(&self, vcpu: Vcpu, interrupt: VgicInt) {
+        let state = interrupt.state().to_num();
+
+        if state & 1 != 0 && !interrupt.in_pend() {
+            self.add_int_list(vcpu.clone(), interrupt.clone(), true);
+        } else if state & 1 == 0 {
+            self.remove_int_list(vcpu.clone(), interrupt.clone(), true);
+        }
+
+        if state & 2 != 0 && !interrupt.in_act() {
+            self.add_int_list(vcpu.clone(), interrupt.clone(), false);
+        } else if state & 2 == 0 {
+            self.remove_int_list(vcpu.clone(), interrupt.clone(), false);
+        }
+
+        if interrupt.id() < GIC_SGIS_NUM as u16 {
+            if self.cpu_priv_sgis_pend(vcpu.id(), interrupt.id() as usize) != 0 &&
+                !interrupt.in_pend() {
+                self.add_int_list(vcpu, interrupt, true);
+            }
+        }
+    }
+
+    fn int_list_head(&self, vcpu: Vcpu, is_pend: bool) -> Option<VgicInt> {
+        let cpu_priv = self.cpu_priv.lock();
+        let vcpu_id = vcpu.id();
+        if is_pend {
+            if cpu_priv[vcpu_id].pend_list.is_empty() {
+                None
+            } else {
+                Some(cpu_priv[vcpu_id].pend_list[0].clone())
+            }
+        } else {
+            if cpu_priv[vcpu_id].act_list.is_empty() {
+                None
+            } else {
+                Some(cpu_priv[vcpu_id].act_list[0].clone())
+            }
         }
     }
 
@@ -437,6 +556,8 @@ impl Vgic {
                     // cpu_priv[vcpu_id].sgis[int_id].pend = 1 << ((lr_val >> 10) & 0b111) as u8;
                 }
             }
+
+            self.update_int_list(vcpu.clone(), interrupt.clone());
 
             if (interrupt.state().to_num() & 1 != 0) && interrupt.enabled() {
                 // println!("remove_lr: interrupt_state {}", interrupt.state().to_num());
@@ -634,6 +755,8 @@ impl Vgic {
 
         // println!("set in {} lr {}", interrupt.id(), lr_ind);
         GICH.set_lr(lr_ind, lr as u32);
+
+        self.update_int_list(vcpu.clone(), interrupt.clone());
     }
 
     fn route(&self, vcpu: Vcpu, interrupt: VgicInt) {
@@ -758,6 +881,7 @@ impl Vgic {
                 } else if !pend && (state & 1) != 0 {
                     interrupt.set_state(IrqState::num_to_state(state & !1));
                 }
+                self.update_int_list(vcpu.clone(), interrupt.clone());
 
                 let state = interrupt.state().to_num();
                 if interrupt.hw() {
@@ -830,6 +954,7 @@ impl Vgic {
                 } else if !act && (state & 2) != 0 {
                     interrupt.set_state(IrqState::num_to_state(state & !2));
                 }
+                self.update_int_list(vcpu.clone(), interrupt.clone());
 
                 let state = interrupt.state().to_num();
                 if interrupt.hw() {
@@ -947,6 +1072,9 @@ impl Vgic {
                 } else {
                     interrupt.set_state(IrqState::num_to_state(state & !1));
                 }
+
+                self.update_int_list(vcpu.clone(), interrupt.clone());
+
                 // println!("state {}", interrupt.state().to_num());
                 match interrupt.state() {
                     IrqState::IrqSInactive => {
@@ -1090,6 +1218,7 @@ impl Vgic {
                 // println!("inject: Core {} get int {} lock", cpu_id(), interrupt.id());
                 interrupt.set_owner(vcpu.clone());
                 interrupt.set_state(IrqState::IrqSPend);
+                self.update_int_list(vcpu.clone(), interrupt.clone());
                 interrupt.set_in_lr(false);
                 self.route(vcpu.clone(), interrupt.clone());
                 // println!("inject: Core {} finish", current_cpu().id);
@@ -1625,15 +1754,6 @@ impl Vgic {
     }
 
     fn refill_lrs(&self, vcpu: Vcpu) {
-        // println!("refill lrs");
-        // for i in 0..4 {
-        //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
-        // }
-        // println!(
-        //     "gich.ELSR {:x}, gic max spi {}",
-        //     GICH.elsr(0),
-        //     gic_max_spi()
-        // );
         let gic_lrs = gic_lrs();
         let mut has_pending = false;
 
@@ -1651,70 +1771,44 @@ impl Vgic {
             1,
             true,
         );
+
         while lr_idx_opt.is_some() {
             let mut interrupt_opt: Option<VgicInt> = None;
-            let lr_idx = lr_idx_opt.unwrap();
-            let mut state = 0;
-
-            for i in 0..gic_max_spi() {
-                let mut temp_int_opt = self.get_int(vcpu.clone(), i);
-
-                match temp_int_opt {
-                    Some(ref temp_int) => {
-                        // ugly
-                        let temp_int_clone = temp_int.clone();
-                        let temp_int_lock = temp_int_clone.lock.lock();
-
-                        if !temp_int.in_lr() && vgic_int_get_owner(vcpu.clone(), temp_int.clone()) {
-                            let temp_state = vgic_get_state(temp_int.clone());
-                            let cpu_is_target = self.get_trgt(vcpu.clone(), i) & (1 << current_cpu().id) != 0;
-                            if cpu_is_target && temp_state != 0 && !temp_int.in_lr() {
-                                match interrupt_opt {
-                                    Some(ref interrupt) => {
-                                        if (!has_pending && ((temp_state & 1 != 0) && ((state & 2 != 0) || ((state & 1 != 0) && temp_int.prio() < interrupt.prio())))) || (has_pending && ((temp_state & 2 != 0) && (state & 1 != 0))) || (has_pending && temp_int.prio() < interrupt.prio()) {
-                                            // println!("Some: refill int {}", temp_int.id());
-                                            let aux = interrupt.clone();
-                                            interrupt_opt = Some(temp_int.clone());
-                                            state = vgic_get_state(temp_int.clone());
-                                            temp_int_opt = Some(aux.clone());
-                                        }
-                                    }
-                                    None => {
-                                        // println!("None: refill int {}", temp_int.id());
-                                        interrupt_opt = Some(temp_int.clone());
-                                        state = vgic_get_state(temp_int.clone());
-                                        temp_int_opt = None;
-                                    }
-                                }
-                            }
+            let mut prev_pend = false;
+            let act_head = self.int_list_head(vcpu.clone(), false);
+            let pend_head = self.int_list_head(vcpu.clone(), true);
+            if has_pending {
+                match act_head {
+                    Some(act_int) => {
+                        if !act_int.in_lr() {
+                            interrupt_opt = Some(act_int.clone());
                         }
-
-                        if let Some(ref temp_int) = temp_int_opt {
-                            vgic_int_yield_owner(vcpu.clone(), temp_int.clone());
-                        }
-                        drop(temp_int_lock);
                     }
-                    None => {
-                        println!("refill_lrs: get empty temp interrupt");
+                    None => {}
+                }
+            }
+            if interrupt_opt.is_none() {
+                if let Some(pend_int) = pend_head {
+                    if !pend_int.in_lr() {
+                        interrupt_opt = Some(pend_int.clone());
+                        prev_pend = true;
                     }
                 }
             }
 
-            if let Some(ref interrupt) = interrupt_opt {
-                self.write_lr(vcpu.clone(), interrupt.clone(), lr_idx);
-                if state & 1 != 0 {
-                    has_pending = true;
+            match interrupt_opt {
+                Some(interrupt) => {
+                    // println!("refill int {}", interrupt.id());
+                    vgic_int_get_owner(vcpu.clone(), interrupt.clone());
+                    self.write_lr(vcpu.clone(), interrupt.clone(), lr_idx_opt.unwrap());
+                    has_pending = has_pending || prev_pend;
                 }
-                // println!(
-                //     "int id {} write lr {}, elsr {}",
-                //     interrupt.id(),
-                //     lr_idx,
-                //     GICH.elsr(0)
-                // );
-            } else {
-                let hcr = GICH.hcr();
-                GICH.set_hcr(hcr & !(1 << 3));
-                break;
+                None => {
+                    // println!("no int to refill");
+                    let hcr = GICH.hcr();
+                    GICH.set_hcr(hcr & !(1 << 3));
+                    break;
+                }
             }
 
             lr_idx_opt = bitmap_find_nth(
@@ -1724,66 +1818,30 @@ impl Vgic {
                 1,
                 true,
             );
-
-            // println!("end write lr");
-            // for i in 0..4 {
-            //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
-            // }
-            // println!("gich.ELSR {:x}", GICH.elsr(0));
         }
         // println!("end refill lrs");
     }
 
     fn eoir_highest_spilled_active(&self, vcpu: Vcpu) {
-        let mut interrupt_opt: Option<VgicInt> = None;
-        for i in 0..gic_max_spi() {
-            let mut temp_int_opt = self.get_int(vcpu.clone(), i);
+        let interrupt = self.int_list_head(vcpu.clone(), false);
+        match interrupt {
+            Some(int) => {
+                int.lock.lock();
+                vgic_int_get_owner(vcpu.clone(), int.clone());
 
-            match temp_int_opt {
-                Some(ref temp_int) => {
-                    // ugly
-                    let temp_int_clone = temp_int.clone();
-                    let temp_int_lock = temp_int_clone.lock.lock();
-                    if vgic_int_get_owner(vcpu.clone(), temp_int.clone()) && (temp_int.state().to_num() & 2 != 0) {
-                        match interrupt_opt {
-                            Some(ref interrupt) => {
-                                if interrupt.prio() < temp_int.prio() {
-                                    let aux = interrupt.clone();
-                                    interrupt_opt = Some(temp_int.clone());
-                                    temp_int_opt = Some(aux.clone());
-                                }
-                            }
-                            None => {
-                                interrupt_opt = Some(temp_int.clone());
-                                temp_int_opt = None;
-                            }
-                        }
-                    }
+                let state = int.state().to_num();
+                int.set_state(IrqState::num_to_state(state & !2));
+                self.update_int_list(vcpu.clone(), int.clone());
 
-                    if let Some(ref temp_int) = temp_int_opt {
-                        vgic_int_yield_owner(vcpu.clone(), temp_int.clone());
+                if vgic_int_is_hw(int.clone()) {
+                    GICD.set_act(int.id() as usize, false);
+                } else {
+                    if int.state().to_num() & 1 != 0 {
+                        self.add_lr(vcpu.clone(), int.clone());
                     }
-                    drop(temp_int_lock);
-                }
-                None => {
-                    println!("eoir_highest_spilled_active: get empty temp interrupt");
-                    break;
                 }
             }
-        }
-
-        if let Some(ref interrupt) = interrupt_opt {
-            let interrupt_lock = interrupt.lock.lock();
-            let state = interrupt.state().to_num();
-            interrupt.set_state(IrqState::num_to_state(state & !2));
-            if vgic_int_is_hw(interrupt.clone()) {
-                GICD.set_act(interrupt.id() as usize, false);
-            } else {
-                if interrupt.state().to_num() & 1 != 0 {
-                    self.add_lr(vcpu.clone(), interrupt.clone());
-                }
-            }
-            drop(interrupt_lock);
+            None => {}
         }
     }
 }
@@ -1879,19 +1937,8 @@ fn vgic_int_yield_owner(vcpu: Vcpu, interrupt: VgicInt) {
     }
 
     if vgic_get_state(interrupt.clone()) & 2 == 0 {
-        // if interrupt.id() == 48 {
-        //     println!("vgic_get_state");
-        // }
-        // println!(
-        //     "clear int {} owner, status {}",
-        //     interrupt.id(),
-        //     vgic_get_state(interrupt.clone())
-        // );
         interrupt.clear_owner();
     }
-    // if interrupt.id() == 48 {
-    //     println!("end vgic_int_yield_owner");
-    // }
 }
 
 fn vgic_int_is_hw(interrupt: VgicInt) -> bool {
@@ -1963,6 +2010,7 @@ pub fn gic_maintenance_handler(_arg: usize, _source: usize) {
     }
 
     if misr & (1 << 2) != 0 {
+        // println!("in gic_maintenance_handler eoir_highest_spilled_active");
         let mut hcr = GICH.hcr();
         while hcr & (0b11111 << 27) != 0 {
             vgic.eoir_highest_spilled_active(current_cpu().active_vcpu.clone().unwrap());
@@ -1970,6 +2018,7 @@ pub fn gic_maintenance_handler(_arg: usize, _source: usize) {
             GICH.set_hcr(hcr);
             hcr = GICH.hcr();
         }
+        // println!("end gic_maintenance_handler eoir_highest_spilled_active");
     }
 }
 

@@ -135,14 +135,14 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
 
 // hard code for tx2 vm1
 fn create_memory_node(fdt: &mut FdtWriter, config: &VmMemoryConfig) -> FdtWriterResult<()> {
-    if config.num == 0 {
+    if config.region.len() == 0 {
         panic!("create_memory_node memory region num 0");
     }
-    let memory_name = format!("memory@{:x}", config.region.as_ref().unwrap()[0].ipa_start);
+    let memory_name = format!("memory@{:x}", config.region[0].ipa_start);
     let memory = fdt.begin_node(&memory_name)?;
     fdt.property_string("device_type", "memory")?;
     let mut addr = vec![];
-    for region in config.region.as_ref().unwrap() {
+    for region in &config.region {
         addr.push(region.ipa_start as u64);
         addr.push(region.length as u64);
     }
