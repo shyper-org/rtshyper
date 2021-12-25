@@ -9,7 +9,7 @@ use crate::arch::ContextFrameTrait;
 // use core::ops::{Deref, DerefMut};
 use crate::arch::cpu_interrupt_unmask;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{Vcpu, VcpuPool, VcpuState, Vm};
+use crate::kernel::{SchedType, Vcpu, VcpuPool, VcpuState, Vm};
 use crate::kernel::IpiMessage;
 use crate::lib::trace;
 
@@ -75,7 +75,9 @@ pub struct Cpu {
     pub cpu_state: CpuState,
     pub active_vcpu: Option<Vcpu>,
     pub ctx: Option<usize>,
-    pub vcpu_pool: Option<Box<VcpuPool>>,
+
+    pub sched: SchedType,
+    // pub vcpu_pool: Option<Box<VcpuPool>>,
 
     pub current_irq: usize,
     pub cpu_pt: CpuPt,
@@ -90,7 +92,7 @@ impl Cpu {
             cpu_state: CpuState::CpuInv,
             active_vcpu: None,
             ctx: None,
-            vcpu_pool: None,
+            sched: SchedType::None,
             current_irq: 0,
             cpu_pt: CpuPt {
                 lvl1: [0; PTE_PER_PAGE],
@@ -169,12 +171,18 @@ impl Cpu {
         }
     }
 
-    pub fn set_active_vcpu(&mut self, idx: usize) {
-        let vcpu_pool = self.vcpu_pool.as_mut().unwrap();
-        let vcpu = vcpu_pool.content[idx].vcpu.clone();
-        vcpu_pool.active_idx = idx;
+    pub fn vcpu_pool(&self) -> VcpuPool {
+        match &self.sched {
+            SchedType::SchedRR(rr) => {
+                rr.pool.clone()
+            }
+            SchedType::None => {
+                panic!("cpu[{}] has no vcpu_pool", self.id);
+            }
+        }
+    }
 
-        vcpu.set_state(VcpuState::VcpuAct);
+    pub fn set_active_vcpu(&mut self, vcpu: Vcpu) {
         self.active_vcpu = Some(vcpu);
     }
 }
@@ -187,7 +195,7 @@ pub static mut CPU: Cpu = Cpu {
     cpu_state: CpuState::CpuInv,
     active_vcpu: None,
     ctx: None,
-    vcpu_pool: None,
+    sched: SchedType::None,
     current_irq: 0,
     cpu_pt: CpuPt {
         lvl1: [0; PTE_PER_PAGE],

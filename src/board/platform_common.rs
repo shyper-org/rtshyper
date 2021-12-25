@@ -5,6 +5,12 @@ pub const TOTAL_MEM_REGION_MAX: usize = 16;
 pub const PLATFORM_VCPU_NUM_MAX: usize = 8;
 
 #[repr(C)]
+pub enum SchedRule {
+    RoundRobin,
+    None,
+}
+
+#[repr(C)]
 pub struct PlatMemRegion {
     pub base: usize,
     pub size: usize,
@@ -22,6 +28,7 @@ pub struct PlatCpuConfig {
     pub num: usize,
     pub name: [u8; PLATFORM_CPU_NUM_MAX],
     pub mpidr_list: [usize; PLATFORM_CPU_NUM_MAX],
+    pub sched_list: [SchedRule; PLATFORM_CPU_NUM_MAX],
 }
 
 #[repr(C)]

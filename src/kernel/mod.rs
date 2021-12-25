@@ -6,6 +6,7 @@ pub use self::ivc::*;
 pub use self::logger::*;
 pub use self::mem::*;
 pub use self::mem_region::*;
+pub use self::sched::*;
 pub use self::task::*;
 pub use self::timer::*;
 pub use self::vcpu::*;
@@ -25,4 +26,5 @@ mod timer;
 mod vcpu;
 mod vcpu_pool;
 mod vm;
+mod sched;
 

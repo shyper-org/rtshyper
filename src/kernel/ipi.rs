@@ -38,8 +38,12 @@ pub struct IpiInitcMessage {
     pub val: u8,
 }
 
+/*
+* src: src vm id
+*/
 #[derive(Copy, Clone)]
 pub struct IpiPowerMessage {
+    pub src: usize,
     pub event: PowerEvent,
     pub entry: usize,
     pub context: usize,
@@ -126,6 +130,7 @@ impl IpiHandler {
 static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
+    // println!("ipi handler");
     let cpu_id = current_cpu().id;
     let mut cpu_if_list = CPU_IF_LIST.lock();
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();

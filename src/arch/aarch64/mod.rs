@@ -15,8 +15,6 @@ pub use self::tlb::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 
-global_asm!(include_str!("cache.S"));
-
 mod context_frame;
 mod cpu;
 mod exception;

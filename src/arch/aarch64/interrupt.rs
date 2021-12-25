@@ -1,6 +1,6 @@
 use crate::arch::{gic_cpu_reset, gicc_clear_current_irq};
 use crate::board::platform_cpuid_to_cpuif;
-use crate::kernel::{current_cpu, Vcpu, Vm};
+use crate::kernel::{active_vcpu_id, active_vm_id, current_cpu, restore_vcpu_gic, save_vcpu_gic, Vcpu, Vm};
 
 use super::GIC_SGIS_NUM;
 use super::GICD;
@@ -56,9 +56,24 @@ pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
     super::vgic_set_hw_int(vm.clone(), id);
 }
 
-pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, id: usize, source: usize) {
+pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize) {
     let vgic = vm.vgic();
-    vgic.inject(vcpu, id, source);
+    // if vcpu.vm_id() == 1 {
+    //     println!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm_id(), vcpu.vm_id());
+    // }
+    // restore_vcpu_gic(current_cpu().active_vcpu.clone(), vcpu.clone());
+    if let Some(cur_vcpu) = current_cpu().active_vcpu.clone() {
+        if cur_vcpu.vm_id() == vcpu.vm_id() {
+            // if cur_vcpu.vm_id() == 1 {
+            //     println!("inject {}", int_id);
+            // }
+            vgic.inject(vcpu.clone(), int_id);
+            return;
+        }
+    }
+
+    vcpu.push_int(int_id);
+    // save_vcpu_gic(current_cpu().active_vcpu.clone(), vcpu.clone());
 }
 
 pub fn interrupt_arch_clear() {

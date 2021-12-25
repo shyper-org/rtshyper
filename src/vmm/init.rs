@@ -15,8 +15,8 @@ use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{CPU, current_cpu, shyper_init, VM_IF_LIST, vm_if_list_set_cpu_id};
-use crate::kernel::{mem_page_alloc, mem_vm_region_alloc, vcpu_pool_append, vcpu_pool_init};
+use crate::kernel::{active_vm_id, CPU, current_cpu, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id};
+use crate::kernel::{cpu_sched_init, mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{Vm, vm, VM_LIST};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
 use crate::kernel::interrupt_vm_register;
@@ -32,6 +32,7 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
         let mut vm_inner = vm_inner_lock.lock();
 
         vm_id = vm_inner.id;
+        println!("vm{} pt {:x}", vm_id, pt_dir_frame.pa());
         vm_inner.pt = Some(PageTable::new(pt_dir_frame));
         vm_inner.mem_region_num = config.region.len() as usize;
     } else {
@@ -133,12 +134,14 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
 
     vm.set_entry_point(config.kernel_entry_point);
     if vm.id() == 0 {
+        println!("vm0 load L4T");
         vmm_load_image(
             config.kernel_load_ipa,
             vm.clone(),
             include_bytes!("../../image/L4T"),
         );
     } else {
+        println!("gvm load vanilla");
         vmm_load_image(
             config.kernel_load_ipa,
             vm.clone(),
@@ -406,8 +409,8 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
                 Ok(dtb) => {
                     let offset = config.image.device_tree_load_ipa
                         - vm.config().memory.region[0].ipa_start;
-                    println!("dtb size {}", dtb.len());
-                    println!("pa 0x{:x}", vm.pa_start(0) + offset);
+                    println!("gvm dtb size {}", dtb.len());
+                    println!("gvm dtb pa 0x{:x}", vm.pa_start(0) + offset);
                     crate::lib::memcpy_safe(
                         (vm.pa_start(0) + offset) as *const u8,
                         dtb.as_ptr(),
@@ -419,6 +422,7 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
                 }
             }
         } else {
+            println!("mvm setup fdt");
             unsafe {
                 vmm_setup_fdt(config.clone(), vm.clone());
             }
@@ -457,8 +461,6 @@ impl VmAssignment {
 static VM_ASSIGN: Mutex<Vec<Mutex<VmAssignment>>> = Mutex::new(Vec::new());
 
 fn vmm_assign_vcpu() {
-    vcpu_pool_init();
-
     let cpu_id = current_cpu().id;
     let assigned = false;
     current_cpu().assigned = assigned;
@@ -496,7 +498,11 @@ fn vmm_assign_vcpu() {
                 let vcpu_id = vcpu.id();
 
                 // println!("core {} before vcpu_pool_append0", cpu_id);
-                if !vcpu_pool_append(vcpu) {
+                if current_cpu().vcpu_pool().running() == 0 {
+                    vcpu.set_state(VcpuState::VcpuPend);
+                    current_cpu().vcpu_pool().add_running();
+                }
+                if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
                 }
                 // println!("core {} after vcpu_pool_append0", cpu_id);
@@ -522,7 +528,7 @@ fn vmm_assign_vcpu() {
                 let vcpu_id = vcpu.id();
 
                 // println!("core {} before vcpu_pool_append1", cpu_id);
-                if !vcpu_pool_append(vcpu) {
+                if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
                     panic!("core {} too many vcpu", cpu_id);
                 }
                 // println!("core {} after vcpu_pool_append1", cpu_id);
@@ -539,23 +545,27 @@ fn vmm_assign_vcpu() {
     }
     barrier();
     if current_cpu().assigned {
-        if let Some(vcpu_pool) = unsafe { &mut CPU.vcpu_pool } {
-            for i in 0..vcpu_pool.content.len() {
-                let vcpu = vcpu_pool.content[i].vcpu.clone();
-                vcpu.set_phys_id(cpu_id);
-                let vm_id = vcpu.vm_id();
+        let vcpu_pool = current_cpu().vcpu_pool();
+        for i in 0..vcpu_pool.vcpu_num() {
+            let vcpu = vcpu_pool.vcpu(i);
+            vcpu.set_phys_id(cpu_id);
+            let vm_id = vcpu.vm_id();
 
-                let vm_assign_list = VM_ASSIGN.lock();
-                let vm_assigned = vm_assign_list[vm_id].lock();
-                let vm = vm(vm_id);
-                vm.set_ncpu(vm_assigned.cpus);
-                vm.set_cpu_num(vm_assigned.cpu_num);
+            let vm_assign_list = VM_ASSIGN.lock();
+            let vm_assigned = vm_assign_list[vm_id].lock();
+            let vm = vm(vm_id);
+            vm.set_ncpu(vm_assigned.cpus);
+            vm.set_cpu_num(vm_assigned.cpu_num);
+
+            if let Some(mvm) = vcpu.vm() {
+                if mvm.id() == 0 {
+                    current_cpu().set_active_vcpu(vcpu.clone());
+                    println!("vm0 elr {:x}", vcpu.elr());
+                }
             }
+
+            vcpu.arch_reset();
         }
-        let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
-        let size = vcpu_pool.content.len();
-        let idx = size - 1;
-        current_cpu().set_active_vcpu(idx);
     }
     barrier();
 
@@ -622,11 +632,13 @@ pub fn vmm_init() {
 pub fn vmm_boot() {
     if current_cpu().assigned && active_vcpu_id() == 0 {
         // let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
-        let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
-        for i in 0..vcpu_pool.content.len() {
-            let vcpu = vcpu_pool.content[i].vcpu.clone();
-            // Before running, every vcpu need to reset context state
-            vcpu.reset_state();
+        let vcpu_pool = current_cpu().vcpu_pool();
+        for i in 0..vcpu_pool.vcpu_num() {
+            let vcpu = vcpu_pool.vcpu(i);
+            if vcpu.vm_id() == active_vm_id() {
+                // Before running, every vcpu need to reset context state
+                vcpu.reset_context();
+            }
         }
         println!("Core {} start running", current_cpu().id);
         vcpu_run();

@@ -2,7 +2,7 @@ use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
-use crate::kernel::{active_vcpu_id, active_vm, current_cpu, vcpu_run, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
+use crate::kernel::{active_vcpu_id, active_vm, current_cpu, Vcpu, vcpu_run, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
 use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id, vm_list_size};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::{vmm_boot, vmm_init_image, vmm_setup_fdt};
@@ -30,13 +30,22 @@ pub fn vmm_boot_vm(vm_id: usize) {
         gicc_clear_current_irq(true);
         vmm_boot();
     } else {
-        let m = IpiVmmMsg {
-            vmid: vm_id,
-            event: VmmEvent::VmmBoot,
+        match current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(vm_id) {
+            None => {
+                let m = IpiVmmMsg {
+                    vmid: vm_id,
+                    event: VmmEvent::VmmBoot,
+                };
+                if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+                    println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
+                }
+            }
+            Some(vcpu_idx) => {
+                gicc_clear_current_irq(true);
+                current_cpu().vcpu_pool().yield_vcpu(vcpu_idx);
+                vmm_boot();
+            }
         };
-        if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-            println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
-        }
     }
 }
 
@@ -82,7 +91,7 @@ pub fn vmm_reboot_vm(vm: Vm) {
 
     crate::arch::interrupt_arch_clear();
     crate::arch::vcpu_arch_init(vm.clone(), vm.vcpu(0));
-    vcpu.reset_state();
+    vcpu.reset_context();
     vcpu_run();
 }
 

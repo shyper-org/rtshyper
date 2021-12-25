@@ -1,13 +1,15 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::config::vm_num;
 use crate::device::{
-    BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
 use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::kernel::interrupt_vm_inject;
 use crate::lib::memcpy_safe;
 
 pub struct UsedInfo {
@@ -43,16 +45,20 @@ impl Task {
         match self {
             Task::MediatedIpiTask(msg) => {
                 if current_cpu().id == 0 {
+                    // println!("Core0 task ipi handler, virtio_blk_notify_handler");
                     virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id));
                 } else {
+                    println!("mediated task ipi send msg");
                     ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
                 }
             }
             Task::MediatedIoTask(msg) => match msg.io_type {
                 VIRTIO_BLK_T_IN => {
+                    // println!("mediated_blk_read");
                     mediated_blk_read(msg.blk_id, msg.sector, msg.count);
                 }
                 VIRTIO_BLK_T_OUT => {
+                    // println!("mediated_blk_write");
                     let mut cache_ptr = msg.cache;
                     for idx in 0..msg.iov_list.len() {
                         let data_bg = msg.iov_list[idx].data_bg;
@@ -86,7 +92,7 @@ pub fn add_task(task: Task) {
         Task::MediatedIpiTask(_) => {
             ipi_list.push(task.clone());
             // println!("add ipi task, len {}", ipi_list.len());
-            if current_cpu().id != 0 && ipi_list.len() == 1 && io_list.is_empty() {
+            if ipi_list.len() == 1 && io_list.is_empty() {
                 drop(ipi_list);
                 drop(io_list);
                 // println!("add and run ipi task");
@@ -140,7 +146,7 @@ pub fn finish_task(ipi: bool) {
     } else {
         None
     };
-    // println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
+    println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
     drop(ipi_list);
     drop(io_list);
 
@@ -148,7 +154,14 @@ pub fn finish_task(ipi: bool) {
         if last_vm_io_task(task_msg.src_vmid) {
             let target_id = vm_if_list_get_cpu_id(task_msg.src_vmid);
             handle_used_info(task_msg.vq.clone(), task_msg.src_vmid);
-            ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
+            if target_id != current_cpu().id {
+                println!("ipi inject blk irq to vm {}", task_msg.src_vmid);
+                ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
+            } else {
+                println!("inject blk irq to vm {}", task_msg.src_vmid);
+                let vm = vm(task_msg.src_vmid);
+                interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
+            }
         }
     }
 
@@ -177,6 +190,19 @@ pub fn io_task_head() -> Option<Task> {
 // }
 
 pub fn last_vm_io_task(vm_id: usize) -> bool {
+    // let ipi_list = MEDIATED_IPI_TASK_LIST.lock();
+    // for ipi_task in &*ipi_list {
+    //     match ipi_task {
+    //         Task::MediatedIpiTask(task) => {
+    //             if task.src_id == vm_id {
+    //                 return false;
+    //             }
+    //         }
+    //         Task::MediatedIoTask(_) => {
+    //             panic!("last_vm_io_task: illegal ipi task type");
+    //         }
+    //     }
+    // }
     let io_list = MEDIATED_IO_TASK_LIST.lock();
     for io_task in &*io_list {
         match io_task {

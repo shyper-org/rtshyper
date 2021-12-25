@@ -9,7 +9,7 @@ use crate::board::platform_cpuid_to_cpuif;
 use crate::board::PLATFORM_GICD_BASE;
 use crate::device::EmuContext;
 use crate::device::EmuDevs;
-use crate::kernel::{active_vcpu_id, current_cpu};
+use crate::kernel::{active_vcpu_id, current_cpu, restore_vcpu_gic, save_vcpu_gic};
 use crate::kernel::{
     active_vm, active_vm_id, active_vm_ncpu,
 };
@@ -1206,12 +1206,12 @@ impl Vgic {
         return interrupt_option.unwrap().targets();
     }
 
-    pub fn inject(&self, vcpu: Vcpu, id: usize, _src: usize) {
+    pub fn inject(&self, vcpu: Vcpu, int_id: usize) {
         // if id == 64 {
         //     println!("inject int {} to vm{}", id, vcpu.vm_id());
         // }
         // let vcpu = active_vcpu().unwrap();
-        let interrupt_option = self.get_int(vcpu.clone(), bit_extract(id, 0, 10));
+        let interrupt_option = self.get_int(vcpu.clone(), bit_extract(int_id, 0, 10));
         if let Some(interrupt) = interrupt_option {
             if interrupt.hw() {
                 let interrupt_lock = interrupt.lock.lock();
@@ -1224,7 +1224,7 @@ impl Vgic {
                 // println!("inject: Core {} finish", current_cpu().id);
                 drop(interrupt_lock);
             } else {
-                self.set_pend(vcpu.clone(), id, true);
+                self.set_pend(vcpu.clone(), int_id, true);
             }
         }
     }
@@ -2130,7 +2130,6 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     true
 }
 
-// use crate::lib::time_current_us;
 pub fn vgic_ipi_handler(msg: &IpiMessage) {
     let vm_id;
     let int_id;
@@ -2146,14 +2145,21 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
             return;
         }
     }
+    let trgt_vcpu = match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
+        None => {
+            println!("Core {} received vgic msg from unknown VM {}", current_cpu().id, vm_id);
+            return;
+        }
+        Some(vcpu) => { vcpu }
+    };
+    restore_vcpu_gic(current_cpu().active_vcpu.clone(), trgt_vcpu.clone());
 
-    let vm = match crate::kernel::active_vm() {
+    let vm = match trgt_vcpu.vm() {
         None => {
             panic!("vgic_ipi_handler: vm is None");
         }
         Some(x) => x,
     };
-    // let vm = active_vm().unwrap();
     let vgic = vm.vgic();
 
     if vm_id as usize != vm.id() {
@@ -2222,10 +2228,13 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
     //     int_id,
     //     val
     // );
+    save_vcpu_gic(current_cpu().active_vcpu.clone(), trgt_vcpu.clone());
 }
 
 pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     let vgic_cpu_num = vm.config().cpu.num;
+    vm.init_intc_mode();
+
     let vgic = Arc::new(Vgic::default());
 
     let mut vgicd = vgic.vgicd.lock();

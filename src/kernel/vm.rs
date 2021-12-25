@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
+use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::config::DEF_VM_CONFIG_TABLE;
@@ -159,6 +160,15 @@ impl Vm {
         }
     }
 
+    pub fn init_intc_mode(&self) {
+        let vm_inner = self.inner.lock();
+        for vcpu in &vm_inner.vcpu_list {
+            println!("vm {} vcpu {} set hcr", vm_inner.id, vcpu.id());
+            vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);
+            vcpu.set_hcr(0x80080019);
+        }
+    }
+
     pub fn med_blk_id(&self) -> usize {
         let vm_inner = self.inner.lock();
         match vm_inner.config.as_ref().unwrap().med_blk_idx {
@@ -237,7 +247,7 @@ impl Vm {
         match &vm_inner.pt {
             Some(pt) => pt.pt_map_range(ipa, len, pa, pte),
             None => {
-                panic!("Vm::pt_map_range: vm pt is empty");
+                panic!("Vm::pt_map_range: vm{} pt is empty", vm_inner.id);
             }
         }
     }
@@ -247,7 +257,7 @@ impl Vm {
         match &vm_inner.pt {
             Some(pt) => return pt.base_pa(),
             None => {
-                panic!("Vm::pt_map_range: vm pt is empty");
+                panic!("Vm::pt_dir: vm{} pt is empty", vm_inner.id);
             }
         }
     }

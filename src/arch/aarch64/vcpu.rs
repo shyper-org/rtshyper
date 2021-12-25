@@ -1,3 +1,5 @@
+use cortex_a::registers::*;
+
 use crate::arch::traits::ContextFrameTrait;
 use crate::kernel::{Vcpu, Vm};
 use crate::kernel::VmType;
@@ -21,6 +23,11 @@ pub fn vcpu_arch_init(vm: Vm, vcpu: Vcpu) {
         vcpu_inner
             .vcpu_ctx
             .set_exception_pc(config.image.kernel_entry_point);
+        vcpu_inner.vcpu_ctx.spsr = (SPSR_EL1::M::EL1h
+            + SPSR_EL1::I::Masked
+            + SPSR_EL1::F::Masked
+            + SPSR_EL1::A::Masked
+            + SPSR_EL1::D::Masked).value;
     } else {
         panic!("vcpu_arch_init failed!");
     }

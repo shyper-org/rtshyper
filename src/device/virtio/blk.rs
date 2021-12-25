@@ -452,7 +452,7 @@ pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, _vm: Vm) -
 }
 
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
-    // println!("vm[{}] in virtio_blk_notify_handler, avail idx {}", vm.id(), avail_idx);
+    println!("vm[{}] in virtio_blk_notify_handler", vm.id());
     // use crate::kernel::active_vm;
     // let vm = active_vm().unwrap();
     if vm.id() == 0 && active_vm_id() == 0 {

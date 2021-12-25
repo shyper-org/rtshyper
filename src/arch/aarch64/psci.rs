@@ -1,5 +1,7 @@
+use cortex_a::asm::ret;
+
 use crate::arch::{Aarch64ContextFrame, gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vm};
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, SchedType, SchedulerTrait, timer_enable, Vcpu, VcpuState, Vm};
 use crate::kernel::{
     active_vcpu_id, active_vm_id, CpuState,
 };
@@ -37,6 +39,7 @@ pub fn power_arch_init() {
 
 pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
     let m = IpiPowerMessage {
+        src: vm.id(),
         event: PowerEvent::PsciIpiCpuReset,
         entry: 0,
         context: 0,
@@ -139,6 +142,7 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
 }
 
 fn psci_vcpu_on(entry: usize, ctx: usize) {
+    println!("psci vcpu on");
     let assigned = true;
     current_cpu().assigned = assigned;
     let state = CpuState::CpuRun;
@@ -147,49 +151,79 @@ fn psci_vcpu_on(entry: usize, ctx: usize) {
     vcpu.set_gpr(0, ctx);
     vcpu.set_elr(entry);
 
-    vcpu.reset_state();
-    match current_cpu().ctx {
-        Some(ctx) => {
-            use crate::lib::memcpy_safe;
-            use core::mem::size_of;
-            let size = size_of::<Aarch64ContextFrame>();
+    vcpu.reset_context();
 
-            if trace() && (ctx < 0x1000 || vcpu.vcpu_ctx_addr() < 0x1000) {
-                panic!("illegal des ctx addr {} vcpu ctx {}", ctx, vcpu.vcpu_ctx_addr());
-            }
-            memcpy_safe(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
+    match &current_cpu().sched {
+        SchedType::SchedRR(rr) => {
+            rr.schedule();
+        }
+        SchedType::None => {
+            println!("Core {} has no scheduler", current_cpu().id);
+        }
+    }
+    // if current_cpu().vcpu_pool().running() == 1 {
+    //     match current_cpu().ctx {
+    //         Some(ctx) => {
+    //             use crate::lib::memcpy_safe;
+    //             use core::mem::size_of;
+    //             let size = size_of::<Aarch64ContextFrame>();
+    //
+    //             if trace() && (ctx < 0x1000 || vcpu.vcpu_ctx_addr() < 0x1000) {
+    //                 panic!("illegal des ctx addr {} vcpu ctx {}", ctx, vcpu.vcpu_ctx_addr());
+    //             }
+    //             memcpy_safe(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
+    //
+    //             println!("cpu_ctx {:x}", current_cpu().ctx.unwrap());
+    //         }
+    //         None => {
+    //             panic!("psci_vcpu_on: cpu_ctx is NULL");
+    //         }
+    //     }
+    // }
 
-            println!("cpu_ctx {:x}", current_cpu().ctx.unwrap());
-        }
-        None => {
-            panic!("psci_vcpu_on: cpu_ctx is NULL");
-        }
+    if current_cpu().vcpu_pool().running() > 1 {
+        timer_enable(true);
     }
 }
 
+// Todo: need to support more vcpu in one Core
 pub fn psci_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
-        IpiInnerMsg::Power(power_msg) => match power_msg.event {
-            PowerEvent::PsciIpiCpuOn => {
-                println!(
-                    "Core {} (vm {}, vcpu {}) is woke up",
-                    current_cpu().id,
-                    active_vm_id(),
-                    active_vcpu_id()
-                );
-                println!(
-                    "entry {:x}, context {:x}",
-                    power_msg.entry, power_msg.context
-                );
-                psci_vcpu_on(power_msg.entry, power_msg.context);
+        IpiInnerMsg::Power(power_msg) => {
+            let trgt_vcpu = match current_cpu().vcpu_pool().pop_vcpu_through_vmid(power_msg.src) {
+                None => {
+                    println!("Core {} failed to find target vcpu, source vmid {}", current_cpu().id, power_msg.src);
+                    return;
+                }
+                Some(vcpu) => { vcpu }
+            };
+            match power_msg.event {
+                PowerEvent::PsciIpiCpuOn => {
+                    if trgt_vcpu.state() as usize != VcpuState::VcpuInv as usize {
+                        println!("psci_ipi_handler: target VCPU {} in VM {} is already running",
+                                 trgt_vcpu.id(), trgt_vcpu.vm().unwrap().id());
+                        return;
+                    }
+                    println!(
+                        "Core {} (vm {}, vcpu {}) is woke up",
+                        current_cpu().id,
+                        trgt_vcpu.vm().unwrap().id(),
+                        trgt_vcpu.id()
+                    );
+                    println!(
+                        "entry {:x}, context {:x}",
+                        power_msg.entry, power_msg.context
+                    );
+                    psci_vcpu_on(power_msg.entry, power_msg.context);
+                }
+                PowerEvent::PsciIpiCpuOff => {
+                    current_cpu().active_vcpu.clone().unwrap().shutdown();
+                }
+                PowerEvent::PsciIpiCpuReset => {
+                    vcpu_arch_init(active_vm().unwrap(), current_cpu().active_vcpu.clone().unwrap());
+                }
             }
-            PowerEvent::PsciIpiCpuOff => {
-                current_cpu().active_vcpu.clone().unwrap().shutdown();
-            }
-            PowerEvent::PsciIpiCpuReset => {
-                vcpu_arch_init(active_vm().unwrap(), current_cpu().active_vcpu.clone().unwrap());
-            }
-        },
+        }
         _ => {
             panic!(
                 "psci_ipi_handler: cpu{} receive illegal psci ipi type",
@@ -198,7 +232,6 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
         }
     }
 }
-
 
 pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let vcpu_id = mpidr & 0xff;
@@ -219,6 +252,7 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         }
 
     let m = IpiPowerMessage {
+        src: vm.id(),
         event: PowerEvent::PsciIpiCpuOn,
         entry,
         context: ctx,
@@ -232,7 +266,6 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         println!("psci_guest_cpu_on: fail to send msg");
         return usize::MAX - 1;
     }
-    // println!("success send msg to cpu {}", physical_linear_id.unwrap());
 
     0
 }

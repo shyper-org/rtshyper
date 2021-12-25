@@ -112,21 +112,44 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     true
 }
 
-pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, id: usize, source: usize) {
-    interrupt_arch_vm_inject(vm, vcpu, id, source);
+pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
+    if vcpu.phys_id() != current_cpu().id {
+        println!("interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})", current_cpu().id, vcpu.id(), vm.id());
+        return;
+    }
+    interrupt_arch_vm_inject(vm, vcpu, int_id);
 }
 
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
-    // println!("interrupt_handler: int_id {}", int_id);
-    use crate::kernel::active_vm;
-    match active_vm() {
-        Some(vm) => {
-            if vm.has_interrupt(int_id) {
-                interrupt_vm_inject(vm.clone(), current_cpu().active_vcpu.clone().unwrap(), int_id, src);
-                return false;
+    if int_id == 48 {
+        println!("interrupt_handler: int_id {}", int_id);
+    }
+    match &current_cpu().active_vcpu {
+        Some(vcpu) => {
+            match vcpu.vm() {
+                None => {}
+                Some(active_vm) => {
+                    if active_vm.has_interrupt(int_id) {
+                        interrupt_vm_inject(active_vm.clone(), vcpu.clone(), int_id, src);
+                        return false;
+                    }
+                }
             }
         }
         None => {}
+    }
+
+    for idx in 0..current_cpu().vcpu_pool().vcpu_num() {
+        let vcpu = current_cpu().vcpu_pool().vcpu(idx);
+        match vcpu.vm() {
+            Some(vm) => {
+                if vm.has_interrupt(int_id) {
+                    interrupt_vm_inject(vm.clone(), vcpu.clone(), int_id, src);
+                    return false;
+                }
+            }
+            None => {}
+        }
     }
 
     if interrupt_is_reserved(int_id) {

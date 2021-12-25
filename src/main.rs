@@ -26,7 +26,7 @@ use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
 
-use crate::kernel::hvc_init;
+use crate::kernel::{hvc_init, cpu_sched_init};
 
 #[macro_export]
 macro_rules! print {
@@ -87,6 +87,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     cpu_init();
     interrupt_init();
     timer_init();
+    cpu_sched_init();
 
     vmm_init();
     if cpu_id == 0 {

@@ -1,5 +1,6 @@
 use crate::arch::GicDesc;
-use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
+use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion, SchedRule};
+use crate::board::SchedRule::RoundRobin;
 use crate::device::ARM_CORTEX_A57;
 #[allow(unused_imports)]
 use crate::device::ARM_NVIDIA_DENVER;
@@ -54,6 +55,7 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         num: 4,
         mpidr_list: [0x80000100, 0x80000101, 0x80000102, 0x80000103, 0, 0, 0, 0],
         name: [ARM_CORTEX_A57; 8],
+        sched_list: [RoundRobin, RoundRobin, RoundRobin, RoundRobin, SchedRule::None, SchedRule::None, SchedRule::None, SchedRule::None],
     },
     mem_desc: PlatMemoryConfig {
         region_num: 3,

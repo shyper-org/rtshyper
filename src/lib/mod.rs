@@ -1,5 +1,6 @@
 pub use self::barrier::*;
 pub use self::bitmap::*;
+pub use self::cache::*;
 // pub use self::fatfs::*;
 pub use self::print::*;
 pub use self::string::*;
@@ -13,4 +14,4 @@ mod print;
 mod string;
 mod time;
 mod util;
-
+mod cache;

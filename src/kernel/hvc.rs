@@ -2,7 +2,7 @@ use core::mem::size_of;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
-use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
+use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, Vcpu, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::lib::{memcpy_safe, trace};
 use crate::vmm::{get_vm_id, vmm_boot_vm};
 
@@ -156,7 +156,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 
     let cpu_trgt = vm_if_list_get_cpu_id(vm_id);
     if cpu_trgt != current_cpu().id {
-        // println!("cpu {} send hvc msg to cpu {}", current_cpu().id, cpu_trgt);
+        println!("cpu {} send hvc msg to cpu {}", current_cpu().id, cpu_trgt);
         let ipi_msg = IpiHvcMsg {
             src_vmid: 0,
             trgt_vmid: vm_id,
@@ -177,15 +177,27 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
     true
 }
 
+// notify current cpu's vcpu
 pub fn hvc_guest_notify(vm_id: usize) {
     let vm = vm(vm_id);
-    interrupt_vm_inject(vm.clone(), vm.vcpu(0), HVC_IRQ, 0);
+    match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
+        None => {
+            println!("hvc_guest_notify: Core {} failed to find vcpu of VM {}", current_cpu().id, vm_id);
+        }
+        Some(vcpu) => {
+            interrupt_vm_inject(vm.clone(), vcpu.clone(), HVC_IRQ, 0);
+        }
+    };
 }
-
 
 pub fn hvc_ipi_handler(msg: &IpiMessage) {
     match &msg.ipi_message {
         IpiInnerMsg::HvcMsg(msg) => {
+            if current_cpu().vcpu_pool().pop_vcpu_through_vmid(msg.trgt_vmid).is_none() {
+                println!("hvc_ipi_handler: Core {} failed to find vcpu of VM {}", current_cpu().id, msg.trgt_vmid);
+                return;
+            }
+
             match msg.fid {
                 HVC_MEDIATED => {
                     hvc_guest_notify(msg.trgt_vmid);

@@ -625,7 +625,6 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
 }
 
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
-    // println!("emu_virtio_mmio_handler");
     let vm = match active_vm() {
         Some(vm) => vm,
         None => {

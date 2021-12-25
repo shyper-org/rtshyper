@@ -12,8 +12,8 @@ use crate::lib::{bit_extract, trace};
 const GICD_CTLR_EN_BIT: usize = 0x1;
 
 // GICC BITS
-const GICC_CTLR_EN_BIT: usize = 0x1;
-const GICC_CTLR_EOIMODENS_BIT: usize = 1 << 9;
+pub const GICC_CTLR_EN_BIT: usize = 0x1;
+pub const GICC_CTLR_EOIMODENS_BIT: usize = 1 << 9;
 
 // GICH BITS
 const GICH_HCR_LRENPIE_BIT: usize = 1 << 2;
@@ -463,6 +463,49 @@ impl GicHypervisorInterface {
 
     pub fn set_lr(&self, lr_idx: usize, val: u32) {
         self.LR[lr_idx].set(val)
+    }
+}
+
+#[derive(Debug)]
+pub struct GicState {
+    pub hcr: u32,
+    eisr: [u32; GIC_LIST_REGS_NUM / 32],
+    elrsr: [u32; GIC_LIST_REGS_NUM / 32],
+    apr: u32,
+    pub lr: [u32; GIC_LIST_REGS_NUM],
+    pub ctlr: u32,
+}
+
+impl GicState {
+    pub fn default() -> GicState {
+        GicState {
+            hcr: 0,
+            eisr: [0; GIC_LIST_REGS_NUM / 32],
+            elrsr: [0; GIC_LIST_REGS_NUM / 32],
+            apr: 0,
+            lr: [0; GIC_LIST_REGS_NUM],
+            ctlr: 0,
+        }
+    }
+
+    pub fn save_state(&mut self) {
+        self.hcr = GICH.hcr();
+        self.apr = GICH.APR.get();
+
+        for i in 0..gich_lrs_num() {
+            self.lr[i] = GICH.lr(i);
+        }
+        self.ctlr = GICC.CTLR.get();
+    }
+
+    pub fn restore_state(&self) {
+        GICH.set_hcr(self.hcr);
+        GICH.APR.set(self.apr);
+
+        for i in 0..gich_lrs_num() {
+            GICH.set_lr(i, self.lr[i]);
+        }
+        GICC.CTLR.set(self.ctlr);
     }
 }
 

@@ -21,7 +21,7 @@ use super::{
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 1;
+    vm_config.vm_num = 3;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -206,8 +206,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig {
-            num: 4,
-            allocate_bitmap: 0b1111,
+            num: 1,
+            allocate_bitmap: 0b0001,
             master: 0,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
@@ -241,15 +241,15 @@ pub fn config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_net@a001000"),
-        base_ipa: 0xa001000,
-        length: 0x1000,
-        irq_id: 32 + 0x11,
-        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-        mediated: false,
-    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_net@a001000"),
+    //     base_ipa: 0xa001000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x11,
+    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+    //     mediated: false,
+    // });
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some("vm_service"),
         base_ipa: 0,
@@ -430,7 +430,7 @@ pub fn config_init() {
         },
         cpu: VmCpuConfig {
             num: 1,
-            allocate_bitmap: 0b0100,
+            allocate_bitmap: 0b0010,
             master: -1,
         },
         vm_emu_dev_confg: Some(emu_dev_config),

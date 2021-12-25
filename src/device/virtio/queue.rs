@@ -65,6 +65,7 @@ impl Virtq {
         }
     }
 
+    // todo: ugly implementation
     pub fn notify(&self, int_id: usize, vm: Vm) {
         // panic!("should not notify");
         let inner = self.inner.lock();
