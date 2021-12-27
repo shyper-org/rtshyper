@@ -16,8 +16,8 @@ debug = true
 
 
 [dependencies]
-vm-fdt = {path = "/home/ohmr/work/rust_projects/vm-fdt"}
-fdt = {path = "/home/ohmr/work/rust_projects/libfdt-binding"}
+vm-fdt = { git = "https://github.com/OhmR/vm-fdt" }
+fdt = { path = "libfdt-binding" }
 log = "0.4.5"
 volatile = "0.4.4"
 spin = "0.9.0"
