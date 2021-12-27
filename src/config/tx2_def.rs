@@ -21,7 +21,7 @@ use super::{
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 1;
+    vm_config.vm_num = 2;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -206,8 +206,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig {
-            num: 4,
-            allocate_bitmap: 0b1111,
+            num: 1,
+            allocate_bitmap: 0b0001,
             master: 0,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
@@ -215,8 +215,8 @@ pub fn config_init() {
         vm_dtb_devs: None,
         med_blk_idx: None,
         cmdline:
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
     // #################### vm1 emu ######################
