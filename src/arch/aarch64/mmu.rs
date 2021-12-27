@@ -1,3 +1,5 @@
+use core::arch::global_asm;
+
 use tock_registers::*;
 use tock_registers::interfaces::*;
 

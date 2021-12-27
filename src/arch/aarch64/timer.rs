@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use spin::Mutex;
 use tock_registers::interfaces::*;
 

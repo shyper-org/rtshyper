@@ -1,3 +1,5 @@
+use core::arch::{asm, global_asm};
+
 use tock_registers::interfaces::*;
 
 use crate::arch::{data_abort_handler, hvc_handler, smc_handler};
