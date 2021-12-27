@@ -1,3 +1,5 @@
+use core::arch::global_asm;
+
 use volatile::Volatile;
 
 use crate::board::PLAT_DESC;

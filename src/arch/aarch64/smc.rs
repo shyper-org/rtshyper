@@ -1,5 +1,6 @@
-global_asm!(include_str!("smc.S"));
+use core::arch::global_asm;
 
+global_asm!(include_str!("smc.S"));
 extern "C" {
     pub fn smc(x0: usize, x1: usize, x2: usize, x3: usize) -> (usize, usize, usize, usize);
 }

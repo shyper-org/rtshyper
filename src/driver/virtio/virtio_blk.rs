@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use core::arch::asm;
 use core::mem::size_of;
 
 // use register::mmio::*;
