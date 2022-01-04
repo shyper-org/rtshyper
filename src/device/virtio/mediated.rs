@@ -161,7 +161,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
         Task::MediatedIoTask(task) => {
             match task.io_type {
                 VIRTIO_BLK_T_IN => {
-                    let mut sum = 0;
+                    // let mut sum = 0;
                     for idx in 0..task.iov_list.len() {
                         let data_bg = task.iov_list[idx].data_bg;
                         let len = task.iov_list[idx].len as usize;
@@ -169,13 +169,13 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
                             panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
                         }
                         memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
-                        sum |= check_sum(data_bg, len);
+                        // sum |= check_sum(data_bg, len);
                         cache_ptr += len;
                     }
-                    println!("read check_sum is {:x}", sum);
+                    // println!("read check_sum is {:x}", sum);
                 }
                 VIRTIO_BLK_T_OUT => {
-                    println!("notify write");
+                    // println!("notify write");
                 }
                 _ => {}
             }
@@ -221,7 +221,7 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_sector(sector);
     mediated_blk.set_count(count);
 
-    println!("mediated blk read: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_IN, sector, count);
+    // println!("mediated blk read: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_IN, sector, count);
 
     let med_msg = HvcGuestMsg {
         fid: 3,    // HVC_MEDIATED
@@ -240,7 +240,7 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_type(VIRTIO_BLK_T_OUT);
     mediated_blk.set_sector(sector);
     mediated_blk.set_count(count);
-    println!("mediated blk write: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_OUT, sector, count);
+    // println!("mediated blk write: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_OUT, sector, count);
 
     let med_msg = HvcGuestMsg {
         fid: 3,    // HVC_MEDIATED

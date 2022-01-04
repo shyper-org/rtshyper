@@ -24,6 +24,7 @@ impl SchedulerTrait for SchedulerRR {
     }
 
     fn schedule(&self) {
+        // println!("in schedule");
         // if self.pool.running() <= 1 &&
         //     current_cpu().active_vcpu.as_ref().unwrap().state() as usize == VcpuState::VcpuAct as usize {
         //     return;

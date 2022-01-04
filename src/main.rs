@@ -26,7 +26,7 @@ use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
 use vmm::{vmm_boot, vmm_init};
 
-use crate::kernel::{hvc_init, cpu_sched_init};
+use crate::kernel::{cpu_sched_init, hvc_init};
 
 #[macro_export]
 macro_rules! print {

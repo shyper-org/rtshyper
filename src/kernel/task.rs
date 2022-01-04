@@ -48,7 +48,7 @@ impl Task {
                     // println!("Core0 task ipi handler, virtio_blk_notify_handler");
                     virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id));
                 } else {
-                    println!("mediated task ipi send msg");
+                    // println!("mediated task ipi send msg");
                     ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
                 }
             }
@@ -146,7 +146,7 @@ pub fn finish_task(ipi: bool) {
     } else {
         None
     };
-    println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
+    // println!("finish {} task, ipi len {}, io len {}", if ipi { "ipi" } else { "io" }, ipi_list.len(), io_list.len());
     drop(ipi_list);
     drop(io_list);
 
@@ -155,10 +155,10 @@ pub fn finish_task(ipi: bool) {
             let target_id = vm_if_list_get_cpu_id(task_msg.src_vmid);
             handle_used_info(task_msg.vq.clone(), task_msg.src_vmid);
             if target_id != current_cpu().id {
-                println!("ipi inject blk irq to vm {}", task_msg.src_vmid);
+                // println!("ipi inject blk irq to vm {}", task_msg.src_vmid);
                 ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
             } else {
-                println!("inject blk irq to vm {}", task_msg.src_vmid);
+                // println!("inject blk irq to vm {}", task_msg.src_vmid);
                 let vm = vm(task_msg.src_vmid);
                 interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
             }

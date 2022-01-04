@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
-use crate::arch::{emu_intc_handler, emu_intc_init};
+use crate::arch::{emu_intc_handler, emu_intc_init, partial_passthrough_intc_handler, partial_passthrough_intc_init};
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
@@ -22,6 +22,8 @@ use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
 use crate::lib::{barrier, trace};
+
+pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/rootfs.cpio");
 
 fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
     let result = mem_page_alloc();
@@ -189,10 +191,16 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     if config.ramdisk_load_ipa != 0 {
+        println!(
+            "VM {} id {} load ramdisk initrd.gz",
+            vm.id(),
+            vm.config().name.unwrap()
+        );
         vmm_load_image(
             config.ramdisk_load_ipa,
             vm.clone(),
-            include_bytes!("../../image/initrd.gz"),
+            CPIO_RAMDISK,
+            // include_bytes!("../../image/rootfs.cpio"),
         );
     } else {
         println!(
@@ -252,6 +260,18 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                     emu_intc_handler,
                 );
                 emu_intc_init(vm.clone(), idx);
+            }
+            EmuDeviceTGPPT => {
+                dev_name = "partial passthrough interrupt controller";
+                vm.set_intc_dev_id(idx);
+                emu_register_dev(
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    partial_passthrough_intc_handler,
+                );
+                partial_passthrough_intc_init(vm.clone());
             }
             EmuDeviceTVirtioBlk => {
                 dev_name = "virtio block";

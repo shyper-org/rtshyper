@@ -369,8 +369,8 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let nic = match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(x) => x,
         _ => {
-            println!("ethernet_send_to: vm[{}] failed to get virtio net dev", vmid);
-            return false;
+            // println!("ethernet_send_to: vm[{}] failed to get virtio net dev", vmid);
+            return true;
         }
     };
 
@@ -441,7 +441,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
         return false;
     }
-    
+
     return true;
 }
 

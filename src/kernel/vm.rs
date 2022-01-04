@@ -160,12 +160,17 @@ impl Vm {
         }
     }
 
-    pub fn init_intc_mode(&self) {
+    pub fn init_intc_mode(&self, emu: bool) {
         let vm_inner = self.inner.lock();
         for vcpu in &vm_inner.vcpu_list {
-            println!("vm {} vcpu {} set hcr", vm_inner.id, vcpu.id());
-            vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);
-            vcpu.set_hcr(0x80080019);
+            println!("vm {} vcpu {} set {} hcr", vm_inner.id, vcpu.id(), if emu { "emu" } else { "partial passthrough" });
+            if !emu {
+                vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT) as u32);
+                vcpu.set_hcr(0x80080001); // HCR_EL2_GIC_PASSTHROUGH_VAL
+            } else {
+                vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);
+                vcpu.set_hcr(0x80080019);
+            }
         }
     }
 
@@ -309,8 +314,19 @@ impl Vm {
                 return vgic.clone();
             }
             _ => {
-                panic!("cannot find vgic");
+                panic!("vm{} cannot find vgic", vm_inner.id);
             }
+        }
+    }
+
+    pub fn has_vgic(&self) -> bool {
+        let vm_inner = self.inner.lock();
+        if vm_inner.intc_dev_id >= vm_inner.emu_devs.len() {
+            return false;
+        }
+        match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
+            EmuDevs::Vgic(vgic) => { true }
+            _ => { false }
         }
     }
 

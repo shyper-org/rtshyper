@@ -9,6 +9,7 @@ use crate::config::{VmConfigEntry, VmCpuConfig, VmMemoryConfig};
 use crate::device::EmuDeviceType;
 use crate::lib::bit_num;
 use crate::SYSTEM_FDT;
+use crate::vmm::CPIO_RAMDISK;
 
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
     unsafe {
@@ -76,11 +77,12 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
 
     create_memory_node(&mut fdt, &config.memory)?;
     create_timer_node(&mut fdt, 0x8)?;
+    // todo: fix create_chosen_node size
     create_chosen_node(
         &mut fdt,
         config.cmdline,
         config.image.ramdisk_load_ipa,
-        0x10dab1,
+        CPIO_RAMDISK.len(),
     )?;
     create_cpu_node(&mut fdt, &config.cpu)?;
     match &config.vm_dtb_devs {

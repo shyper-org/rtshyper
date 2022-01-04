@@ -1,6 +1,8 @@
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::ops::Deref;
+use core::ptr;
 
 use spin::Mutex;
 
@@ -2051,25 +2053,8 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     //     "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
     //     vgicd_offset_prefix, offset
     // );
-    match vgicd_offset_prefix {
-        VGICD_REG_OFFSET_PREFIX_CTLR | VGICD_REG_OFFSET_PREFIX_ISENABLER | VGICD_REG_OFFSET_PREFIX_ISPENDR | VGICD_REG_OFFSET_PREFIX_ISACTIVER | VGICD_REG_OFFSET_PREFIX_ICENABLER | VGICD_REG_OFFSET_PREFIX_ICPENDR | VGICD_REG_OFFSET_PREFIX_ICACTIVER | VGICD_REG_OFFSET_PREFIX_ICFGR => {
-            if emu_ctx.width != 4 || emu_ctx.address & 0x3 != 0 {
-                return false;
-            }
-        }
-        VGICD_REG_OFFSET_PREFIX_SGIR => {
-            if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0) || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0) {
-                return false;
-            }
-        }
-        _ => {
-            // TODO: hard code to rebuild (gicd IPRIORITYR and ITARGETSR)
-            if offset >= 0x400 && offset < 0xc00 {
-                if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0) || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0) {
-                    return false;
-                }
-            }
-        }
+    if !vgicd_emu_access_is_vaild(emu_ctx) {
+        return false;
     }
 
     match vgicd_offset_prefix {
@@ -2127,6 +2112,118 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
         }
     }
     // println!("finish emu_intc_handler");
+    true
+}
+
+pub fn vgicd_emu_access_is_vaild(emu_ctx: &EmuContext) -> bool {
+    let offset = emu_ctx.address & 0xfff;
+    let offset_prefix = (offset & 0xf80) >> 7;
+    match offset_prefix {
+        VGICD_REG_OFFSET_PREFIX_CTLR | VGICD_REG_OFFSET_PREFIX_ISENABLER | VGICD_REG_OFFSET_PREFIX_ISPENDR | VGICD_REG_OFFSET_PREFIX_ISACTIVER | VGICD_REG_OFFSET_PREFIX_ICENABLER | VGICD_REG_OFFSET_PREFIX_ICPENDR | VGICD_REG_OFFSET_PREFIX_ICACTIVER | VGICD_REG_OFFSET_PREFIX_ICFGR => {
+            if emu_ctx.width != 4 || emu_ctx.address & 0x3 != 0 {
+                return false;
+            }
+        }
+        VGICD_REG_OFFSET_PREFIX_SGIR => {
+            if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0) || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0) {
+                return false;
+            }
+        }
+        _ => {
+            // TODO: hard code to rebuild (gicd IPRIORITYR and ITARGETSR)
+            if offset >= 0x400 && offset < 0xc00 {
+                if (emu_ctx.width == 4 && emu_ctx.address & 0x3 != 0) || (emu_ctx.width == 2 && emu_ctx.address & 0x1 != 0) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
+    if !vgicd_emu_access_is_vaild(emu_ctx) {
+        return false;
+    }
+    let vm = match crate::kernel::active_vm() {
+        None => {
+            panic!("emu_intc_handler: vm is None");
+        }
+        Some(x) => x,
+    };
+    let offset = emu_ctx.address & 0xfff;
+    // let offset_prefix = (offset & 0xf80) >> 7;
+
+    // println!(
+    //     "partial_passthrough_intc_handler: {} offset_prefix 0x{:x}, offset 0x{:x}",
+    //     if emu_ctx.write { "write" } else { "read" }, offset_prefix, offset
+    // );
+    if emu_ctx.write {
+        // todo: add offset match
+        let val = current_cpu().get_gpr(emu_ctx.reg);
+        // let mut res = vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, 0, true);
+        vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, val, false);
+
+        // match offset_prefix {
+        //     VGICD_REG_OFFSET_PREFIX_ISENABLER | VGICD_REG_OFFSET_PREFIX_ICENABLER |
+        //     VGICD_REG_OFFSET_PREFIX_ISPENDR | VGICD_REG_OFFSET_PREFIX_ICPENDR |
+        //     VGICD_REG_OFFSET_PREFIX_ISACTIVER | VGICD_REG_OFFSET_PREFIX_ICACTIVER => {
+        //         let reg_idx = (emu_ctx.address & 0b1111111) / 4;
+        //         let first_int = reg_idx * 32;
+        //         res = 0;
+        //         for i in 0..32 {
+        //             if vm.has_interrupt(first_int + i) {
+        //                 println!("vm{} has int {}, val 0b{:x}", vm.id(), first_int + i, val);
+        //                 if val | (1 << i) != 0 {
+        //                     res |= 1 << i;
+        //                 }
+        //             }
+        //         }
+        //         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, res, false);
+        //     }
+        //     VGICD_REG_OFFSET_PREFIX_ICFGR => {
+        //         let first_int = (32 / GIC_CONFIG_BITS) *
+        //             bit_extract(emu_ctx.address, 0, 9) / 4;
+        //         let mut irq = first_int;
+        //         for idx in 0..emu_ctx.width * 8 / 2 {
+        //             if vm.has_interrupt(irq) {
+        //                 let bit = idx * 2 + 1;
+        //                 if val | (1 << bit) != 0 {
+        //                     res |= 1 << bit;
+        //                 } else {
+        //                     res &= !(1 << bit);
+        //                 }
+        //             }
+        //             irq += 1;
+        //         }
+        //         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, res, false);
+        //     }
+        //     VGICD_REG_OFFSET_PREFIX_SGIR => {
+        //         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, val as usize, false);
+        //     }
+        //     _ => {
+        //         if offset >= 0x400 && offset < 0x800 || offset >= 0x800 && offset < 0xc00 {
+        //             let first_int = (8 / GIC_PRIO_BITS) * bit_extract(emu_ctx.address, 0, 9);
+        //             for i in 0..emu_ctx.width {
+        //                 if vm.has_interrupt(first_int + i) {
+        //                     for bit in i * 8..(i + 1) * 8 {
+        //                         if val | (1 << bit) != 0 {
+        //                             res |= 1 << bit;
+        //                         } else {
+        //                             res &= !(1 << bit);
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //             vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, res, false);
+        //         }
+        //     }
+        // }
+    } else {
+        let res = vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, 0, true);
+        current_cpu().set_gpr(emu_ctx.reg, res);
+    }
+
     true
 }
 
@@ -2233,7 +2330,7 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
 
 pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     let vgic_cpu_num = vm.config().cpu.num;
-    vm.init_intc_mode();
+    vm.init_intc_mode(true);
 
     let vgic = Arc::new(Vgic::default());
 
@@ -2274,11 +2371,18 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     // }
 }
 
+pub fn partial_passthrough_intc_init(vm: Vm) {
+    vm.init_intc_mode(false);
+}
+
 pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {
     if int_id < GIC_SGIS_NUM {
         return;
     }
 
+    if !vm.has_vgic() {
+        return;
+    }
     let vgic = vm.vgic();
 
     if int_id < GIC_PRIVINT_NUM {
@@ -2313,5 +2417,36 @@ pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {
             }
             None => {}
         }
+    }
+}
+
+fn vgicd_emu_ctx_rw(emu_ctx: &EmuContext, addr: usize, val: usize, read: bool) -> usize {
+    if read {
+        if emu_ctx.width == 1 {
+            unsafe { ptr::read(addr as *const u8) as usize }
+        } else if emu_ctx.width == 2 {
+            unsafe { ptr::read(addr as *const u16) as usize }
+            // (unsafe { *(addr as *const u16) }) as usize
+        } else if emu_ctx.width == 4 {
+            unsafe { ptr::read(addr as *const u32) as usize }
+            // (unsafe { *(addr as *const u32) }) as usize
+        } else {
+            panic!("vgicd_emu_ctx_rw: illegal read len {}", emu_ctx.width);
+        }
+    } else {
+        if emu_ctx.width == 1 {
+            unsafe { ptr::write(addr as *mut u8, val as u8); }
+            // unsafe { *(addr as *mut u8) = val as u8; }
+        } else if emu_ctx.width == 2 {
+            unsafe { ptr::write(addr as *mut u16, val as u16); }
+            // unsafe { *(addr as *mut u16) = val as u16; }
+        } else if emu_ctx.width == 4 {
+            unsafe { ptr::write(addr as *mut u32, val as u32); }
+            // unsafe { *(addr as *mut u32) = val as u32; }
+        } else {
+            panic!("vgicd_emu_ctx_rw: illegal write len {}", emu_ctx.width);
+        }
+        // println!("write addr {:x}, val {:x}, width {}, is_enabler[0] {:x}", addr, val, emu_ctx.width, GICD.is_enabler(0));
+        0
     }
 }

@@ -4,11 +4,11 @@ use alloc::vec::Vec;
 use crate::board::*;
 use crate::config::PassthroughRegion;
 use crate::device::EmuDeviceType;
-use crate::kernel::{HVC_IRQ, VmType};
+use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType};
 
 use super::{
-    AddrRegions, DEF_VM_CONFIG_TABLE, DtbDevType, VmConfigEntry, VmCpuConfig, VmDtbDev,
-    VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
+    AddrRegions, DEF_VM_CONFIG_TABLE, DtbDevType, VmConfigEntry, VmCpuConfig,
+    VmDtbDev, VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
 };
 
 // pub fn vm_num() -> usize {
@@ -166,7 +166,7 @@ pub fn config_init() {
     ];
     // 146 is UART_INT
     pt_dev_config.irqs = vec![
-        27, 32, 33, 34, 35, 36, 37, 38, 39, 40, 48, 49, 56, 57, 58, 59, 60, 62, 63, 64, 65, 67, 68,
+        INTERRUPT_IRQ_GUEST_TIMER, 32, 33, 34, 35, 36, 37, 38, 39, 40, 48, 49, 56, 57, 58, 59, 60, 62, 63, 64, 65, 67, 68,
         69, 70, 71, 72, 74, 76, 79, 82, 85, 88, 91, 92, 94, 95, 96, 97, 102, 103, 104, 105, 107,
         108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
         126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, UART_0_INT, 151, 152,
@@ -250,15 +250,15 @@ pub fn config_init() {
     //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
     //     mediated: false,
     // });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("vm_service"),
-        base_ipa: 0,
-        length: 0,
-        irq_id: HVC_IRQ,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTShyper,
-        mediated: false,
-    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("vm_service"),
+    //     base_ipa: 0,
+    //     length: 0,
+    //     irq_id: HVC_IRQ,
+    //     cfg_list: Vec::new(),
+    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
+    //     mediated: false,
+    // });
 
     // vm1 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -266,8 +266,8 @@ pub fn config_init() {
         PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
         PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
     ];
-    pt_dev_config.irqs = vec![UART_1_INT, 27];
-    // pt_dev_config.irqs = vec![27];
+    pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
+    // pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
 
     // vm1 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
@@ -320,7 +320,7 @@ pub fn config_init() {
         },
         cpu: VmCpuConfig {
             num: 1,
-            allocate_bitmap: 0b0010,
+            allocate_bitmap: 0b0001,
             master: -1,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
@@ -328,7 +328,6 @@ pub fn config_init() {
         vm_dtb_devs: Some(vm_dtb_devs),
         med_blk_idx: Some(0),
         cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
-        // cmdline: "root=/dev/vda rw audit=0",
     }));
 
     // #################### vm2 emu ######################
@@ -376,8 +375,8 @@ pub fn config_init() {
         // PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
         PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
     ];
-    // pt_dev_config.irqs = vec![UART_1_INT, 27];
-    pt_dev_config.irqs = vec![27];
+    // pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
+    pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
 
     // vm2 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
@@ -441,7 +440,7 @@ pub fn config_init() {
         // cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
     }));
 
-    // #################### vm3 emu ######################
+    // #################### vm3 emu (SRT VM)######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some("intc@8000000"),
@@ -449,34 +448,7 @@ pub fn config_init() {
         length: 0x1000,
         irq_id: 0,
         cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTGicd,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_blk@a000000"),
-        base_ipa: 0xa000000,
-        length: 0x1000,
-        irq_id: 32 + 0x10,
-        cfg_list: vec![0, 209715200], // 100G
-        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-        mediated: true,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_net@a001000"),
-        base_ipa: 0xa001000,
-        length: 0x1000,
-        irq_id: 32 + 0x11,
-        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd3],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("vm_service"),
-        base_ipa: 0,
-        length: 0,
-        irq_id: HVC_IRQ,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTShyper,
+        emu_type: EmuDeviceType::EmuDeviceTGPPT,
         mediated: false,
     });
 
@@ -484,16 +456,15 @@ pub fn config_init() {
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
         PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
-        PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
+        PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICC_BASE, length: 0x2000 },
     ];
-    pt_dev_config.irqs = vec![UART_1_INT, 27];
-    // pt_dev_config.irqs = vec![27];
+    pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
 
-    // vm3 vm_region
+    // vm1 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
     vm_region.push(VmRegion {
         ipa_start: 0x80000000,
-        length: 0x40000000,
+        length: 0x80000000,
     });
 
     let mut vm_dtb_devs: Vec<VmDtbDev> = vec![];
@@ -536,7 +507,7 @@ pub fn config_init() {
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
-            ramdisk_load_ipa: 0,
+            ramdisk_load_ipa: 0x83000000,
         },
         cpu: VmCpuConfig {
             num: 1,
@@ -546,8 +517,7 @@ pub fn config_init() {
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: Some(vm_dtb_devs),
-        med_blk_idx: Some(2),
-        // cmdline: "root=/dev/vda rw audit=0",
-        cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
+        med_blk_idx: None,
+        cmdline: "earlycon console=ttyS0,115200n8 audit=0",
     }));
 }

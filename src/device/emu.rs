@@ -39,6 +39,7 @@ pub struct EmuDevEntry {
 pub enum EmuDeviceType {
     EmuDeviceTConsole,
     EmuDeviceTGicd,
+    EmuDeviceTGPPT,
     EmuDeviceTVirtioBlk,
     EmuDeviceTVirtioNet,
     EmuDeviceTShyper,
