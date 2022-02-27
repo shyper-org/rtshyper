@@ -10,7 +10,7 @@ use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext, virtio_mediated_blk_notify_handler};
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
-use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
+use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE};
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
@@ -121,6 +121,16 @@ impl VirtioQueue for VirtioMmio {
                     inner.vq[i].reset(i);
                     use crate::device::virtio_net_notify_handler;
                     inner.vq[i].set_notify_handler(virtio_net_notify_handler);
+                }
+            }
+            VirtioDeviceType::Console => {
+                self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
+                let mut inner = self.inner.lock();
+                for i in 0..3 {
+                    inner.vq.push(Virtq::default());
+                    inner.vq[i].reset(i);
+                    use crate::device::virtio_console_notify_handler;
+                    inner.vq[i].set_notify_handler(virtio_console_notify_handler);
                 }
             }
             VirtioDeviceType::None => {
@@ -635,6 +645,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     let mmio = match vm.emu_dev(emu_dev_id) {
         EmuDevs::VirtioBlk(blk) => blk,
         EmuDevs::VirtioNet(net) => net,
+        EmuDevs::VirtioConsole(console) => console,
         _ => {
             panic!("emu_virtio_mmio_handler: illegal mmio dev type")
         }

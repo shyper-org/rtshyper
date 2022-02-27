@@ -16,6 +16,7 @@ pub enum EmuDevs {
     Vgic(Arc<Vgic>),
     VirtioBlk(VirtioMmio),
     VirtioNet(VirtioMmio),
+    VirtioConsole(VirtioMmio),
     None,
 }
 
@@ -42,6 +43,7 @@ pub enum EmuDeviceType {
     EmuDeviceTGPPT,
     EmuDeviceTVirtioBlk,
     EmuDeviceTVirtioNet,
+    EmuDeviceTVirtioConsole,
     EmuDeviceTShyper,
 }
 

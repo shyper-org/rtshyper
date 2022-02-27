@@ -6,17 +6,21 @@ use spin::Mutex;
 use crate::config::VmEmulatedDeviceConfig;
 // use crate::device::add_mediated_dev;
 use crate::device::{net_features, NetDesc};
+use crate::device::{console_features, ConsoleDesc};
 use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
 use crate::device::{BlkStat, NicStat};
 use crate::kernel::mem_pages_alloc;
 use crate::mm::PageFrame;
 
+use super::ConsoleDesc;
+
 #[derive(Copy, Clone)]
 pub enum VirtioDeviceType {
     None = 0,
     Net = 1,
     Block = 2,
+    Console = 3,
 }
 
 #[derive(Clone)]
@@ -30,6 +34,7 @@ pub enum DevStat {
 pub enum DevDesc {
     BlkDesc(BlkDesc),
     NetDesc(NetDesc),
+    ConsoleDesc(ConsoleDesc),
     None,
 }
 
@@ -222,6 +227,22 @@ impl VirtDevInner {
                 }
 
                 self.stat = DevStat::NicStat(NicStat::default());
+            }
+            VirtioDeviceType::Console => {
+                let console_desc = ConsoleDesc::default();
+                console_desc.cfg_init(config.cfg_list[0], config.cfg_list[1]);
+                self.desc = DevDesc::ConsoleDesc(console_desc);
+                self.features |= console_features();
+
+                match mem_pages_alloc(1) {
+                    Ok(page_frame) => {
+                        // println!("PageFrame pa {:x}", page_frame.pa());
+                        self.cache = Some(page_frame);
+                    }
+                    Err(_) => {
+                        println!("VirtDevInner::init(): mem_pages_alloc failed");
+                    }
+                }
             }
             _ => {
                 panic!("ERROR: Wrong virtio device type");

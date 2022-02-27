@@ -21,7 +21,7 @@ use super::{
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 3;
+    vm_config.vm_num = 2;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -41,6 +41,15 @@ pub fn config_init() {
         irq_id: 32 + 0x11,
         cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
         emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_mmio@a002000"),
+        base_ipa: 0xa002000,
+        length: 0x1000,
+        irq_id: 32 + 0x12,
+        cfg_list: vec![1, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
@@ -216,7 +225,7 @@ pub fn config_init() {
         med_blk_idx: None,
         cmdline:
         "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
     // #################### vm1 emu ######################
@@ -240,6 +249,15 @@ pub fn config_init() {
         cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_mmio@a002000"),
+        base_ipa: 0xa002000,
+        length: 0x1000,
+        irq_id: 32 + 0x12,
+        cfg_list: vec![0, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+        mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some("virtio_net@a001000"),
