@@ -8,6 +8,7 @@ use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
+use crate::device::DevDesc;
 use crate::kernel::{active_vm, active_vm_id, vm_if_list_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -42,7 +43,7 @@ pub struct ConsoleDesc {
 impl ConsoleDesc {
     pub fn default() -> ConsoleDesc {
         ConsoleDesc {
-            inner: Arc::new(Mutex::new(ConsoleInner::default())),
+            inner: Arc::new(Mutex::new(ConsoleDescInner::default())),
         }
     }
 
@@ -123,7 +124,8 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
     let dev = console.dev();
     let mut trgt_vmid  = 0 as u16;
     let mut trgt_console_ipa = 0 as u64;
-    if let ConsoleDesc(console_desc) = dev.desc() {
+
+    if let DevDesc::ConsoleDesc(console_desc) = dev.desc() {
         (trgt_vmid, trgt_console_ipa) = console_desc.target_console();
     }
 
@@ -175,8 +177,8 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
     true
 }
 
-fn virtio_console_recv(trgt_vmid: usize, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
-    let trgt_vm = crate::kernel::vm(trgt_vmid);
+fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
+    let trgt_vm = crate::kernel::vm(trgt_vmid as usize);
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa) {
         EmuDevs::VirtioConsole(x) => x,
         _ => {
@@ -194,7 +196,7 @@ fn virtio_console_recv(trgt_vmid: usize, trgt_console_ipa: u64, tx_iov: VirtioIo
         Err(_) => {
             println!(
                 "virtio_console_recv: trgt_vm[{}] failed to get virtio console rx virt queue",
-                vtrgt_vmm.id()
+                trgt_vm.id()
             );
             return false;
         }
@@ -246,13 +248,6 @@ fn virtio_console_recv(trgt_vmid: usize, trgt_console_ipa: u64, tx_iov: VirtioIo
         return false;
     }
 
-    if trgt_vmid.id() == active_vm_id() {
-        if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-            rx_vq.notify(console.dev().int_id(), trgt_vmid.clone());
-        }
-    } else {
-        // Todo: handle ipi
-    }
-
+    rx_vq.notify(console.dev().int_id(), trgt_vm.clone());
     true
 }

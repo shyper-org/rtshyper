@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
 use core::mem::size_of;
+use core::arch::asm;
 
 use cortex_a::asm::ret;
 use spin::Mutex;

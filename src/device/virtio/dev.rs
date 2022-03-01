@@ -13,8 +13,6 @@ use crate::device::{BlkStat, NicStat};
 use crate::kernel::mem_pages_alloc;
 use crate::mm::PageFrame;
 
-use super::ConsoleDesc;
-
 #[derive(Copy, Clone)]
 pub enum VirtioDeviceType {
     None = 0,
@@ -230,7 +228,7 @@ impl VirtDevInner {
             }
             VirtioDeviceType::Console => {
                 let console_desc = ConsoleDesc::default();
-                console_desc.cfg_init(config.cfg_list[0], config.cfg_list[1]);
+                console_desc.cfg_init(config.cfg_list[0] as u16, config.cfg_list[1] as u64);
                 self.desc = DevDesc::ConsoleDesc(console_desc);
                 self.features |= console_features();
 

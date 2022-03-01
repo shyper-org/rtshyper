@@ -373,15 +373,15 @@ impl Vm {
 
     // Get console dev by ipa.
     pub fn emu_console_dev(&self, ipa: u64) -> EmuDevs {
-        let emu_dev_id = -1;
+        let mut emu_dev_id = -1;
         for idx in 0..self.config().vm_emu_dev_confg.as_ref().unwrap().len() {
-            if self.config().vm_emu_dev_confg.as_ref().unwrap()[idx].base_ipa == ipa {
+            if self.config().vm_emu_dev_confg.as_ref().unwrap()[idx].base_ipa == ipa as usize {
                 emu_dev_id = idx as i32;
             }
         }
-        if iemu_dev_iddx > 0 {
+        if emu_dev_id > 0 {
             let vm_inner = self.inner.lock();
-            return vm_inner.emu_devs[emu_dev_id].clone();
+            return vm_inner.emu_devs[emu_dev_id as usize].clone();
         }
         return EmuDevs::None;
     }

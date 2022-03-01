@@ -62,6 +62,14 @@ pub struct IpiEthernetMsg {
 }
 
 #[derive(Copy, Clone)]
+pub struct IpiIntInjectMsg {
+    pub src_vmid: usize,
+    pub trgt_vmid: usize,
+    pub int_id: usize,
+    // pub trgt_vcpuid: usize,
+}
+
+#[derive(Copy, Clone)]
 pub struct IpiVmmMsg {
     pub vmid: usize,
     pub event: VmmEvent,
@@ -111,6 +119,7 @@ pub enum IpiType {
 #[derive(Clone)]
 pub enum IpiInnerMsg {
     Initc(IpiInitcMessage),
+    IntInjectMsg(IpiIntInjectMsg),
     Power(IpiPowerMessage),
     EnternetMsg(IpiEthernetMsg),
     VmmMsg(IpiVmmMsg),

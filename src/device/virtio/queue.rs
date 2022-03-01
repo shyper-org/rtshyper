@@ -5,7 +5,9 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, active_vm_id, current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, Vm};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, Vm, vm_if_list_get_cpu_id};
+use crate::kernel::{interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
+use crate::kernel::IpiMessage;
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -66,7 +68,7 @@ impl Virtq {
     }
 
     pub fn notify(&self, int_id: usize, vm: Vm) {
-        // panic!("should not notify");
+        // Undo: mmio->regs->irt_stat = VIRTIO_MMIO_INT_VRING; Is it necessery?
         let inner = self.inner.lock();
         let trgt_id = vm.vcpu(0).phys_id();
         use crate::kernel::interrupt_vm_inject;
