@@ -1,7 +1,7 @@
 #!/bin/bash
 
 bin="./target/aarch64-tx2/release"
-tftp="tx2@192.168.106.153:/tftp"
+tftp="root@192.168.106.153:/tftp"
 
 aarch64-elf-objcopy ${bin}/rust_hypervisor -O binary ${bin}/shyper.bin
 # gzip ${bin}/shyper.bin
@@ -10,6 +10,6 @@ mkimage -n shyper -A arm64 -O linux -T kernel -C none -a 0x83000000 -e 0x8300000
 # rm ${bin}/shyper.bin.gz
 echo "*** Upload Image ***"
 
-scp ${bin}/shyperImage ${tftp}/Image13
-# scp ${bin}/shyper.bin ${tftp}/shyper.bin
-scp ${bin}/rust_hypervisor ${tftp}/shyper13.elf
+scp ${bin}/shyperImage ${tftp}/HkyRustImage
+# # scp ${bin}/shyper.bin ${tftp}/shyper.bin
+# scp ${bin}/rust_hypervisor ${tftp}/shyper13.elf

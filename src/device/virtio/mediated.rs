@@ -226,8 +226,6 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_sector(sector);
     mediated_blk.set_count(count);
 
-    // println!("mediated blk read: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_IN, sector, count);
-
     let med_msg = HvcGuestMsg {
         fid: 3,    // HVC_MEDIATED
         event: 50, // HVC_MEDIATED_DEV_NOTIFY
@@ -245,7 +243,6 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_type(VIRTIO_BLK_T_OUT);
     mediated_blk.set_sector(sector);
     mediated_blk.set_count(count);
-    // println!("mediated blk write: nreq {}, type {}, sector {}, count {}", nreq + 1, VIRTIO_BLK_T_OUT, sector, count);
 
     let med_msg = HvcGuestMsg {
         fid: 3,    // HVC_MEDIATED

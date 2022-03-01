@@ -188,6 +188,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     };
 
     if !console.dev().activated() {
+        println!("virtio_console_recv: trgt_vm[{}] virtio console dev is not ready", trgt_vmid);
         return false;
     }
 
@@ -196,7 +197,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         Err(_) => {
             println!(
                 "virtio_console_recv: trgt_vm[{}] failed to get virtio console rx virt queue",
-                trgt_vm.id()
+                trgt_vmid
             );
             return false;
         }
@@ -207,6 +208,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         println!("virtio_console_recv: receive invalid avail desc idx");
         return false;
     } else if desc_header_idx_opt.is_none() {
+        println!("virtio_console_recv: desc_header_idx_opt.is_none()");
         return false;
     }
 
@@ -218,7 +220,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     loop {
         let dst = vm_ipa2pa(trgt_vm.clone(), rx_vq.desc_addr(desc_idx));
         if dst == 0 {
-            println!("ethernet_send_to: failed to get dst");
+            println!("virtio_console_recv: failed to get dst");
             return false;
         }
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
@@ -235,16 +237,17 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
 
     if rx_len < len {
         rx_vq.put_back_avail_desc_idx();
-        println!("ethernet_send_to: rx_len smaller than tx_len");
+        println!("virtio_console_recv: rx_len smaller than tx_len");
         return false;
     }
 
     if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {
-        println!("ethernet_send_to: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}", rx_iov.num(), tx_iov.num(), rx_len, len);
+        println!("virtio_console_recv: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}", rx_iov.num(), tx_iov.num(), rx_len, len);
         return false;
     }
 
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
+        println!("virtio_console_recv: update used ring failed len {} rx_vq num {}", len, rx_vq.num());
         return false;
     }
 

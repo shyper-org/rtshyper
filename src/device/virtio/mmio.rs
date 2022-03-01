@@ -616,6 +616,10 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
             virt_dev_type = VirtioDeviceType::Net;
             vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioNet(mmio.clone()));
         }
+        crate::device::EmuDeviceType::EmuDeviceTVirtioConsole => {
+            virt_dev_type = VirtioDeviceType::Console;
+            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioConsole(mmio.clone()));
+        }
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
             return false;

@@ -108,8 +108,8 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
 
     for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
         match emu_cfg.emu_type {
-            EmuDeviceType::EmuDeviceTVirtioBlk | EmuDeviceType::EmuDeviceTVirtioNet => {
-                println!("virtio fdt node init {:x}", emu_cfg.base_ipa);
+            EmuDeviceType::EmuDeviceTVirtioBlk | EmuDeviceType::EmuDeviceTVirtioNet | EmuDeviceType::EmuDeviceTVirtioConsole=> {
+                println!("virtio fdt node init {} {:x}",emu_cfg.name.unwrap(), emu_cfg.base_ipa);
                 create_virtio_node(
                     &mut fdt,
                     emu_cfg.name.unwrap(),

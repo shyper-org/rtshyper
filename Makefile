@@ -12,19 +12,17 @@ OBJDUMP = aarch64-linux-gnu-objdump
 
 
 RUSTFLAGS := -C llvm-args=-global-isel=false
+export RUSTFLAGS := ${RUSTFLAGS}
 
 qemu_debug:
-	RUSTFLAGS="-C llvm-args=-global-isel=false" \
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu
 	${OBJDUMP} -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
 
 qemu_release:
-	RUSTFLAGS="-C llvm-args=-global-isel=false" \
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu --release
 	${OBJDUMP} -d target/aarch64/release/rust_hypervisor > target/aarch64/release/t.txt
 
 tx2:
-	RUSTFLAGS="-C llvm-args=-global-isel=false" \
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features tx2
 	bash upload
 	${OBJDUMP} -d target/aarch64-tx2/debug/rust_hypervisor > target/aarch64-tx2/debug/t.txt
