@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, active_vm_id, Vm};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, Vm};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -65,18 +65,16 @@ impl Virtq {
         }
     }
 
-    // TODO: ugly implementation
     pub fn notify(&self, int_id: usize, vm: Vm) {
         // panic!("should not notify");
         let inner = self.inner.lock();
         use crate::kernel::interrupt_vm_inject;
-        // if vm.id() != active_vm_id() {
-        //     println!("vm{} notify int {} to vm{}", active_vm_id(), int_id, vm.id());
-        // }
-        // TODO: should add an ipi for different phy core
-        if inner.to_notify {
+        if vm.vcpu(0).phys_id() == current_cpu().id {
             drop(inner);
             interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, 0);
+        } else {
+            // TODO: should add an ipi for different phy core
+            todo!("inject special interrupt");
         }
     }
 
@@ -384,7 +382,6 @@ pub struct VirtqInner<'a> {
     last_avail_idx: u16,
     last_used_idx: u16,
     used_flags: u16,
-    to_notify: bool,
 
     desc_table_addr: usize,
     avail_addr: usize,
@@ -405,7 +402,6 @@ impl VirtqInner<'_> {
             last_avail_idx: 0,
             last_used_idx: 0,
             used_flags: 0,
-            to_notify: true,
 
             desc_table_addr: 0,
             avail_addr: 0,
@@ -423,7 +419,6 @@ impl VirtqInner<'_> {
         self.last_avail_idx = 0;
         self.last_used_idx = 0;
         self.used_flags = 0;
-        self.to_notify = true;
         self.desc_table_addr = 0;
         self.avail_addr = 0;
         self.used_addr = 0;

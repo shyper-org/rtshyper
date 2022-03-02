@@ -8,7 +8,7 @@ use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, active_vm_id, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
@@ -196,7 +196,9 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
             let vm = crate::kernel::vm(trgt_vmid);
-            if vm.id() == active_vm_id() {
+            let vcpu = vm.vcpu(0);
+            if vcpu.phys_id() == current_cpu().id {
+                // if vm.id() == active_vm_id() {
                 let nic = match vm.emu_net_dev(0) {
                     EmuDevs::VirtioNet(x) => x,
                     _ => {
@@ -287,21 +289,6 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     //     println!("ethernet_ipi_rev_handler time {}us", end - begin);
     // }
 }
-
-// fn ethernet_ipi_send_msg(msg: &IpiEthernetMsg, ack: &IpiEthernetAckMsg, npage: usize) {
-//     if !ipi_send_msg(
-//         msg.src,
-//         IpiType::IpiTEthernetAck,
-//         IpiInnerMsg::EthernetAck(*ack),
-//     ) {
-//         println!(
-//             "Failed to send ipi message, target {} type {:#?}",
-//             msg.src,
-//             IpiType::IpiTEthernetAck
-//         );
-//     }
-//     mem_pages_free(msg.frame, npage);
-// }
 
 fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
     // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]

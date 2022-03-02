@@ -351,15 +351,15 @@ pub fn config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("virtio_net@a001000"),
-    //     base_ipa: 0xa001000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x11,
-    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd2],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-    //     mediated: false,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("virtio_net@a001000"),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd2],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
     //     name: Some("vm_service"),
     //     base_ipa: 0,
