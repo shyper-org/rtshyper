@@ -1,3 +1,5 @@
+use core::arch::global_asm;
+
 global_asm!(include_str!("../arch/aarch64/cache.S"));
 
 extern "C" {

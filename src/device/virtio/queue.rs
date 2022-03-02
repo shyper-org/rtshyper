@@ -65,15 +65,15 @@ impl Virtq {
         }
     }
 
-    // todo: ugly implementation
+    // TODO: ugly implementation
     pub fn notify(&self, int_id: usize, vm: Vm) {
         // panic!("should not notify");
         let inner = self.inner.lock();
         use crate::kernel::interrupt_vm_inject;
-        if vm.id() != active_vm_id() {
-            println!("vm{} notify int {} to vm{}", active_vm_id(), int_id, vm.id());
-            // panic!("target vm{} should not notify at vm{}", vm.id(), active_vm_id());
-        }
+        // if vm.id() != active_vm_id() {
+        //     println!("vm{} notify int {} to vm{}", active_vm_id(), int_id, vm.id());
+        // }
+        // TODO: should add an ipi for different phy core
         if inner.to_notify {
             drop(inner);
             interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, 0);

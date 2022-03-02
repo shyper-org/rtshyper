@@ -19,26 +19,33 @@ pub struct VcpuPoolContent {
 #[derive(Clone)]
 pub struct VcpuPool {
     inner: Arc<Mutex<VcpuPoolInner>>,
+    // sched_lock: Mutex<{}>,
 }
 
 impl VcpuPool {
     pub fn default() -> VcpuPool {
         VcpuPool {
-            inner: Arc::new(Mutex::new(VcpuPoolInner::default(5)))
+            inner: Arc::new(Mutex::new(VcpuPoolInner::default(1)))
+            // sched_lock: Mutex::new({}),
         }
     }
 
     // return true if need to change another vcpu
-    pub fn schedule(&self) -> bool {
-        let mut pool = self.inner.lock();
-        let active_idx = pool.active_idx;
-        if pool.content[active_idx].time_slice != 0 {
-            pool.content[active_idx].time_slice -= 1;
-            false
-        } else {
-            pool.content[active_idx].time_slice = pool.base_slice;
-            true
-        }
+    // pub fn schedule(&self) -> bool {
+    //     let mut pool = self.inner.lock();
+    //     let active_idx = pool.active_idx;
+    //     if pool.content[active_idx].time_slice != 0 {
+    //         pool.content[active_idx].time_slice -= 1;
+    //         false
+    //     } else {
+    //         pool.content[active_idx].time_slice = pool.base_slice;
+    //         true
+    //     }
+    // }
+
+    pub fn slice(&self) -> usize {
+        let pool = self.inner.lock();
+        pool.base_slice
     }
 
     pub fn next_vcpu_idx(&self) -> usize {

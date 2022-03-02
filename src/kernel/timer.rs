@@ -55,15 +55,11 @@ fn timer_notify_after(us: usize) {
     timer_arch_enable_irq();
 }
 
-fn timer_irq_handler(_arg: usize, _: usize) {
+fn timer_irq_handler(_arg: usize) {
     use crate::arch::{
         timer_arch_disable_irq, timer_arch_enable_irq, timer_arch_get_counter, timer_arch_set,
     };
-    // println!(
-    //     "timer_irq_handler: core {} count 0x{:x}",
-    //     current_cpu().id,
-    //     timer_arch_get_counter()
-    // );
+
     timer_arch_disable_irq();
     let vcpu_pool = current_cpu().vcpu_pool();
 
@@ -72,7 +68,7 @@ fn timer_irq_handler(_arg: usize, _: usize) {
             SchedType::SchedRR(rr) => {
                 rr.schedule();
                 // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
-                timer_notify_after(5);
+                timer_notify_after(vcpu_pool.slice());
             }
             SchedType::None => {
                 panic!("cpu{} sched should not be None", current_cpu().id);

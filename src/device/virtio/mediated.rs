@@ -186,10 +186,15 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
     true
 }
 
-pub fn mediated_notify_ipi_handler(_msg: &IpiMessage) {
-    let vm = active_vm().unwrap();
+pub fn mediated_notify_ipi_handler(msg: &IpiMessage) {
+    match &msg.ipi_message {
+        IpiInnerMsg::MediatedNotifyMsg(msg) => {
+            let vm = vm(msg.vm_id);
+            interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
+        }
+        _ => {}
+    }
     // println!("vm[{}] inject blk irq", vm.id());
-    interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
 }
 
 fn check_sum(addr: usize, len: usize) -> usize {

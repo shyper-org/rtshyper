@@ -256,10 +256,10 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             let nic = match vm.emu_net_dev(0) {
                 EmuDevs::VirtioNet(x) => x,
                 _ => {
-                    println!(
-                        "ethernet_ipi_rev_handler: vm[{}] failed to get virtio net dev",
-                        vm.id()
-                    );
+                    // println!(
+                    //     "ethernet_ipi_rev_handler: vm[{}] failed to get virtio net dev",
+                    //     vm.id()
+                    // );
                     return;
                 }
             };
@@ -275,7 +275,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             };
 
             if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                rx_vq.notify(nic.dev().int_id(), active_vm().unwrap());
+                rx_vq.notify(nic.dev().int_id(), vm);
             }
         }
         _ => {

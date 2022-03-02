@@ -32,10 +32,6 @@ pub fn interrupt_arch_init() {
 
 pub fn interrupt_arch_enable(int_id: usize, en: bool) {
     let cpu_id = current_cpu().id;
-    // println!(
-    //     "interrupt_arch_enable: cpu_id {}, int_id {}, en {}",
-    //     cpu_id, int_id, en
-    // );
     if en {
         GICD.set_prio(int_id, 0x7f);
         GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(cpu_id));
@@ -58,15 +54,10 @@ pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
 
 pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize) {
     let vgic = vm.vgic();
-    // if vcpu.vm_id() == 1 {
-    //     println!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm_id(), vcpu.vm_id());
-    // }
+    // println!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm_id(), vcpu.vm_id());
     // restore_vcpu_gic(current_cpu().active_vcpu.clone(), vcpu.clone());
     if let Some(cur_vcpu) = current_cpu().active_vcpu.clone() {
         if cur_vcpu.vm_id() == vcpu.vm_id() {
-            // if cur_vcpu.vm_id() == 1 {
-            //     println!("inject {}", int_id);
-            // }
             vgic.inject(vcpu.clone(), int_id);
             return;
         }

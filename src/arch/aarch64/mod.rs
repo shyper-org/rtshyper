@@ -1,5 +1,3 @@
-use core::arch::global_asm;
-
 pub use self::context_frame::*;
 pub use self::cpu::*;
 pub use self::exception::*;

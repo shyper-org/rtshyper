@@ -1,7 +1,9 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::arch::asm;
 use core::mem::size_of;
 
+use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
@@ -63,6 +65,8 @@ impl Vcpu {
 
         let mut inner = self.inner.lock();
         inner.vm_ctx.ext_regs_restore();
+
+        // restore vm's VFP and SIMD
         inner.vm_ctx.fpsimd_restore_context();
         inner.vm_ctx.gic_restore_state();
         drop(inner);
@@ -215,6 +219,11 @@ impl Vcpu {
 
     pub fn push_int(&self, int: usize) {
         let mut inner = self.inner.lock();
+        for i in &inner.int_list {
+            if *i == int {
+                return;
+            }
+        }
         inner.int_list.push(int);
     }
 
@@ -225,14 +234,9 @@ impl Vcpu {
             None => {}
             Some(vm) => {
                 let int_list = inner.int_list.clone();
-                // if inner.int_list.len() > 0 {
-                //     println!("inner int list len {}, int_list len {}", inner.int_list.len(), int_list.len());
-                // }
                 drop(inner);
                 for int in int_list {
-                    if vm.id() == 1 {
-                        println!("schedule: inject int {} for vm {}", int, vm.id());
-                    }
+                    // println!("schedule: inject int {} for vm {}", int, vm.id());
                     interrupt_vm_inject(vm.clone(), self.clone(), int, 0);
                 }
                 let mut inner = self.inner.lock();

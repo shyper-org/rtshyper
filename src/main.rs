@@ -4,7 +4,6 @@
 #![feature(core_intrinsics)]
 #![feature(default_alloc_error_handler)]
 #![feature(alloc_error_handler)]
-#![feature(asm)]
 #![feature(const_fn_trait_bound)]
 
 #[macro_use]

@@ -77,6 +77,11 @@ pub struct IpiMediatedMsg {
 }
 
 #[derive(Clone)]
+pub struct IpiMediatedNotifyMsg {
+    pub vm_id: usize,
+}
+
+#[derive(Clone)]
 pub struct IpiHvcMsg {
     pub src_vmid: usize,
     pub trgt_vmid: usize,
@@ -103,6 +108,7 @@ pub enum IpiInnerMsg {
     EnternetMsg(IpiEthernetMsg),
     VmmMsg(IpiVmmMsg),
     MediatedMsg(IpiMediatedMsg),
+    MediatedNotifyMsg(IpiMediatedNotifyMsg),
     HvcMsg(IpiHvcMsg),
     None,
 }

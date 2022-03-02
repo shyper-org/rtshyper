@@ -1,4 +1,4 @@
-use core::arch::asm;
+use core::arch::{asm, global_asm};
 use core::fmt::Formatter;
 
 use cortex_a::registers::*;
@@ -137,6 +137,7 @@ pub struct VmContext {
     cntv_cval_el0: u64,
     pub cntkctl_el1: u32,
     cntp_ctl_el0: u32,
+    cntv_ctl_el0: u32,
 
     // vpidr and vmpidr
     vpidr_el2: u32,
@@ -187,6 +188,7 @@ impl VmContext {
             cntv_cval_el0: 0,
             cntkctl_el1: 0,
             cntp_ctl_el0: 0,
+            cntv_ctl_el0: 0,
 
             // vpidr and vmpidr
             vpidr_el2: 0,
@@ -272,6 +274,11 @@ impl VmContext {
             asm!("mrs {0}, CNTV_CVAL_EL0", out(reg) self.cntv_cval_el0);
             asm!("mrs {0:x}, CNTKCTL_EL1", out(reg) self.cntkctl_el1);
             asm!("mrs {0:x}, CNTP_CTL_EL0", out(reg) self.cntp_ctl_el0);
+            asm!("mrs {0:x}, CNTV_CTL_EL0", out(reg) self.cntv_ctl_el0);
+
+            asm!("mrs {0:x}, VPIDR_EL2", out(reg) self.vpidr_el2);
+            asm!("mrs {0}, VMPIDR_EL2", out(reg) self.vmpidr_el2);
+
             asm!("mrs {0}, SP_EL0", out(reg) self.sp_el0);
             asm!("mrs {0}, SP_EL1", out(reg) self.sp_el1);
             asm!("mrs {0}, ELR_EL1", out(reg) self.elr_el1);
@@ -291,15 +298,14 @@ impl VmContext {
             asm!("mrs {0}, TPIDR_EL0", out(reg) self.tpidr_el0);
             asm!("mrs {0}, TPIDR_EL1", out(reg) self.tpidr_el1);
             asm!("mrs {0}, TPIDRRO_EL0", out(reg) self.tpidrro_el0);
-            asm!("mrs {0}, HCR_EL2", out(reg) self.hcr_el2);
-            asm!("mrs {0}, CPTR_EL2", out(reg) self.cptr_el2);
-            asm!("mrs {0}, HSTR_EL2", out(reg) self.hstr_el2);
+
             asm!("mrs {0}, PMCR_EL0", out(reg) self.pmcr_el0);
             asm!("mrs {0}, VTCR_EL2", out(reg) self.vtcr_el2);
-            asm!("mrs {0}, FAR_EL2", out(reg) self.far_el2);
-            asm!("mrs {0}, HPFAR_EL2", out(reg) self.hpfar_el2);
-            asm!("mrs {0:x}, VPIDR_EL2", out(reg) self.vpidr_el2);
-            asm!("mrs {0}, VMPIDR_EL2", out(reg) self.vmpidr_el2);
+            asm!("mrs {0}, HCR_EL2", out(reg) self.hcr_el2);
+            // asm!("mrs {0}, CPTR_EL2", out(reg) self.cptr_el2);
+            // asm!("mrs {0}, HSTR_EL2", out(reg) self.hstr_el2);
+            // asm!("mrs {0}, FAR_EL2", out(reg) self.far_el2);
+            // asm!("mrs {0}, HPFAR_EL2", out(reg) self.hpfar_el2);
             asm!("mrs {0}, ACTLR_EL1", out(reg) self.actlr_el1);
         }
     }
@@ -311,6 +317,11 @@ impl VmContext {
             asm!("msr CNTV_CVAL_EL0, {0}", "isb", in(reg) self.cntv_cval_el0);
             asm!("msr CNTKCTL_EL1, {0:x}", "isb", in(reg) self.cntkctl_el1);
             asm!("msr CNTP_CTL_EL0, {0:x}", "isb", in(reg) self.cntp_ctl_el0);
+            asm!("msr CNTV_CTL_EL0, {0:x}", "isb", in(reg) self.cntv_ctl_el0);
+
+            asm!("msr VPIDR_EL2, {0:x}", "isb", in(reg) self.vpidr_el2);
+            asm!("msr VMPIDR_EL2, {0}", "isb", in(reg) self.vmpidr_el2);
+
             asm!("msr SP_EL0, {0}", "isb", in(reg) self.sp_el0);
             asm!("msr SP_EL1, {0}", "isb", in(reg) self.sp_el1);
             asm!("msr ELR_EL1, {0}", "isb", in(reg) self.elr_el1);
@@ -330,15 +341,14 @@ impl VmContext {
             asm!("msr TPIDR_EL0, {0}", "isb", in(reg) self.tpidr_el0);
             asm!("msr TPIDR_EL1, {0}", "isb", in(reg) self.tpidr_el1);
             asm!("msr TPIDRRO_EL0, {0}", "isb", in(reg) self.tpidrro_el0);
-            asm!("msr HCR_EL2, {0}", "isb", in(reg) self.hcr_el2);
-            asm!("msr CPTR_EL2, {0}", "isb", in(reg) self.cptr_el2);
-            asm!("msr HSTR_EL2, {0}", "isb", in(reg) self.hstr_el2);
+
             asm!("msr PMCR_EL0, {0}", "isb", in(reg) self.pmcr_el0);
             asm!("msr VTCR_EL2, {0}", "isb", in(reg) self.vtcr_el2);
-            asm!("msr FAR_EL2, {0}", "isb", in(reg) self.far_el2);
-            asm!("msr HPFAR_EL2, {0}", "isb", in(reg) self.hpfar_el2);
-            asm!("msr VPIDR_EL2, {0:x}", "isb", in(reg) self.vpidr_el2);
-            asm!("msr VMPIDR_EL2, {0}", "isb", in(reg) self.vmpidr_el2);
+            asm!("msr HCR_EL2, {0}", "isb", in(reg) self.hcr_el2);
+            // asm!("msr CPTR_EL2, {0}", "isb", in(reg) self.cptr_el2);
+            // asm!("msr HSTR_EL2, {0}", "isb", in(reg) self.hstr_el2);
+            // asm!("msr FAR_EL2, {0}", "isb", in(reg) self.far_el2);
+            // asm!("msr HPFAR_EL2, {0}", "isb", in(reg) self.hpfar_el2);
             asm!("msr ACTLR_EL1, {0}", "isb", in(reg) self.actlr_el1);
         }
     }

@@ -112,7 +112,7 @@ fn hvc_mediated_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize
     match event {
         // HVC_MEDIATED_DEV_APPEND
         48 => {
-            println!("mediated dev_append");
+            // println!("mediated dev_append");
             mediated_dev_append(x0, x1);
         }
         // HVC_DEVICE_USER_NOTIFY

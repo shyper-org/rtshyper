@@ -180,14 +180,3 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
 unsafe extern "C" fn lower_aarch64_serror() {
     panic!("lower aarch64 serror");
 }
-
-// pub fn exception_init() {
-//     extern "C" {
-//         fn vectors();
-//     }
-//     unsafe {
-//         let addr: u64 = vectors as usize as u64;
-//         VBAR_EL1.set(addr);
-//         // barrier::isb(barrier::SY);
-//     }
-// }

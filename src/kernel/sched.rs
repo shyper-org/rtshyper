@@ -29,10 +29,10 @@ impl SchedulerTrait for SchedulerRR {
         //     current_cpu().active_vcpu.as_ref().unwrap().state() as usize == VcpuState::VcpuAct as usize {
         //     return;
         // }
-        if self.pool.schedule() {
-            let next = self.pool.next_vcpu_idx();
-            self.pool.yield_vcpu(next);
-        }
+        // if self.pool.schedule() {
+        let next = self.pool.next_vcpu_idx();
+        self.pool.yield_vcpu(next);
+        // }
     }
 
     fn yield_next(&self, next_idx: usize) {

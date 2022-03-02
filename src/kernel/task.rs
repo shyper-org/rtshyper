@@ -8,7 +8,7 @@ use crate::config::vm_num;
 use crate::device::{
     BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, vm_if_list_get_cpu_id};
 use crate::kernel::interrupt_vm_inject;
 use crate::lib::memcpy_safe;
 
@@ -156,7 +156,10 @@ pub fn finish_task(ipi: bool) {
             handle_used_info(task_msg.vq.clone(), task_msg.src_vmid);
             if target_id != current_cpu().id {
                 // println!("ipi inject blk irq to vm {}", task_msg.src_vmid);
-                ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::None);
+                let msg = IpiMediatedNotifyMsg {
+                    vm_id: task_msg.src_vmid,
+                };
+                ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::MediatedNotifyMsg(msg));
             } else {
                 // println!("inject blk irq to vm {}", task_msg.src_vmid);
                 let vm = vm(task_msg.src_vmid);

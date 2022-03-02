@@ -1,8 +1,9 @@
+use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
-use crate::kernel::{current_cpu, ipi_irq_handler, Vcpu};
+use crate::kernel::{current_cpu, ipi_irq_handler, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
@@ -20,8 +21,8 @@ pub static INTERRUPT_HANDLERS: Mutex<[InterruptHandler; INTERRUPT_NUM_MAX]> =
 #[derive(Copy, Clone)]
 pub enum InterruptHandler {
     IpiIrqHandler(fn()),
-    GicMaintenanceHandler(fn(usize, usize)),
-    TimeIrqHandler(fn(usize, usize)),
+    GicMaintenanceHandler(fn(usize)),
+    TimeIrqHandler(fn(usize)),
     None,
 }
 
@@ -29,8 +30,8 @@ impl InterruptHandler {
     pub fn call(&self, arg0: usize, arg1: usize) {
         match self {
             InterruptHandler::IpiIrqHandler(irq_handler) => irq_handler(),
-            InterruptHandler::GicMaintenanceHandler(gic_handler) => gic_handler(arg0, arg1),
-            InterruptHandler::TimeIrqHandler(time_handler) => time_handler(arg0, arg1),
+            InterruptHandler::GicMaintenanceHandler(gic_handler) => gic_handler(arg0),
+            InterruptHandler::TimeIrqHandler(time_handler) => time_handler(arg0),
             InterruptHandler::None => panic!("Call An Empty Interrupt Hanlder!"),
         }
     }
@@ -121,37 +122,6 @@ pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
 }
 
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
-    if int_id == 48 {
-        println!("interrupt_handler: int_id {}", int_id);
-    }
-    match &current_cpu().active_vcpu {
-        Some(vcpu) => {
-            match vcpu.vm() {
-                None => {}
-                Some(active_vm) => {
-                    if active_vm.has_interrupt(int_id) {
-                        interrupt_vm_inject(active_vm.clone(), vcpu.clone(), int_id, src);
-                        return false;
-                    }
-                }
-            }
-        }
-        None => {}
-    }
-
-    for idx in 0..current_cpu().vcpu_pool().vcpu_num() {
-        let vcpu = current_cpu().vcpu_pool().vcpu(idx);
-        match vcpu.vm() {
-            Some(vm) => {
-                if vm.has_interrupt(int_id) {
-                    interrupt_vm_inject(vm.clone(), vcpu.clone(), int_id, src);
-                    return false;
-                }
-            }
-            None => {}
-        }
-    }
-
     if interrupt_is_reserved(int_id) {
         let irq_handler_list = INTERRUPT_HANDLERS.lock();
         let irq_handler = irq_handler_list[int_id].clone();
@@ -161,23 +131,60 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                 ipi_handler();
             }
             InterruptHandler::GicMaintenanceHandler(maintenace_handler) => {
-                maintenace_handler(int_id, src);
+                maintenace_handler(int_id);
             }
             InterruptHandler::TimeIrqHandler(timer_irq_handler) => {
-                timer_irq_handler(int_id, src);
+                timer_irq_handler(int_id);
             }
             InterruptHandler::None => {
                 unimplemented!();
             }
         }
         // drop(irq_handler);
-        true
-    } else {
-        println!(
-            "interrupt_handler: core {} receive unsupported int {}",
-            current_cpu().id,
-            int_id
-        );
-        false
+        return true;
     }
+
+    if int_id >= 16 && int_id < 32 {
+        if let Some(vcpu) = &current_cpu().active_vcpu {
+            if let Some(active_vm) = vcpu.vm() {
+                // if active_vm.id() == 1 {
+                //     println!("interrupt_handler, before inject {} to vm1", int_id);
+                // }
+                if active_vm.has_interrupt(int_id) {
+                    // if active_vm.id() == 1 {
+                    //     println!("interrupt_handler, inject {} to vm1", int_id);
+                    // }
+                    interrupt_vm_inject(active_vm.clone(), vcpu.clone(), int_id, src);
+                    return false;
+                } else {
+                    return true;
+                }
+            }
+        }
+    }
+
+
+    for idx in 0..current_cpu().vcpu_pool().vcpu_num() {
+        let vcpu = current_cpu().vcpu_pool().vcpu(idx);
+        match vcpu.vm() {
+            Some(vm) => {
+                if vm.has_interrupt(int_id) {
+                    if vcpu.state() as usize == VcpuState::VcpuInv as usize {
+                        return true;
+                    }
+
+                    interrupt_vm_inject(vm.clone(), vcpu.clone(), int_id, src);
+                    return false;
+                }
+            }
+            None => {}
+        }
+    }
+
+    println!(
+        "interrupt_handler: core {} receive unsupported int {}",
+        current_cpu().id,
+        int_id
+    );
+    true
 }

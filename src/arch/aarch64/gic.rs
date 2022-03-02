@@ -404,7 +404,7 @@ register_structs! {
         (0x0014 => reserve1),
         (0x0020 => EISR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]),
         (0x0028 => reserve2),
-        (0x0030 => ELSR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]),
+        (0x0030 => ELRSR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]),
         (0x0038 => reserve3),
         (0x00f0 => APR: ReadWrite<u32>),
         (0x00f4 => reserve4),
@@ -445,8 +445,8 @@ impl GicHypervisorInterface {
         self.HCR.set(hcr);
     }
 
-    pub fn elsr(&self, elsr_idx: usize) -> u32 {
-        self.ELSR[elsr_idx].get()
+    pub fn elrsr(&self, elsr_idx: usize) -> u32 {
+        self.ELRSR[elsr_idx].get()
     }
 
     pub fn eisr(&self, eisr_idx: usize) -> u32 {
@@ -491,9 +491,17 @@ impl GicState {
     pub fn save_state(&mut self) {
         self.hcr = GICH.hcr();
         self.apr = GICH.APR.get();
+        for i in 0..(GIC_LIST_REGS_NUM / 32) {
+            self.eisr[i] = GICH.eisr(i);
+            self.elrsr[i] = GICH.elrsr(i);
+        }
 
         for i in 0..gich_lrs_num() {
-            self.lr[i] = GICH.lr(i);
+            if self.elrsr[0] & 1 << i == 0 {
+                self.lr[i] = GICH.lr(i);
+            } else {
+                self.lr[i] = 0;
+            }
         }
         self.ctlr = GICC.CTLR.get();
     }
@@ -509,9 +517,6 @@ impl GicState {
     }
 }
 
-// pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE);
-// pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE);
-// pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(PLATFORM_GICH_BASE);
 pub static GICD: GicDistributor = GicDistributor::new(PLATFORM_GICD_BASE + 0x8_0000_0000);
 pub static GICC: GicCpuInterface = GicCpuInterface::new(PLATFORM_GICC_BASE + 0x8_0000_0000);
 pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(PLATFORM_GICH_BASE + 0x8_0000_0000);
