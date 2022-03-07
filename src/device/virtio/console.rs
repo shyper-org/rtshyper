@@ -6,9 +6,9 @@ use spin::Mutex;
 
 use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
+use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::device::DevDesc;
 use crate::kernel::{active_vm, active_vm_id, vm_if_list_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -102,13 +102,11 @@ impl ConsoleDescInner {
 }
 
 pub fn console_features() -> usize {
-    VIRTIO_F_VERSION_1
-        | VIRTIO_CONSOLE_F_SIZE
+    VIRTIO_F_VERSION_1 | VIRTIO_CONSOLE_F_SIZE
 }
 
 pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> bool {
-     // let time_begin = time_current_us();
-     if vq.ready() == 0 {
+    if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
         return false;
     }
@@ -119,15 +117,17 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
     }
 
     let tx_iov = VirtioIov::default();
-    let mut vms_to_notify = 0;
-
     let dev = console.dev();
-    let mut trgt_vmid  = 0 as u16;
-    let mut trgt_console_ipa = 0 as u64;
 
-    if let DevDesc::ConsoleDesc(console_desc) = dev.desc() {
-        (trgt_vmid, trgt_console_ipa) = console_desc.target_console();
-    }
+    let (trgt_vmid, trgt_console_ipa) = match dev.desc() {
+        DevDesc::ConsoleDesc(desc) => {
+            desc.target_console()
+        }
+        _ => {
+            println!("virtio_console_notify_handler: console desc should not be None");
+            return false;
+        }
+    };
 
     // let buf = dev.cache();
     let vq_size = vq.num();
@@ -153,7 +153,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
             idx = vq.desc_next(idx) as usize;
         }
 
-        if !virtio_console_recv(trgt_vmid, trgt_console_ipa,tx_iov.clone(), len){
+        if !virtio_console_recv(trgt_vmid, trgt_console_ipa, tx_iov.clone(), len) {
             println!("virtio_console_notify_handler: failed send");
             return false;
         }
@@ -178,7 +178,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
 }
 
 fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
-    let trgt_vm = crate::kernel::vm(trgt_vmid as usize);
+    let trgt_vm = vm(trgt_vmid as usize);
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa) {
         EmuDevs::VirtioConsole(x) => x,
         _ => {

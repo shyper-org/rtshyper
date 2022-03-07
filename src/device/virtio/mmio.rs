@@ -10,7 +10,7 @@ use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext, virtio_mediated_blk_notify_handler};
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
-use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE};
+use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
@@ -479,7 +479,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_READY", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_DESC_LOW => match mmio.vq(q_sel) {
@@ -488,7 +487,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_DESC_LOW", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_DESC_HIGH => match mmio.vq(q_sel) {
@@ -503,7 +501,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_DESC_HIGH", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_AVAIL_LOW => match mmio.vq(q_sel) {
@@ -512,7 +509,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_AVAIL_LOW", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_AVAIL_HIGH => match mmio.vq(q_sel) {
@@ -527,7 +523,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_AVAIL_HIGH", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_USED_LOW => match mmio.vq(q_sel) {
@@ -536,7 +531,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_USED_LOW", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_USED_HIGH => match mmio.vq(q_sel) {
@@ -551,7 +545,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_USED_HIGH", q_sel);
-                    // return;
                 }
             },
             _ => {
