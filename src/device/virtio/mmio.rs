@@ -10,7 +10,7 @@ use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext, virtio_mediated_blk_notify_handler};
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
-use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
+use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
@@ -121,6 +121,16 @@ impl VirtioQueue for VirtioMmio {
                     inner.vq[i].reset(i);
                     use crate::device::virtio_net_notify_handler;
                     inner.vq[i].set_notify_handler(virtio_net_notify_handler);
+                }
+            }
+            VirtioDeviceType::Console => {
+                self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
+                let mut inner = self.inner.lock();
+                for i in 0..3 {
+                    inner.vq.push(Virtq::default());
+                    inner.vq[i].reset(i);
+                    use crate::device::virtio_console_notify_handler;
+                    inner.vq[i].set_notify_handler(virtio_console_notify_handler);
                 }
             }
             VirtioDeviceType::None => {
@@ -469,7 +479,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_READY", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_DESC_LOW => match mmio.vq(q_sel) {
@@ -478,7 +487,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_DESC_LOW", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_DESC_HIGH => match mmio.vq(q_sel) {
@@ -493,7 +501,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_DESC_HIGH", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_AVAIL_LOW => match mmio.vq(q_sel) {
@@ -502,7 +509,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_AVAIL_LOW", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_AVAIL_HIGH => match mmio.vq(q_sel) {
@@ -517,7 +523,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_AVAIL_HIGH", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_USED_LOW => match mmio.vq(q_sel) {
@@ -526,7 +531,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_USED_LOW", q_sel);
-                    // return;
                 }
             },
             VIRTIO_MMIO_QUEUE_USED_HIGH => match mmio.vq(q_sel) {
@@ -541,7 +545,6 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
                 Err(_) => {
                     panic!("virtio_mmio_queue_access: wrong q_sel {:x} in write VIRTIO_MMIO_QUEUE_USED_HIGH", q_sel);
-                    // return;
                 }
             },
             _ => {
@@ -606,6 +609,10 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
             virt_dev_type = VirtioDeviceType::Net;
             vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioNet(mmio.clone()));
         }
+        crate::device::EmuDeviceType::EmuDeviceTVirtioConsole => {
+            virt_dev_type = VirtioDeviceType::Console;
+            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioConsole(mmio.clone()));
+        }
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
             return false;
@@ -635,6 +642,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     let mmio = match vm.emu_dev(emu_dev_id) {
         EmuDevs::VirtioBlk(blk) => blk,
         EmuDevs::VirtioNet(net) => net,
+        EmuDevs::VirtioConsole(console) => console,
         _ => {
             panic!("emu_virtio_mmio_handler: illegal mmio dev type")
         }

@@ -304,6 +304,19 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
                 }
                 drop(vm_if_list);
             }
+            EmuDeviceTVirtioConsole => {
+                dev_name = "virtio console";
+                emu_register_dev(
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_virtio_mmio_handler,
+                );
+                if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
+                    return false;
+                }
+            }
             EmuDeviceTShyper => {
                 dev_name = "shyper";
                 if !shyper_init(vm.clone(), emu_dev.base_ipa, emu_dev.length) {
@@ -391,7 +404,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
                         }
-                        EmuDeviceTVirtioNet => {
+                        EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
                             fdt_add_virtio(dtb, emu_cfg.name.unwrap().as_ptr(), emu_cfg.irq_id as u32 - 0x20, emu_cfg.base_ipa as u64);
                         }
                         EmuDeviceTShyper => {
