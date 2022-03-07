@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, active_vm_id, current_cpu, Vm};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, Vm};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -68,13 +68,19 @@ impl Virtq {
     pub fn notify(&self, int_id: usize, vm: Vm) {
         // panic!("should not notify");
         let inner = self.inner.lock();
+        let trgt_id = vm.vcpu(0).phys_id();
         use crate::kernel::interrupt_vm_inject;
-        if vm.vcpu(0).phys_id() == current_cpu().id {
+        if trgt_id == current_cpu().id {
             drop(inner);
             interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, 0);
         } else {
-            // TODO: should add an ipi for different phy core
-            todo!("inject special interrupt");
+            let m = IpiIntInjectMsg {
+                vm_id: vm.id(),
+                int_id,
+            };
+            if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
+                println!("notify: failed to send ipi to Core {}", trgt_id);
+            }
         }
     }
 

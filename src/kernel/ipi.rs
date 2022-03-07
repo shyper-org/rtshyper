@@ -89,6 +89,12 @@ pub struct IpiHvcMsg {
     pub event: usize,
 }
 
+#[derive(Clone)]
+pub struct IpiIntInjectMsg {
+    pub vm_id: usize,
+    pub int_id: usize,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum IpiType {
     IpiTIntc = 0,
@@ -99,6 +105,7 @@ pub enum IpiType {
     IpiTVMM = 5,
     IpiTMediatedDev = 6,
     IpiTMediatedNotify = 7,
+    IpiTIntInject = 8,
 }
 
 #[derive(Clone)]
@@ -110,6 +117,7 @@ pub enum IpiInnerMsg {
     MediatedMsg(IpiMediatedMsg),
     MediatedNotifyMsg(IpiMediatedNotifyMsg),
     HvcMsg(IpiHvcMsg),
+    IntInjectMsg(IpiIntInjectMsg),
     None,
 }
 

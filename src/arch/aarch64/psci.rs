@@ -108,11 +108,10 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             let result = smc_call(fid, x1, x2, x3);
             r = result.0;
             // println!("x1 0x{:x}, x2 0x{:x}, x3 0x{:x}", x1, x2, x3);
-            println!(
-                "result.0 0x{:x}, result.1 0x{:x}, result.2 0x{:x}, sub {:x}",
-                result.0, result.1, result.2,
-                if result.1 > result.2 { result.1 - result.2 } else { result.2 - result.1 }
-            );
+            // println!(
+            //     "result.0 0x{:x}, result.1 0x{:x}, result.2 0x{:x}",
+            //     result.0, result.1, result.2
+            // );
             let idx = 1;
             let val = result.1;
             current_cpu().set_gpr(idx, val);
@@ -141,45 +140,35 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     true
 }
 
-fn psci_vcpu_on(entry: usize, ctx: usize) {
-    println!("psci vcpu on");
+fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
+    // println!("psci vcpu on， entry {:x}, ctx {:x}", entry, ctx);
+    if vcpu.phys_id() != current_cpu().id {
+        panic!("cannot psci on vcpu on cpu {} by cpu {}", vcpu.phys_id(), current_cpu().id);
+    }
     let assigned = true;
     current_cpu().assigned = assigned;
-    let state = CpuState::CpuRun;
-    current_cpu().cpu_state = state;
-    let vcpu = current_cpu().active_vcpu.clone().unwrap();
+    current_cpu().cpu_state = CpuState::CpuRun;
+    // let vcpu = current_cpu().active_vcpu.clone().unwrap();
+    vcpu.reset_context();
     vcpu.set_gpr(0, ctx);
     vcpu.set_elr(entry);
 
-    vcpu.reset_context();
+    current_cpu().vcpu_pool().add_running();
+    if current_cpu().active_vcpu.is_none() {
+        current_cpu().set_active_vcpu(vcpu.clone());
+    }
 
     match &current_cpu().sched {
         SchedType::SchedRR(rr) => {
-            rr.schedule();
+            // should add a new fun to change vcpu in pool to trgt
+            // rr.schedule();
+            let idx = current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(vcpu.vm_id());
+            rr.yield_next(idx.unwrap());
         }
         SchedType::None => {
             println!("Core {} has no scheduler", current_cpu().id);
         }
     }
-    // if current_cpu().vcpu_pool().running() == 1 {
-    //     match current_cpu().ctx {
-    //         Some(ctx) => {
-    //             use crate::lib::memcpy_safe;
-    //             use core::mem::size_of;
-    //             let size = size_of::<Aarch64ContextFrame>();
-    //
-    //             if trace() && (ctx < 0x1000 || vcpu.vcpu_ctx_addr() < 0x1000) {
-    //                 panic!("illegal des ctx addr {} vcpu ctx {}", ctx, vcpu.vcpu_ctx_addr());
-    //             }
-    //             memcpy_safe(ctx as *mut u8, vcpu.vcpu_ctx_addr() as *mut u8, size);
-    //
-    //             println!("cpu_ctx {:x}", current_cpu().ctx.unwrap());
-    //         }
-    //         None => {
-    //             panic!("psci_vcpu_on: cpu_ctx is NULL");
-    //         }
-    //     }
-    // }
 
     if current_cpu().vcpu_pool().running() > 1 {
         timer_enable(true);
@@ -210,11 +199,7 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
                         trgt_vcpu.vm().unwrap().id(),
                         trgt_vcpu.id()
                     );
-                    println!(
-                        "entry {:x}, context {:x}",
-                        power_msg.entry, power_msg.context
-                    );
-                    psci_vcpu_on(power_msg.entry, power_msg.context);
+                    psci_vcpu_on(trgt_vcpu, power_msg.entry, power_msg.context);
                 }
                 PowerEvent::PsciIpiCpuOff => {
                     current_cpu().active_vcpu.clone().unwrap().shutdown();

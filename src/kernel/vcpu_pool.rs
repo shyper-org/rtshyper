@@ -83,7 +83,10 @@ impl VcpuPool {
         if next_vcpu.phys_id() != current_cpu().id {
             panic!("illegal vcpu for cpu {}", current_cpu().id);
         }
+
+        // a new vcpu power on by psci will come here
         if current_cpu().active_vcpu.is_some() && next_vcpu.vm_id() == active_vm_id() {
+            next_vcpu.context_vm_restore();
             return;
         }
         if next_vcpu.state() as usize == VcpuState::VcpuInv as usize {

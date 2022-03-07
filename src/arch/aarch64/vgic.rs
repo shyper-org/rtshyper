@@ -722,9 +722,6 @@ impl Vgic {
         interrupt.set_lr(lr_ind as u16);
         self.set_cpu_priv_curr_lrs(vcpu_id, lr_ind, int_id as u16);
 
-        if interrupt.id() == 4 {
-            println!("lr is {:x}", lr);
-        }
         GICH.set_lr(lr_ind, lr as u32);
 
         self.update_int_list(vcpu.clone(), interrupt.clone());
@@ -1492,7 +1489,7 @@ impl Vgic {
             if emu_ctx.write {
                 let sgir_trglstflt = bit_extract(val, 24, 2);
                 let mut trgtlist = 0;
-                println!("addr {:x}, sgir trglst flt {}, vtrgt {}", emu_ctx.address, sgir_trglstflt, bit_extract(val, 16, 8));
+                // println!("addr {:x}, sgir trglst flt {}, vtrgt {}", emu_ctx.address, sgir_trglstflt, bit_extract(val, 16, 8));
                 match sgir_trglstflt {
                     0 => {
                         trgtlist = vgic_target_translate(vm.clone(), bit_extract(val, 16, 8) as u32, true) as usize;
@@ -1511,9 +1508,6 @@ impl Vgic {
 
                 for i in 0..8 {
                     if trgtlist & (1 << i) != 0 {
-                        if (bit_extract(val, 0, 8) | (active_vcpu_id() << 10)) == 4 {
-                            println!("trgt list {}", trgtlist);
-                        }
                         let m = IpiInitcMessage {
                             event: InitcEvent::VgicdSetPend,
                             vm_id: active_vm_id(),

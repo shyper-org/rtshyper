@@ -184,6 +184,7 @@ impl Cpu {
     }
 
     pub fn set_active_vcpu(&mut self, vcpu: Vcpu) {
+        vcpu.set_state(VcpuState::VcpuAct);
         self.active_vcpu = Some(vcpu);
     }
 }

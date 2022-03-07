@@ -3,7 +3,7 @@ use spin::Mutex;
 
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
-use crate::kernel::{current_cpu, ipi_irq_handler, Vcpu, VcpuState};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
@@ -73,17 +73,23 @@ pub fn interrupt_init() {
             InterruptHandler::IpiIrqHandler(ipi_irq_handler),
         );
 
+        if !ipi_register(IpiType::IpiTIntInject, interrupt_inject_ipi_handler) {
+            panic!(
+                "interrupt_init: failed to register int inject ipi {:#?}",
+                IpiType::IpiTIntInject
+            )
+        }
         use crate::arch::vgic_ipi_handler;
         if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
             panic!(
-                "interrupt_init: failed to register intc ipi {}",
-                IpiType::IpiTIntc as usize
+                "interrupt_init: failed to register intc ipi {:#?}",
+                IpiType::IpiTIntc
             )
         }
         use crate::device::ethernet_ipi_rev_handler;
         if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
             panic!(
-                "interrupt_init: failed to register eth ipi {:?}",
+                "interrupt_init: failed to register eth ipi {:#?}",
                 IpiType::IpiTEthernetMsg,
             );
         }
@@ -187,4 +193,25 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         int_id
     );
     true
+}
+
+pub fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
+    match &msg.ipi_message {
+        IpiInnerMsg::IntInjectMsg(int_msg) => {
+            let vm_id = int_msg.vm_id;
+            let int_id = int_msg.int_id;
+            match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
+                None => {
+                    panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
+                }
+                Some(vcpu) => {
+                    interrupt_vm_inject(vcpu.vm().unwrap(), vcpu.clone(), int_id, 0);
+                }
+            }
+        }
+        _ => {
+            println!("interrupt_inject_ipi_handler: illegal ipi type");
+            return;
+        }
+    }
 }

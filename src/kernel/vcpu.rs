@@ -369,7 +369,6 @@ pub fn vcpu_run() {
         active_vcpu_id()
     );
 
-    println!("running vcpu num {}", current_cpu().vcpu_pool().running());
     if current_cpu().vcpu_pool().running() > 1 {
         timer_enable(true);
     }
@@ -378,7 +377,6 @@ pub fn vcpu_run() {
     // vm.show_pagetable(0x17000000);
     let vcpu = current_cpu().active_vcpu.clone().unwrap();
     vcpu.set_state(VcpuState::VcpuAct);
-    println!("vcpu {} state {}", vcpu.id(), vcpu.state() as usize);
     let vm = vcpu.vm().unwrap().clone();
     let sp = &(current_cpu().stack) as *const _ as usize + CPU_STACK_SIZE;
     let size = size_of::<Aarch64ContextFrame>();
@@ -388,7 +386,7 @@ pub fn vcpu_run() {
     use core::mem::size_of;
     vcpu.context_vm_restore();
     tlb_invalidate_guest_all();
-    vcpu.show_ctx();
+    // vcpu.show_ctx();
 
     current_cpu().cpu_state = CpuState::CpuRun;
     vm_if_list_set_state(active_vm_id(), super::VmState::VmActive);
@@ -399,8 +397,6 @@ pub fn vcpu_run() {
         }
     }
 
-    println!("vcpu run elr {:x}", current_cpu().active_vcpu.clone().unwrap().elr());
-    // TODO: vcpu_run
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;
     }

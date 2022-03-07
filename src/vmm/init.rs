@@ -517,6 +517,7 @@ fn vmm_assign_vcpu() {
                 let vcpu = vm_inner.vcpu_list[0].clone();
                 let vcpu_id = vcpu.id();
 
+                // only vm0 vcpu state should set to pend here
                 if current_cpu().vcpu_pool().running() == 0 && i == 0 {
                     vcpu.set_state(VcpuState::VcpuPend);
                     current_cpu().vcpu_pool().add_running();
