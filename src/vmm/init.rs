@@ -15,7 +15,7 @@ use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm_id, CPU, current_cpu, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id};
+use crate::kernel::{active_vm_id, CPU, current_cpu, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
 use crate::kernel::{cpu_sched_init, mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{Vm, vm, VM_LIST};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
@@ -135,26 +135,34 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     }
 
     vm.set_entry_point(config.kernel_entry_point);
-    if vm.id() == 0 {
-        println!("vm0 load L4T");
-        vmm_load_image(
-            config.kernel_load_ipa,
-            vm.clone(),
-            include_bytes!("../../image/L4T"),
-        );
-    } else {
-        println!("gvm load vanilla");
-        vmm_load_image(
-            config.kernel_load_ipa,
-            vm.clone(),
-            // include_bytes!("../../image/vm1_arch_Image"),
-            include_bytes!("../../image/Image_vanilla"),
-        );
-    }
 
     match &vm.config().os_type {
-        crate::kernel::VmType::VmTBma => return true,
-        _ => {}
+        VmType::VmTBma => {
+            vmm_load_image(
+                config.kernel_load_ipa,
+                vm.clone(),
+                include_bytes!("../../image/BMA"),
+            );
+            return true;
+        }
+        VmType::VmTOs => {
+            if vm.id() == 0 {
+                println!("vm0 load L4T");
+                vmm_load_image(
+                    config.kernel_load_ipa,
+                    vm.clone(),
+                    include_bytes!("../../image/L4T"),
+                );
+            } else {
+                println!("gvm load vanilla");
+                vmm_load_image(
+                    config.kernel_load_ipa,
+                    vm.clone(),
+                    // include_bytes!("../../image/vm1_arch_Image"),
+                    include_bytes!("../../image/Image_vanilla"),
+                );
+            }
+        }
     }
 
     if config.device_tree_load_ipa != 0 {
@@ -436,28 +444,27 @@ fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
         if !vmm_init_image(&config.image, vm.clone()) {
             panic!("vmm_setup_config: vmm_init_image failed");
         }
-        if vm_id != 0 {
-            // init vm1 dtb
-            match create_fdt(config.clone()) {
-                Ok(dtb) => {
-                    let offset = config.image.device_tree_load_ipa
-                        - vm.config().memory.region[0].ipa_start;
-                    println!("gvm dtb size {}", dtb.len());
-                    println!("gvm dtb pa 0x{:x}", vm.pa_start(0) + offset);
-                    crate::lib::memcpy_safe(
-                        (vm.pa_start(0) + offset) as *const u8,
-                        dtb.as_ptr(),
-                        dtb.len(),
-                    );
+        if let VmType::VmTOs = config.os_type {
+            if vm_id != 0 {
+                // init gvm dtb
+                match create_fdt(config.clone()) {
+                    Ok(dtb) => {
+                        let offset = config.image.device_tree_load_ipa
+                            - vm.config().memory.region[0].ipa_start;
+                        crate::lib::memcpy_safe(
+                            (vm.pa_start(0) + offset) as *const u8,
+                            dtb.as_ptr(),
+                            dtb.len(),
+                        );
+                    }
+                    _ => {
+                        panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
+                    }
                 }
-                _ => {
-                    panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
+            } else {
+                unsafe {
+                    vmm_setup_fdt(config.clone(), vm.clone());
                 }
-            }
-        } else {
-            println!("mvm setup fdt");
-            unsafe {
-                vmm_setup_fdt(config.clone(), vm.clone());
             }
         }
     }
@@ -650,10 +657,6 @@ pub fn vmm_init() {
         // TODO: vmm_setup_contact_config
     }
     drop(vm_cfg_table);
-
-    // if cpu_id() == 0 && !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
-    //     panic!("vmm_init: failed to register ipi vmm");
-    // }
 
     if current_cpu().id == 0 {
         println!("Sybilla Hypervisor init ok\n\nStart booting VMs ...");
