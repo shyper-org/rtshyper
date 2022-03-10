@@ -93,7 +93,7 @@ pub enum VmState {
     VmActive = 2,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum VmType {
     VmTOs = 0,
     VmTBma = 1,

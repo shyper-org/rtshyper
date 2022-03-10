@@ -74,7 +74,7 @@ impl VmMemoryConfig {
 }
 
 pub struct VmImageConfig {
-    // pub kernel_name: Option<&'static str>,
+    pub kernel_img_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
     pub kernel_entry_point: usize,
     // pub device_tree_filename: Option<&'static str>,
@@ -86,7 +86,7 @@ pub struct VmImageConfig {
 impl VmImageConfig {
     pub const fn default() -> VmImageConfig {
         VmImageConfig {
-            // kernel_name: None,
+            kernel_img_name: None,
             kernel_load_ipa: 0,
             kernel_entry_point: 0,
             // device_tree_filename: None,
