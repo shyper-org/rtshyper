@@ -232,15 +232,15 @@ pub fn config_init() {
     // vm1 BMA emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
 
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("vgicd"),
-    //     base_ipa: 0x8000000,
-    //     length: 0x1000,
-    //     irq_id: 0,
-    //     cfg_list: Vec::new(),
-    //     emu_type: EmuDeviceType::EmuDeviceTGicd,
-    //     mediated: false,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some("vgicd"),
+        base_ipa: 0x8000000,
+        length: 0x1000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTGicd,
+        mediated: false,
+    });
     // vm2 BMA passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
@@ -272,12 +272,12 @@ pub fn config_init() {
         cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
-            master: -1,
+            master: 2,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: None,
-        med_blk_idx: Some(0),
+        med_blk_idx: None,
         cmdline: "",
     }));
 
