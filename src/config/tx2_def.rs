@@ -11,17 +11,10 @@ use super::{
     VmDtbDev, VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
 };
 
-// pub fn vm_num() -> usize {
-//     let vm_config = DEF_VM_CONFIG_TABLE.lock();
-//     let vm_num = vm_config.vm_num;
-//     drop(vm_config);
-//     vm_num()
-// }
-
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 3;
+    vm_config.vm_num = 2;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -291,7 +284,7 @@ pub fn config_init() {
     let mut vm_region: Vec<VmRegion> = Vec::new();
     vm_region.push(VmRegion {
         ipa_start: 0x80000000,
-        length: 0x80000000,
+        length: 0x40000000,
     });
 
     let mut vm_dtb_devs: Vec<VmDtbDev> = vec![];
@@ -350,65 +343,65 @@ pub fn config_init() {
     }));
 
     // #################### bare metal app emu (vm2) ######################
-    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("intc@8000000"),
-        base_ipa: 0x8000000,
-        length: 0x1000,
-        irq_id: 0,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTGicd,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_blk@a000000"),
-        base_ipa: 0xa000000,
-        length: 0x1000,
-        irq_id: 32 + 0x10,
-        cfg_list: vec![0, 209715200], // 100G
-        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-        mediated: true,
-    });
-
-    // bma passthrough
-    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
-    pt_dev_config.regions = vec![
-        PassthroughRegion { ipa: 0x9000000, pa: UART_1_ADDR, length: 0x1000 },
-        PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
-    ];
-    pt_dev_config.irqs = vec![UART_1_INT];
-
-    // bma vm_region
-    let mut vm_region: Vec<VmRegion> = Vec::new();
-    vm_region.push(VmRegion {
-        ipa_start: 0x40000000,
-        length: 0x40000000,
-    });
-
-    // bma config
-    vm_config.entries.push(Arc::new(VmConfigEntry {
-        name: Some("guest-bma-0"),
-        os_type: VmType::VmTBma,
-        memory: VmMemoryConfig {
-            region: vm_region,
-        },
-        image: VmImageConfig {
-            kernel_load_ipa: 0x40080000,
-            kernel_entry_point: 0x40080000,
-            device_tree_load_ipa: 0,
-            ramdisk_load_ipa: 0,
-        },
-        cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0100,
-            master: 2,
-        },
-        vm_emu_dev_confg: Some(emu_dev_config),
-        vm_pt_dev_confg: Some(pt_dev_config),
-        vm_dtb_devs: None,
-        med_blk_idx: Some(1),
-        cmdline: "",
-    }));
+    // let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("intc@8000000"),
+    //     base_ipa: 0x8000000,
+    //     length: 0x1000,
+    //     irq_id: 0,
+    //     cfg_list: Vec::new(),
+    //     emu_type: EmuDeviceType::EmuDeviceTGicd,
+    //     mediated: false,
+    // });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some("virtio_blk@a000000"),
+    //     base_ipa: 0xa000000,
+    //     length: 0x1000,
+    //     irq_id: 32 + 0x10,
+    //     cfg_list: vec![0, 209715200], // 100G
+    //     emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+    //     mediated: true,
+    // });
+    //
+    // // bma passthrough
+    // let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
+    // pt_dev_config.regions = vec![
+    //     PassthroughRegion { ipa: 0x9000000, pa: UART_1_ADDR, length: 0x1000 },
+    //     PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
+    // ];
+    // pt_dev_config.irqs = vec![UART_1_INT];
+    //
+    // // bma vm_region
+    // let mut vm_region: Vec<VmRegion> = Vec::new();
+    // vm_region.push(VmRegion {
+    //     ipa_start: 0x40000000,
+    //     length: 0x40000000,
+    // });
+    //
+    // // bma config
+    // vm_config.entries.push(Arc::new(VmConfigEntry {
+    //     name: Some("guest-bma-0"),
+    //     os_type: VmType::VmTBma,
+    //     memory: VmMemoryConfig {
+    //         region: vm_region,
+    //     },
+    //     image: VmImageConfig {
+    //         kernel_load_ipa: 0x40080000,
+    //         kernel_entry_point: 0x40080000,
+    //         device_tree_load_ipa: 0,
+    //         ramdisk_load_ipa: 0,
+    //     },
+    //     cpu: VmCpuConfig {
+    //         num: 1,
+    //         allocate_bitmap: 0b0100,
+    //         master: 2,
+    //     },
+    //     vm_emu_dev_confg: Some(emu_dev_config),
+    //     vm_pt_dev_confg: Some(pt_dev_config),
+    //     vm_dtb_devs: None,
+    //     med_blk_idx: Some(1),
+    //     cmdline: "",
+    // }));
 
     // #################### vm2 emu ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -439,15 +432,6 @@ pub fn config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
         mediated: false,
     });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some("vm_service"),
-    //     base_ipa: 0,
-    //     length: 0,
-    //     irq_id: HVC_IRQ,
-    //     cfg_list: Vec::new(),
-    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
-    //     mediated: false,
-    // });
 
     // vm2 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -508,8 +492,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig {
-            num: 2,
-            allocate_bitmap: 0b0110,
+            num: 1,
+            allocate_bitmap: 0b0100,
             master: 2,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
@@ -544,7 +528,7 @@ pub fn config_init() {
     let mut vm_region: Vec<VmRegion> = Vec::new();
     vm_region.push(VmRegion {
         ipa_start: 0x80000000,
-        length: 0x80000000,
+        length: 0x40000000,
     });
 
     let mut vm_dtb_devs: Vec<VmDtbDev> = vec![];

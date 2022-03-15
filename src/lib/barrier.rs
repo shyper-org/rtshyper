@@ -35,13 +35,6 @@ pub fn barrier() {
         let mut count = Volatile::new(&mut CPU_GLB_SYNC.count);
         count.update(|count| *count += 1);
         let next_count = round_up(count.read(), CPU_GLB_SYNC.n);
-        // println!(
-        //     "Core {} count CPU_GLB_SYNC.count {}, volatile count {}, next_count {}",
-        //     crate::kernel::cpu_id(),
-        //     CPU_GLB_SYNC.count,
-        //     count.read(),
-        //     next_count
-        // );
         spin_unlock(lock_addr);
         while count.read() < next_count {}
     }

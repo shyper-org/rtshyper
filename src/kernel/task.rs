@@ -242,9 +242,6 @@ pub fn handle_used_info(vq: Virtq, src_vmid: usize) {
     }
     let vq_size = vq.num();
     for info in &*used_info_list[src_vmid] {
-        if info.used_len == 0 {
-            println!("used_len {}, chain_head_idx {}", info.used_len, info.desc_chain_head_idx);
-        }
         vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
     }
     used_info_list[src_vmid].clear();
@@ -258,8 +255,6 @@ pub fn init_mediated_used_info() {
     for _ in 0..vm_num {
         used_info_list.push(Vec::new());
     }
-    println!("vm num {}", vm_num);
-    println!("after init, info list len {}", used_info_list.len());
 }
 
 pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
