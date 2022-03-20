@@ -5,11 +5,13 @@ use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, Vcpu, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::lib::{memcpy_safe, trace};
 use crate::vmm::{get_vm_id, vmm_boot_vm};
+use crate::config::*;
 
 pub const HVC_SYS: usize = 0;
 pub const HVC_VMM: usize = 1;
 pub const HVC_IVC: usize = 2;
 pub const HVC_MEDIATED: usize = 3;
+pub const HVC_CONFIG: usize = 3;
 
 pub const HVC_IRQ: usize = 32 + 0x20;
 
@@ -43,11 +45,52 @@ pub fn hvc_guest_handler(
         HVC_MEDIATED => {
             hvc_mediated_handler(event, x0, x1, x2, x3)
         }
+        HVC_CONFIG => {
+            hvc_config_handler(event, x0, x1, x2, x3, x4)
+        }
         _ => {
             println!(
                 "hvc_guest_handler: unknown hvc type {} event {}",
                 hvc_type, event
             );
+            false
+        }
+    }
+}
+
+fn hvc_config_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize) -> bool{
+    match event {
+        // VM
+        0 => {
+            return vm_config_add_vm(x0, x1, x2, x3, x4);
+        }
+        // MEMORY
+        1 => {
+            
+            true 
+        }
+        // CPU
+        2 => {
+            
+            true 
+        }
+        // EMULATED DEVICE
+        3 => {
+            
+            true 
+        }
+        // PASSTHROUGH DEVICE
+        4 => {
+            
+            true 
+        }
+        // DTB
+        5 => {
+            true 
+        }
+        // 
+        _ => {
+            println!("hvc_config_handler unknown event {}", event);
             false
         }
     }

@@ -3,9 +3,11 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
+use crate::lib::{memcpy_safe};
+
 // use crate::board::*;
 use crate::device::EmuDeviceType;
-use crate::kernel::VmType;
+use crate::kernel::{VmType, vm_ipa2pa};
 
 const NAME_MAX_LEN: usize = 32;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
@@ -67,9 +69,7 @@ pub struct VmMemoryConfig {
 
 impl VmMemoryConfig {
     pub const fn default() -> VmMemoryConfig {
-        VmMemoryConfig {
-            region: vec![],
-        }
+        VmMemoryConfig { region: vec![] }
     }
 }
 
@@ -227,3 +227,47 @@ pub fn vm_cfg_entry(id: usize) -> Arc<VmConfigEntry> {
     let table = DEF_VM_CONFIG_TABLE.lock();
     table.entries[id].clone()
 }
+
+pub fn vm_config_add_vm(
+    vmtype: usize,
+    cmdline_ipa: usize,
+    kernel_img_ipa: usize,
+    kernel_load_ipa: usize,
+    device_tree_load_ipa: usize,
+) -> bool {
+    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
+    let mut newVm = VmConfigEntry {
+        name: None,
+        os_type: VmType::from_usize(vmtype),
+        memory: VmMemoryConfig::default(),
+        image: VmImageConfig {
+            kernel_img_name: None,
+            kernel_load_ipa: kernel_img_ipa,
+            kernel_entry_point: kernel_img_ipa,
+            device_tree_load_ipa: device_tree_load_ipa,
+            ramdisk_load_ipa: 0,
+        },
+        cpu: VmCpuConfig::default(),
+        vm_emu_dev_confg: None,
+        vm_pt_dev_confg: None,
+        vm_dtb_devs: None,
+        cmdline: "",
+        med_blk_idx: None,
+    };
+    // memcpy_safe(newVm.cmdline as *mut u8, vm_ipa2pa(active_vm().unwrap(), cmdline_ipa) as *mut u8, NAME_MAX_LEN);
+
+    vm_config.entries.push(Arc::new(newVm));
+    true
+}
+
+pub fn vm_config_del_vm() -> bool {
+    true
+}
+
+pub fn vm_config_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize) -> bool {
+    
+    true
+}
+pub fn vm_config_add_emu_dev(vmid: usize) -> bool {true}
+pub fn vm_config_add_pt_dev(vmid: usize) -> bool {true}
+pub fn vm_config_add_dtb_dev(vmid: usize) -> bool {true}

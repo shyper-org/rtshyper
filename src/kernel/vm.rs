@@ -99,6 +99,16 @@ pub enum VmType {
     VmTBma = 1,
 }
 
+impl VmType {
+    pub fn from_usize(value : usize) -> VmType {
+        match value {
+            0 => VmType::VmTOs,
+            1 => VmType::VmTBma,
+            _ => panic!("Unknown value: {}", value),
+        }
+    }
+}
+
 pub struct VmInterface {
     pub master_cpu_id: usize,
     pub state: VmState,
