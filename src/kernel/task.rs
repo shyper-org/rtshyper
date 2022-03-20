@@ -91,7 +91,9 @@ pub fn add_task(task: Task) {
     match task {
         Task::MediatedIpiTask(_) => {
             ipi_list.push(task.clone());
-            // println!("add ipi task, len {}", ipi_list.len());
+            if ipi_list.len() > 1 {
+                println!("add ipi task, len {}", ipi_list.len());
+            }
             if ipi_list.len() == 1 && io_list.is_empty() {
                 drop(ipi_list);
                 drop(io_list);

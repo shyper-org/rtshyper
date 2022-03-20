@@ -14,9 +14,10 @@ panic = "abort"
 panic = "abort"
 debug = true
 
-
 [dependencies]
 vm-fdt = { git = "https://github.com/OhmR/vm-fdt" }
+#nostd_async = "0.6.0"
+woke = "0.0.2"
 fdt = { path = "libfdt-binding" }
 log = "0.4.5"
 volatile = "0.4.4"
