@@ -1,13 +1,8 @@
-use cortex_a::asm::ret;
-
-use crate::arch::{Aarch64ContextFrame, gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
+use crate::arch::{gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
 use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, SchedType, SchedulerTrait, timer_enable, Vcpu, VcpuState, Vm};
-use crate::kernel::{
-    active_vcpu_id, active_vm_id, CpuState,
-};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
+use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
-use crate::lib::trace;
 use crate::vmm::vmm_reboot_vm;
 
 use super::smc::smc_call;

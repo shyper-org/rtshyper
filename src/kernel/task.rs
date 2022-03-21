@@ -184,30 +184,7 @@ pub fn io_task_head() -> Option<Task> {
     Some(io_list[0].clone())
 }
 
-// pub fn io_list_len() -> usize {
-//     let io_list = MEDIATED_IO_TASK_LIST.lock();
-//     io_list.len()
-// }
-//
-// pub fn ipi_list_len() -> usize {
-//     let ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-//     ipi_list.len()
-// }
-
 pub fn last_vm_io_task(vm_id: usize) -> bool {
-    // let ipi_list = MEDIATED_IPI_TASK_LIST.lock();
-    // for ipi_task in &*ipi_list {
-    //     match ipi_task {
-    //         Task::MediatedIpiTask(task) => {
-    //             if task.src_id == vm_id {
-    //                 return false;
-    //             }
-    //         }
-    //         Task::MediatedIoTask(_) => {
-    //             panic!("last_vm_io_task: illegal ipi task type");
-    //         }
-    //     }
-    // }
     let io_list = MEDIATED_IO_TASK_LIST.lock();
     for io_task in &*io_list {
         match io_task {

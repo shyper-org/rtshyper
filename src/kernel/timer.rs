@@ -56,9 +56,7 @@ fn timer_notify_after(us: usize) {
 }
 
 fn timer_irq_handler(_arg: usize) {
-    use crate::arch::{
-        timer_arch_disable_irq, timer_arch_enable_irq, timer_arch_get_counter, timer_arch_set,
-    };
+    use crate::arch::timer_arch_disable_irq;
 
     timer_arch_disable_irq();
     let vcpu_pool = current_cpu().vcpu_pool();

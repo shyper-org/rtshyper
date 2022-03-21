@@ -1,7 +1,6 @@
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::ops::Deref;
 use core::ptr;
 
 use spin::Mutex;
@@ -2049,15 +2048,7 @@ pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext
     if !vgicd_emu_access_is_vaild(emu_ctx) {
         return false;
     }
-    let vm = match crate::kernel::active_vm() {
-        None => {
-            panic!("emu_intc_handler: vm is None");
-        }
-        Some(x) => x,
-    };
     let offset = emu_ctx.address & 0xfff;
-    // let offset_prefix = (offset & 0xf80) >> 7;
-
     // println!(
     //     "partial_passthrough_intc_handler: {} offset_prefix 0x{:x}, offset 0x{:x}",
     //     if emu_ctx.write { "write" } else { "read" }, offset_prefix, offset
@@ -2065,64 +2056,7 @@ pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext
     if emu_ctx.write {
         // todo: add offset match
         let val = current_cpu().get_gpr(emu_ctx.reg);
-        // let mut res = vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, 0, true);
         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, val, false);
-
-        // match offset_prefix {
-        //     VGICD_REG_OFFSET_PREFIX_ISENABLER | VGICD_REG_OFFSET_PREFIX_ICENABLER |
-        //     VGICD_REG_OFFSET_PREFIX_ISPENDR | VGICD_REG_OFFSET_PREFIX_ICPENDR |
-        //     VGICD_REG_OFFSET_PREFIX_ISACTIVER | VGICD_REG_OFFSET_PREFIX_ICACTIVER => {
-        //         let reg_idx = (emu_ctx.address & 0b1111111) / 4;
-        //         let first_int = reg_idx * 32;
-        //         res = 0;
-        //         for i in 0..32 {
-        //             if vm.has_interrupt(first_int + i) {
-        //                 println!("vm{} has int {}, val 0b{:x}", vm.id(), first_int + i, val);
-        //                 if val | (1 << i) != 0 {
-        //                     res |= 1 << i;
-        //                 }
-        //             }
-        //         }
-        //         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, res, false);
-        //     }
-        //     VGICD_REG_OFFSET_PREFIX_ICFGR => {
-        //         let first_int = (32 / GIC_CONFIG_BITS) *
-        //             bit_extract(emu_ctx.address, 0, 9) / 4;
-        //         let mut irq = first_int;
-        //         for idx in 0..emu_ctx.width * 8 / 2 {
-        //             if vm.has_interrupt(irq) {
-        //                 let bit = idx * 2 + 1;
-        //                 if val | (1 << bit) != 0 {
-        //                     res |= 1 << bit;
-        //                 } else {
-        //                     res &= !(1 << bit);
-        //                 }
-        //             }
-        //             irq += 1;
-        //         }
-        //         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, res, false);
-        //     }
-        //     VGICD_REG_OFFSET_PREFIX_SGIR => {
-        //         vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, val as usize, false);
-        //     }
-        //     _ => {
-        //         if offset >= 0x400 && offset < 0x800 || offset >= 0x800 && offset < 0xc00 {
-        //             let first_int = (8 / GIC_PRIO_BITS) * bit_extract(emu_ctx.address, 0, 9);
-        //             for i in 0..emu_ctx.width {
-        //                 if vm.has_interrupt(first_int + i) {
-        //                     for bit in i * 8..(i + 1) * 8 {
-        //                         if val | (1 << bit) != 0 {
-        //                             res |= 1 << bit;
-        //                         } else {
-        //                             res &= !(1 << bit);
-        //                         }
-        //                     }
-        //                 }
-        //             }
-        //             vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, res, false);
-        //         }
-        //     }
-        // }
     } else {
         let res = vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, 0, true);
         current_cpu().set_gpr(emu_ctx.reg, res);

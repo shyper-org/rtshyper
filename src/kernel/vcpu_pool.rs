@@ -1,12 +1,10 @@
-use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use spin::mutex::Mutex;
 
 use crate::board::{PLAT_DESC, SchedRule};
-use crate::kernel::{active_vcpu_id, active_vm_id, current_cpu, SchedType, SchedulerRR, Vcpu, VcpuInner, VcpuState};
-use crate::kernel::CPU;
+use crate::kernel::{active_vm_id, current_cpu, SchedType, SchedulerRR, Vcpu, VcpuState};
 
 pub const VCPU_POOL_MAX: usize = 4;
 
@@ -49,7 +47,7 @@ impl VcpuPool {
     }
 
     pub fn next_vcpu_idx(&self) -> usize {
-        let mut pool = self.inner.lock();
+        let pool = self.inner.lock();
         for i in (pool.active_idx + 1)..pool.content.len() {
             match pool.content[i].vcpu.state() {
                 VcpuState::VcpuInv => {}
@@ -111,7 +109,7 @@ impl VcpuPool {
     }
 
     pub fn next_vcpu(&self) -> Vcpu {
-        let mut pool = self.inner.lock();
+        let pool = self.inner.lock();
         for i in (pool.active_idx + 1)..pool.content.len() {
             match pool.content[i].vcpu.state() {
                 VcpuState::VcpuInv => {}

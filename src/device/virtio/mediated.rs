@@ -5,7 +5,7 @@ use spin::Mutex;
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{active_vm, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcGuestMsg, init_async_used_info, interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
-use crate::lib::{memcpy_safe, trace};
+use crate::lib::trace;
 
 static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 

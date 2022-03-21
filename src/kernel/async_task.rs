@@ -1,16 +1,16 @@
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::future::{Future, IntoFuture};
+use core::future::Future;
 use core::pin::Pin;
-use core::task::{Context, Poll};
+use core::task::Context;
 
 use spin::mutex::Mutex;
 use woke::{waker_ref, Woke};
 
 use crate::config::vm_num;
 use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+    BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
 use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, vm_if_list_get_cpu_id};
 use crate::lib::{memcpy_safe, trace};
@@ -39,72 +39,6 @@ pub struct IoAsyncMsg {
     pub iov_list: Arc<Vec<BlkIov>>,
 }
 
-// pub struct IOFuture {
-//     pub src_vmid: usize,
-//     pub vq: Virtq,
-//     pub io_type: usize,
-//     pub blk_id: usize,
-//     pub sector: usize,
-//     pub count: usize,
-//     pub cache: usize,
-//     pub iov_list: Arc<Vec<BlkIov>>,
-//     pub completed: Arc<Mutex<bool>>,
-// }
-//
-// impl Future for IOFuture {
-//     type Output = ();
-//     // need change
-//     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-//         let completed = self.completed.lock();
-//         if *completed {
-//             match self.io_type {
-//                 VIRTIO_BLK_T_IN => {
-//                     let mut cache_ptr = self.cache;
-//                     for idx in 0..self.iov_list.len() {
-//                         let data_bg = self.iov_list[idx].data_bg;
-//                         let len = self.iov_list[idx].len as usize;
-//                         if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
-//                             panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
-//                         }
-//                         memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
-//                         // sum |= check_sum(data_bg, len);
-//                         cache_ptr += len;
-//                     }
-//                 }
-//                 VIRTIO_BLK_T_OUT => {}
-//                 _ => {}
-//             };
-//             Poll::Ready(())
-//         } else {
-//             match self.io_type {
-//                 VIRTIO_BLK_T_IN => {
-//                     // println!("mediated_blk_read");
-//                     mediated_blk_read(self.blk_id, self.sector, self.count);
-//                 }
-//                 VIRTIO_BLK_T_OUT => {
-//                     // println!("mediated_blk_write");
-//                     let mut cache_ptr = self.cache;
-//                     for idx in 0..self.iov_list.len() {
-//                         let data_bg = self.iov_list[idx].data_bg;
-//                         let len = self.iov_list[idx].len as usize;
-//
-//                         if cache_ptr < 0x1000 || data_bg < 0x1000 {
-//                             panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
-//                         }
-//                         memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
-//                         cache_ptr += len;
-//                     }
-//                     mediated_blk_write(self.blk_id, self.sector, self.count);
-//                 }
-//                 _ => {
-//                     panic!("illegal mediated blk req type {}", self.io_type);
-//                 }
-//             }
-//             Poll::Pending
-//         }
-//     }
-// }
-
 static ASYNC_IPI_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
 static ASYNC_IO_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
 static ASYNC_USED_INFO_LIST: Mutex<Vec<Vec<UsedInfo>>> = Mutex::new(vec![]);
@@ -128,7 +62,7 @@ impl Woke for AsyncTask {
         todo!()
     }
 
-    fn wake_by_ref(arc_self: &Arc<Self>) {
+    fn wake_by_ref(_arc_self: &Arc<Self>) {
         todo!()
     }
 }
@@ -225,9 +159,8 @@ pub async fn async_blk_io_req() {
 }
 // end async req function
 
-
 pub fn set_io_task_state(idx: usize, state: AsyncTaskState) {
-    let mut io_list = ASYNC_IO_TASK_LIST.lock();
+    let io_list = ASYNC_IO_TASK_LIST.lock();
     if io_list.len() <= idx {
         panic!("async_io_task_head io_list should not be empty");
     }
@@ -258,7 +191,7 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
 // async task executor
 pub fn async_task_exe() {
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    let mut io_list = ASYNC_IO_TASK_LIST.lock();
+    let io_list = ASYNC_IO_TASK_LIST.lock();
 
     if !ipi_list.is_empty() {
         let state = ipi_list[0].state.lock();
@@ -269,7 +202,7 @@ pub fn async_task_exe() {
     }
 
     let mut task;
-    let mut ipi;
+    let ipi;
     if io_list.is_empty() {
         if !ipi_list.is_empty() {
             task = ipi_list[0].clone();
@@ -323,7 +256,7 @@ pub fn finish_async_task(ipi: bool) {
 
             if last_vm_async_io_task(task.src_vmid) {
                 let target_id = vm_if_list_get_cpu_id(task.src_vmid);
-                handle_used_info(args.vq.clone(), task.src_vmid);
+                update_used_info(args.vq.clone(), task.src_vmid);
                 if target_id != current_cpu().id {
                     // println!("ipi inject blk irq to vm {}", task.src_vmid);
                     let msg = IpiMediatedNotifyMsg {
@@ -354,7 +287,6 @@ pub fn last_vm_async_io_task(vm_id: usize) -> bool {
     true
 }
 
-
 pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     if src_vmid >= used_info_list.len() {
@@ -367,7 +299,7 @@ pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) 
     });
 }
 
-pub fn handle_used_info(vq: Virtq, src_vmid: usize) {
+pub fn update_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     if src_vmid >= used_info_list.len() {
         println!("handle_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());

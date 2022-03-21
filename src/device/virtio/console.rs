@@ -1,17 +1,12 @@
 use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, active_vm_id, vm_if_list_get_cpu_id, vm_ipa2pa};
-use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
-use crate::kernel::IpiMessage;
+use crate::kernel::{active_vm, vm_ipa2pa};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::trace;
@@ -72,7 +67,7 @@ impl ConsoleDesc {
     }
 
     pub fn target_console(&self) -> (u16, u64) {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         (inner.oppo_end_vmid, inner.oppo_end_ipa)
     }
 }
