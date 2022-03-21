@@ -1,4 +1,4 @@
-use crate::kernel::{current_cpu, Vcpu, VcpuPool, VcpuState};
+use crate::kernel::{Vcpu, VcpuPool};
 
 pub enum SchedType {
     SchedRR(SchedulerRR),

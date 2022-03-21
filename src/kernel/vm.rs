@@ -325,7 +325,7 @@ impl Vm {
             return false;
         }
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
-            EmuDevs::Vgic(vgic) => { true }
+            EmuDevs::Vgic(_) => { true }
             _ => { false }
         }
     }

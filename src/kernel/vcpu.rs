@@ -3,13 +3,12 @@ use alloc::vec::Vec;
 use core::arch::asm;
 use core::mem::size_of;
 
-use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::{active_vm, current_cpu, interrupt_vm_inject, timer_enable, vm_if_list_set_state};
+use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_list_set_state};
 use crate::kernel::{
     active_vcpu_id, active_vm_id, CPU_STACK_SIZE,
 };
@@ -63,7 +62,7 @@ impl Vcpu {
         // println!("context_vm_restore");
         self.restore_cpu_ctx();
 
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         inner.vm_ctx.ext_regs_restore();
 
         // restore vm's VFP and SIMD
@@ -279,8 +278,6 @@ impl VcpuInner {
     }
 
     fn arch_ctx_reset(&mut self) {
-        use cortex_a::registers::*;
-        use tock_registers::interfaces::*;
         self.vm_ctx.cntvoff_el2 = 0;
         self.vm_ctx.sctlr_el1 = 0x30C50830;
         self.vm_ctx.cntkctl_el1 = 0;
@@ -382,8 +379,6 @@ pub fn vcpu_run() {
     let size = size_of::<Aarch64ContextFrame>();
     current_cpu().set_ctx((sp - size) as *mut _);
 
-    use crate::lib::memcpy_safe;
-    use core::mem::size_of;
     vcpu.context_vm_restore();
     tlb_invalidate_guest_all();
     // vcpu.show_ctx();
