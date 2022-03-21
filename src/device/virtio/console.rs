@@ -101,13 +101,13 @@ pub fn console_features() -> usize {
 }
 
 pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> bool {
-    if vq.ready() == 0 {
-        println!("net virt_queue is not ready!");
-        return false;
+    if vq.vq_indx() % 4 != 1 {
+        println!("console rx queue notified!");
+        return true;
     }
 
-    if vq.vq_indx() != 1 {
-        println!("net rx queue notified!");
+    if vq.ready() == 0 {
+        println!("virtio_console_notify_handler: console virt_queue is not ready!");
         return false;
     }
 
@@ -203,8 +203,8 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         println!("virtio_console_recv: receive invalid avail desc idx");
         return false;
     } else if desc_header_idx_opt.is_none() {
-        println!("virtio_console_recv: desc_header_idx_opt.is_none()");
-        return false;
+        // println!("virtio_console_recv: desc_header_idx_opt.is_none()");
+        return true;
     }
 
     let desc_idx_header = desc_header_idx_opt.unwrap();
