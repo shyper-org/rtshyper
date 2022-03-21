@@ -94,7 +94,7 @@ pub fn interrupt_init() {
             );
         }
         if !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
-            panic!("vmm_init: failed to register ipi vmm");
+            panic!("interrupt_init: failed to register ipi vmm");
         }
         println!("Interrupt init ok");
     }

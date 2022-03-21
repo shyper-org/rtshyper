@@ -570,6 +570,11 @@ pub fn vm(id: usize) -> Vm {
     vm_list[id].clone()
 }
 
+pub fn get_vm_by_index(id: usize) -> Vm {
+    let vm_list = VM_LIST.lock();
+    vm_list[id].clone()
+}
+
 pub fn vm_list_size() -> usize {
     let vm_list = VM_LIST.lock();
     vm_list.len()
