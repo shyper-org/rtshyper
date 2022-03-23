@@ -429,57 +429,56 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     }
 }
 
-fn vmm_setup_config(config: Arc<VmConfigEntry>, vm: Vm) {
-    let cpu_id = current_cpu().id;
-    let vm_id = vm.id();
+pub fn vmm_setup_config(vm_id: usize) {
+    let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
+    let config = vm_cfg_table.entries[vm_id].clone();
+    let vm = vm(vm_id);
 
-    if cpu_id == 0 {
-        if vm_id >= VM_NUM_MAX {
-            panic!("vmm_setup_config: out of vm");
-        }
-        if !vmm_init_memory(&config.memory, vm.clone()) {
-            panic!("vmm_setup_config: vmm_init_memory failed");
-        }
+    println!("vmm_setup_config VM[{}] name {:?} current core {}",vm_id,config.name.unwrap(),current_cpu().id);
+    
+    if vm_id >= VM_NUM_MAX {
+        panic!("vmm_setup_config: out of vm");
+    }
+    if !vmm_init_memory(&config.memory, vm.clone()) {
+        panic!("vmm_setup_config: vmm_init_memory failed");
+    }
 
-        if !vmm_init_image(&config.image, vm.clone()) {
-            panic!("vmm_setup_config: vmm_init_image failed");
-        }
-        if let VmType::VmTOs = config.os_type {
-            if vm_id != 0 {
-                // init gvm dtb
-                match create_fdt(config.clone()) {
-                    Ok(dtb) => {
-                        let offset = config.image.device_tree_load_ipa
-                            - vm.config().memory.region[0].ipa_start;
-                        crate::lib::memcpy_safe(
-                            (vm.pa_start(0) + offset) as *const u8,
-                            dtb.as_ptr(),
-                            dtb.len(),
-                        );
-                    }
-                    _ => {
-                        panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
-                    }
+    if !vmm_init_image(&config.image, vm.clone()) {
+        panic!("vmm_setup_config: vmm_init_image failed");
+    }
+    if let VmType::VmTOs = config.os_type {
+        if vm_id != 0 {
+            // init gvm dtb
+            match create_fdt(config.clone()) {
+                Ok(dtb) => {
+                    let offset = config.image.device_tree_load_ipa
+                        - vm.config().memory.region[0].ipa_start;
+                    crate::lib::memcpy_safe(
+                        (vm.pa_start(0) + offset) as *const u8,
+                        dtb.as_ptr(),
+                        dtb.len(),
+                    );
                 }
-            } else {
-                unsafe {
-                    vmm_setup_fdt(config.clone(), vm.clone());
+                _ => {
+                    panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
                 }
+            }
+        } else {
+            unsafe {
+                vmm_setup_fdt(config.clone(), vm.clone());
             }
         }
     }
 
     // barrier
 
-    if cpu_id == 0 {
-        if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
-            panic!("vmm_setup_config: vmm_init_emulated_device failed");
-        }
-        if !vmm_init_passthrough_device(&config.vm_pt_dev_confg, vm.clone()) {
-            panic!("vmm_setup_config: vmm_init_passthrough_device failed");
-        }
-        println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
+    if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
+        panic!("vmm_setup_config: vmm_init_emulated_device failed");
     }
+    if !vmm_init_passthrough_device(&config.vm_pt_dev_confg, vm.clone()) {
+        panic!("vmm_setup_config: vmm_init_passthrough_device failed");
+    }
+    println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }
 
 struct VmAssignment {
@@ -500,37 +499,50 @@ impl VmAssignment {
 
 static VM_ASSIGN: Mutex<Vec<Mutex<VmAssignment>>> = Mutex::new(Vec::new());
 
-fn vmm_assign_vcpu(vm_id: usize) {
+pub fn vmm_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
     let assigned = false;
-    current_cpu().assigned = assigned;
-    println!("vm {} cpu {} assign vcpu",vm_id, cpu_id);
+    if current_cpu().assigned {
+        println!("vmm_assign_vcpu vm[{}] cpu {} is assigned",vm_id,cpu_id);
+    } else {
+        current_cpu().assigned = assigned;
+        println!("vmm_assign_vcpu vm[{}] cpu {} hasn't been assigned",vm_id,cpu_id);
+    }
+    
+
+    let mut cfg_master: usize;
+    let mut cfg_cpu_num : usize;
+    let mut cfg_cpu_allocate_bitmap: u32;
 
     {
-        let mut vm_assign_list = VM_ASSIGN.lock();
-        vm_assign_list.push(Mutex::new(VmAssignment::default()));
+        let vm = vm(vm_id);
+
+        let vm_inner_lock = vm.inner();
+        let vm_inner = vm_inner_lock.lock();
+
+        let config = vm_inner.config.as_ref().unwrap();
+        cfg_master = config.cpu.master as usize;
+        cfg_cpu_num = config.cpu.num;
+        cfg_cpu_allocate_bitmap = config.cpu.allocate_bitmap;
+        println!("vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
+            vm_id,cpu_id, cfg_master,cfg_cpu_num,cfg_cpu_allocate_bitmap);
     }
 
-    let vm = vm(vm_id);
-
-    let vm_inner_lock = vm.inner();
-    let vm_inner = vm_inner_lock.lock();
-
-    let config = vm_inner.config.as_ref().unwrap();
-
+    // barrier();
     // Judge if current cpu is allocated.
-    if (config.cpu.allocate_bitmap & (1 << cpu_id)) != 0 {
+    if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 {
         let vm_assign_list = VM_ASSIGN.lock();
         let mut vm_assigned = vm_assign_list[vm_id].lock();
-        let cfg_master = config.cpu.master as usize;
-        let cfg_cpu_num = config.cpu.num;
-
+        
         if cpu_id == cfg_master
             || (!vm_assigned.has_master && vm_assigned.cpu_num == cfg_cpu_num - 1)
         {
+            let vm = vm(vm_id);
+            let vm_inner_lock = vm.inner();
+            let vm_inner = vm_inner_lock.lock();
             let vcpu = vm_inner.vcpu_list[0].clone();
             let vcpu_id = vcpu.id();
-            // println!("core {} before vcpu_pool_append0", cpu_id);
+            println!("core {} before vcpu_pool_append0", cpu_id);
             // only vm0 vcpu state should set to pend here
             if current_cpu().vcpu_pool().running() == 0 && vm_id == 0 {
                 vcpu.set_state(VcpuState::VcpuPend);
@@ -539,8 +551,8 @@ fn vmm_assign_vcpu(vm_id: usize) {
             if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
                 panic!("core {} too many vcpu", cpu_id);
             }
-            // println!("core {} after vcpu_pool_append0", cpu_id);
-            vm_if_list_set_cpu_id(0, cpu_id);
+            println!("core {} after vcpu_pool_append0", cpu_id);
+            vm_if_list_set_cpu_id(vm_id, cpu_id);
 
             vm_assigned.has_master = true;
             vm_assigned.cpu_num += 1;
@@ -558,6 +570,9 @@ fn vmm_assign_vcpu(vm_id: usize) {
                 trgt_id += 1;
             }
 
+            let vm = vm(vm_id);
+            let vm_inner_lock = vm.inner();
+            let vm_inner = vm_inner_lock.lock();
             let vcpu = vm_inner.vcpu_list[trgt_id].clone();
             let vcpu_id = vcpu.id();
 
@@ -577,17 +592,17 @@ fn vmm_assign_vcpu(vm_id: usize) {
         }
     }
 
+    // barrier();
+
     if current_cpu().assigned {
         let vcpu_pool = current_cpu().vcpu_pool();
         for i in 0..vcpu_pool.vcpu_num() {
             let vcpu = vcpu_pool.vcpu(i);
             vcpu.set_phys_id(cpu_id);
-            println!("core {} i {} vcpu_num {} set_phys_id", cpu_id, i, vcpu_pool.vcpu_num());
             let vmid = vcpu.vm_id();
-            println!("core {} i {} vcpu_num {} vmid {}", cpu_id, i, vcpu_pool.vcpu_num(),vmid);
             let vm_assign_list = VM_ASSIGN.lock();
             let vm_assigned = vm_assign_list[vmid].lock();
-            let vm = get_vm_by_index(vmid);
+            let vm = get_vm_by_index(vmid).unwrap();
             vm.set_ncpu(vm_assigned.cpus);
             vm.set_cpu_num(vm_assigned.cpu_num);
             if let Some(mvm) = vcpu.vm() {
@@ -601,45 +616,60 @@ fn vmm_assign_vcpu(vm_id: usize) {
             vcpu.arch_reset();
         }
     }
-    println!("end vmm_assign_vcpu");
+
+    let vm = vm(vm_id);
+    vm.set_ready(true);
+    println!("vmm_assign_vcpu: core {} vm[{}] is ready", cpu_id, vm_id);
+    // barrier();
+}
+
+pub fn vmm_add_vm(vm_id: usize) {
+    println!("vmm_add_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
+    let mut vm_list = VM_LIST.lock();
+    if vm_id < vm_list.len() {
+        println!("vmm_add_vm: vm {} already exists", vm_id);
+        return
+    }
+    let vm = Vm::new(vm_id);
+    vm_list.push(vm);
+
+    let vm_arc = vm_list[vm_id].inner();
+    let mut vm = vm_arc.lock();
+
+    let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
+    vm.config = Some(vm_cfg_table.entries[vm_id].clone());
+    let vm_type = vm.config.as_ref().unwrap().os_type;
+    drop(vm);
+
+    if !vmm_init_cpu(&vm_cfg_table.entries[vm_id].cpu, vm_list[vm_id].clone()) {
+        println!("vmm_add_vm: vmm_init_cpu failed");
+    }
+    use crate::kernel::vm_if_list_set_type;
+    vm_if_list_set_type(vm_id, vm_type);
+
+    let mut vm_assign_list = VM_ASSIGN.lock();
+    vm_assign_list.push(Mutex::new(VmAssignment::default()));
 }
 
 pub fn vmm_init(vm_id: usize) {
+    barrier();
 
-    super::vmm_init_config();
-
-    // Alloc Vm structue, add to VM_LIST.
-    { 
-        let mut vm_list = VM_LIST.lock();
-        let vm = Vm::new(vm_id);
-        vm_list.push(vm);
-
-        let vm_arc = vm_list[vm_id].inner();
-        let mut vm = vm_arc.lock();
-
-        let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
-        vm.config = Some(vm_cfg_table.entries[vm_id].clone());
-        let vm_type = vm.config.as_ref().unwrap().os_type;
-        drop(vm);
-        if !vmm_init_cpu(&vm_cfg_table.entries[vm_id].cpu, vm_list[vm_id].clone()) {
-            println!("vmm_init: vmm_init_cpu failed");
-        }
-        use crate::kernel::vm_if_list_set_type;
-        vm_if_list_set_type(vm_id, vm_type);
+    // Set up basic config.
+    if current_cpu().id == 0 {
+        super::vmm_init_config();
+        vmm_add_vm(vm_id);
     }
+    barrier();
 
+    println!("core {} init vm {}",current_cpu().id,vm_id);
 
-    println!("init vm {}",vm_id);
     vmm_assign_vcpu(vm_id);
+    barrier();
 
-    let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
-    let config = vm_cfg_table.entries[vm_id].clone();
-    let vm = vm(vm_id);
-
-    vmm_setup_config(config, vm.clone());
     // TODO: vmm_setup_contact_config
     if current_cpu().id == 0 {
-        println!("Sybilla Hypervisor init ok\n\nStart booting VMs ...");
+        vmm_setup_config(vm_id);
+        println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     }
 
 }

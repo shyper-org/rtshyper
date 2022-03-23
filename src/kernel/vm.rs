@@ -49,6 +49,7 @@ pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
 pub fn vm_if_list_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id = master_cpu_id;
+    println!("vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}",vm_id,master_cpu_id);
 }
 
 pub fn vm_if_list_get_cpu_id(vm_id: usize) -> usize {
@@ -481,11 +482,22 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.pt.as_ref().unwrap().show_pt(ipa);
     }
+
+    pub fn ready(&self) -> bool {
+        let vm_inner = self.inner.lock();
+        vm_inner.ready
+    }
+
+    pub fn set_ready(&self, _ready: bool) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.ready = _ready;
+    }
 }
 
 #[repr(align(4096))]
 pub struct VmInner {
     pub id: usize,
+    pub ready: bool,
     pub config: Option<Arc<VmConfigEntry>>,
     pub dtb: Option<usize>,
     // memory config
@@ -513,6 +525,7 @@ impl VmInner {
     pub const fn default() -> VmInner {
         VmInner {
             id: 0,
+            ready: false,
             config: None,
             dtb: None,
             pt: None,
@@ -532,6 +545,7 @@ impl VmInner {
     pub fn new(id: usize) -> VmInner {
         VmInner {
             id,
+            ready: false,
             config: None,
             dtb: None,
             pt: None,
@@ -570,9 +584,13 @@ pub fn vm(id: usize) -> Vm {
     vm_list[id].clone()
 }
 
-pub fn get_vm_by_index(id: usize) -> Vm {
+pub fn get_vm_by_index(id: usize) -> Option<Vm> {
     let vm_list = VM_LIST.lock();
-    vm_list[id].clone()
+    if vm_list.get(id).is_none() {
+        return None;
+    } else {
+        return Some(vm_list[id].clone());
+    }
 }
 
 pub fn vm_list_size() -> usize {

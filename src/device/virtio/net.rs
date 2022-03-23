@@ -11,7 +11,7 @@ use crate::device::VirtioIov;
 use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
-use crate::kernel::vm;
+use crate::kernel::{vm,get_vm_by_index};
 use crate::kernel::Vm;
 use crate::lib::trace;
 
@@ -195,7 +195,16 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
-            let vm = crate::kernel::vm(trgt_vmid);
+            // let vm = crate::kernel::vm(trgt_vmid);
+            let vm = match get_vm_by_index(trgt_vmid) {
+                None => {
+                    println!("virtio_net_notify_handler: target vm [{}] is not ready or not exist", trgt_vmid);
+                    return true;
+                }
+                Some(_vm) => {
+                    _vm
+                }
+            };
             let vcpu = vm.vcpu(0);
             if vcpu.phys_id() == current_cpu().id {
                 // if vm.id() == active_vm_id() {
@@ -254,7 +263,16 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::EnternetMsg(ethernet_msg) => {
             let trgt_vmid = ethernet_msg.trgt_vmid;
-            let vm = vm(trgt_vmid);
+            // let vm = vm(trgt_vmid);
+            let vm = match get_vm_by_index(trgt_vmid) {
+                None => {
+                    println!("ethernet_ipi_rev_handler: target vm [{}] is not ready or not exist", trgt_vmid);
+                    return;
+                }
+                Some(_vm) => {
+                    _vm
+                }
+            };
             let nic = match vm.emu_net_dev(0) {
                 EmuDevs::VirtioNet(x) => x,
                 _ => {
@@ -352,7 +370,15 @@ fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
 }
 
 fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
-    let vm = vm(vmid);
+    let vm = match get_vm_by_index(vmid) {
+        None => {
+            println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
+            return true;
+        }
+        Some(_vm) => {
+            _vm
+        }
+    };
     let nic = match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(x) => x,
         _ => {

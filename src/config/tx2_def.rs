@@ -229,64 +229,7 @@ pub fn config_init() {
     //############################################ begin vm 1 ################################################
     //########################################################################################################
 
-    // vm1 BMA emu
-    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
 
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("vgicd"),
-        base_ipa: 0x8000000,
-        length: 0x1000,
-        irq_id: 0,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTGicd,
-        mediated: false,
-    });
-    // vm2 BMA passthrough
-    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
-    pt_dev_config.regions = vec![
-        PassthroughRegion { ipa: 0x9000000, pa: UART_1_ADDR, length: 0x1000 },
-        // PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
-    ];
-    pt_dev_config.irqs = vec![UART_1_INT];
-    // pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
-    // vm2 BMA vm_region
-    let mut vm_region: Vec<VmRegion> = Vec::new();
-    vm_region.push(VmRegion {
-        ipa_start: 0x40000000,
-        length: 0x40000000,
-    });
-    // vm2 BMA config
-    vm_config.entries.push(Arc::new(VmConfigEntry {
-        name: Some("guest-bma-0"),
-        os_type: VmType::VmTBma,
-        memory: VmMemoryConfig {
-            region: vm_region,
-        },
-        image: VmImageConfig {
-            kernel_img_name: Some("sbma.bin"),
-            kernel_load_ipa: 0x40080000,
-            kernel_entry_point: 0x40080000,
-            device_tree_load_ipa: 0,
-            ramdisk_load_ipa: 0, //0x83000000,
-        },
-        cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0010,
-            master: 2,
-        },
-        vm_emu_dev_confg: Some(emu_dev_config),
-        vm_pt_dev_confg: Some(pt_dev_config),
-        vm_dtb_devs: None,
-        med_blk_idx: None,
-        cmdline: "",
-    }));
-
-    //########################################################################################################
-    //############################################# end vm 1 #################################################
-    //########################################################################################################
-    //############################################ begin vm 2 ################################################
-    //########################################################################################################
-    
     // #################### vm1 emu ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
@@ -399,8 +342,8 @@ pub fn config_init() {
         },
         cpu: VmCpuConfig {
             num: 1,
-            allocate_bitmap: 0b0010,
-            master: 1,
+            allocate_bitmap: 0b0100,
+            master: 2,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),

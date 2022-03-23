@@ -88,16 +88,14 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     timer_init();
     cpu_sched_init();
 
+    vmm_init(0);
+    if cpu_id == 0 {   
+        mediated_dev_init();
+    }
     crate::lib::barrier();
+    
     if cpu_id != 0 {
         crate::kernel::cpu_idle();
-    }
-
-    if cpu_id == 0 {
-        vmm_init(0);
-        mediated_dev_init();
-    } else {
-        panic!("cpu_id {} should not reach here",cpu_id);
     }
     println!("Start booting Manager VM ...");
     vmm_boot();
