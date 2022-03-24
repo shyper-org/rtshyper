@@ -497,7 +497,6 @@ impl VmAssignment {
     }
 }
 
-static VM_ASSIGN: Mutex<Vec<Mutex<VmAssignment>>> = Mutex::new(Vec::new());
 
 pub fn vmm_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
@@ -506,43 +505,33 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
         println!("vmm_assign_vcpu vm[{}] cpu {} is assigned",vm_id,cpu_id);
     } else {
         current_cpu().assigned = assigned;
-        println!("vmm_assign_vcpu vm[{}] cpu {} hasn't been assigned",vm_id,cpu_id);
+        // println!("vmm_assign_vcpu vm[{}] cpu {} hasn't been assigned",vm_id,cpu_id);
     }
     
+    // let cpu_config = vm(vm_id).config().cpu;
+    let mut cfg_master = vm(vm_id).config().cpu.master as usize;
+    let mut cfg_cpu_num = vm(vm_id).config().cpu.num;
+    let mut cfg_cpu_allocate_bitmap = vm(vm_id).config().cpu.allocate_bitmap;
 
-    let mut cfg_master: usize;
-    let mut cfg_cpu_num : usize;
-    let mut cfg_cpu_allocate_bitmap: u32;
-
-    {
-        let vm = vm(vm_id);
-
-        let vm_inner_lock = vm.inner();
-        let vm_inner = vm_inner_lock.lock();
-
-        let config = vm_inner.config.as_ref().unwrap();
-        cfg_master = config.cpu.master as usize;
-        cfg_cpu_num = config.cpu.num;
-        cfg_cpu_allocate_bitmap = config.cpu.allocate_bitmap;
-        println!("vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
+    println!("vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
             vm_id,cpu_id, cfg_master,cfg_cpu_num,cfg_cpu_allocate_bitmap);
-    }
 
     // barrier();
     // Judge if current cpu is allocated.
     if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 {
-        let vm_assign_list = VM_ASSIGN.lock();
-        let mut vm_assigned = vm_assign_list[vm_id].lock();
-        
+        let vm = vm(vm_id);
         if cpu_id == cfg_master
-            || (!vm_assigned.has_master && vm_assigned.cpu_num == cfg_cpu_num - 1)
+            || (!vm.has_master_cpu() && vm.get_cpu_num() == cfg_cpu_num - 1)
         {
-            let vm = vm(vm_id);
-            let vm_inner_lock = vm.inner();
-            let vm_inner = vm_inner_lock.lock();
-            let vcpu = vm_inner.vcpu_list[0].clone();
+            let vcpu = match vm.get_vcpu(0) {
+                None => {
+                    panic!("core {} vm {} don't have vcpu 0", cpu_id, vm_id);
+                    return;
+                }
+                Some(vcpu) => vcpu
+            };
             let vcpu_id = vcpu.id();
-            println!("core {} before vcpu_pool_append0", cpu_id);
+
             // only vm0 vcpu state should set to pend here
             if current_cpu().vcpu_pool().running() == 0 && vm_id == 0 {
                 vcpu.set_state(VcpuState::VcpuPend);
@@ -551,40 +540,41 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
                 panic!("core {} too many vcpu", cpu_id);
             }
-            println!("core {} after vcpu_pool_append0", cpu_id);
+
             vm_if_list_set_cpu_id(vm_id, cpu_id);
 
-            vm_assigned.has_master = true;
-            vm_assigned.cpu_num += 1;
-            vm_assigned.cpus |= 1 << cpu_id;
-            let assigned = true;
-            current_cpu().assigned = assigned;
+            vm.set_has_master_cpu(true);
+            vm.set_cpu_num(vm.get_cpu_num()+1);
+            vm.set_ncpu(vm.get_ncpu() | 1 << cpu_id);
+
+            current_cpu().assigned = true;
             println!(
                 "* Core {} is assigned => vm {}, vcpu {}",
                 cpu_id, vm_id, vcpu_id
             );
             // The remain core become secondary vcpu
-        } else if vm_assigned.cpu_num < cfg_cpu_num {
-            let mut trgt_id = cfg_cpu_num - vm_assigned.cpu_num - 1;
-            if vm_assigned.has_master {
+        } else if vm.get_cpu_num() < cfg_cpu_num {
+            let mut trgt_id = cfg_cpu_num - vm.get_cpu_num() - 1;
+            if vm.has_master_cpu() {
                 trgt_id += 1;
             }
 
-            let vm = vm(vm_id);
-            let vm_inner_lock = vm.inner();
-            let vm_inner = vm_inner_lock.lock();
-            let vcpu = vm_inner.vcpu_list[trgt_id].clone();
+            let vcpu = match vm.get_vcpu(trgt_id) {
+                None => {
+                    panic!("core {} vm {} don't have vcpu {}", cpu_id, vm_id, trgt_id);
+                    return;
+                }
+                Some(vcpu) => vcpu
+            };
             let vcpu_id = vcpu.id();
 
-            println!("core {} before vcpu_pool_append1", cpu_id);
             if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
                 panic!("core {} too many vcpu", cpu_id);
             }
-            println!("core {} after vcpu_pool_append1", cpu_id);
-            let assigned = true;
-            current_cpu().assigned = assigned;
-            vm_assigned.cpu_num += 1;
-            vm_assigned.cpus |= 1 << cpu_id;
+
+            current_cpu().assigned = true;
+            vm.set_cpu_num(vm.get_cpu_num()+1);
+            vm.set_ncpu(vm.get_ncpu() | 1 << cpu_id);
             println!(
                 "Core {} is assigned => vm {}, vcpu {}",
                 cpu_id, vm_id, vcpu_id
@@ -599,12 +589,6 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
         for i in 0..vcpu_pool.vcpu_num() {
             let vcpu = vcpu_pool.vcpu(i);
             vcpu.set_phys_id(cpu_id);
-            let vmid = vcpu.vm_id();
-            let vm_assign_list = VM_ASSIGN.lock();
-            let vm_assigned = vm_assign_list[vmid].lock();
-            let vm = get_vm_by_index(vmid).unwrap();
-            vm.set_ncpu(vm_assigned.cpus);
-            vm.set_cpu_num(vm_assigned.cpu_num);
             if let Some(mvm) = vcpu.vm() {
                 if mvm.id() == 0 {
                     current_cpu().set_active_vcpu(vcpu.clone());
@@ -617,9 +601,15 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
         }
     }
 
-    let vm = vm(vm_id);
-    vm.set_ready(true);
-    println!("vmm_assign_vcpu: core {} vm[{}] is ready", cpu_id, vm_id);
+    if vm_id != 0 {
+        let vm = vm(vm_id);
+        if cfg_cpu_num == vm.get_cpu_num() {
+            vm.set_ready(true);
+            println!("vmm_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id,cfg_cpu_num,vm.get_cpu_num());
+        } else {
+            println!("vmm_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id,cfg_cpu_num,vm.get_cpu_num());
+        }
+    }
     // barrier();
 }
 
@@ -646,29 +636,27 @@ pub fn vmm_add_vm(vm_id: usize) {
     }
     use crate::kernel::vm_if_list_set_type;
     vm_if_list_set_type(vm_id, vm_type);
-
-    let mut vm_assign_list = VM_ASSIGN.lock();
-    vm_assign_list.push(Mutex::new(VmAssignment::default()));
 }
 
-pub fn vmm_init(vm_id: usize) {
+pub fn vmm_init() {
     barrier();
 
-    // Set up basic config.
     if current_cpu().id == 0 {
+        // Set up basic config.
         super::vmm_init_config();
-        vmm_add_vm(vm_id);
+        // Add VM 0
+        vmm_add_vm(0);
     }
     barrier();
 
-    println!("core {} init vm {}",current_cpu().id,vm_id);
+    println!("core {} init vm 0",current_cpu().id);
 
-    vmm_assign_vcpu(vm_id);
+    vmm_assign_vcpu(0);
     barrier();
 
-    // TODO: vmm_setup_contact_config
     if current_cpu().id == 0 {
-        vmm_setup_config(vm_id);
+        // TODO: vmm_setup_contact_config
+        vmm_setup_config(0);
         println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     }
 

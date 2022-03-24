@@ -202,14 +202,43 @@ impl Vm {
         vm_inner.dtb = Some(val as usize);
     }
 
+    pub fn get_vcpu(&self, index: usize) -> Option<Vcpu>{
+        let mut vm_inner = self.inner.lock();
+        if vm_inner.vcpu_list.get(index).is_some() {
+            return Some(vm_inner.vcpu_list[index].clone());
+        } else {
+            return None;
+        }
+    }
+
     pub fn push_vcpu(&self, vcpu: Vcpu) {
         let mut vm_inner = self.inner.lock();
         vm_inner.vcpu_list.push(vcpu);
     }
 
+    pub fn set_has_master_cpu(&self, has_master: bool){
+        let mut vm_inner = self.inner.lock();
+        vm_inner.has_master = has_master;
+    }
+
+    pub fn has_master_cpu(&self) -> bool {
+        let vm_inner = self.inner.lock();
+        vm_inner.has_master
+    }
+
+    pub fn get_ncpu(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.ncpu
+    }
+
     pub fn set_ncpu(&self, ncpu: usize) {
         let mut vm_inner = self.inner.lock();
         vm_inner.ncpu = ncpu;
+    }
+
+    pub fn get_cpu_num(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.cpu_num
     }
 
     pub fn set_cpu_num(&self, cpu_num: usize) {
@@ -509,6 +538,7 @@ pub struct VmInner {
     pub entry_point: usize,
 
     // vcpu config
+    pub has_master: bool,
     pub vcpu_list: Vec<Vcpu>,
     pub cpu_num: usize,
     pub ncpu: usize,
@@ -532,6 +562,8 @@ impl VmInner {
             mem_region_num: 0,
             pa_region: None,
             entry_point: 0,
+
+            has_master: false,
             vcpu_list: Vec::new(),
             cpu_num: 0,
             ncpu: 0,
@@ -552,6 +584,8 @@ impl VmInner {
             mem_region_num: 0,
             pa_region: None,
             entry_point: 0,
+
+            has_master: false,
             vcpu_list: Vec::new(),
             cpu_num: 0,
             ncpu: 0,

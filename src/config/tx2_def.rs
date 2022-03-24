@@ -14,7 +14,7 @@ use super::{
 pub fn config_init() {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     vm_config.name = Some("tx2-default");
-    vm_config.vm_num = 2;
+    vm_config.vm_num = 3;
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
@@ -218,8 +218,8 @@ pub fn config_init() {
         vm_dtb_devs: None,
         med_blk_idx: None,
         cmdline:
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
 
@@ -247,9 +247,9 @@ pub fn config_init() {
         length: 0x1000,
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-        cfg_list: vec![0, 8388608],
+        // cfg_list: vec![0, 8388608],
         // cfg_list: vec![0, 67108864], // 32G
-        // cfg_list: vec![0, 209715200], // 100G
+        cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });
@@ -284,10 +284,10 @@ pub fn config_init() {
     // vm1 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
-        PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
+        // PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
         PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
     ];
-    pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
+    // pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
     pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
 
     // vm1 vm_region
@@ -316,15 +316,15 @@ pub fn config_init() {
             length: 0x2000,
         },
     });
-    vm_dtb_devs.push(VmDtbDev {
-        name: "serial",
-        dev_type: DtbDevType::DevSerial,
-        irqs: vec![UART_1_INT],
-        addr_region: AddrRegions {
-            ipa: UART_1_ADDR,
-            length: 0x1000,
-        },
-    });
+    // vm_dtb_devs.push(VmDtbDev {
+    //     name: "serial",
+    //     dev_type: DtbDevType::DevSerial,
+    //     irqs: vec![UART_1_INT],
+    //     addr_region: AddrRegions {
+    //         ipa: UART_1_ADDR,
+    //         length: 0x1000,
+    //     },
+    // });
 
     // vm1 config
     vm_config.entries.push(Arc::new(VmConfigEntry {
@@ -341,8 +341,8 @@ pub fn config_init() {
             ramdisk_load_ipa: 0, //0x83000000,
         },
         cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0100,
+            num: 2,
+            allocate_bitmap: 0b0110,
             master: 2,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
@@ -350,7 +350,7 @@ pub fn config_init() {
         vm_dtb_devs: Some(vm_dtb_devs),
         med_blk_idx: Some(0),
         // cmdline: "root=/dev/vda rw audit=0",
-        cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
+        cmdline: "earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0",
     }));
 
     // #################### bare metal app emu (vm2) ######################
@@ -505,8 +505,8 @@ pub fn config_init() {
         },
         cpu: VmCpuConfig {
             num: 1,
-            allocate_bitmap: 0b0100,
-            master: 2,
+            allocate_bitmap: 0b1000,
+            master: 3,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),

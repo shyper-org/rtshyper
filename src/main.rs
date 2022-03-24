@@ -88,7 +88,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     timer_init();
     cpu_sched_init();
 
-    vmm_init(0);
+    vmm_init();
     if cpu_id == 0 {   
         mediated_dev_init();
     }

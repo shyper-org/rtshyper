@@ -60,16 +60,13 @@ pub fn vmm_boot_vm(vm_id: usize) {
         vmm_set_up_vm(vm_id);
         while true {
             println!("vmm_boot_vm: on core {},waiting vm[{}] to be set up",current_cpu().id, vm_id);
-            let vm: Vm;
-            match get_vm_by_index(vm_id) {
+            let vm = match get_vm_by_index(vm_id) {
                 None => {
                     println!("vmm_boot_vm: on core {}, vm[{}]  is not added yet",current_cpu().id, vm_id);
                     continue;
                 }
-                Some(_vm) => {
-                    vm = _vm;
-                }
-            }
+                Some(_vm) => _vm
+            };
             if vm.ready() {
                 break;
             }
