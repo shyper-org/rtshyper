@@ -1,10 +1,10 @@
 #![no_std]
 #![no_main]
-#![feature(global_asm)]
 #![feature(core_intrinsics)]
 #![feature(default_alloc_error_handler)]
 #![feature(alloc_error_handler)]
 #![feature(const_fn_trait_bound)]
+#![feature(into_future)]
 
 #[macro_use]
 extern crate alloc;
@@ -87,7 +87,9 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     interrupt_init();
     timer_init();
     cpu_sched_init();
-
+    // if cpu_id == 0 {
+    //     tmp();
+    // }
     vmm_init();
     if cpu_id == 0 {
         mediated_dev_init();

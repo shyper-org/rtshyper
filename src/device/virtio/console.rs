@@ -1,17 +1,12 @@
 use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, active_vm_id, vm_if_list_get_cpu_id, vm_ipa2pa};
-use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
-use crate::kernel::IpiMessage;
+use crate::kernel::{active_vm, vm_ipa2pa};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::trace;
@@ -72,7 +67,7 @@ impl ConsoleDesc {
     }
 
     pub fn target_console(&self) -> (u16, u64) {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         (inner.oppo_end_vmid, inner.oppo_end_ipa)
     }
 }
@@ -106,13 +101,13 @@ pub fn console_features() -> usize {
 }
 
 pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> bool {
-    if vq.ready() == 0 {
-        println!("net virt_queue is not ready!");
-        return false;
+    if vq.vq_indx() % 4 != 1 {
+        println!("console rx queue notified!");
+        return true;
     }
 
-    if vq.vq_indx() != 1 {
-        println!("net rx queue notified!");
+    if vq.ready() == 0 {
+        println!("virtio_console_notify_handler: console virt_queue is not ready!");
         return false;
     }
 
@@ -217,8 +212,8 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         println!("virtio_console_recv: receive invalid avail desc idx");
         return false;
     } else if desc_header_idx_opt.is_none() {
-        println!("virtio_console_recv: desc_header_idx_opt.is_none()");
-        return false;
+        // println!("virtio_console_recv: desc_header_idx_opt.is_none()");
+        return true;
     }
 
     let desc_idx_header = desc_header_idx_opt.unwrap();

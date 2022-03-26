@@ -1,23 +1,21 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use spin::Mutex;
-
 use crate::arch::{emu_intc_handler, emu_intc_init, partial_passthrough_intc_handler, partial_passthrough_intc_init};
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
-use crate::config::{DEF_VM_CONFIG_TABLE, vm_cfg_entry, vm_type, VmCpuConfig, VmImageConfig, VmMemoryConfig};
+use crate::config::{vm_cfg_entry, vm_type, VmCpuConfig, VmImageConfig, VmMemoryConfig};
 use crate::config::VmConfigEntry;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm_id, CPU, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
-use crate::kernel::{cpu_sched_init, mem_page_alloc, mem_vm_region_alloc};
-use crate::kernel::{vm, Vm, VM_LIST, vm_list_size};
+use crate::kernel::{active_vm_id, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
+use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
+use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
@@ -506,9 +504,9 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
 
     // let cpu_config = vm(vm_id).config().cpu;
     let vm = vm(vm_id).unwrap();
-    let mut cfg_master = vm.config().cpu.master as usize;
-    let mut cfg_cpu_num = vm.config().cpu.num;
-    let mut cfg_cpu_allocate_bitmap = vm.config().cpu.allocate_bitmap;
+    let cfg_master = vm.config().cpu.master as usize;
+    let cfg_cpu_num = vm.config().cpu.num;
+    let cfg_cpu_allocate_bitmap = vm.config().cpu.allocate_bitmap;
 
     println!("vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
              vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap);

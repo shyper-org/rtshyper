@@ -6,7 +6,7 @@ use spin::Mutex;
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
-use crate::config::{DEF_VM_CONFIG_TABLE, VmCpuConfig};
+use crate::config::DEF_VM_CONFIG_TABLE;
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::lib::*;
@@ -204,7 +204,7 @@ impl Vm {
     }
 
     pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
-        let mut vm_inner = self.inner.lock();
+        let vm_inner = self.inner.lock();
         if vm_inner.vcpu_list.len() > index {
             Some(vm_inner.vcpu_list[index].clone())
         } else {
@@ -348,7 +348,7 @@ impl Vm {
             return false;
         }
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
-            EmuDevs::Vgic(vgic) => { true }
+            EmuDevs::Vgic(_) => { true }
             _ => { false }
         }
     }

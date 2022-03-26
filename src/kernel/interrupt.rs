@@ -1,9 +1,8 @@
-use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
-use crate::kernel::{active_vm, active_vm_id, current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
+use crate::kernel::{current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
@@ -27,7 +26,7 @@ pub enum InterruptHandler {
 }
 
 impl InterruptHandler {
-    pub fn call(&self, arg0: usize, arg1: usize) {
+    pub fn call(&self, arg0: usize, _arg1: usize) {
         match self {
             InterruptHandler::IpiIrqHandler(irq_handler) => irq_handler(),
             InterruptHandler::GicMaintenanceHandler(gic_handler) => gic_handler(arg0),

@@ -1,3 +1,4 @@
+pub use self::async_task::*;
 pub use self::cpu::*;
 pub use self::hvc::*;
 pub use self::interrupt::*;
@@ -7,12 +8,13 @@ pub use self::logger::*;
 pub use self::mem::*;
 pub use self::mem_region::*;
 pub use self::sched::*;
-pub use self::task::*;
+// pub use self::task::*;
 pub use self::timer::*;
 pub use self::vcpu::*;
 pub use self::vcpu_pool::*;
 pub use self::vm::*;
 
+mod async_task;
 mod cpu;
 mod hvc;
 mod interrupt;
@@ -21,7 +23,7 @@ mod ivc;
 mod logger;
 mod mem;
 mod mem_region;
-mod task;
+// mod task;
 mod timer;
 mod vcpu;
 mod vcpu_pool;

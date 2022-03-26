@@ -3,9 +3,9 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::kernel::{active_vm, finish_task, hvc_send_msg_to_vm, HvcGuestMsg, init_mediated_used_info, interrupt_vm_inject, io_task_head, IpiInnerMsg, Task, vm, vm_ipa2pa};
+use crate::kernel::{active_vm, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcGuestMsg, init_async_used_info, interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
-use crate::lib::{memcpy_safe, trace};
+use crate::lib::trace;
 
 static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
@@ -116,7 +116,7 @@ pub fn mediated_dev_init() {
         panic!("mediated_dev_init: failed to register ipi IpiTMediatedNotify");
     }
 
-    init_mediated_used_info();
+    init_async_used_info();
 }
 
 // only run in vm0
@@ -139,52 +139,10 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     true
 }
 
-pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
-    let dev_pa_reg = vm_ipa2pa(active_vm().unwrap(), dev_ipa_reg);
-
-    let mediated_blk = match mediated_blk_list_get_from_pa(dev_pa_reg) {
-        Some(blk) => { blk }
-        None => {
-            println!("illegal mediated blk pa {:x} ipa {:x}", dev_pa_reg, dev_ipa_reg);
-            return false;
-        }
-    };
-    let mut cache_ptr = mediated_blk.cache_pa();
-    let io_task = io_task_head();
-    if io_task.is_none() {
-        return false;
-    }
-
-    match io_task.unwrap() {
-        Task::MediatedIpiTask(_) => {
-            panic!("illegal io task type");
-        }
-        Task::MediatedIoTask(task) => {
-            match task.io_type {
-                VIRTIO_BLK_T_IN => {
-                    // let mut sum = 0;
-                    for idx in 0..task.iov_list.len() {
-                        let data_bg = task.iov_list[idx].data_bg;
-                        let len = task.iov_list[idx].len as usize;
-                        if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
-                            panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
-                        }
-                        memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
-                        // sum |= check_sum(data_bg, len);
-                        cache_ptr += len;
-                    }
-                    // println!("read check_sum is {:x}", sum);
-                }
-                VIRTIO_BLK_T_OUT => {
-                    // println!("notify write");
-                }
-                _ => {}
-            }
-        }
-    }
-
-    finish_task(false);
-    true
+pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
+    set_io_task_state(0, AsyncTaskState::Finish);
+    async_task_exe();
+    return true;
 }
 
 pub fn mediated_notify_ipi_handler(msg: &IpiMessage) {
@@ -195,7 +153,6 @@ pub fn mediated_notify_ipi_handler(msg: &IpiMessage) {
         }
         _ => {}
     }
-    // println!("vm[{}] inject blk irq", vm.id());
 }
 
 fn check_sum(addr: usize, len: usize) -> usize {

@@ -5,9 +5,8 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, active_vm_id, current_cpu, Vm, vm_if_list_get_cpu_id};
-use crate::kernel::{interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
-use crate::kernel::IpiMessage;
+use crate::kernel::{active_vm, current_cpu, Vm};
+use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;

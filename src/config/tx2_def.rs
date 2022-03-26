@@ -28,7 +28,7 @@ pub fn config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a001000"),
+        name: Some("virtio_net@a001000"),
         base_ipa: 0xa001000,
         length: 0x1000,
         irq_id: 32 + 0x11,
@@ -37,7 +37,7 @@ pub fn config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a002000"),
+        name: Some("virtio_console@a002000"),
         base_ipa: 0xa002000,
         length: 0x1000,
         irq_id: 32 + 0x12,
@@ -254,7 +254,7 @@ pub fn config_init() {
         mediated: true,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_mmio@a002000"),
+        name: Some("virtio_console@a002000"),
         base_ipa: 0xa002000,
         length: 0x1000,
         irq_id: 32 + 0x12,

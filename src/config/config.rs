@@ -5,8 +5,7 @@ use spin::Mutex;
 
 // use crate::board::*;
 use crate::device::EmuDeviceType;
-use crate::kernel::{vm_ipa2pa, VmType};
-use crate::lib::memcpy_safe;
+use crate::kernel::VmType;
 
 const NAME_MAX_LEN: usize = 32;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
@@ -231,7 +230,7 @@ pub fn vm_cfg_entry(id: usize) -> Arc<VmConfigEntry> {
 pub fn vm_config_add_vm(
     vmtype: usize,
     cmdline_ipa: usize,
-    kernel_img_ipa: usize,
+    kernel_entry_point: usize,
     kernel_load_ipa: usize,
     device_tree_load_ipa: usize,
 ) -> bool {
@@ -242,9 +241,9 @@ pub fn vm_config_add_vm(
         memory: VmMemoryConfig::default(),
         image: VmImageConfig {
             kernel_img_name: None,
-            kernel_load_ipa: kernel_img_ipa,
-            kernel_entry_point: kernel_img_ipa,
-            device_tree_load_ipa: device_tree_load_ipa,
+            kernel_load_ipa,
+            kernel_entry_point,
+            device_tree_load_ipa,
             ramdisk_load_ipa: 0,
         },
         cpu: VmCpuConfig::default(),

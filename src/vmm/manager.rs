@@ -3,8 +3,8 @@ use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
-use crate::kernel::{active_vcpu_id, active_vm, current_cpu, Vcpu, vcpu_run, Vm, vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa, VM_LIST};
-use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id, vm_list_size};
+use crate::kernel::{active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
+use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::{vmm_add_vm, vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
 
