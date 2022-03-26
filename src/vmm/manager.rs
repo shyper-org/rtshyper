@@ -1,7 +1,7 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::vm_cfg_entry;
+use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2, init_tmp_config_for_vm3, vm_cfg_entry, vm_num};
 use crate::device::create_fdt;
 use crate::kernel::{active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
 use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id};
@@ -57,6 +57,15 @@ pub fn vmm_set_up_vm(vm_id: usize) {
 pub fn vmm_boot_vm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 {
+        // TODO: this code should be replaced
+        if vm_id == 1 {
+            init_tmp_config_for_vm1();
+        } else if vm_id == 2 {
+            init_tmp_config_for_vm2();
+        } else if vm_id == 3 {
+            init_tmp_config_for_vm3();
+        }
+
         vmm_set_up_vm(vm_id);
         loop {
             println!("vmm_boot_vm: on core {},waiting vm[{}] to be set up", current_cpu().id, vm_id);

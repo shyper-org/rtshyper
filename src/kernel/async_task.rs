@@ -310,12 +310,7 @@ pub fn update_used_info(vq: Virtq, src_vmid: usize) {
     used_info_list[src_vmid].clear();
 }
 
-pub fn init_async_used_info() {
-    let vm_num = vm_num();
+pub fn add_async_used_info() {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    used_info_list.clear();
-
-    for _ in 0..vm_num {
-        used_info_list.push(Vec::new());
-    }
+    used_info_list.push(Vec::new());
 }

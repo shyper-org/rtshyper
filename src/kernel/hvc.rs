@@ -110,7 +110,8 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> bool {
         }
         // HVC_VMM_BOOT_VM
         2 => {
-            vmm_boot_vm(x0);
+            let vm_id = vm_num();
+            vmm_boot_vm(vm_id);
             true
         }
         // HVC_VMM_SHUTDOWN_VM

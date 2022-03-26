@@ -13,7 +13,7 @@ use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm_id, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
+use crate::kernel::{active_vm_id, add_async_used_info, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
@@ -427,6 +427,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     }
 }
 
+// this func should run 1 time for each vm
 pub fn vmm_setup_config(vm_id: usize) {
     let config = vm_cfg_entry(vm_id);
     let vm = vm(vm_id).unwrap();
@@ -473,6 +474,7 @@ pub fn vmm_setup_config(vm_id: usize) {
     if !vmm_init_passthrough_device(&config.vm_pt_dev_confg, vm.clone()) {
         panic!("vmm_setup_config: vmm_init_passthrough_device failed");
     }
+    add_async_used_info();
     println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }
 
