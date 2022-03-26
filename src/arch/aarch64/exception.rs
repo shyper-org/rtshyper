@@ -113,8 +113,11 @@ unsafe extern "C" fn current_el_sp0_serror() {
 #[inline(never)]
 unsafe extern "C" fn current_el_spx_synchronous() {
     panic!(
-        "current_elx_synchronous {:016x}",
-        cortex_a::registers::ELR_EL2.get()
+        "current_elx_synchronous {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
+        cortex_a::registers::ELR_EL2.get(),
+        cortex_a::registers::SP_EL0.get(),
+        cortex_a::registers::SP_EL1.get(),
+        cortex_a::registers::SPSel.get(),
     );
 }
 

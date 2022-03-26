@@ -195,8 +195,17 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
-            let vm = crate::kernel::vm(trgt_vmid);
-            let vcpu = vm.vcpu(0);
+            // let vm = crate::kernel::vm(trgt_vmid);
+            let vm = match crate::kernel::vm(trgt_vmid) {
+                None => {
+                    println!("virtio_net_notify_handler: target vm [{}] is not ready or not exist", trgt_vmid);
+                    return true;
+                }
+                Some(_vm) => {
+                    _vm
+                }
+            };
+            let vcpu = vm.vcpu(0).unwrap();
             if vcpu.phys_id() == current_cpu().id {
                 // if vm.id() == active_vm_id() {
                 let nic = match vm.emu_net_dev(0) {
@@ -254,7 +263,16 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::EnternetMsg(ethernet_msg) => {
             let trgt_vmid = ethernet_msg.trgt_vmid;
-            let vm = vm(trgt_vmid);
+            // let vm = vm(trgt_vmid);
+            let vm = match vm(trgt_vmid) {
+                None => {
+                    println!("ethernet_ipi_rev_handler: target vm [{}] is not ready or not exist", trgt_vmid);
+                    return;
+                }
+                Some(_vm) => {
+                    _vm
+                }
+            };
             let nic = match vm.emu_net_dev(0) {
                 EmuDevs::VirtioNet(x) => x,
                 _ => {
@@ -352,7 +370,15 @@ fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
 }
 
 fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
-    let vm = vm(vmid);
+    let vm = match vm(vmid) {
+        None => {
+            println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
+            return true;
+        }
+        Some(_vm) => {
+            _vm
+        }
+    };
     let nic = match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(x) => x,
         _ => {

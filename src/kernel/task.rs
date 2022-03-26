@@ -46,7 +46,7 @@ impl Task {
             Task::MediatedIpiTask(msg) => {
                 if current_cpu().id == 0 {
                     // println!("Core0 task ipi handler, virtio_blk_notify_handler");
-                    virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id));
+                    virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
                 } else {
                     // println!("mediated task ipi send msg");
                     ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
@@ -164,8 +164,8 @@ pub fn finish_task(ipi: bool) {
                 ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::MediatedNotifyMsg(msg));
             } else {
                 // println!("inject blk irq to vm {}", task_msg.src_vmid);
-                let vm = vm(task_msg.src_vmid);
-                interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
+                let vm = vm(task_msg.src_vmid).unwrap();
+                interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
             }
         }
     }
@@ -240,7 +240,7 @@ pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
     if let Task::MediatedIoTask(io_task_src) = src_task
     {
         if let Task::MediatedIoTask(io_task_des) = des_task {
-            let des_vm = vm(io_task_des.src_vmid);
+            let des_vm = vm(io_task_des.src_vmid).unwrap();
             let mediated_blk = mediated_blk_list_get(des_vm.med_blk_id());
 
             if io_task_des.src_vmid == io_task_src.src_vmid &&

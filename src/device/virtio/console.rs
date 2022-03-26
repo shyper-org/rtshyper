@@ -173,7 +173,16 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
 }
 
 fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
-    let trgt_vm = vm(trgt_vmid as usize);
+    let trgt_vm = match vm(trgt_vmid as usize) {
+        None => {
+            println!("target vm [{}] is not ready or not exist", trgt_vmid);
+            return true;
+        }
+        Some(vm) => {
+            vm
+        }
+    };
+
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa) {
         EmuDevs::VirtioConsole(x) => x,
         _ => {

@@ -49,6 +49,7 @@ pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
 pub fn vm_if_list_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id = master_cpu_id;
+    println!("vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}", vm_id, master_cpu_id);
 }
 
 pub fn vm_if_list_get_cpu_id(vm_id: usize) -> usize {
@@ -93,10 +94,20 @@ pub enum VmState {
     VmActive = 2,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum VmType {
     VmTOs = 0,
     VmTBma = 1,
+}
+
+impl VmType {
+    pub fn from_usize(value: usize) -> VmType {
+        match value {
+            0 => VmType::VmTOs,
+            1 => VmType::VmTBma,
+            _ => panic!("Unknown value: {}", value),
+        }
+    }
 }
 
 pub struct VmInterface {
@@ -186,14 +197,34 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.dtb.map(|x| x as *mut fdt::myctypes::c_void)
     }
+
     pub fn set_dtb(&self, val: *mut fdt::myctypes::c_void) {
         let mut vm_inner = self.inner.lock();
         vm_inner.dtb = Some(val as usize);
     }
 
+    pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
+        let vm_inner = self.inner.lock();
+        if vm_inner.vcpu_list.len() > index {
+            Some(vm_inner.vcpu_list[index].clone())
+        } else {
+            None
+        }
+    }
+
     pub fn push_vcpu(&self, vcpu: Vcpu) {
         let mut vm_inner = self.inner.lock();
         vm_inner.vcpu_list.push(vcpu);
+    }
+
+    pub fn set_has_master_cpu(&self, has_master: bool) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.has_master = has_master;
+    }
+
+    pub fn has_master_cpu(&self) -> bool {
+        let vm_inner = self.inner.lock();
+        vm_inner.has_master
     }
 
     pub fn set_ncpu(&self, ncpu: usize) {
@@ -237,14 +268,11 @@ impl Vm {
     pub fn set_int_bit_map(&self, int_id: usize) {
         let mut vm_inner = self.inner.lock();
         vm_inner.int_bitmap.as_mut().unwrap().set(int_id);
-        // match vm_inner.int_bitmap {
-        //     Some(mut bitmap) => {
-        //         bitmap.set(int_id);
-        //     }
-        //     None => {
-        //         panic!("vm {} bitmap is None", self.vm_id());
-        //     }
-        // }
+    }
+
+    pub fn set_config_entry(&self, config: Arc<VmConfigEntry>) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.config = Some(config);
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
@@ -300,11 +328,6 @@ impl Vm {
     pub fn mem_region_num(&self) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.mem_region_num
-    }
-
-    pub fn vcpu(&self, idx: usize) -> Vcpu {
-        let vm_inner = self.inner.lock();
-        vm_inner.vcpu_list[idx].clone()
     }
 
     pub fn vgic(&self) -> Arc<Vgic> {
@@ -394,17 +417,6 @@ impl Vm {
     pub fn has_interrupt(&self, int_id: usize) -> bool {
         let mut vm_inner = self.inner.lock();
         vm_inner.int_bitmap.as_mut().unwrap().get(int_id) != 0
-        // match vm_inner.int_bitmap {
-        //     Some(mut bitmap) => {
-        //         if int_id == 27 {
-        //             println!("bitmap 27 is {}", bitmap.get(int_id));
-        //         }
-        //         return bitmap.get(int_id) != 0;
-        //     }
-        //     None => {
-        //         panic!("vm {} bitmap is None", self.vm_id());
-        //     }
-        // }
     }
 
     pub fn emu_has_interrupt(&self, int_id: usize) -> bool {
@@ -471,11 +483,22 @@ impl Vm {
         let vm_inner = self.inner.lock();
         vm_inner.pt.as_ref().unwrap().show_pt(ipa);
     }
+
+    pub fn ready(&self) -> bool {
+        let vm_inner = self.inner.lock();
+        vm_inner.ready
+    }
+
+    pub fn set_ready(&self, _ready: bool) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.ready = _ready;
+    }
 }
 
 #[repr(align(4096))]
 pub struct VmInner {
     pub id: usize,
+    pub ready: bool,
     pub config: Option<Arc<VmConfigEntry>>,
     pub dtb: Option<usize>,
     // memory config
@@ -487,6 +510,7 @@ pub struct VmInner {
     pub entry_point: usize,
 
     // vcpu config
+    pub has_master: bool,
     pub vcpu_list: Vec<Vcpu>,
     pub cpu_num: usize,
     pub ncpu: usize,
@@ -503,12 +527,15 @@ impl VmInner {
     pub const fn default() -> VmInner {
         VmInner {
             id: 0,
+            ready: false,
             config: None,
             dtb: None,
             pt: None,
             mem_region_num: 0,
             pa_region: None,
             entry_point: 0,
+
+            has_master: false,
             vcpu_list: Vec::new(),
             cpu_num: 0,
             ncpu: 0,
@@ -522,12 +549,15 @@ impl VmInner {
     pub fn new(id: usize) -> VmInner {
         VmInner {
             id,
+            ready: false,
             config: None,
             dtb: None,
             pt: None,
             mem_region_num: 0,
             pa_region: None,
             entry_point: 0,
+
+            has_master: false,
             vcpu_list: Vec::new(),
             cpu_num: 0,
             ncpu: 0,
@@ -555,9 +585,24 @@ impl VmInner {
 // ]);
 pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
 
-pub fn vm(id: usize) -> Vm {
+pub fn push_vm(id: usize) -> Result<(), ()> {
+    let mut vm_list = VM_LIST.lock();
+    if id < vm_list.len() {
+        println!("push_vm: vm {} already exists", id);
+        return Err(());
+    }
+    let vm = Vm::new(id);
+    vm_list.push(vm);
+    Ok(())
+}
+
+pub fn vm(id: usize) -> Option<Vm> {
     let vm_list = VM_LIST.lock();
-    vm_list[id].clone()
+    if vm_list.get(id).is_none() {
+        return None;
+    } else {
+        return Some(vm_list[id].clone());
+    }
 }
 
 pub fn vm_list_size() -> usize {
@@ -566,13 +611,6 @@ pub fn vm_list_size() -> usize {
 }
 
 pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
-    // let vm = match active_vm() {
-    //     Some(vm) => vm,
-    //     None => {
-    //         panic!("vm_ipa2pa: current vcpu.vm is none");
-    //     }
-    // };
-
     if ipa == 0 {
         return 0;
     }

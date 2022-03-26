@@ -111,7 +111,7 @@ pub async fn async_ipi_req() {
     match task.task_data {
         AsyncTaskData::AsyncIpiTask(msg) => {
             if current_cpu().id == 0 {
-                virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id));
+                virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
             } else {
                 ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
             }
@@ -258,15 +258,13 @@ pub fn finish_async_task(ipi: bool) {
                 let target_id = vm_if_list_get_cpu_id(task.src_vmid);
                 update_used_info(args.vq.clone(), task.src_vmid);
                 if target_id != current_cpu().id {
-                    // println!("ipi inject blk irq to vm {}", task.src_vmid);
                     let msg = IpiMediatedNotifyMsg {
                         vm_id: task.src_vmid,
                     };
                     ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::MediatedNotifyMsg(msg));
                 } else {
-                    // println!("inject blk irq to vm {}", task.src_vmid);
-                    let vm = vm(task.src_vmid);
-                    interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
+                    let vm = vm(task.src_vmid).unwrap();
+                    interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
                 }
             }
         }

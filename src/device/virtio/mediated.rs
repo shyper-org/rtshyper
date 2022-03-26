@@ -139,7 +139,7 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     true
 }
 
-pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
+pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
     set_io_task_state(0, AsyncTaskState::Finish);
     async_task_exe();
     return true;
@@ -148,8 +148,8 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
 pub fn mediated_notify_ipi_handler(msg: &IpiMessage) {
     match &msg.ipi_message {
         IpiInnerMsg::MediatedNotifyMsg(msg) => {
-            let vm = vm(msg.vm_id);
-            interrupt_vm_inject(vm.clone(), vm.vcpu(0), BLK_IRQ, 0);
+            let vm = vm(msg.vm_id).unwrap();
+            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
         }
         _ => {}
     }
@@ -169,7 +169,7 @@ pub fn mediated_ipi_handler(msg: &IpiMessage) {
     match &msg.ipi_message {
         IpiInnerMsg::MediatedMsg(mediated_msg) => {
             let src_id = mediated_msg.src_id;
-            let vm = vm(src_id);
+            let vm = vm(src_id).unwrap();
             virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm);
         }
         _ => {}

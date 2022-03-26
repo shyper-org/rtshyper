@@ -94,7 +94,6 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     if cpu_id == 0 {
         mediated_dev_init();
     }
-
     crate::lib::barrier();
     if cpu_id != 0 {
         crate::kernel::cpu_idle();

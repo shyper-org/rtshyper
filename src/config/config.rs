@@ -67,14 +67,12 @@ pub struct VmMemoryConfig {
 
 impl VmMemoryConfig {
     pub const fn default() -> VmMemoryConfig {
-        VmMemoryConfig {
-            region: vec![],
-        }
+        VmMemoryConfig { region: vec![] }
     }
 }
 
 pub struct VmImageConfig {
-    // pub kernel_name: Option<&'static str>,
+    pub kernel_img_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
     pub kernel_entry_point: usize,
     // pub device_tree_filename: Option<&'static str>,
@@ -86,7 +84,7 @@ pub struct VmImageConfig {
 impl VmImageConfig {
     pub const fn default() -> VmImageConfig {
         VmImageConfig {
-            // kernel_name: None,
+            kernel_img_name: None,
             kernel_load_ipa: 0,
             kernel_entry_point: 0,
             // device_tree_filename: None,
@@ -97,6 +95,7 @@ impl VmImageConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct VmCpuConfig {
     pub num: usize,
     pub allocate_bitmap: u32,
@@ -227,3 +226,49 @@ pub fn vm_cfg_entry(id: usize) -> Arc<VmConfigEntry> {
     let table = DEF_VM_CONFIG_TABLE.lock();
     table.entries[id].clone()
 }
+
+pub fn vm_config_add_vm(
+    vmtype: usize,
+    cmdline_ipa: usize,
+    kernel_entry_point: usize,
+    kernel_load_ipa: usize,
+    device_tree_load_ipa: usize,
+) -> bool {
+    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
+    let mut newVm = VmConfigEntry {
+        name: None,
+        os_type: VmType::from_usize(vmtype),
+        memory: VmMemoryConfig::default(),
+        image: VmImageConfig {
+            kernel_img_name: None,
+            kernel_load_ipa,
+            kernel_entry_point,
+            device_tree_load_ipa,
+            ramdisk_load_ipa: 0,
+        },
+        cpu: VmCpuConfig::default(),
+        vm_emu_dev_confg: None,
+        vm_pt_dev_confg: None,
+        vm_dtb_devs: None,
+        cmdline: "",
+        med_blk_idx: None,
+    };
+    // memcpy_safe(newVm.cmdline as *mut u8, vm_ipa2pa(active_vm().unwrap(), cmdline_ipa) as *mut u8, NAME_MAX_LEN);
+
+    vm_config.entries.push(Arc::new(newVm));
+    true
+}
+
+pub fn vm_config_del_vm() -> bool {
+    true
+}
+
+pub fn vm_config_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize) -> bool {
+    true
+}
+
+pub fn vm_config_add_emu_dev(vmid: usize) -> bool { true }
+
+pub fn vm_config_add_pt_dev(vmid: usize) -> bool { true }
+
+pub fn vm_config_add_dtb_dev(vmid: usize) -> bool { true }

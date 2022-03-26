@@ -336,8 +336,8 @@ impl VcpuInner {
     }
 
     fn show_ctx(&self) {
-        println!("cntvoff_el2 {:x}, sctlr_el1 {:x}, cntkctl_el1 {:x}, pmcr_el0 {:x}, vtcr_el2 {:x}",
-                 self.vm_ctx.cntvoff_el2, self.vm_ctx.sctlr_el1, self.vm_ctx.cntkctl_el1, self.vm_ctx.pmcr_el0, self.vm_ctx.vtcr_el2);
+        println!("cntvoff_el2 {:x}, sctlr_el1 {:x}, cntkctl_el1 {:x}, pmcr_el0 {:x}, vtcr_el2 {:x} x0 {:x}",
+                 self.vm_ctx.cntvoff_el2, self.vm_ctx.sctlr_el1, self.vm_ctx.cntkctl_el1, self.vm_ctx.pmcr_el0, self.vm_ctx.vtcr_el2, self.vcpu_ctx.gpr(0));
     }
 }
 
@@ -392,6 +392,8 @@ pub fn vcpu_run() {
         }
     }
 
+    println!("vcpu run elr {:x} x0 {:016x}", current_cpu().active_vcpu.clone().unwrap().elr(),current_cpu().get_gpr(0));
+    // TODO: vcpu_run
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;
     }

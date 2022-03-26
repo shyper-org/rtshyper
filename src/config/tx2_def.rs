@@ -202,6 +202,7 @@ pub fn config_init() {
             region: vm_region,
         },
         image: VmImageConfig {
+            kernel_img_name: None,
             kernel_load_ipa: 0x90080000,
             kernel_entry_point: 0x90080000,
             device_tree_load_ipa: 0x90000000,
@@ -221,6 +222,14 @@ pub fn config_init() {
         // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
     }));
 
+
+    //########################################################################################################
+    //############################################# end vm 0 #################################################
+    //########################################################################################################
+    //############################################ begin vm 1 ################################################
+    //########################################################################################################
+
+
     // #################### vm1 emu ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
@@ -238,6 +247,7 @@ pub fn config_init() {
         length: 0x1000,
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
+        // cfg_list: vec![0, 8388608],
         // cfg_list: vec![0, 67108864], // 32G
         cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
@@ -324,22 +334,23 @@ pub fn config_init() {
             region: vm_region,
         },
         image: VmImageConfig {
+            kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
         },
         cpu: VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0010,
-            master: 1,
+            num: 2,
+            allocate_bitmap: 0b0110,
+            master: 2,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
         vm_dtb_devs: Some(vm_dtb_devs),
         med_blk_idx: Some(0),
-        cmdline: "console=hvc0,115200n8 root=/dev/vda rw audit=0",
-        // cmdline: "earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0",
+        // cmdline: "root=/dev/vda rw audit=0",
+        cmdline: "earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0",
     }));
 
     // #################### bare metal app emu (vm2) ######################
@@ -486,6 +497,7 @@ pub fn config_init() {
             region: vm_region,
         },
         image: VmImageConfig {
+            kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
@@ -493,8 +505,8 @@ pub fn config_init() {
         },
         cpu: VmCpuConfig {
             num: 1,
-            allocate_bitmap: 0b0100,
-            master: 2,
+            allocate_bitmap: 0b1000,
+            master: 3,
         },
         vm_emu_dev_confg: Some(emu_dev_config),
         vm_pt_dev_confg: Some(pt_dev_config),
@@ -568,6 +580,7 @@ pub fn config_init() {
             region: vm_region,
         },
         image: VmImageConfig {
+            kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
