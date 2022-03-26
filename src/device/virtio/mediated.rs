@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::kernel::{active_vm, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcGuestMsg, init_async_used_info, interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa};
+use crate::kernel::{active_vm, add_async_used_info, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcGuestMsg, interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa};
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::trace;
 
@@ -115,8 +115,6 @@ pub fn mediated_dev_init() {
     if !ipi_register(IpiType::IpiTMediatedNotify, mediated_notify_ipi_handler) {
         panic!("mediated_dev_init: failed to register ipi IpiTMediatedNotify");
     }
-
-    init_async_used_info();
 }
 
 // only run in vm0
