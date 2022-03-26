@@ -8,16 +8,16 @@ use crate::arch::PageTable;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
-use crate::config::{DEF_VM_CONFIG_TABLE, VmCpuConfig, VmImageConfig, VmMemoryConfig};
+use crate::config::{DEF_VM_CONFIG_TABLE, vm_cfg_entry, vm_type, VmCpuConfig, VmImageConfig, VmMemoryConfig};
 use crate::config::VmConfigEntry;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm_id, CPU, current_cpu, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
+use crate::kernel::{active_vm_id, CPU, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
 use crate::kernel::{cpu_sched_init, mem_page_alloc, mem_vm_region_alloc};
-use crate::kernel::{Vm, vm,get_vm_by_index, VM_LIST,vm_list_size};
+use crate::kernel::{vm, Vm, VM_LIST, vm_list_size};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
@@ -430,12 +430,11 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
 }
 
 pub fn vmm_setup_config(vm_id: usize) {
-    let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
-    let config = vm_cfg_table.entries[vm_id].clone();
-    let vm = vm(vm_id);
+    let config = vm_cfg_entry(vm_id);
+    let vm = vm(vm_id).unwrap();
 
-    println!("vmm_setup_config VM[{}] name {:?} current core {}",vm_id,config.name.unwrap(),current_cpu().id);
-    
+    println!("vmm_setup_config VM[{}] name {:?} current core {}", vm_id, config.name.unwrap(), current_cpu().id);
+
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
     }
@@ -470,8 +469,6 @@ pub fn vmm_setup_config(vm_id: usize) {
         }
     }
 
-    // barrier
-
     if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
         panic!("vmm_setup_config: vmm_init_emulated_device failed");
     }
@@ -500,33 +497,30 @@ impl VmAssignment {
 
 pub fn vmm_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
-    let assigned = false;
     if current_cpu().assigned {
-        println!("vmm_assign_vcpu vm[{}] cpu {} is assigned",vm_id,cpu_id);
+        println!("vmm_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
     } else {
-        current_cpu().assigned = assigned;
+        current_cpu().assigned = false;
         // println!("vmm_assign_vcpu vm[{}] cpu {} hasn't been assigned",vm_id,cpu_id);
     }
-    
+
     // let cpu_config = vm(vm_id).config().cpu;
-    let mut cfg_master = vm(vm_id).config().cpu.master as usize;
-    let mut cfg_cpu_num = vm(vm_id).config().cpu.num;
-    let mut cfg_cpu_allocate_bitmap = vm(vm_id).config().cpu.allocate_bitmap;
+    let vm = vm(vm_id).unwrap();
+    let mut cfg_master = vm.config().cpu.master as usize;
+    let mut cfg_cpu_num = vm.config().cpu.num;
+    let mut cfg_cpu_allocate_bitmap = vm.config().cpu.allocate_bitmap;
 
     println!("vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
-            vm_id,cpu_id, cfg_master,cfg_cpu_num,cfg_cpu_allocate_bitmap);
+             vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap);
 
     // barrier();
     // Judge if current cpu is allocated.
     if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 {
-        let vm = vm(vm_id);
-        if cpu_id == cfg_master
-            || (!vm.has_master_cpu() && vm.get_cpu_num() == cfg_cpu_num - 1)
-        {
-            let vcpu = match vm.get_vcpu(0) {
+        if cpu_id == cfg_master ||
+            (!vm.has_master_cpu() && vm.cpu_num() == cfg_cpu_num - 1) {
+            let vcpu = match vm.vcpu(0) {
                 None => {
                     panic!("core {} vm {} don't have vcpu 0", cpu_id, vm_id);
-                    return;
                 }
                 Some(vcpu) => vcpu
             };
@@ -544,8 +538,8 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             vm_if_list_set_cpu_id(vm_id, cpu_id);
 
             vm.set_has_master_cpu(true);
-            vm.set_cpu_num(vm.get_cpu_num()+1);
-            vm.set_ncpu(vm.get_ncpu() | 1 << cpu_id);
+            vm.set_cpu_num(vm.cpu_num() + 1);
+            vm.set_ncpu(vm.ncpu() | 1 << cpu_id);
 
             current_cpu().assigned = true;
             println!(
@@ -553,13 +547,13 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
                 cpu_id, vm_id, vcpu_id
             );
             // The remain core become secondary vcpu
-        } else if vm.get_cpu_num() < cfg_cpu_num {
-            let mut trgt_id = cfg_cpu_num - vm.get_cpu_num() - 1;
+        } else if vm.cpu_num() < cfg_cpu_num {
+            let mut trgt_id = cfg_cpu_num - vm.cpu_num() - 1;
             if vm.has_master_cpu() {
                 trgt_id += 1;
             }
 
-            let vcpu = match vm.get_vcpu(trgt_id) {
+            let vcpu = match vm.vcpu(trgt_id) {
                 None => {
                     panic!("core {} vm {} don't have vcpu {}", cpu_id, vm_id, trgt_id);
                     return;
@@ -573,16 +567,14 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             }
 
             current_cpu().assigned = true;
-            vm.set_cpu_num(vm.get_cpu_num()+1);
-            vm.set_ncpu(vm.get_ncpu() | 1 << cpu_id);
+            vm.set_cpu_num(vm.cpu_num() + 1);
+            vm.set_ncpu(vm.ncpu() | 1 << cpu_id);
             println!(
                 "Core {} is assigned => vm {}, vcpu {}",
                 cpu_id, vm_id, vcpu_id
             );
         }
     }
-
-    // barrier();
 
     if current_cpu().assigned {
         let vcpu_pool = current_cpu().vcpu_pool();
@@ -592,7 +584,6 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             if let Some(mvm) = vcpu.vm() {
                 if mvm.id() == 0 {
                     current_cpu().set_active_vcpu(vcpu.clone());
-                    println!("vm0 elr {:x}", vcpu.elr());
                 }
             }
             println!("core {} i {} vcpu_num {} arch_reset", cpu_id, i, vcpu_pool.vcpu_num());
@@ -602,12 +593,11 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     }
 
     if vm_id != 0 {
-        let vm = vm(vm_id);
-        if cfg_cpu_num == vm.get_cpu_num() {
+        if cfg_cpu_num == vm.cpu_num() {
             vm.set_ready(true);
-            println!("vmm_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id,cfg_cpu_num,vm.get_cpu_num());
+            println!("vmm_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id, cfg_cpu_num, vm.cpu_num());
         } else {
-            println!("vmm_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id,cfg_cpu_num,vm.get_cpu_num());
+            println!("vmm_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id, cfg_cpu_num, vm.cpu_num());
         }
     }
     // barrier();
@@ -615,27 +605,17 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
 
 pub fn vmm_add_vm(vm_id: usize) {
     println!("vmm_add_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
-    let mut vm_list = VM_LIST.lock();
-    if vm_id < vm_list.len() {
-        println!("vmm_add_vm: vm {} already exists", vm_id);
-        return
+    if push_vm(vm_id).is_err() {
+        return;
     }
-    let vm = Vm::new(vm_id);
-    vm_list.push(vm);
+    let vm = vm(vm_id).unwrap();
+    vm.set_config_entry(vm_cfg_entry(vm_id));
 
-    let vm_arc = vm_list[vm_id].inner();
-    let mut vm = vm_arc.lock();
-
-    let vm_cfg_table = DEF_VM_CONFIG_TABLE.lock();
-    vm.config = Some(vm_cfg_table.entries[vm_id].clone());
-    let vm_type = vm.config.as_ref().unwrap().os_type;
-    drop(vm);
-
-    if !vmm_init_cpu(&vm_cfg_table.entries[vm_id].cpu, vm_list[vm_id].clone()) {
+    if !vmm_init_cpu(&vm_cfg_entry(vm_id).cpu, vm.clone()) {
         println!("vmm_add_vm: vmm_init_cpu failed");
     }
     use crate::kernel::vm_if_list_set_type;
-    vm_if_list_set_type(vm_id, vm_type);
+    vm_if_list_set_type(vm_id, vm_type(vm_id));
 }
 
 pub fn vmm_init() {
@@ -649,7 +629,7 @@ pub fn vmm_init() {
     }
     barrier();
 
-    println!("core {} init vm 0",current_cpu().id);
+    println!("core {} init vm 0", current_cpu().id);
 
     vmm_assign_vcpu(0);
     barrier();
@@ -659,7 +639,6 @@ pub fn vmm_init() {
         vmm_setup_config(0);
         println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     }
-
 }
 
 

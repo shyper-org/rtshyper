@@ -70,11 +70,11 @@ impl Virtq {
     pub fn notify(&self, int_id: usize, vm: Vm) {
         // Undo: mmio->regs->irt_stat = VIRTIO_MMIO_INT_VRING; Is it necessery?
         let inner = self.inner.lock();
-        let trgt_id = vm.vcpu(0).phys_id();
+        let trgt_id = vm.vcpu(0).unwrap().phys_id();
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
             drop(inner);
-            interrupt_vm_inject(vm.clone(), vm.vcpu(0), int_id, 0);
+            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
         } else {
             let m = IpiIntInjectMsg {
                 vm_id: vm.id(),

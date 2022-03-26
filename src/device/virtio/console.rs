@@ -12,7 +12,7 @@ use crate::device::VirtioIov;
 use crate::kernel::{active_vm, active_vm_id, vm_if_list_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
-use crate::kernel::{vm,get_vm_by_index};
+use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::trace;
 
@@ -178,7 +178,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
 }
 
 fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
-    let trgt_vm = match get_vm_by_index(trgt_vmid as usize) {
+    let trgt_vm = match vm(trgt_vmid as usize) {
         None => {
             println!("target vm [{}] is not ready or not exist", trgt_vmid);
             return true;

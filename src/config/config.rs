@@ -3,11 +3,10 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
-use crate::lib::{memcpy_safe};
-
 // use crate::board::*;
 use crate::device::EmuDeviceType;
-use crate::kernel::{VmType, vm_ipa2pa};
+use crate::kernel::{vm_ipa2pa, VmType};
+use crate::lib::memcpy_safe;
 
 const NAME_MAX_LEN: usize = 32;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
@@ -97,6 +96,7 @@ impl VmImageConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct VmCpuConfig {
     pub num: usize,
     pub allocate_bitmap: u32,
@@ -265,9 +265,11 @@ pub fn vm_config_del_vm() -> bool {
 }
 
 pub fn vm_config_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize) -> bool {
-    
     true
 }
-pub fn vm_config_add_emu_dev(vmid: usize) -> bool {true}
-pub fn vm_config_add_pt_dev(vmid: usize) -> bool {true}
-pub fn vm_config_add_dtb_dev(vmid: usize) -> bool {true}
+
+pub fn vm_config_add_emu_dev(vmid: usize) -> bool { true }
+
+pub fn vm_config_add_pt_dev(vmid: usize) -> bool { true }
+
+pub fn vm_config_add_dtb_dev(vmid: usize) -> bool { true }

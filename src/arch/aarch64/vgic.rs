@@ -2236,7 +2236,7 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     for i in 0..vgic_cpu_num {
         let mut cpu_priv = VgicCpuPriv::default();
         for int_idx in 0..GIC_PRIVINT_NUM {
-            let vcpu = vm.vcpu(i);
+            let vcpu = vm.vcpu(i).unwrap();
             let phys_id = vcpu.phys_id();
 
             cpu_priv.interrupts.push(VgicInt::priv_new(
@@ -2277,7 +2277,7 @@ pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {
 
     if int_id < GIC_PRIVINT_NUM {
         for i in 0..vm.cpu_num() {
-            let interrupt_option = vgic.get_int(vm.vcpu(i), int_id);
+            let interrupt_option = vgic.get_int(vm.vcpu(i).unwrap(), int_id);
             match interrupt_option {
                 Some(interrupt) => {
                     let interrupt_lock = interrupt.lock.lock();
@@ -2293,7 +2293,7 @@ pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {
             }
         }
     } else {
-        let interrupt_option = vgic.get_int(vm.vcpu(0), int_id);
+        let interrupt_option = vgic.get_int(vm.vcpu(0).unwrap(), int_id);
         match interrupt_option {
             Some(interrupt) => {
                 let interrupt_lock = interrupt.lock.lock();

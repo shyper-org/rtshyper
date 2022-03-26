@@ -1,11 +1,11 @@
 use core::mem::size_of;
 
 use crate::arch::PAGE_SIZE;
+use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, Vcpu, vm, vm_if_list_get_cpu_id, vm_if_list_ivc_arg, vm_if_list_ivc_arg_ptr, vm_if_list_set_ivc_arg_ptr, VM_NUM_MAX};
 use crate::lib::{memcpy_safe, trace};
 use crate::vmm::{get_vm_id, vmm_boot_vm};
-use crate::config::*;
 
 pub const HVC_SYS: usize = 0;
 pub const HVC_VMM: usize = 1;
@@ -58,7 +58,7 @@ pub fn hvc_guest_handler(
     }
 }
 
-fn hvc_config_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize) -> bool{
+fn hvc_config_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize) -> bool {
     match event {
         // VM
         0 => {
@@ -66,27 +66,23 @@ fn hvc_config_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, 
         }
         // MEMORY
         1 => {
-            
-            true 
+            true
         }
         // CPU
         2 => {
-            
-            true 
+            true
         }
         // EMULATED DEVICE
         3 => {
-            
-            true 
+            true
         }
         // PASSTHROUGH DEVICE
         4 => {
-            
-            true 
+            true
         }
         // DTB
         5 => {
-            true 
+            true
         }
         // 
         _ => {
@@ -222,7 +218,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 
 // notify current cpu's vcpu
 pub fn hvc_guest_notify(vm_id: usize) {
-    let vm = vm(vm_id);
+    let vm = vm(vm_id).unwrap();
     match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
         None => {
             println!("hvc_guest_notify: Core {} failed to find vcpu of VM {}", current_cpu().id, vm_id);
