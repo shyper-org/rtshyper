@@ -75,10 +75,7 @@ impl Virtq {
             drop(inner);
             interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
         } else {
-            let m = IpiIntInjectMsg {
-                vm_id: vm.id(),
-                int_id,
-            };
+            let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
                 println!("notify: failed to send ipi to Core {}", trgt_id);
             }

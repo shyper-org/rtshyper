@@ -269,11 +269,17 @@ pub fn vm_config_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize) -> boo
     true
 }
 
-pub fn vm_config_add_emu_dev(vmid: usize) -> bool { true }
+pub fn vm_config_add_emu_dev(vmid: usize) -> bool {
+    true
+}
 
-pub fn vm_config_add_pt_dev(vmid: usize) -> bool { true }
+pub fn vm_config_add_pt_dev(vmid: usize) -> bool {
+    true
+}
 
-pub fn vm_config_add_dtb_dev(vmid: usize) -> bool { true }
+pub fn vm_config_add_dtb_dev(vmid: usize) -> bool {
+    true
+}
 
 pub fn init_tmp_config_for_vm1() {
     println!("init_tmp_config_for_vm1");
@@ -333,7 +339,11 @@ pub fn init_tmp_config_for_vm1() {
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
         // PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
-        PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: PLATFORM_GICV_BASE,
+            length: 0x2000,
+        },
     ];
     // pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
     pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
@@ -378,9 +388,7 @@ pub fn init_tmp_config_for_vm1() {
     vm_config.entries.push(Arc::new(VmConfigEntry {
         name: Some("guest-os-0"),
         os_type: VmType::VmTOs,
-        memory: VmMemoryConfig {
-            region: vm_region,
-        },
+        memory: VmMemoryConfig { region: vm_region },
         image: VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
@@ -499,8 +507,16 @@ pub fn init_tmp_config_for_vm2() {
     // vm2 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
-        PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
-        PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICV_BASE, length: 0x2000 },
+        PassthroughRegion {
+            ipa: UART_1_ADDR,
+            pa: UART_1_ADDR,
+            length: 0x1000,
+        },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: PLATFORM_GICV_BASE,
+            length: 0x2000,
+        },
     ];
     pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
     // pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
@@ -545,9 +561,7 @@ pub fn init_tmp_config_for_vm2() {
     vm_config.entries.push(Arc::new(VmConfigEntry {
         name: Some("guest-os-1"),
         os_type: VmType::VmTOs,
-        memory: VmMemoryConfig {
-            region: vm_region,
-        },
+        memory: VmMemoryConfig { region: vm_region },
         image: VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
@@ -587,8 +601,16 @@ pub fn init_tmp_config_for_vm3() {
     // vm3 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
-        PassthroughRegion { ipa: UART_1_ADDR, pa: UART_1_ADDR, length: 0x1000 },
-        PassthroughRegion { ipa: 0x8010000, pa: PLATFORM_GICC_BASE, length: 0x2000 },
+        PassthroughRegion {
+            ipa: UART_1_ADDR,
+            pa: UART_1_ADDR,
+            length: 0x1000,
+        },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: PLATFORM_GICC_BASE,
+            length: 0x2000,
+        },
     ];
     pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
 
@@ -632,9 +654,7 @@ pub fn init_tmp_config_for_vm3() {
     vm_config.entries.push(Arc::new(VmConfigEntry {
         name: Some("guest-os-2"),
         os_type: VmType::VmTOs,
-        memory: VmMemoryConfig {
-            region: vm_region,
-        },
+        memory: VmMemoryConfig { region: vm_region },
         image: VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,

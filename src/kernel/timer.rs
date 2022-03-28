@@ -28,10 +28,7 @@ pub fn timer_init() {
             INTERRUPT_IRQ_HYPERVISOR_TIMER,
             InterruptHandler::TimeIrqHandler(timer_irq_handler),
         );
-        println!(
-            "Timer frequency: {}Hz",
-            crate::arch::timer_arch_get_frequency()
-        );
+        println!("Timer frequency: {}Hz", crate::arch::timer_arch_get_frequency());
         println!("Timer init ok");
     }
 }

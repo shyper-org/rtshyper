@@ -7,4 +7,3 @@ mod device;
 mod device_tree;
 mod emu;
 mod virtio;
-

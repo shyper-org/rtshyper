@@ -25,18 +25,14 @@ impl PageFrame {
         if trace() && self.pa() < 0x1000 {
             panic!("illegal addr {:x}", self.pa());
         }
-        unsafe {
-            core::slice::from_raw_parts(self.pa as *const T, PAGE_SIZE / core::mem::size_of::<T>())
-        }
+        unsafe { core::slice::from_raw_parts(self.pa as *const T, PAGE_SIZE / core::mem::size_of::<T>()) }
     }
 
     pub fn as_mut_slice<T>(&self) -> &'static mut [T] {
         if trace() && self.pa() < 0x1000 {
             panic!("illegal addr {:x}", self.pa());
         }
-        unsafe {
-            core::slice::from_raw_parts_mut(self.pa as *mut T, PAGE_SIZE / core::mem::size_of::<T>())
-        }
+        unsafe { core::slice::from_raw_parts_mut(self.pa as *mut T, PAGE_SIZE / core::mem::size_of::<T>()) }
     }
 }
 

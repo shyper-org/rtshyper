@@ -23,10 +23,7 @@ pub fn interrupt_arch_init() {
     use crate::board::PLAT_DESC;
 
     let int_id = PLAT_DESC.arch_desc.gic_desc.maintenance_int_id;
-    interrupt_reserve_int(
-        int_id,
-        InterruptHandler::GicMaintenanceHandler(gic_maintenance_handler),
-    );
+    interrupt_reserve_int(int_id, InterruptHandler::GicMaintenanceHandler(gic_maintenance_handler));
     interrupt_arch_enable(int_id, true);
 }
 

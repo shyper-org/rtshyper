@@ -1,5 +1,7 @@
 use crate::arch::{gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, SchedType, SchedulerTrait, timer_enable, Vcpu, VcpuState, Vm};
+use crate::kernel::{
+    cpu_idle, current_cpu, ipi_intra_broadcast_msg, SchedType, SchedulerTrait, timer_enable, Vcpu, VcpuState, Vm,
+};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
@@ -46,10 +48,7 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
 }
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
-    println!(
-        "power_arch_cpu_on, {:x}, {:x}, {:x}",
-        PSCI_CPU_ON_AARCH64, mpidr, entry
-    );
+    println!("power_arch_cpu_on, {:x}, {:x}, {:x}", PSCI_CPU_ON_AARCH64, mpidr, entry);
     let r = smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0;
     println!("smc return val is {}", r);
     r
@@ -138,7 +137,11 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
 fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
     // println!("psci vcpu on， entry {:x}, ctx {:x}", entry, ctx);
     if vcpu.phys_id() != current_cpu().id {
-        panic!("cannot psci on vcpu on cpu {} by cpu {}", vcpu.phys_id(), current_cpu().id);
+        panic!(
+            "cannot psci on vcpu on cpu {} by cpu {}",
+            vcpu.phys_id(),
+            current_cpu().id
+        );
     }
     let assigned = true;
     current_cpu().assigned = assigned;
@@ -176,16 +179,23 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::Power(power_msg) => {
             let trgt_vcpu = match current_cpu().vcpu_pool().pop_vcpu_through_vmid(power_msg.src) {
                 None => {
-                    println!("Core {} failed to find target vcpu, source vmid {}", current_cpu().id, power_msg.src);
+                    println!(
+                        "Core {} failed to find target vcpu, source vmid {}",
+                        current_cpu().id,
+                        power_msg.src
+                    );
                     return;
                 }
-                Some(vcpu) => { vcpu }
+                Some(vcpu) => vcpu,
             };
             match power_msg.event {
                 PowerEvent::PsciIpiCpuOn => {
                     if trgt_vcpu.state() as usize != VcpuState::VcpuInv as usize {
-                        println!("psci_ipi_handler: target VCPU {} in VM {} is already running",
-                                 trgt_vcpu.id(), trgt_vcpu.vm().unwrap().id());
+                        println!(
+                            "psci_ipi_handler: target VCPU {} in VM {} is already running",
+                            trgt_vcpu.id(),
+                            trgt_vcpu.vm().unwrap().id()
+                        );
                         return;
                     }
                     println!(
@@ -223,13 +233,13 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         return usize::MAX - 1;
     }
     #[cfg(feature = "tx2")]
-        {
-            let cluster = (mpidr >> 8) & 0xff;
-            if vm.id() == 0 && cluster != 1 {
-                println!("psci_guest_cpu_on: L4T only support cluster #1");
-                return usize::MAX - 1;
-            }
+    {
+        let cluster = (mpidr >> 8) & 0xff;
+        if vm.id() == 0 && cluster != 1 {
+            println!("psci_guest_cpu_on: L4T only support cluster #1");
+            return usize::MAX - 1;
         }
+    }
 
     let m = IpiPowerMessage {
         src: vm.id(),
@@ -238,11 +248,7 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         context: ctx,
     };
 
-    if !ipi_send_msg(
-        physical_linear_id.unwrap(),
-        IpiType::IpiTPower,
-        IpiInnerMsg::Power(m),
-    ) {
+    if !ipi_send_msg(physical_linear_id.unwrap(), IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
         println!("psci_guest_cpu_on: fail to send msg");
         return usize::MAX - 1;
     }

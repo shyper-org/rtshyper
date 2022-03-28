@@ -1,7 +1,6 @@
 use crate::arch::{
-    exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write,
-    exception_data_abort_access_reg, exception_data_abort_access_reg_width,
-    exception_data_abort_access_width, exception_data_abort_handleable,
+    exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write, exception_data_abort_access_reg,
+    exception_data_abort_access_reg_width, exception_data_abort_access_width, exception_data_abort_handleable,
     exception_data_abort_is_translate_fault,
 };
 use crate::arch::{exception_esr, exception_fault_ipa};
@@ -97,10 +96,7 @@ pub fn hvc_handler() {
     let val = 0;
     current_cpu().set_gpr(idx, val);
     if !hvc_guest_handler(hvc_type, event, x0, x1, x2, x3, x4, x5, x6) {
-        println!(
-            "Failed to handle hvc request fid 0x{:x} event 0x{:x}",
-            hvc_type, event
-        );
+        println!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
         let idx = 0;
         let val = usize::MAX;
         current_cpu().set_gpr(idx, val);

@@ -9,9 +9,7 @@ use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_list_set_state};
-use crate::kernel::{
-    active_vcpu_id, active_vm_id, CPU_STACK_SIZE,
-};
+use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
 
 use super::{CpuState, Vm, VmType};
@@ -45,7 +43,12 @@ impl Vcpu {
     }
 
     pub fn shutdown(&self) {
-        println!("Core {} (vm {} vcpu {}) shutdown ok", current_cpu().id, active_vm_id(), active_vcpu_id());
+        println!(
+            "Core {} (vm {} vcpu {}) shutdown ok",
+            current_cpu().id,
+            active_vm_id(),
+            active_vcpu_id()
+        );
         crate::board::platform_cpu_shutdown();
     }
 
@@ -95,7 +98,11 @@ impl Vcpu {
                 println!("save_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
             }
             Some(ctx) => {
-                memcpy_safe(&(inner.vcpu_ctx) as *const _ as *const u8, ctx as *const u8, size_of::<Aarch64ContextFrame>());
+                memcpy_safe(
+                    &(inner.vcpu_ctx) as *const _ as *const u8,
+                    ctx as *const u8,
+                    size_of::<Aarch64ContextFrame>(),
+                );
             }
         }
     }
@@ -107,7 +114,11 @@ impl Vcpu {
                 println!("restore_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
             }
             Some(ctx) => {
-                memcpy_safe(ctx as *const u8, &(inner.vcpu_ctx) as *const _ as *const u8, size_of::<Aarch64ContextFrame>());
+                memcpy_safe(
+                    ctx as *const u8,
+                    &(inner.vcpu_ctx) as *const _ as *const u8,
+                    size_of::<Aarch64ContextFrame>(),
+                );
             }
         }
     }
@@ -336,8 +347,15 @@ impl VcpuInner {
     }
 
     fn show_ctx(&self) {
-        println!("cntvoff_el2 {:x}, sctlr_el1 {:x}, cntkctl_el1 {:x}, pmcr_el0 {:x}, vtcr_el2 {:x} x0 {:x}",
-                 self.vm_ctx.cntvoff_el2, self.vm_ctx.sctlr_el1, self.vm_ctx.cntkctl_el1, self.vm_ctx.pmcr_el0, self.vm_ctx.vtcr_el2, self.vcpu_ctx.gpr(0));
+        println!(
+            "cntvoff_el2 {:x}, sctlr_el1 {:x}, cntkctl_el1 {:x}, pmcr_el0 {:x}, vtcr_el2 {:x} x0 {:x}",
+            self.vm_ctx.cntvoff_el2,
+            self.vm_ctx.sctlr_el1,
+            self.vm_ctx.cntkctl_el1,
+            self.vm_ctx.pmcr_el0,
+            self.vm_ctx.vtcr_el2,
+            self.vcpu_ctx.gpr(0)
+        );
     }
 }
 
@@ -392,7 +410,11 @@ pub fn vcpu_run() {
         }
     }
 
-    println!("vcpu run elr {:x} x0 {:016x}", current_cpu().active_vcpu.clone().unwrap().elr(),current_cpu().get_gpr(0));
+    println!(
+        "vcpu run elr {:x} x0 {:016x}",
+        current_cpu().active_vcpu.clone().unwrap().elr(),
+        current_cpu().get_gpr(0)
+    );
     // TODO: vcpu_run
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;

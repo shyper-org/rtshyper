@@ -51,15 +51,11 @@ pub const PTE_S2_FIELD_SH_INNER_SHAREABLE: usize = 0b11 << 8;
 
 pub const PTE_S2_FIELD_AF: usize = 1 << 10;
 
-pub const PTE_S1_NORMAL: usize = pte_s1_field_attr_indx(1)
-    | PTE_S1_FIELD_AP_RW_EL0_NONE
-    | PTE_S1_FIELD_SH_OUTER_SHAREABLE
-    | PTE_S1_FIELD_AF;
+pub const PTE_S1_NORMAL: usize =
+    pte_s1_field_attr_indx(1) | PTE_S1_FIELD_AP_RW_EL0_NONE | PTE_S1_FIELD_SH_OUTER_SHAREABLE | PTE_S1_FIELD_AF;
 
-pub const PTE_S2_DEVICE: usize = PTE_S2_FIELD_MEM_ATTR_DEVICE_NGNRNE
-    | PTE_S2_FIELD_AP_RW
-    | PTE_S2_FIELD_SH_OUTER_SHAREABLE
-    | PTE_S2_FIELD_AF;
+pub const PTE_S2_DEVICE: usize =
+    PTE_S2_FIELD_MEM_ATTR_DEVICE_NGNRNE | PTE_S2_FIELD_AP_RW | PTE_S2_FIELD_SH_OUTER_SHAREABLE | PTE_S2_FIELD_AF;
 
 pub const PTE_S2_NORMAL: usize = PTE_S2_FIELD_MEM_ATTR_NORMAL_INNER_WRITE_BACK_CACHEABLE
     | PTE_S2_FIELD_MEM_ATTR_NORMAL_OUTER_WRITE_BACK_CACHEABLE
@@ -92,11 +88,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     }
     let addr: usize = lvl1_page_table as usize;
 
-    memcpy_safe(
-        &(cpu.cpu_pt.lvl1) as *const _ as *mut u8,
-        addr as *mut u8,
-        PAGE_SIZE,
-    );
+    memcpy_safe(&(cpu.cpu_pt.lvl1) as *const _ as *mut u8, addr as *mut u8, PAGE_SIZE);
     memset_safe(&(cpu.cpu_pt.lvl2) as *const _ as *mut u8, 0, PAGE_SIZE);
     memset_safe(&(cpu.cpu_pt.lvl3) as *const _ as *mut u8, 0, PAGE_SIZE);
 
@@ -111,8 +103,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
 
     // println!("cpu page num is {}", page_num);
     for i in 0..page_num {
-        cpu.cpu_pt.lvl3[pt_lvl3_idx(CPU_BANKED_ADDRESS) + i] =
-            (cpu_addr + i * PAGE_SIZE) | PTE_S1_NORMAL | PTE_PAGE;
+        cpu.cpu_pt.lvl3[pt_lvl3_idx(CPU_BANKED_ADDRESS) + i] = (cpu_addr + i * PAGE_SIZE) | PTE_S1_NORMAL | PTE_PAGE;
     }
 
     // println!("cpu addr {:x}", cpu_addr);
@@ -199,10 +190,7 @@ impl PageTable {
         if l2e.valid() {
             println!("map_2mb lvl 2 already mapped with 0x{:x}", l2e.to_pte());
         } else {
-            l1e.set_entry(
-                pt_lvl2_idx(ipa),
-                Aarch64PageTableEntry::from_pa(pa | pte | PTE_BLOCK),
-            );
+            l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pa | pte | PTE_BLOCK));
         }
     }
 
@@ -239,10 +227,7 @@ impl PageTable {
         if l3e.valid() {
             println!("map lvl 3 already mapped with 0x{:x}", l3e.to_pte());
         } else {
-            l2e.set_entry(
-                pt_lvl3_idx(ipa),
-                Aarch64PageTableEntry::from_pa(pa | PTE_TABLE | pte),
-            );
+            l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pa | PTE_TABLE | pte));
         }
     }
 

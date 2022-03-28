@@ -76,7 +76,7 @@ impl ConsoleDesc {
 pub struct ConsoleDescInner {
     oppo_end_vmid: u16,
     oppo_end_ipa: u64,
-    // vm access 
+    // vm access
     cols: u16,
     rows: u16,
     max_nr_ports: u32,
@@ -115,9 +115,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
     let dev = console.dev();
 
     let (trgt_vmid, trgt_console_ipa) = match dev.desc() {
-        DevDesc::ConsoleDesc(desc) => {
-            desc.target_console()
-        }
+        DevDesc::ConsoleDesc(desc) => desc.target_console(),
         _ => {
             println!("virtio_console_notify_handler: console desc should not be None");
             return false;
@@ -152,10 +150,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
             println!("virtio_console_notify_handler: failed send");
             // return false;
         }
-        if !vq.update_used_ring(
-            len as u32,
-            next_desc_idx_opt.unwrap() as u32,
-            vq_size) {
+        if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32, vq_size) {
             return false;
         }
 
@@ -178,21 +173,25 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
             println!("target vm [{}] is not ready or not exist", trgt_vmid);
             return true;
         }
-        Some(vm) => {
-            vm
-        }
+        Some(vm) => vm,
     };
 
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa) {
         EmuDevs::VirtioConsole(x) => x,
         _ => {
-            println!("virtio_console_recv: trgt_vm[{}] failed to get virtio console dev", trgt_vmid);
+            println!(
+                "virtio_console_recv: trgt_vm[{}] failed to get virtio console dev",
+                trgt_vmid
+            );
             return true;
         }
     };
 
     if !console.dev().activated() {
-        println!("virtio_console_recv: trgt_vm[{}] virtio console dev is not ready", trgt_vmid);
+        println!(
+            "virtio_console_recv: trgt_vm[{}] virtio console dev is not ready",
+            trgt_vmid
+        );
         return false;
     }
 
@@ -246,12 +245,22 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     }
 
     if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {
-        println!("virtio_console_recv: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}", rx_iov.num(), tx_iov.num(), rx_len, len);
+        println!(
+            "virtio_console_recv: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}",
+            rx_iov.num(),
+            tx_iov.num(),
+            rx_len,
+            len
+        );
         return false;
     }
 
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
-        println!("virtio_console_recv: update used ring failed len {} rx_vq num {}", len, rx_vq.num());
+        println!(
+            "virtio_console_recv: update used ring failed len {} rx_vq num {}",
+            len,
+            rx_vq.num()
+        );
         return false;
     }
 

@@ -95,14 +95,11 @@ pub fn create_fdt(config: Arc<VmConfigEntry>) -> Result<Vec<u8>, Error> {
 
     for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
         match emu_cfg.emu_type {
-            EmuDeviceType::EmuDeviceTVirtioBlk | EmuDeviceType::EmuDeviceTVirtioNet | EmuDeviceType::EmuDeviceTVirtioConsole => {
+            EmuDeviceType::EmuDeviceTVirtioBlk
+            | EmuDeviceType::EmuDeviceTVirtioNet
+            | EmuDeviceType::EmuDeviceTVirtioConsole => {
                 println!("virtio fdt node init {} {:x}", emu_cfg.name.unwrap(), emu_cfg.base_ipa);
-                create_virtio_node(
-                    &mut fdt,
-                    emu_cfg.name.unwrap(),
-                    emu_cfg.irq_id,
-                    emu_cfg.base_ipa,
-                )?;
+                create_virtio_node(&mut fdt, emu_cfg.name.unwrap(), emu_cfg.irq_id, emu_cfg.base_ipa)?;
             }
             EmuDeviceType::EmuDeviceTShyper => {
                 println!("shyper fdt node init {:x}", emu_cfg.base_ipa);
@@ -206,12 +203,7 @@ fn create_serial_node(fdt: &mut FdtWriter, devs_config: &Vec<VmDtbDev>) -> FdtWr
     Ok(())
 }
 
-fn create_chosen_node(
-    fdt: &mut FdtWriter,
-    cmdline: &str,
-    ipa: usize,
-    size: usize,
-) -> FdtWriterResult<()> {
+fn create_chosen_node(fdt: &mut FdtWriter, cmdline: &str, ipa: usize, size: usize) -> FdtWriterResult<()> {
     let chosen = fdt.begin_node("chosen")?;
     fdt.property_string("bootargs", cmdline)?;
     fdt.property_u32("linux,initrd-start", ipa as u32)?;
@@ -234,12 +226,7 @@ fn create_gic_node(fdt: &mut FdtWriter, gicc_addr: usize, gicd_addr: usize) -> F
     Ok(())
 }
 
-fn create_virtio_node(
-    fdt: &mut FdtWriter,
-    name: &'static str,
-    irq: usize,
-    address: usize,
-) -> FdtWriterResult<()> {
+fn create_virtio_node(fdt: &mut FdtWriter, name: &'static str, irq: usize, address: usize) -> FdtWriterResult<()> {
     let virtio = fdt.begin_node(name)?;
     fdt.property_null("dma-coherent")?;
     fdt.property_string("compatible", "virtio,mmio")?;

@@ -24,9 +24,8 @@ mod logger;
 mod mem;
 mod mem_region;
 // mod task;
+mod sched;
 mod timer;
 mod vcpu;
 mod vcpu_pool;
 mod vm;
-mod sched;
-

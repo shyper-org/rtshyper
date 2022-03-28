@@ -9,4 +9,3 @@ mod mmio;
 mod ring;
 mod virtio;
 mod virtio_blk;
-

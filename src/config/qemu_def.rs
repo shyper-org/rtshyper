@@ -8,8 +8,8 @@ use crate::device::EmuDeviceType;
 use crate::kernel::VmType;
 
 use super::{
-    DEF_VM_CONFIG_TABLE, VmConfigEntry, VmConfigTable, VmCpuConfig, VmEmulatedDeviceConfig,
-    VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
+    DEF_VM_CONFIG_TABLE, VmConfigEntry, VmConfigTable, VmCpuConfig, VmEmulatedDeviceConfig, VmImageConfig,
+    VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
 };
 
 pub fn config_init() {

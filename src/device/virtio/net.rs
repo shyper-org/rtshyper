@@ -107,10 +107,7 @@ pub struct NetDescInner {
 
 impl NetDescInner {
     pub fn default() -> NetDescInner {
-        NetDescInner {
-            mac: [0; 6],
-            status: 0,
-        }
+        NetDescInner { mac: [0; 6], status: 0 }
     }
 }
 
@@ -198,12 +195,13 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             // let vm = crate::kernel::vm(trgt_vmid);
             let vm = match crate::kernel::vm(trgt_vmid) {
                 None => {
-                    println!("virtio_net_notify_handler: target vm [{}] is not ready or not exist", trgt_vmid);
+                    println!(
+                        "virtio_net_notify_handler: target vm [{}] is not ready or not exist",
+                        trgt_vmid
+                    );
                     return true;
                 }
-                Some(_vm) => {
-                    _vm
-                }
+                Some(_vm) => _vm,
             };
             let vcpu = vm.vcpu(0).unwrap();
             if vcpu.phys_id() == current_cpu().id {
@@ -234,11 +232,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                     trgt_vmid,
                 };
                 let cpu_trgt = vm_if_list_get_cpu_id(trgt_vmid);
-                if !ipi_send_msg(
-                    cpu_trgt,
-                    IpiType::IpiTEthernetMsg,
-                    IpiInnerMsg::EnternetMsg(msg),
-                ) {
+                if !ipi_send_msg(cpu_trgt, IpiType::IpiTEthernetMsg, IpiInnerMsg::EnternetMsg(msg)) {
                     println!(
                         "virtio_net_notify_handler: failed to send ipi message, target {}",
                         cpu_trgt
@@ -266,12 +260,13 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             // let vm = vm(trgt_vmid);
             let vm = match vm(trgt_vmid) {
                 None => {
-                    println!("ethernet_ipi_rev_handler: target vm [{}] is not ready or not exist", trgt_vmid);
+                    println!(
+                        "ethernet_ipi_rev_handler: target vm [{}] is not ready or not exist",
+                        trgt_vmid
+                    );
                     return;
                 }
-                Some(_vm) => {
-                    _vm
-                }
+                Some(_vm) => _vm,
             };
             let nic = match vm.emu_net_dev(0) {
                 EmuDevs::VirtioNet(x) => x,
@@ -311,7 +306,11 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
 fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
     // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]
     if len < size_of::<VirtioNetHdr>() || len - size_of::<VirtioNetHdr>() < 6 + 6 + 2 {
-        println!("Too short for an ethernet frame, len {}, size of head {}", len, size_of::<VirtioNetHdr>());
+        println!(
+            "Too short for an ethernet frame, len {}, size of head {}",
+            len,
+            size_of::<VirtioNetHdr>()
+        );
         return (false, 0);
     }
 
@@ -375,9 +374,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
             println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
             return true;
         }
-        Some(_vm) => {
-            _vm
-        }
+        Some(_vm) => _vm,
     };
     let nic = match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(x) => x,
@@ -447,7 +444,13 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     header.num_buffers = 1;
 
     if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {
-        println!("ethernet_send_to: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}", rx_iov.num(), tx_iov.num(), rx_len, len);
+        println!(
+            "ethernet_send_to: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}",
+            rx_iov.num(),
+            tx_iov.num(),
+            rx_len,
+            len
+        );
         return false;
     }
 

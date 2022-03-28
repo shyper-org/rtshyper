@@ -3,7 +3,10 @@ use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2, init_tmp_config_for_vm3, vm_cfg_entry, vm_num};
 use crate::device::create_fdt;
-use crate::kernel::{active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa};
+use crate::kernel::{
+    active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr,
+    vm_ipa2pa,
+};
 use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::{vmm_add_vm, vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
@@ -51,7 +54,10 @@ pub fn vmm_set_up_vm(vm_id: usize) {
         cpu_allocate_bitmap >>= 1;
         target_cpu_id += 1;
     }
-    println!("vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}", vm_id, cpu_num, config.cpu.allocate_bitmap);
+    println!(
+        "vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}",
+        vm_id, cpu_num, config.cpu.allocate_bitmap
+    );
 }
 
 pub fn vmm_boot_vm(vm_id: usize) {
@@ -68,13 +74,21 @@ pub fn vmm_boot_vm(vm_id: usize) {
 
         vmm_set_up_vm(vm_id);
         loop {
-            println!("vmm_boot_vm: on core {},waiting vm[{}] to be set up", current_cpu().id, vm_id);
+            println!(
+                "vmm_boot_vm: on core {},waiting vm[{}] to be set up",
+                current_cpu().id,
+                vm_id
+            );
             let vm = match vm(vm_id) {
                 None => {
-                    panic!("vmm_boot_vm: on core {}, vm[{}] is not added yet", current_cpu().id, vm_id);
+                    panic!(
+                        "vmm_boot_vm: on core {}, vm[{}] is not added yet",
+                        current_cpu().id,
+                        vm_id
+                    );
                     continue;
                 }
-                Some(vm) => vm
+                Some(vm) => vm,
             };
             if vm.ready() {
                 break;
@@ -84,7 +98,12 @@ pub fn vmm_boot_vm(vm_id: usize) {
     }
 
     let phys_id = vm_if_list_get_cpu_id(vm_id);
-    println!("vmm_boot_vm: current_cpu {} target vm {} get phys_id {}", current_cpu().id, vm_id, phys_id);
+    println!(
+        "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
+        current_cpu().id,
+        vm_id,
+        phys_id
+    );
 
     if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
         gicc_clear_current_irq(true);
@@ -117,7 +136,12 @@ pub fn vmm_reboot_vm(vm: Vm) {
     let vcpu = current_cpu().active_vcpu.clone().unwrap();
     println!("VM {} reset...", vm.id());
     power_arch_vm_shutdown_secondary_cores(vm.clone());
-    println!("Core {} (vm {} vcpu {}) shutdown ok", current_cpu().id, vm.id(), active_vcpu_id());
+    println!(
+        "Core {} (vm {} vcpu {}) shutdown ok",
+        current_cpu().id,
+        vm.id(),
+        active_vcpu_id()
+    );
 
     let config = vm_cfg_entry(vm.id());
     if !vmm_init_image(&config.image, vm.clone()) {
@@ -127,15 +151,10 @@ pub fn vmm_reboot_vm(vm: Vm) {
         // init vm1 dtb
         match create_fdt(config.clone()) {
             Ok(dtb) => {
-                let offset = config.image.device_tree_load_ipa
-                    - vm.config().memory.region[0].ipa_start;
+                let offset = config.image.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
                 println!("dtb size {}", dtb.len());
                 println!("pa 0x{:x}", vm.pa_start(0) + offset);
-                crate::lib::memcpy_safe(
-                    (vm.pa_start(0) + offset) as *const u8,
-                    dtb.as_ptr(),
-                    dtb.len(),
-                );
+                crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
             }
             _ => {
                 panic!("vmm_setup_config: create fdt for vm{} fail", vm.id());
@@ -161,7 +180,9 @@ pub fn get_vm_id(id_ipa: usize) -> bool {
         println!("illegal id_pa {:x}", id_pa);
         return false;
     }
-    unsafe { *(id_pa as *mut usize) = active_vm_id(); }
+    unsafe {
+        *(id_pa as *mut usize) = active_vm_id();
+    }
     true
 }
 
@@ -172,7 +193,11 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
                 vmm_boot_vm(vmm.vmid);
             }
             VmmEvent::VmmAssignCpu => {
-                println!("vmm_ipi_handler: core {} receive assign vcpu request for vm[{}]", current_cpu().id, vmm.vmid);
+                println!(
+                    "vmm_ipi_handler: core {} receive assign vcpu request for vm[{}]",
+                    current_cpu().id,
+                    vmm.vmid
+                );
                 vmm_assign_vcpu(vmm.vmid);
             }
             _ => {

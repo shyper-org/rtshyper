@@ -9,4 +9,3 @@ mod config;
 mod qemu_def;
 #[cfg(feature = "tx2")]
 mod tx2_def;
-

@@ -13,7 +13,10 @@ use crate::config::VmPassthroughDeviceConfig;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{active_vm_id, add_async_used_info, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id, VmType};
+use crate::kernel::{
+    active_vm_id, add_async_used_info, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id,
+    VmType,
+};
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
@@ -67,12 +70,7 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
 
         if vm_inner.pa_region.is_none() {
             use crate::kernel::VmPa;
-            let mut pa_region = [
-                VmPa::default(),
-                VmPa::default(),
-                VmPa::default(),
-                VmPa::default(),
-            ];
+            let mut pa_region = [VmPa::default(), VmPa::default(), VmPa::default(), VmPa::default()];
             pa_region[i].pa_start = pa;
             pa_region[i].pa_length = vm_region.length;
             pa_region[i].offset = vm_region.ipa_start as isize - pa as isize;
@@ -94,9 +92,7 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     for i in 0..config.memory.region.len() {
         let idx = i as usize;
         let region = &config.memory.region;
-        if load_ipa < region[idx].ipa_start
-            || load_ipa + size > region[idx].ipa_start + region[idx].length
-        {
+        if load_ipa < region[idx].ipa_start || load_ipa + size > region[idx].ipa_start + region[idx].length {
             continue;
         }
 
@@ -111,9 +107,7 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
         if trace() && vm.pa_start(idx) + offset < 0x1000 {
             panic!("illegal addr {:x}", vm.pa_start(idx) + offset);
         }
-        let dst = unsafe {
-            core::slice::from_raw_parts_mut((vm.pa_start(idx) + offset) as *mut u8, size)
-        };
+        let dst = unsafe { core::slice::from_raw_parts_mut((vm.pa_start(idx) + offset) as *mut u8, size) };
         dst.clone_from_slice(bin);
         // dst = bin;
         return;
@@ -136,21 +130,13 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
 
     match &vm.config().os_type {
         VmType::VmTBma => {
-            vmm_load_image(
-                config.kernel_load_ipa,
-                vm.clone(),
-                include_bytes!("../../image/BMA"),
-            );
+            vmm_load_image(config.kernel_load_ipa, vm.clone(), include_bytes!("../../image/BMA"));
             return true;
         }
         VmType::VmTOs => {
             if vm.id() == 0 {
                 println!("vm0 load L4T");
-                vmm_load_image(
-                    config.kernel_load_ipa,
-                    vm.clone(),
-                    include_bytes!("../../image/L4T"),
-                );
+                vmm_load_image(config.kernel_load_ipa, vm.clone(), include_bytes!("../../image/L4T"));
             } else {
                 println!("gvm load vanilla");
                 vmm_load_image(
@@ -175,33 +161,23 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-            {
-                let offset = config.device_tree_load_ipa
-                    - vm.config().memory.region[0].ipa_start;
-                unsafe {
-                    let src = SYSTEM_FDT.get().unwrap();
-                    let len = src.len();
-                    let dst =
-                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                    dst.clone_from_slice(&src);
-                }
-                println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        {
+            let offset = config.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
+            unsafe {
+                let src = SYSTEM_FDT.get().unwrap();
+                let len = src.len();
+                let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                dst.clone_from_slice(&src);
             }
+            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        }
     } else {
-        println!(
-            "VM {} id {} device tree not found",
-            vm.id(),
-            vm.config().name.unwrap()
-        );
+        println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
     }
 
     if config.ramdisk_load_ipa != 0 {
-        println!(
-            "VM {} id {} load ramdisk initrd.gz",
-            vm.id(),
-            vm.config().name.unwrap()
-        );
+        println!("VM {} id {} load ramdisk initrd.gz", vm.id(), vm.config().name.unwrap());
         vmm_load_image(
             config.ramdisk_load_ipa,
             vm.clone(),
@@ -209,11 +185,7 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
             // include_bytes!("../../image/rootfs.cpio"),
         );
     } else {
-        println!(
-            "VM {} id {} ramdisk not found",
-            vm.id(),
-            vm.config().name.unwrap()
-        );
+        println!("VM {} id {} ramdisk not found", vm.id(), vm.config().name.unwrap());
     }
     true
 }
@@ -245,10 +217,7 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
 
 fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm) -> bool {
     if config.is_none() {
-        println!(
-            "vmm_init_emulated_device: VM {} emu config is NULL",
-            vm.id()
-        );
+        println!("vmm_init_emulated_device: VM {} emu config is NULL", vm.id());
         return true;
     }
 
@@ -258,13 +227,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             EmuDeviceTGicd => {
                 dev_name = "interrupt controller";
                 vm.set_intc_dev_id(idx);
-                emu_register_dev(
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_intc_handler,
-                );
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_intc_handler);
                 emu_intc_init(vm.clone(), idx);
             }
             EmuDeviceTGPPT => {
@@ -281,26 +244,14 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             }
             EmuDeviceTVirtioBlk => {
                 dev_name = "virtio block";
-                emu_register_dev(
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_virtio_mmio_handler,
-                );
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
             }
             EmuDeviceTVirtioNet => {
                 dev_name = "virtio net";
-                emu_register_dev(
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_virtio_mmio_handler,
-                );
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
@@ -312,13 +263,7 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
             }
             EmuDeviceTVirtioConsole => {
                 dev_name = "virtio console";
-                emu_register_dev(
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_virtio_mmio_handler,
-                );
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
@@ -366,17 +311,13 @@ fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: V
             }
         }
         None => {
-            println!(
-                "vmm_init_passthrough_device: VM {} passthrough config is NULL",
-                vm.id()
-            );
+            println!("vmm_init_passthrough_device: VM {} passthrough config is NULL", vm.id());
             return true;
         }
     }
 
     true
 }
-
 
 pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     use fdt::*;
@@ -389,12 +330,7 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                     length: r.length as u64,
                 });
             }
-            fdt_set_memory(
-                dtb,
-                mr.len() as u64,
-                mr.as_ptr(),
-                "memory@90000000\0".as_ptr(),
-            );
+            fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
             fdt_add_timer(dtb, 0x8);
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
@@ -411,10 +347,20 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
                             );
                         }
                         EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
-                            fdt_add_virtio(dtb, emu_cfg.name.unwrap().as_ptr(), emu_cfg.irq_id as u32 - 0x20, emu_cfg.base_ipa as u64);
+                            fdt_add_virtio(
+                                dtb,
+                                emu_cfg.name.unwrap().as_ptr(),
+                                emu_cfg.irq_id as u32 - 0x20,
+                                emu_cfg.base_ipa as u64,
+                            );
                         }
                         EmuDeviceTShyper => {
-                            fdt_add_vm_service(dtb, emu_cfg.irq_id as u32 - 0x20, emu_cfg.base_ipa as u64, emu_cfg.length as u64);
+                            fdt_add_vm_service(
+                                dtb,
+                                emu_cfg.irq_id as u32 - 0x20,
+                                emu_cfg.base_ipa as u64,
+                                emu_cfg.length as u64,
+                            );
                         }
                         _ => {
                             todo!();
@@ -432,7 +378,12 @@ pub fn vmm_setup_config(vm_id: usize) {
     let config = vm_cfg_entry(vm_id);
     let vm = vm(vm_id).unwrap();
 
-    println!("vmm_setup_config VM[{}] name {:?} current core {}", vm_id, config.name.unwrap(), current_cpu().id);
+    println!(
+        "vmm_setup_config VM[{}] name {:?} current core {}",
+        vm_id,
+        config.name.unwrap(),
+        current_cpu().id
+    );
 
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
@@ -449,13 +400,8 @@ pub fn vmm_setup_config(vm_id: usize) {
             // init gvm dtb
             match create_fdt(config.clone()) {
                 Ok(dtb) => {
-                    let offset = config.image.device_tree_load_ipa
-                        - vm.config().memory.region[0].ipa_start;
-                    crate::lib::memcpy_safe(
-                        (vm.pa_start(0) + offset) as *const u8,
-                        dtb.as_ptr(),
-                        dtb.len(),
-                    );
+                    let offset = config.image.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
+                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
@@ -494,7 +440,6 @@ impl VmAssignment {
     }
 }
 
-
 pub fn vmm_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
     if current_cpu().assigned {
@@ -510,19 +455,20 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     let cfg_cpu_num = vm.config().cpu.num;
     let cfg_cpu_allocate_bitmap = vm.config().cpu.allocate_bitmap;
 
-    println!("vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
-             vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap);
+    println!(
+        "vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
+        vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap
+    );
 
     // barrier();
     // Judge if current cpu is allocated.
     if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 {
-        if cpu_id == cfg_master ||
-            (!vm.has_master_cpu() && vm.cpu_num() == cfg_cpu_num - 1) {
+        if cpu_id == cfg_master || (!vm.has_master_cpu() && vm.cpu_num() == cfg_cpu_num - 1) {
             let vcpu = match vm.vcpu(0) {
                 None => {
                     panic!("core {} vm {} don't have vcpu 0", cpu_id, vm_id);
                 }
-                Some(vcpu) => vcpu
+                Some(vcpu) => vcpu,
             };
             let vcpu_id = vcpu.id();
 
@@ -542,10 +488,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             vm.set_ncpu(vm.ncpu() | 1 << cpu_id);
 
             current_cpu().assigned = true;
-            println!(
-                "* Core {} is assigned => vm {}, vcpu {}",
-                cpu_id, vm_id, vcpu_id
-            );
+            println!("* Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu_id);
             // The remain core become secondary vcpu
         } else if vm.cpu_num() < cfg_cpu_num {
             let mut trgt_id = cfg_cpu_num - vm.cpu_num() - 1;
@@ -558,7 +501,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
                     panic!("core {} vm {} don't have vcpu {}", cpu_id, vm_id, trgt_id);
                     return;
                 }
-                Some(vcpu) => vcpu
+                Some(vcpu) => vcpu,
             };
             let vcpu_id = vcpu.id();
 
@@ -569,10 +512,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             current_cpu().assigned = true;
             vm.set_cpu_num(vm.cpu_num() + 1);
             vm.set_ncpu(vm.ncpu() | 1 << cpu_id);
-            println!(
-                "Core {} is assigned => vm {}, vcpu {}",
-                cpu_id, vm_id, vcpu_id
-            );
+            println!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu_id);
         }
     }
 
@@ -595,9 +535,21 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     if vm_id != 0 {
         if cfg_cpu_num == vm.cpu_num() {
             vm.set_ready(true);
-            println!("vmm_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id, cfg_cpu_num, vm.cpu_num());
+            println!(
+                "vmm_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}",
+                cpu_id,
+                vm_id,
+                cfg_cpu_num,
+                vm.cpu_num()
+            );
         } else {
-            println!("vmm_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}", cpu_id, vm_id, cfg_cpu_num, vm.cpu_num());
+            println!(
+                "vmm_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}",
+                cpu_id,
+                vm_id,
+                cfg_cpu_num,
+                vm.cpu_num()
+            );
         }
     }
     // barrier();
@@ -640,7 +592,6 @@ pub fn vmm_init() {
         println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     }
 }
-
 
 pub fn vmm_boot() {
     if current_cpu().assigned && active_vcpu_id() == 0 {

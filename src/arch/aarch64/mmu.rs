@@ -84,11 +84,11 @@ impl BlockDescriptor {
                 + PageDescriptorS1::TYPE::Block
                 + PageDescriptorS1::VALID::True
                 + if device {
-                PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
-            } else {
-                PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::OuterShareable
-            })
-                .value,
+                    PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
+                } else {
+                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::OuterShareable
+                })
+            .value,
         )
     }
 
@@ -96,7 +96,8 @@ impl BlockDescriptor {
         BlockDescriptor(
             (PageDescriptorS1::OUTPUT_PPN.val((output_addr >> PAGE_SHIFT) as u64)
                 + PageDescriptorS1::VALID::True
-                + PageDescriptorS1::TYPE::Table).value
+                + PageDescriptorS1::TYPE::Table)
+                .value,
         )
     }
     const fn invalid() -> BlockDescriptor {

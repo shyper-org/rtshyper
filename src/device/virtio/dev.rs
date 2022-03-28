@@ -54,12 +54,7 @@ impl VirtDev {
         }
     }
 
-    pub fn init(
-        &self,
-        dev_type: VirtioDeviceType,
-        config: &VmEmulatedDeviceConfig,
-        mediated: bool,
-    ) {
+    pub fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig, mediated: bool) {
         let mut inner = self.inner.lock();
         inner.init(dev_type, config, mediated);
     }
@@ -144,22 +139,13 @@ impl VirtDevInner {
 
     pub fn mediated(&self) -> bool {
         match &self.req {
-            DevReq::BlkReq(req) => {
-                req.mediated()
-            }
-            DevReq::None => {
-                false
-            }
+            DevReq::BlkReq(req) => req.mediated(),
+            DevReq::None => false,
         }
     }
 
     // virtio_dev_init
-    pub fn init(
-        &mut self,
-        dev_type: VirtioDeviceType,
-        config: &VmEmulatedDeviceConfig,
-        mediated: bool,
-    ) {
+    pub fn init(&mut self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig, mediated: bool) {
         self.dev_type = dev_type;
         self.int_id = config.irq_id;
 

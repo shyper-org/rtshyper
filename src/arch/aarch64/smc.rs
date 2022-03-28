@@ -7,9 +7,7 @@ extern "C" {
 
 #[inline(never)]
 pub fn smc_call(x0: usize, x1: usize, x2: usize, x3: usize) -> (usize, usize, usize, usize) {
-    unsafe {
-        smc(x0, x1, x2, x3)
-    }
+    unsafe { smc(x0, x1, x2, x3) }
     // let r0;
     // let r1;
     // let r2;

@@ -2,7 +2,10 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::arch::PTE_S2_NORMAL;
-use crate::kernel::{active_vm, current_cpu, mem_pages_alloc, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX};
+use crate::kernel::{
+    active_vm, current_cpu, mem_pages_alloc, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa,
+    VM_NUM_MAX,
+};
 use crate::mm::PageFrame;
 
 // todo: need to rewrite for more vm

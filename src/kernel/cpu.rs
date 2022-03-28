@@ -39,9 +39,7 @@ pub struct CpuIf {
 
 impl CpuIf {
     pub fn default() -> CpuIf {
-        CpuIf {
-            msg_queue: Vec::new(),
-        }
+        CpuIf { msg_queue: Vec::new() }
     }
 
     pub fn push(&mut self, ipi_msg: IpiMessage) {
@@ -78,7 +76,6 @@ pub struct Cpu {
 
     pub sched: SchedType,
     // pub vcpu_pool: Option<Box<VcpuPool>>,
-
     pub current_irq: usize,
     pub cpu_pt: CpuPt,
     pub stack: [u8; CPU_STACK_SIZE],
@@ -173,9 +170,7 @@ impl Cpu {
 
     pub fn vcpu_pool(&self) -> VcpuPool {
         match &self.sched {
-            SchedType::SchedRR(rr) => {
-                rr.pool.clone()
-            }
+            SchedType::SchedRR(rr) => rr.pool.clone(),
             SchedType::None => {
                 panic!("cpu[{}] has no vcpu_pool", self.id);
             }
@@ -207,9 +202,7 @@ pub static mut CPU: Cpu = Cpu {
 };
 
 pub fn current_cpu() -> &'static mut Cpu {
-    unsafe {
-        &mut CPU
-    }
+    unsafe { &mut CPU }
 }
 
 pub fn active_vcpu_id() -> usize {

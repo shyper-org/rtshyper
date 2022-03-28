@@ -8,11 +8,10 @@ pub use self::console::*;
 pub use self::queue::*;
 
 mod blk;
+mod console;
 mod dev;
 mod iov;
 mod mediated;
 mod mmio;
 mod net;
-mod console;
 mod queue;
-

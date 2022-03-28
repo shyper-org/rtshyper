@@ -67,10 +67,7 @@ pub fn interrupt_init() {
 
     let cpu_id = current_cpu().id;
     if cpu_id == 0 {
-        interrupt_reserve_int(
-            INTERRUPT_IRQ_IPI,
-            InterruptHandler::IpiIrqHandler(ipi_irq_handler),
-        );
+        interrupt_reserve_int(INTERRUPT_IRQ_IPI, InterruptHandler::IpiIrqHandler(ipi_irq_handler));
 
         if !ipi_register(IpiType::IpiTIntInject, interrupt_inject_ipi_handler) {
             panic!(
@@ -80,10 +77,7 @@ pub fn interrupt_init() {
         }
         use crate::arch::vgic_ipi_handler;
         if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
-            panic!(
-                "interrupt_init: failed to register intc ipi {:#?}",
-                IpiType::IpiTIntc
-            )
+            panic!("interrupt_init: failed to register intc ipi {:#?}", IpiType::IpiTIntc)
         }
         use crate::device::ethernet_ipi_rev_handler;
         if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
@@ -104,11 +98,7 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     // println!("VM {} register interrupt {}", vm.vm_id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
-        println!(
-            "interrupt_vm_register: VM {} interrupts conflict, id = {}",
-            vm.id(),
-            id
-        );
+        println!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);
         return false;
     }
 
@@ -120,7 +110,12 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
 
 pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
     if vcpu.phys_id() != current_cpu().id {
-        println!("interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})", current_cpu().id, vcpu.id(), vm.id());
+        println!(
+            "interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})",
+            current_cpu().id,
+            vcpu.id(),
+            vm.id()
+        );
         return;
     }
     interrupt_arch_vm_inject(vm, vcpu, int_id);
@@ -167,7 +162,6 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
             }
         }
     }
-
 
     for idx in 0..current_cpu().vcpu_pool().vcpu_num() {
         let vcpu = current_cpu().vcpu_pool().vcpu(idx);

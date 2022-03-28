@@ -177,16 +177,11 @@ fn virtio_mmio_setup_vq(index: usize) {
     let ring = VIRTIO_RING.lock();
 
     mmio.QueueDescLow.set(ring.desc.base_addr_usize() as u32);
-    mmio.QueueDescHigh
-        .set((ring.desc.base_addr_usize() >> 32) as u32);
-    mmio.QueueDriverLow
-        .set(ring.driver.base_addr_usize() as u32);
-    mmio.QueueDriverHigh
-        .set((ring.driver.base_addr_usize() >> 32) as u32);
-    mmio.QueueDeviceLow
-        .set(ring.device.base_addr_usize() as u32);
-    mmio.QueueDeviceHigh
-        .set((ring.device.base_addr_usize() >> 32) as u32);
+    mmio.QueueDescHigh.set((ring.desc.base_addr_usize() >> 32) as u32);
+    mmio.QueueDriverLow.set(ring.driver.base_addr_usize() as u32);
+    mmio.QueueDriverHigh.set((ring.driver.base_addr_usize() >> 32) as u32);
+    mmio.QueueDeviceLow.set(ring.device.base_addr_usize() as u32);
+    mmio.QueueDeviceHigh.set((ring.device.base_addr_usize() >> 32) as u32);
 
     mmio.QueueReady.set(1);
 }

@@ -9,4 +9,3 @@ mod platform_common;
 mod qemu;
 #[cfg(feature = "tx2")]
 mod tx2;
-

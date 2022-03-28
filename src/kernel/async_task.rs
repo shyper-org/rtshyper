@@ -10,9 +10,13 @@ use woke::{waker_ref, Woke};
 
 use crate::config::vm_num;
 use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+    BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN,
+    VIRTIO_BLK_T_OUT, Virtq,
 };
-use crate::kernel::{current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::kernel::{
+    current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
+    vm_if_list_get_cpu_id,
+};
 use crate::lib::{memcpy_safe, trace};
 
 #[derive(Clone, Debug)]
@@ -54,7 +58,7 @@ pub struct AsyncTask {
     pub task_data: AsyncTaskData,
     pub src_vmid: usize,
     pub state: Arc<Mutex<AsyncTaskState>>,
-    pub task: Arc<Mutex<Pin<Box<dyn Future<Output=()> + 'static + Send + Sync>>>>,
+    pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
 }
 
 impl Woke for AsyncTask {
@@ -68,7 +72,11 @@ impl Woke for AsyncTask {
 }
 
 impl AsyncTask {
-    pub fn new(task_data: AsyncTaskData, src_vmid: usize, future: impl Future<Output=()> + 'static + Send + Sync) -> AsyncTask {
+    pub fn new(
+        task_data: AsyncTaskData,
+        src_vmid: usize,
+        future: impl Future<Output = ()> + 'static + Send + Sync,
+    ) -> AsyncTask {
         AsyncTask {
             task_data,
             src_vmid,
@@ -226,11 +234,7 @@ pub fn async_task_exe() {
 pub fn finish_async_task(ipi: bool) {
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
-    let task = if ipi {
-        ipi_list.remove(0)
-    } else {
-        io_list.remove(0)
-    };
+    let task = if ipi { ipi_list.remove(0) } else { io_list.remove(0) };
     drop(io_list);
     drop(ipi_list);
     match task.task_data {
@@ -258,10 +262,12 @@ pub fn finish_async_task(ipi: bool) {
                 let target_id = vm_if_list_get_cpu_id(task.src_vmid);
                 update_used_info(args.vq.clone(), task.src_vmid);
                 if target_id != current_cpu().id {
-                    let msg = IpiMediatedNotifyMsg {
-                        vm_id: task.src_vmid,
-                    };
-                    ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::MediatedNotifyMsg(msg));
+                    let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };
+                    ipi_send_msg(
+                        target_id,
+                        IpiType::IpiTMediatedNotify,
+                        IpiInnerMsg::MediatedNotifyMsg(msg),
+                    );
                 } else {
                     let vm = vm(task.src_vmid).unwrap();
                     interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
@@ -288,7 +294,11 @@ pub fn last_vm_async_io_task(vm_id: usize) -> bool {
 pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     if src_vmid >= used_info_list.len() {
-        println!("push_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());
+        println!(
+            "push_used_info: src_vmid {} larger than list size {}",
+            src_vmid,
+            used_info_list.len()
+        );
         return;
     }
     used_info_list[src_vmid].push(UsedInfo {
@@ -300,7 +310,11 @@ pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) 
 pub fn update_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     if src_vmid >= used_info_list.len() {
-        println!("handle_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());
+        println!(
+            "handle_used_info: src_vmid {} larger than list size {}",
+            src_vmid,
+            used_info_list.len()
+        );
         return;
     }
     let vq_size = vq.num();

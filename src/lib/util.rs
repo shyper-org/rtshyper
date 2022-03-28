@@ -66,13 +66,7 @@ pub fn bit_num(bits: usize, size: usize) -> usize {
 }
 
 // change find nth
-pub fn bitmap_find_nth(
-    bitmap: usize,
-    start: usize,
-    size: usize,
-    nth: usize,
-    set: bool,
-) -> Option<usize> {
+pub fn bitmap_find_nth(bitmap: usize, start: usize, size: usize, nth: usize, set: bool) -> Option<usize> {
     if size + start > 64 {
         println!("bitmap_find_nth: bitmap size is too large");
         return None;

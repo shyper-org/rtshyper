@@ -23,8 +23,7 @@ pub struct VcpuPool {
 impl VcpuPool {
     pub fn default() -> VcpuPool {
         VcpuPool {
-            inner: Arc::new(Mutex::new(VcpuPoolInner::default(1)))
-            // sched_lock: Mutex::new({}),
+            inner: Arc::new(Mutex::new(VcpuPoolInner::default(1))), // sched_lock: Mutex::new({}),
         }
     }
 
@@ -216,7 +215,10 @@ impl VcpuPoolInner {
     }
 
     fn append_vcpu(&mut self, vcpu: Vcpu) {
-        self.content.push(VcpuPoolContent { vcpu, time_slice: self.base_slice });
+        self.content.push(VcpuPoolContent {
+            vcpu,
+            time_slice: self.base_slice,
+        });
     }
 }
 
@@ -225,7 +227,9 @@ pub fn cpu_sched_init() {
     match PLAT_DESC.cpu_desc.sched_list[current_cpu().id] {
         SchedRule::RoundRobin => {
             println!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
-            current_cpu().sched = SchedType::SchedRR(SchedulerRR { pool: VcpuPool::default() })
+            current_cpu().sched = SchedType::SchedRR(SchedulerRR {
+                pool: VcpuPool::default(),
+            })
         }
         _ => {
             todo!();

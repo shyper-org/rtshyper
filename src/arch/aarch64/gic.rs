@@ -382,7 +382,8 @@ impl GicCpuInterface {
         //     ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOImodeNS_BIT as u32,
         //     gich_lrs_num()
         // );
-        self.CTLR.set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOIMODENS_BIT as u32);
+        self.CTLR
+            .set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOIMODENS_BIT as u32);
 
         let hcr_prev = GICH.HCR.get();
         GICH.HCR.set(hcr_prev | GICH_HCR_LRENPIE_BIT as u32);

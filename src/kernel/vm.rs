@@ -49,7 +49,10 @@ pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
 pub fn vm_if_list_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id = master_cpu_id;
-    println!("vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}", vm_id, master_cpu_id);
+    println!(
+        "vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}",
+        vm_id, master_cpu_id
+    );
 }
 
 pub fn vm_if_list_get_cpu_id(vm_id: usize) -> usize {
@@ -174,7 +177,12 @@ impl Vm {
     pub fn init_intc_mode(&self, emu: bool) {
         let vm_inner = self.inner.lock();
         for vcpu in &vm_inner.vcpu_list {
-            println!("vm {} vcpu {} set {} hcr", vm_inner.id, vcpu.id(), if emu { "emu" } else { "partial passthrough" });
+            println!(
+                "vm {} vcpu {} set {} hcr",
+                vm_inner.id,
+                vcpu.id(),
+                if emu { "emu" } else { "partial passthrough" }
+            );
             if !emu {
                 vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT) as u32);
                 vcpu.set_hcr(0x80080001); // HCR_EL2_GIC_PASSTHROUGH_VAL
@@ -188,8 +196,10 @@ impl Vm {
     pub fn med_blk_id(&self) -> usize {
         let vm_inner = self.inner.lock();
         match vm_inner.config.as_ref().unwrap().med_blk_idx {
-            None => { panic!("vm {} do not have mediated blk", vm_inner.id); }
-            Some(idx) => { idx }
+            None => {
+                panic!("vm {} do not have mediated blk", vm_inner.id);
+            }
+            Some(idx) => idx,
         }
     }
 
@@ -348,8 +358,8 @@ impl Vm {
             return false;
         }
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
-            EmuDevs::Vgic(_) => { true }
-            _ => { false }
+            EmuDevs::Vgic(_) => true,
+            _ => false,
         }
     }
 
