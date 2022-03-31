@@ -605,7 +605,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
     let virt_dev_type: VirtioDeviceType;
     let vm_cfg = vm.config();
     let mmio = VirtioMmio::new(emu_dev_id);
-    match vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].emu_type {
+    match vm_cfg.emulated_device_list()[emu_dev_id].emu_type {
         crate::device::EmuDeviceType::EmuDeviceTVirtioBlk => {
             virt_dev_type = VirtioDeviceType::Block;
             vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioBlk(mmio.clone()));
@@ -627,7 +627,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
     mmio.mmio_reg_init(virt_dev_type);
     mmio.dev_init(
         virt_dev_type,
-        &vm_cfg.vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id],
+        &vm_cfg.emulated_device_list()[emu_dev_id],
         mediated,
     );
     // no need to set vm_if_list
@@ -654,7 +654,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     };
 
     let addr = emu_ctx.address;
-    let offset = addr - vm.config().vm_emu_dev_confg.as_ref().unwrap()[emu_dev_id].base_ipa;
+    let offset = addr - vm.config().emulated_device_list()[emu_dev_id].base_ipa;
     let write = emu_ctx.write;
 
     // if vm.vm_id() == 1 && emu_dev_id == 2 {

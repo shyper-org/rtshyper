@@ -1,25 +1,33 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use alloc::string::String;
+
+use spin::Mutex;
 
 use crate::board::*;
-use crate::config::PassthroughRegion;
 use crate::device::EmuDeviceType;
 use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType};
 
 use super::{
-    AddrRegions, DEF_VM_CONFIG_TABLE, DtbDevType, VmConfigEntry, VmCpuConfig, VmDtbDev, VmEmulatedDeviceConfig,
-    VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
+    VmConfigEntry, 
+    VmEmulatedDeviceConfig,VmEmulatedDeviceConfigList,
+    PassthroughRegion,VmPassthroughDeviceConfig,
+    VmMemoryConfig,VmRegion,
+    VmImageConfig, VmCpuConfig, 
+    AddrRegions, VmDtbDevConfig, DtbDevType,VMDtbDevConfigList,
+    vm_cfg_add_mvm_entry,vm_cfg_set_config_name,
 };
 
 #[rustfmt::skip]
 pub fn mvm_config_init() {
-    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
-    vm_config.name = Some("tx2-default");
+    println!("mvm_config_init() init config for VM0, which is manager VM");
+    
+    vm_cfg_set_config_name("tx2-default");
 
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("interrupt-controller@3881000"),
+        name: Some(String::from("interrupt-controller@3881000")),
         base_ipa: PLATFORM_GICD_BASE,
         length: 0x1000,
         irq_id: 0,
@@ -28,7 +36,7 @@ pub fn mvm_config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_net@a001000"),
+        name: Some(String::from("virtio_net@a001000")),
         base_ipa: 0xa001000,
         length: 0x1000,
         irq_id: 32 + 0x11,
@@ -37,7 +45,7 @@ pub fn mvm_config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("virtio_console@a002000"),
+        name: Some(String::from("virtio_console@a002000")),
         base_ipa: 0xa002000,
         length: 0x1000,
         irq_id: 32 + 0x12,
@@ -46,7 +54,7 @@ pub fn mvm_config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some("vm_service"),
+        name: Some(String::from("vm_service")),
         base_ipa: 0,
         length: 0,
         irq_id: HVC_IRQ,
@@ -195,12 +203,13 @@ pub fn mvm_config_init() {
     });
 
     // vm0 config
-    vm_config.entries.push(Arc::new(VmConfigEntry {
-        name: Some("privileged"),
+
+    let mvm_config_entry = VmConfigEntry {
+        id: 0,
+        // name: Some("privileged"),
+        name: Some(String::from("privileged")),
+        name_vec: None,
         os_type: VmType::VmTOs,
-        memory: VmMemoryConfig {
-            region: vm_region,
-        },
         image: VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x90080000,
@@ -208,17 +217,24 @@ pub fn mvm_config_init() {
             device_tree_load_ipa: 0x90000000,
             ramdisk_load_ipa: 0,
         },
-        cpu: VmCpuConfig {
+        cmdline_vec: None,
+        cmdline:
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        med_blk_idx: None,
+
+        memory: Arc::new(Mutex::new(VmMemoryConfig{
+            region: vm_region,
+        })),
+        cpu: Arc::new(Mutex::new(VmCpuConfig{
             num: 1,
             allocate_bitmap: 0b0001,
             master: 0,
-        },
-        vm_emu_dev_confg: Some(emu_dev_config),
-        vm_pt_dev_confg: Some(pt_dev_config),
-        vm_dtb_devs: None,
-        med_blk_idx: None,
-        cmdline:
-        "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-    }));
+        })),
+        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList{emu_dev_list: emu_dev_config,})),
+        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
+        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
+    };
+    vm_cfg_add_mvm_entry(mvm_config_entry);
 }

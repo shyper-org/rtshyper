@@ -10,6 +10,7 @@ use crate::config::DEF_VM_CONFIG_TABLE;
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::lib::*;
+use crate::mm::PageFrame;
 
 use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
@@ -108,7 +109,7 @@ impl VmType {
         match value {
             0 => VmType::VmTOs,
             1 => VmType::VmTBma,
-            _ => panic!("Unknown value: {}", value),
+            _ => panic!("Unknown VmType value: {}", value),
         }
     }
 }
@@ -280,9 +281,9 @@ impl Vm {
         vm_inner.int_bitmap.as_mut().unwrap().set(int_id);
     }
 
-    pub fn set_config_entry(&self, config: Arc<VmConfigEntry>) {
+    pub fn set_config_entry(&self, config: Option<VmConfigEntry>) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.config = Some(config);
+        vm_inner.config = config;
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
@@ -293,6 +294,11 @@ impl Vm {
                 panic!("Vm::pt_map_range: vm{} pt is empty", vm_inner.id);
             }
         }
+    }
+
+    pub fn set_pt(&self, pt_dir_frame: PageFrame) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.pt = Some(PageTable::new(pt_dir_frame))
     }
 
     pub fn pt_dir(&self) -> usize {
@@ -315,7 +321,7 @@ impl Vm {
         vm_inner.id
     }
 
-    pub fn config(&self) -> Arc<VmConfigEntry> {
+    pub fn config(&self) -> VmConfigEntry {
         let vm_inner = self.inner.lock();
         vm_inner.config.as_ref().unwrap().clone()
     }
@@ -333,6 +339,11 @@ impl Vm {
     pub fn pa_offset(&self, idx: usize) -> usize {
         let vm_inner = self.inner.lock();
         vm_inner.pa_region.as_ref().unwrap()[idx].offset as usize
+    }
+
+    pub fn set_mem_region_num(&self, _mem_region_num:usize) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.mem_region_num = _mem_region_num;
     }
 
     pub fn mem_region_num(&self) -> usize {
@@ -407,8 +418,8 @@ impl Vm {
     // Get console dev by ipa.
     pub fn emu_console_dev(&self, ipa: u64) -> EmuDevs {
         let mut emu_dev_id = -1;
-        for idx in 0..self.config().vm_emu_dev_confg.as_ref().unwrap().len() {
-            if self.config().vm_emu_dev_confg.as_ref().unwrap()[idx].base_ipa == ipa as usize {
+        for idx in 0..self.config().emulated_device_list().len() {
+            if self.config().emulated_device_list()[idx].base_ipa == ipa as usize {
                 emu_dev_id = idx as i32;
             }
         }
@@ -430,17 +441,10 @@ impl Vm {
     }
 
     pub fn emu_has_interrupt(&self, int_id: usize) -> bool {
-        let vm_config = DEF_VM_CONFIG_TABLE.lock();
-        let vm_id = self.id();
-        match &vm_config.entries[vm_id].vm_emu_dev_confg {
-            Some(emu_devs) => {
-                for emu_dev in emu_devs {
-                    if int_id == emu_dev.irq_id {
-                        return true;
-                    }
-                }
+        for emu_dev in self.config().emulated_device_list() {
+            if int_id == emu_dev.irq_id {
+                return true;
             }
-            None => return false,
         }
         false
     }
@@ -509,7 +513,7 @@ impl Vm {
 pub struct VmInner {
     pub id: usize,
     pub ready: bool,
-    pub config: Option<Arc<VmConfigEntry>>,
+    pub config: Option<VmConfigEntry>,
     pub dtb: Option<usize>,
     // memory config
     pub pt: Option<PageTable>,

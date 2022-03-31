@@ -11,11 +11,16 @@ use crate::kernel::{
 use crate::lib::{memcpy_safe, trace};
 use crate::vmm::{get_vm_id, vmm_boot_vm};
 
+// If succeed, return 0.
+const HVC_FINISH: usize = 0;
+// If failed, return -1.
+const HVC_ERR: usize = usize::MAX;
+
 pub const HVC_SYS: usize = 0;
 pub const HVC_VMM: usize = 1;
 pub const HVC_IVC: usize = 2;
 pub const HVC_MEDIATED: usize = 3;
-pub const HVC_CONFIG: usize = 3;
+pub const HVC_CONFIG: usize = 0x11;
 
 pub const HVC_IRQ: usize = 32 + 0x20;
 
@@ -35,40 +40,81 @@ pub fn hvc_guest_handler(
     x4: usize,
     x5: usize,
     x6: usize,
-) -> bool {
+) -> Result<usize, ()> {
+    let mut res = false;
     match hvc_type {
-        HVC_SYS => hvc_sys_handler(event, x0),
-        HVC_VMM => hvc_vmm_handler(event, x0, x1),
-        HVC_IVC => hvc_ivc_handler(event, x0, x1, x2, x3, x4),
-        HVC_MEDIATED => hvc_mediated_handler(event, x0, x1, x2, x3),
-        HVC_CONFIG => hvc_config_handler(event, x0, x1, x2, x3, x4),
-        _ => {
-            println!("hvc_guest_handler: unknown hvc type {} event {}", hvc_type, event);
-            false
+        HVC_SYS => {
+            res = hvc_sys_handler(event, x0);
         }
+        HVC_VMM => {
+            res = hvc_vmm_handler(event, x0, x1);
+        }
+        HVC_IVC => {
+            res = hvc_ivc_handler(event, x0, x1, x2, x3, x4);
+        }
+        HVC_MEDIATED => {
+            res = hvc_mediated_handler(event, x0, x1, x2, x3);
+        }
+        HVC_CONFIG => {
+            return hvc_config_handler(event, x0, x1, x2, x3, x4, x5, x6);
+        }
+        _ => {
+            println!(
+                "hvc_guest_handler: unknown hvc type {} event {}",
+                hvc_type, event
+            );
+            return Err(())
+        }
+    }
+    if res {
+        Ok(HVC_FINISH)
+    } else {
+        Err(())
     }
 }
 
-fn hvc_config_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize) -> bool {
+fn hvc_config_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize, x5: usize, x6: usize) -> Result<usize, ()>{
     match event {
-        // VM
+        // HVC_CONFIG_ADD_VM
         0 => {
-            return vm_config_add_vm(x0, x1, x2, x3, x4);
+            vm_cfg_add_vm(x0, x1, x2, x3, x4, x5, x6)
         }
-        // MEMORY
-        1 => true,
-        // CPU
-        2 => true,
-        // EMULATED DEVICE
-        3 => true,
-        // PASSTHROUGH DEVICE
-        4 => true,
-        // DTB
-        5 => true,
-        //
+        // HVC_CONFIG_DELETE_VM
+        1 => {
+            vm_cfg_del_vm(x0)
+        }
+        // HVC_CONFIG_CPU
+        2 => {
+            vm_cfg_set_cpu(x0,x1,x2,x3)
+        }
+        // HVC_CONFIG_MEMORY_REGION
+        3 => {
+            vm_cfg_add_mem_region(x0,x1,x2)
+        }
+        // HVC_CONFIG_EMULATED_DEVICE
+        4 => {
+            vm_cfg_add_emu_dev(x0,x1,x2,x3,x4,x5,x6)
+        }
+        // HVC_CONFIG_PASSTHROUGH_DEVICE_REGION
+        5 => {
+            vm_cfg_add_passthrough_device_region(x0,x1,x2,x3) 
+        }
+        // HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS
+        6 => {
+            vm_cfg_add_passthrough_device_irqs(x0,x1,x2)
+        }
+        // HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS
+        7 => {
+            vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2)
+        }
+        // HVC_CONFIG_DTB_DEVICE
+        8 => {
+            vm_cfg_add_dtb_dev(x0,x1,x2,x3,x4,x5,x6) 
+        }
+        // 
         _ => {
             println!("hvc_config_handler unknown event {}", event);
-            false
+            Err(())
         }
     }
 }
@@ -91,8 +137,8 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> bool {
         }
         // HVC_VMM_BOOT_VM
         2 => {
-            let vm_id = vm_num();
-            vmm_boot_vm(vm_id);
+            // let vm_id = vm_num();
+            vmm_boot_vm(x0);
             true
         }
         // HVC_VMM_SHUTDOWN_VM

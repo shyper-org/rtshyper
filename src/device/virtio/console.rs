@@ -147,7 +147,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         }
 
         if !virtio_console_recv(trgt_vmid, trgt_console_ipa, tx_iov.clone(), len) {
-            println!("virtio_console_notify_handler: failed send");
+            // println!("virtio_console_notify_handler: failed send");
             // return false;
         }
         if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32, vq_size) {

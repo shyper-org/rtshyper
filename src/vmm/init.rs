@@ -26,25 +26,21 @@ use crate::lib::{barrier, trace};
 
 pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/rootfs.cpio");
 
-fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
+fn vmm_init_memory(vm: Vm) -> bool {
     let result = mem_page_alloc();
-    let vm_id;
+    let vm_id = vm.id();
+    let config = vm.config();
 
     if let Ok(pt_dir_frame) = result {
-        let vm_inner_lock = vm.inner();
-        let mut vm_inner = vm_inner_lock.lock();
-
-        vm_id = vm_inner.id;
         println!("vm{} pt {:x}", vm_id, pt_dir_frame.pa());
-        vm_inner.pt = Some(PageTable::new(pt_dir_frame));
-        vm_inner.mem_region_num = config.region.len() as usize;
+        vm.set_pt(pt_dir_frame);
+        vm.set_mem_region_num(config.memory_region().len());
     } else {
         println!("vmm_init_memory: page alloc failed");
         return false;
     }
 
-    for i in 0..config.region.len() as usize {
-        let vm_region = &config.region[i];
+    for (i, vm_region) in config.memory_region().iter().enumerate() {
         let pa = mem_vm_region_alloc(vm_region.length);
 
         if pa == 0 {
@@ -89,14 +85,14 @@ fn vmm_init_memory(config: &VmMemoryConfig, vm: Vm) -> bool {
 fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     let size = bin.len();
     let config = vm.config();
-    for i in 0..config.memory.region.len() {
-        let idx = i as usize;
-        let region = &config.memory.region;
-        if load_ipa < region[idx].ipa_start || load_ipa + size > region[idx].ipa_start + region[idx].length {
+    for (idx, region) in config.memory_region().iter().enumerate() {
+        if load_ipa < region.ipa_start
+            || load_ipa + size > region.ipa_start + region.length
+        {
             continue;
         }
 
-        let offset = load_ipa - region[idx].ipa_start;
+        let offset = load_ipa - region.ipa_start;
         println!(
             "VM {} loads kernel: ipa=<0x{:x}>, pa=<0x{:x}>, size=<{}K>",
             vm.id(),
@@ -115,11 +111,12 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     panic!("vmm_load_image: Image config conflicts with memory config");
 }
 
-pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
+pub fn vmm_init_image(vm: Vm) -> bool {
     // if config.kernel_name.is_none() {
     //     println!("vmm_init_image: filename is missed");
     //     return false;
     // }
+    let config = vm.config().image;
 
     if config.kernel_load_ipa == 0 {
         println!("vmm_init_image: kernel load ipa is null");
@@ -161,17 +158,19 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-        {
-            let offset = config.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
-            unsafe {
-                let src = SYSTEM_FDT.get().unwrap();
-                let len = src.len();
-                let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                dst.clone_from_slice(&src);
+            {
+                let offset = config.device_tree_load_ipa
+                    - vm.config().memory_region()[0].ipa_start;
+                unsafe {
+                    let src = SYSTEM_FDT.get().unwrap();
+                    let len = src.len();
+                    let dst =
+                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                    dst.clone_from_slice(&src);
+                }
+                println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
             }
-            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
-        }
     } else {
         println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
     }
@@ -190,8 +189,8 @@ pub fn vmm_init_image(config: &VmImageConfig, vm: Vm) -> bool {
     true
 }
 
-fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
-    for i in 0..config.num {
+fn vmm_init_cpu(vm: Vm) -> bool {
+    for i in 0..vm.config().cpu_num() {
         use crate::kernel::vcpu_alloc;
         if let Some(vcpu) = vcpu_alloc() {
             vm.push_vcpu(vcpu.clone());
@@ -208,20 +207,17 @@ fn vmm_init_cpu(config: &VmCpuConfig, vm: Vm) -> bool {
     println!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<0b{:b}>",
         vm.id(),
-        config.num,
-        config.allocate_bitmap
+        vm.config().cpu_num(),
+        vm.config().cpu_allocated_bitmap()
     );
 
     true
 }
 
-fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm) -> bool {
-    if config.is_none() {
-        println!("vmm_init_emulated_device: VM {} emu config is NULL", vm.id());
-        return true;
-    }
+fn vmm_init_emulated_device(vm: Vm) -> bool {
+    let config = vm.config().emulated_device_list();
 
-    for (idx, emu_dev) in config.as_ref().unwrap().iter().enumerate() {
+    for (idx, emu_dev) in config.iter().enumerate() {
         let dev_name;
         match emu_dev.emu_type {
             EmuDeviceTGicd => {
@@ -291,40 +287,33 @@ fn vmm_init_emulated_device(config: &Option<Vec<VmEmulatedDeviceConfig>>, vm: Vm
     true
 }
 
-fn vmm_init_passthrough_device(config: &Option<VmPassthroughDeviceConfig>, vm: Vm) -> bool {
-    match config {
-        Some(cfg) => {
-            for region in &cfg.regions {
-                vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE);
+fn vmm_init_passthrough_device(vm: Vm) -> bool {
+    for region in vm.config().passthrough_device_regions() {
+        vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE);
 
-                println!(
-                    "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>",
-                    vm.id(),
-                    region.ipa,
-                    region.pa,
-                );
-            }
-            for irq in &cfg.irqs {
-                if !interrupt_vm_register(vm.clone(), *irq) {
-                    return false;
-                }
-            }
-        }
-        None => {
-            println!("vmm_init_passthrough_device: VM {} passthrough config is NULL", vm.id());
-            return true;
+        println!(
+            "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>",
+            vm.id(),
+            region.ipa,
+            region.pa,
+        );
+    }
+    for irq in vm.config().passthrough_device_irqs() {
+        if !interrupt_vm_register(vm.clone(), irq) {
+            return false;
         }
     }
-
     true
 }
 
-pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
+
+pub unsafe fn vmm_setup_fdt(vm: Vm) {
     use fdt::*;
+    let config = vm.config();
     match vm.dtb() {
         Some(dtb) => {
             let mut mr = Vec::new();
-            for r in &config.memory.region {
+            for r in config.memory_region() {
                 mr.push(region {
                     ipa_start: r.ipa_start as u64,
                     length: r.length as u64,
@@ -335,8 +324,8 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
 
-            if config.vm_emu_dev_confg.is_some() {
-                for emu_cfg in config.vm_emu_dev_confg.as_ref().unwrap() {
+            if config.emulated_device_list().len() > 0 {
+                for emu_cfg in config.emulated_device_list() {
                     match emu_cfg.emu_type {
                         EmuDeviceTGicd => {
                             fdt_setup_gic(
@@ -373,35 +362,46 @@ pub unsafe fn vmm_setup_fdt(config: Arc<VmConfigEntry>, vm: Vm) {
     }
 }
 
-// this func should run 1 time for each vm
+// This func should run 1 time for each vm.
 pub fn vmm_setup_config(vm_id: usize) {
-    let config = vm_cfg_entry(vm_id);
-    let vm = vm(vm_id).unwrap();
+    let vm = match vm(vm_id) {
+        Some(_vm) => _vm,
+        None => {
+            panic!("vmm_setup_config vm id {} doesn't exist", vm_id);
+        }
+    };
 
-    println!(
-        "vmm_setup_config VM[{}] name {:?} current core {}",
-        vm_id,
-        config.name.unwrap(),
-        current_cpu().id
-    );
+    let config = match vm_cfg_entry(vm_id) {
+        Some(_config) => _config,
+        None => {
+            panic!("vmm_setup_config vm id {} config doesn't exist",vm_id);
+        }
+    };
+
+    println!("vmm_setup_config VM[{}] name {:?} current core {}", vm_id, config.name.clone().unwrap(), current_cpu().id);
 
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
     }
-    if !vmm_init_memory(&config.memory, vm.clone()) {
+    if !vmm_init_memory(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_memory failed");
     }
 
-    if !vmm_init_image(&config.image, vm.clone()) {
+    if !vmm_init_image(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_image failed");
     }
     if let VmType::VmTOs = config.os_type {
         if vm_id != 0 {
-            // init gvm dtb
+            // Init GVM dtb.
             match create_fdt(config.clone()) {
                 Ok(dtb) => {
-                    let offset = config.image.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
-                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
+                    let offset = config.image.device_tree_load_ipa
+                        - vm.config().memory_region()[0].ipa_start;
+                    crate::lib::memcpy_safe(
+                        (vm.pa_start(0) + offset) as *const u8,
+                        dtb.as_ptr(),
+                        dtb.len(),
+                    );
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
@@ -409,15 +409,15 @@ pub fn vmm_setup_config(vm_id: usize) {
             }
         } else {
             unsafe {
-                vmm_setup_fdt(config.clone(), vm.clone());
+                vmm_setup_fdt(vm.clone());
             }
         }
     }
 
-    if !vmm_init_emulated_device(&config.vm_emu_dev_confg, vm.clone()) {
+    if !vmm_init_emulated_device(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_emulated_device failed");
     }
-    if !vmm_init_passthrough_device(&config.vm_pt_dev_confg, vm.clone()) {
+    if !vmm_init_passthrough_device(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_passthrough_device failed");
     }
     add_async_used_info();
@@ -451,9 +451,9 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
 
     // let cpu_config = vm(vm_id).config().cpu;
     let vm = vm(vm_id).unwrap();
-    let cfg_master = vm.config().cpu.master as usize;
-    let cfg_cpu_num = vm.config().cpu.num;
-    let cfg_cpu_allocate_bitmap = vm.config().cpu.allocate_bitmap;
+    let cfg_master = vm.config().cpu_master();
+    let cfg_cpu_num = vm.config().cpu_num();
+    let cfg_cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
 
     println!(
         "vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
@@ -561,9 +561,16 @@ pub fn vmm_add_vm(vm_id: usize) {
         return;
     }
     let vm = vm(vm_id).unwrap();
-    vm.set_config_entry(vm_cfg_entry(vm_id));
+    let vm_cfg = match vm_cfg_entry(vm_id) {
+        Some(_vm_cfg) => _vm_cfg,
+        None => {
+            println!("vmm_add_vm: failed to find config for vm {}",vm_id);
+            return;
+        }
+    };
+    vm.set_config_entry(Some(vm_cfg));
 
-    if !vmm_init_cpu(&vm_cfg_entry(vm_id).cpu, vm.clone()) {
+    if !vmm_init_cpu(vm.clone()) {
         println!("vmm_add_vm: vmm_init_cpu failed");
     }
     use crate::kernel::vm_if_list_set_type;

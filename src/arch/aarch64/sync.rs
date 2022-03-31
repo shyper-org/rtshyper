@@ -95,10 +95,18 @@ pub fn hvc_handler() {
     let idx = 0;
     let val = 0;
     current_cpu().set_gpr(idx, val);
-    if !hvc_guest_handler(hvc_type, event, x0, x1, x2, x3, x4, x5, x6) {
-        println!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
-        let idx = 0;
-        let val = usize::MAX;
-        current_cpu().set_gpr(idx, val);
+    match hvc_guest_handler(hvc_type, event, x0, x1, x2, x3, x4, x5, x6) {
+        Ok(val) => {
+            current_cpu().set_gpr(idx, val);
+        }
+        Err(_) => {
+            println!(
+                "Failed to handle hvc request fid 0x{:x} event 0x{:x}",
+                hvc_type, event
+            );
+            let idx = 0;
+            let val = usize::MAX;
+            current_cpu().set_gpr(idx, val);
+        }
     }
 }

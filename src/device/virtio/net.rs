@@ -371,7 +371,7 @@ fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
 fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let vm = match vm(vmid) {
         None => {
-            println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
+            // println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
             return true;
         }
         Some(_vm) => _vm,

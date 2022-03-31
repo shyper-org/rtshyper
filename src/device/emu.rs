@@ -37,14 +37,32 @@ pub struct EmuDevEntry {
     handler: EmuDevHandler,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum EmuDeviceType {
-    EmuDeviceTConsole,
-    EmuDeviceTGicd,
-    EmuDeviceTGPPT,
-    EmuDeviceTVirtioBlk,
-    EmuDeviceTVirtioNet,
-    EmuDeviceTVirtioConsole,
-    EmuDeviceTShyper,
+    EmuDeviceTConsole = 0,
+    EmuDeviceTGicd = 1,
+    EmuDeviceTGPPT = 2,
+    EmuDeviceTVirtioBlk = 3,
+    EmuDeviceTVirtioNet = 4,
+    EmuDeviceTVirtioConsole = 5,
+    EmuDeviceTShyper = 6,
+    EmuDeviceTVirtioBlkMediated = 7,
+}
+
+impl EmuDeviceType {
+    pub fn from_usize(value: usize) -> EmuDeviceType {
+        match value {
+            0 => EmuDeviceType::EmuDeviceTConsole,
+            1 => EmuDeviceType::EmuDeviceTGicd,
+            2 => EmuDeviceType::EmuDeviceTGPPT,
+            3 => EmuDeviceType::EmuDeviceTVirtioBlk,
+            4 => EmuDeviceType::EmuDeviceTVirtioNet,
+            5 => EmuDeviceType::EmuDeviceTVirtioConsole,
+            6 => EmuDeviceType::EmuDeviceTShyper,
+            7 => EmuDeviceType::EmuDeviceTVirtioBlkMediated,
+            _ => panic!("Unknown  EmuDeviceType value: {}", value),
+        }
+    }
 }
 
 pub type EmuDevHandler = fn(usize, &EmuContext) -> bool;

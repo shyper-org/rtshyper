@@ -1,7 +1,8 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2, init_tmp_config_for_vm3, vm_cfg_entry, vm_num};
+use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::{vm_cfg_entry};
 use crate::device::create_fdt;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr,
@@ -31,7 +32,7 @@ pub fn vmm_set_up_vm(vm_id: usize) {
     let vm = vm(vm_id).unwrap();
     let config = vm.config();
 
-    let mut cpu_allocate_bitmap = config.cpu.allocate_bitmap;
+    let mut cpu_allocate_bitmap = config.cpu_allocated_bitmap();
     let mut target_cpu_id = 0;
     let mut cpu_num = 0;
     while cpu_allocate_bitmap != 0 && target_cpu_id < PLATFORM_CPU_NUM_MAX {
@@ -54,10 +55,7 @@ pub fn vmm_set_up_vm(vm_id: usize) {
         cpu_allocate_bitmap >>= 1;
         target_cpu_id += 1;
     }
-    println!(
-        "vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}",
-        vm_id, cpu_num, config.cpu.allocate_bitmap
-    );
+    println!("vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}", vm_id, cpu_num, config.cpu_allocated_bitmap());
 }
 
 pub fn vmm_boot_vm(vm_id: usize) {
@@ -68,9 +66,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
             init_tmp_config_for_vm1();
         } else if vm_id == 2 {
             init_tmp_config_for_vm2();
-        } else if vm_id == 3 {
-            init_tmp_config_for_vm3();
-        }
+        } 
 
         vmm_set_up_vm(vm_id);
         loop {
@@ -143,15 +139,21 @@ pub fn vmm_reboot_vm(vm: Vm) {
         active_vcpu_id()
     );
 
-    let config = vm_cfg_entry(vm.id());
-    if !vmm_init_image(&config.image, vm.clone()) {
+    let config = match vm_cfg_entry(vm.id()) {
+        Some(_config) => _config,
+        None => {
+            panic!("vmm_setup_config vm id {} config doesn't exist", vm.id());
+        }
+    };
+    if !vmm_init_image(vm.clone()) {
         panic!("vmm_reboot_vm: vmm_init_image failed");
     }
     if vm.id() != 0 {
         // init vm1 dtb
         match create_fdt(config.clone()) {
             Ok(dtb) => {
-                let offset = config.image.device_tree_load_ipa - vm.config().memory.region[0].ipa_start;
+                let offset = config.image.device_tree_load_ipa
+                    - vm.config().memory_region()[0].ipa_start;
                 println!("dtb size {}", dtb.len());
                 println!("pa 0x{:x}", vm.pa_start(0) + offset);
                 crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
@@ -162,7 +164,7 @@ pub fn vmm_reboot_vm(vm: Vm) {
         }
     } else {
         unsafe {
-            vmm_setup_fdt(config.clone(), vm.clone());
+            vmm_setup_fdt(vm.clone());
         }
     }
     vm_if_list_set_ivc_arg(vm.id(), 0);

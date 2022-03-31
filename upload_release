@@ -8,6 +8,6 @@ mkimage -n shyper -A arm64 -O linux -T kernel -C none -a 0x83000000 -e 0x8300000
 -d ${bin}/shyper.bin ${bin}/shyperImage
 echo "*** Upload Image ***"
 
-scp ${bin}/shyperImage ${tftp}/Image13
+scp ${bin}/shyperImage ${tftp}/HkyRustImage
 # scp ${bin}/shyper.bin ${tftp}/shyper.bin
 # scp ${bin}/rust_hypervisor ${tftp}/shyper13.elf

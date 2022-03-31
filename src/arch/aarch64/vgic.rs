@@ -2118,7 +2118,7 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
 }
 
 pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
-    let vgic_cpu_num = vm.config().cpu.num;
+    let vgic_cpu_num = vm.config().cpu_num();
     vm.init_intc_mode(true);
 
     let vgic = Arc::new(Vgic::default());
