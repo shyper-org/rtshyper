@@ -15,7 +15,7 @@ use crate::device::{
 };
 use crate::kernel::{
     current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
-    vm_if_list_get_cpu_id,
+    vm_if_get_cpu_id,
 };
 use crate::lib::{memcpy_safe, trace};
 
@@ -259,7 +259,7 @@ pub fn finish_async_task(ipi: bool) {
             }
 
             if last_vm_async_io_task(task.src_vmid) {
-                let target_id = vm_if_list_get_cpu_id(task.src_vmid);
+                let target_id = vm_if_get_cpu_id(task.src_vmid);
                 update_used_info(args.vq.clone(), task.src_vmid);
                 if target_id != current_cpu().id {
                     let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };

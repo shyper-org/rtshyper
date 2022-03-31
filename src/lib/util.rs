@@ -46,7 +46,7 @@ pub fn bit_extract(bits: usize, off: usize, len: usize) -> usize {
 
 #[inline(always)]
 pub fn bit_get(bits: usize, off: usize) -> usize {
-    bits & (1 << off)
+    (bits >> off) & 1
 }
 
 #[inline(always)]

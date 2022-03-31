@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_list_set_state};
+use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
 
@@ -312,8 +312,8 @@ impl VcpuInner {
         self.arch_ctx_reset();
         self.gic_ctx_reset();
 
-        use crate::kernel::vm_if_list_get_type;
-        match vm_if_list_get_type(self.vm_id()) {
+        use crate::kernel::vm_if_get_type;
+        match vm_if_get_type(self.vm_id()) {
             VmType::VmTBma => {
                 self.reset_vm_ctx();
                 self.context_ext_regs_store();
@@ -402,7 +402,7 @@ pub fn vcpu_run() {
     // vcpu.show_ctx();
 
     current_cpu().cpu_state = CpuState::CpuRun;
-    vm_if_list_set_state(active_vm_id(), super::VmState::VmActive);
+    vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
     for i in 0..vm.mem_region_num() {
         unsafe {

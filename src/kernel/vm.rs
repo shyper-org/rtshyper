@@ -6,7 +6,7 @@ use spin::Mutex;
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
-use crate::config::DEF_VM_CONFIG_TABLE;
+use crate::config::{DEF_VM_CONFIG_TABLE, VmRegion};
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::lib::*;
@@ -27,27 +27,27 @@ pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
 ];
 
-pub fn vm_if_list_set_state(vm_id: usize, vm_state: VmState) {
+pub fn vm_if_set_state(vm_id: usize, vm_state: VmState) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.state = vm_state;
 }
 
-pub fn vm_if_list_get_state(vm_id: usize) -> VmState {
+pub fn vm_if_get_state(vm_id: usize) -> VmState {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.state
 }
 
-pub fn vm_if_list_set_type(vm_id: usize, vm_type: VmType) {
+pub fn vm_if_set_type(vm_id: usize, vm_type: VmType) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.vm_type = vm_type;
 }
 
-pub fn vm_if_list_get_type(vm_id: usize) -> VmType {
+pub fn vm_if_get_type(vm_id: usize) -> VmType {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.vm_type
 }
 
-pub fn vm_if_list_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
+pub fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id = master_cpu_id;
     println!(
@@ -56,12 +56,12 @@ pub fn vm_if_list_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     );
 }
 
-pub fn vm_if_list_get_cpu_id(vm_id: usize) -> usize {
+pub fn vm_if_get_cpu_id(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id
 }
 
-pub fn vm_if_list_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
+pub fn vm_if_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
     let vm_if = VM_IF_LIST[vm_id].lock();
     for i in 0..6 {
         if vm_if.mac[i] != frame[i] {
@@ -71,24 +71,34 @@ pub fn vm_if_list_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
     true
 }
 
-pub fn vm_if_list_set_ivc_arg(vm_id: usize, ivc_arg: usize) {
+pub fn vm_if_set_ivc_arg(vm_id: usize, ivc_arg: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg = ivc_arg;
 }
 
-pub fn vm_if_list_ivc_arg(vm_id: usize) -> usize {
+pub fn vm_if_ivc_arg(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg
 }
 
-pub fn vm_if_list_set_ivc_arg_ptr(vm_id: usize, ivc_arg_ptr: usize) {
+pub fn vm_if_set_ivc_arg_ptr(vm_id: usize, ivc_arg_ptr: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg_ptr = ivc_arg_ptr;
 }
 
-pub fn vm_if_list_ivc_arg_ptr(vm_id: usize) -> usize {
+pub fn vm_if_ivc_arg_ptr(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg_ptr
+}
+
+pub fn vm_if_init_mem_map(vm_id: usize, len: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map = Some(FlexBitmap::new(len));
+}
+
+pub fn vm_if_dirty_mem_map(vm_id: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map.as_mut().unwrap().init_dirty();
 }
 
 #[derive(Clone, Copy)]
@@ -121,6 +131,7 @@ pub struct VmInterface {
     pub mac: [u8; 6],
     pub ivc_arg: usize,
     pub ivc_arg_ptr: usize,
+    pub mem_map: Option<FlexBitmap>,
 }
 
 impl VmInterface {
@@ -132,10 +143,12 @@ impl VmInterface {
             mac: [0; 6],
             ivc_arg: 0,
             ivc_arg_ptr: 0,
+            mem_map: None,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct VmPa {
     pub pa_start: usize,
     pub pa_length: usize,
@@ -296,6 +309,22 @@ impl Vm {
         }
     }
 
+    pub fn pt_read_only(&self) {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => {
+                for i in 0..vm_inner.mem_region_num {
+                    let ipa_start = vm_inner.pa_region[i].pa_start + vm_inner.pa_region[i].offset as usize;
+                    let len = vm_inner.pa_region[i].pa_length;
+                    pt.read_only(ipa_start, len);
+                }
+            }
+            None => {
+                panic!("Vm::read_only: vm{} pt is empty", vm_inner.id);
+            }
+        }
+    }
+
     pub fn set_pt(&self, pt_dir_frame: PageFrame) {
         let mut vm_inner = self.inner.lock();
         vm_inner.pt = Some(PageTable::new(pt_dir_frame))
@@ -326,24 +355,29 @@ impl Vm {
         vm_inner.config.as_ref().unwrap().clone()
     }
 
+    pub fn add_region(&self, region: VmPa) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.pa_region.push(region);
+    }
+
     pub fn pa_start(&self, idx: usize) -> usize {
         let vm_inner = self.inner.lock();
-        vm_inner.pa_region.as_ref().unwrap()[idx].pa_start
+        vm_inner.pa_region[idx].pa_start
     }
 
     pub fn pa_length(&self, idx: usize) -> usize {
         let vm_inner = self.inner.lock();
-        vm_inner.pa_region.as_ref().unwrap()[idx].pa_length
+        vm_inner.pa_region[idx].pa_length
     }
 
     pub fn pa_offset(&self, idx: usize) -> usize {
         let vm_inner = self.inner.lock();
-        vm_inner.pa_region.as_ref().unwrap()[idx].offset as usize
+        vm_inner.pa_region[idx].offset as usize
     }
 
-    pub fn set_mem_region_num(&self, _mem_region_num:usize) {
+    pub fn set_mem_region_num(&self, mem_region_num: usize) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.mem_region_num = _mem_region_num;
+        vm_inner.mem_region_num = mem_region_num;
     }
 
     pub fn mem_region_num(&self) -> usize {
@@ -518,7 +552,7 @@ pub struct VmInner {
     // memory config
     pub pt: Option<PageTable>,
     pub mem_region_num: usize,
-    pub pa_region: Option<[VmPa; VM_MEM_REGION_MAX]>,
+    pub pa_region: Vec<VmPa>, // Option<[VmPa; VM_MEM_REGION_MAX]>,
 
     // image config
     pub entry_point: usize,
@@ -546,7 +580,7 @@ impl VmInner {
             dtb: None,
             pt: None,
             mem_region_num: 0,
-            pa_region: None,
+            pa_region: Vec::new(),
             entry_point: 0,
 
             has_master: false,
@@ -568,7 +602,7 @@ impl VmInner {
             dtb: None,
             pt: None,
             mem_region_num: 0,
-            pa_region: None,
+            pa_region: Vec::new(),
             entry_point: 0,
 
             has_master: false,

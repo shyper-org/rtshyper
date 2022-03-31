@@ -170,6 +170,34 @@ impl PageTable {
         self.directory.pa()
     }
 
+    pub fn read_only(&self, start: usize, len: usize) {
+        let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
+        let mut ipa = start;
+        while ipa < (start + len) {
+            let mut l1e = directory.entry(pt_lvl1_idx(ipa));
+            if !l1e.valid() {
+                ipa += 512 * 512 * 4096; // 1GB: 9 + 9 + 12 bits
+                continue;
+            }
+            let l2e = l1e.entry(pt_lvl2_idx(ipa));
+            if !l2e.valid() {
+                ipa += 512 * 4096; // 2MB: 9 + 12 bits
+                continue;
+            } else if l2e.to_pte() & PTE_BLOCK != 0 {
+                let pte = l2e.to_pte() & !(0b11 << 6) | PTE_S2_FIELD_AP_RO;
+                l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
+                ipa += 512 * 4096; // 2MB: 9 + 12 bits
+                continue;
+            }
+            let l3e = l2e.entry(pt_lvl3_idx(ipa));
+            if l3e.valid() {
+                let pte = l3e.to_pte() & !(0b11 << 6) | PTE_S2_FIELD_AP_RO;
+                l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pte))
+            }
+            ipa += 4096; // 4KB: 12 bits
+        }
+    }
+
     pub fn map_2mb(&self, ipa: usize, pa: usize, pte: usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));

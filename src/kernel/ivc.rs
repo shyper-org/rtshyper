@@ -3,8 +3,7 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::kernel::{
-    active_vm, current_cpu, mem_pages_alloc, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr, vm_ipa2pa,
-    VM_NUM_MAX,
+    active_vm, current_cpu, mem_pages_alloc, Vm, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
 };
 use crate::mm::PageFrame;
 
@@ -23,8 +22,8 @@ pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
         return false;
     }
 
-    vm_if_list_set_ivc_arg(vm_id, cfg_pa);
-    vm_if_list_set_ivc_arg_ptr(vm_id, cfg_pa - PAGE_SIZE / VM_NUM_MAX);
+    vm_if_set_ivc_arg(vm_id, cfg_pa);
+    vm_if_set_ivc_arg_ptr(vm_id, cfg_pa - PAGE_SIZE / VM_NUM_MAX);
 
     let idx = 0;
     let val = vm_id;

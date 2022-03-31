@@ -1,14 +1,13 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2};
-use crate::config::{vm_cfg_entry};
+use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
 use crate::kernel::{
-    active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_list_set_ivc_arg, vm_if_list_set_ivc_arg_ptr,
-    vm_ipa2pa,
+    active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa,
 };
-use crate::kernel::{active_vm_id, vm_if_list_get_cpu_id};
+use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::vmm::{vmm_add_vm, vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
 
@@ -55,7 +54,12 @@ pub fn vmm_set_up_vm(vm_id: usize) {
         cpu_allocate_bitmap >>= 1;
         target_cpu_id += 1;
     }
-    println!("vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}", vm_id, cpu_num, config.cpu_allocated_bitmap());
+    println!(
+        "vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}",
+        vm_id,
+        cpu_num,
+        config.cpu_allocated_bitmap()
+    );
 }
 
 pub fn vmm_boot_vm(vm_id: usize) {
@@ -63,10 +67,10 @@ pub fn vmm_boot_vm(vm_id: usize) {
     if current_cpu().id == 0 {
         // TODO: this code should be replaced
         if vm_id == 1 {
-            init_tmp_config_for_vm1();
+            init_tmp_config_for_bma1();
         } else if vm_id == 2 {
             init_tmp_config_for_vm2();
-        } 
+        }
 
         vmm_set_up_vm(vm_id);
         loop {
@@ -93,7 +97,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
         vmm_setup_config(vm_id);
     }
 
-    let phys_id = vm_if_list_get_cpu_id(vm_id);
+    let phys_id = vm_if_get_cpu_id(vm_id);
     println!(
         "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
         current_cpu().id,
@@ -152,8 +156,7 @@ pub fn vmm_reboot_vm(vm: Vm) {
         // init vm1 dtb
         match create_fdt(config.clone()) {
             Ok(dtb) => {
-                let offset = config.image.device_tree_load_ipa
-                    - vm.config().memory_region()[0].ipa_start;
+                let offset = config.image.device_tree_load_ipa - vm.config().memory_region()[0].ipa_start;
                 println!("dtb size {}", dtb.len());
                 println!("pa 0x{:x}", vm.pa_start(0) + offset);
                 crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
@@ -167,8 +170,8 @@ pub fn vmm_reboot_vm(vm: Vm) {
             vmm_setup_fdt(vm.clone());
         }
     }
-    vm_if_list_set_ivc_arg(vm.id(), 0);
-    vm_if_list_set_ivc_arg_ptr(vm.id(), 0);
+    vm_if_set_ivc_arg(vm.id(), 0);
+    vm_if_set_ivc_arg_ptr(vm.id(), 0);
 
     crate::arch::interrupt_arch_clear();
     crate::arch::vcpu_arch_init(vm.clone(), vm.vcpu(0).unwrap());

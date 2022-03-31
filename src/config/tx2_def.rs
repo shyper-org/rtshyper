@@ -1,6 +1,6 @@
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::string::String;
 
 use spin::Mutex;
 
@@ -9,13 +9,13 @@ use crate::device::EmuDeviceType;
 use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType};
 
 use super::{
-    VmConfigEntry, 
-    VmEmulatedDeviceConfig,VmEmulatedDeviceConfigList,
-    PassthroughRegion,VmPassthroughDeviceConfig,
-    VmMemoryConfig,VmRegion,
-    VmImageConfig, VmCpuConfig, 
-    AddrRegions, VmDtbDevConfig, DtbDevType,VMDtbDevConfigList,
-    vm_cfg_add_mvm_entry,vm_cfg_set_config_name,
+    AddrRegions,
+    DtbDevType, PassthroughRegion,
+    vm_cfg_add_mvm_entry, vm_cfg_set_config_name,
+    VmConfigEntry, VmCpuConfig,
+    VmDtbDevConfig, VMDtbDevConfigList,
+    VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig,
+    VmPassthroughDeviceConfig, VmRegion,
 };
 
 #[rustfmt::skip]
@@ -219,9 +219,9 @@ pub fn mvm_config_init() {
         },
         cmdline_vec: None,
         cmdline:
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         med_blk_idx: None,
 
         memory: Arc::new(Mutex::new(VmMemoryConfig{

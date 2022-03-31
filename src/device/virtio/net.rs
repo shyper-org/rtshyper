@@ -8,7 +8,7 @@ use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_list_cmp_mac, vm_if_list_get_cpu_id, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_cmp_mac, vm_if_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
@@ -231,7 +231,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                     src_vmid: active_vm_id(),
                     trgt_vmid,
                 };
-                let cpu_trgt = vm_if_list_get_cpu_id(trgt_vmid);
+                let cpu_trgt = vm_if_get_cpu_id(trgt_vmid);
                 if !ipi_send_msg(cpu_trgt, IpiType::IpiTEthernetMsg, IpiInnerMsg::EnternetMsg(msg)) {
                     println!(
                         "virtio_net_notify_handler: failed to send ipi message, target {}",
@@ -467,7 +467,7 @@ fn ethernet_is_arp(frame: &[u8]) -> bool {
 
 fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
     for vm_id in 0..vm_num() {
-        if vm_if_list_cmp_mac(vm_id, frame) {
+        if vm_if_cmp_mac(vm_id, frame) {
             return Ok(vm_id);
         }
     }

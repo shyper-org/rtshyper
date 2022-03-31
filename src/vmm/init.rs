@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::arch::{emu_intc_handler, emu_intc_init, partial_passthrough_intc_handler, partial_passthrough_intc_init};
+use crate::arch::PAGE_SIZE;
 use crate::arch::PageTable;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
@@ -14,8 +15,8 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    active_vm_id, add_async_used_info, current_cpu, push_vm, shyper_init, VcpuState, VM_IF_LIST, vm_if_list_set_cpu_id,
-    VmType,
+    active_vm_id, add_async_used_info, current_cpu, push_vm, shyper_init, VcpuState, vm_if_init_mem_map, VM_IF_LIST,
+    vm_if_set_cpu_id, VmPa, VmType,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -30,6 +31,7 @@ fn vmm_init_memory(vm: Vm) -> bool {
     let result = mem_page_alloc();
     let vm_id = vm.id();
     let config = vm.config();
+    let mut vm_mem_size: usize = 0; // size for pages
 
     if let Ok(pt_dir_frame) = result {
         println!("vm{} pt {:x}", vm_id, pt_dir_frame.pa());
@@ -42,6 +44,7 @@ fn vmm_init_memory(vm: Vm) -> bool {
 
     for (i, vm_region) in config.memory_region().iter().enumerate() {
         let pa = mem_vm_region_alloc(vm_region.length);
+        vm_mem_size += vm_region.length;
 
         if pa == 0 {
             println!("vmm_init_memory: vm memory region is not large enough");
@@ -52,32 +55,15 @@ fn vmm_init_memory(vm: Vm) -> bool {
             "VM {} memory region: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>",
             vm_id, vm_region.ipa_start, pa, vm_region.length
         );
+        vm.pt_map_range(vm_region.ipa_start, vm_region.length, pa, PTE_S2_NORMAL);
 
-        let vm_inner_lock = vm.inner();
-        let mut vm_inner = vm_inner_lock.lock();
-
-        match &vm_inner.pt {
-            Some(pt) => pt.pt_map_range(vm_region.ipa_start, vm_region.length, pa, PTE_S2_NORMAL),
-            None => {
-                println!("vmm_inner_memory: VM page table is null!");
-                return false;
-            }
-        }
-
-        if vm_inner.pa_region.is_none() {
-            use crate::kernel::VmPa;
-            let mut pa_region = [VmPa::default(), VmPa::default(), VmPa::default(), VmPa::default()];
-            pa_region[i].pa_start = pa;
-            pa_region[i].pa_length = vm_region.length;
-            pa_region[i].offset = vm_region.ipa_start as isize - pa as isize;
-            vm_inner.pa_region = Some(pa_region);
-        } else {
-            let pa_region = vm_inner.pa_region.as_mut().unwrap();
-            pa_region[i].pa_start = pa;
-            pa_region[i].pa_length = vm_region.length;
-            pa_region[i].offset = vm_region.ipa_start as isize - pa as isize;
-        }
+        vm.add_region(VmPa {
+            pa_start: pa,
+            pa_length: vm_region.length,
+            offset: vm_region.ipa_start as isize - pa as isize,
+        });
     }
+    vm_if_init_mem_map(vm_id, vm_mem_size / PAGE_SIZE);
 
     true
 }
@@ -86,9 +72,7 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
     let size = bin.len();
     let config = vm.config();
     for (idx, region) in config.memory_region().iter().enumerate() {
-        if load_ipa < region.ipa_start
-            || load_ipa + size > region.ipa_start + region.length
-        {
+        if load_ipa < region.ipa_start || load_ipa + size > region.ipa_start + region.length {
             continue;
         }
 
@@ -158,19 +142,17 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-            {
-                let offset = config.device_tree_load_ipa
-                    - vm.config().memory_region()[0].ipa_start;
-                unsafe {
-                    let src = SYSTEM_FDT.get().unwrap();
-                    let len = src.len();
-                    let dst =
-                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                    dst.clone_from_slice(&src);
-                }
-                println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        {
+            let offset = config.device_tree_load_ipa - vm.config().memory_region()[0].ipa_start;
+            unsafe {
+                let src = SYSTEM_FDT.get().unwrap();
+                let len = src.len();
+                let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                dst.clone_from_slice(&src);
             }
+            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        }
     } else {
         println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
     }
@@ -306,7 +288,6 @@ fn vmm_init_passthrough_device(vm: Vm) -> bool {
     true
 }
 
-
 pub unsafe fn vmm_setup_fdt(vm: Vm) {
     use fdt::*;
     let config = vm.config();
@@ -374,11 +355,16 @@ pub fn vmm_setup_config(vm_id: usize) {
     let config = match vm_cfg_entry(vm_id) {
         Some(_config) => _config,
         None => {
-            panic!("vmm_setup_config vm id {} config doesn't exist",vm_id);
+            panic!("vmm_setup_config vm id {} config doesn't exist", vm_id);
         }
     };
 
-    println!("vmm_setup_config VM[{}] name {:?} current core {}", vm_id, config.name.clone().unwrap(), current_cpu().id);
+    println!(
+        "vmm_setup_config VM[{}] name {:?} current core {}",
+        vm_id,
+        config.name.clone().unwrap(),
+        current_cpu().id
+    );
 
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
@@ -395,13 +381,8 @@ pub fn vmm_setup_config(vm_id: usize) {
             // Init GVM dtb.
             match create_fdt(config.clone()) {
                 Ok(dtb) => {
-                    let offset = config.image.device_tree_load_ipa
-                        - vm.config().memory_region()[0].ipa_start;
-                    crate::lib::memcpy_safe(
-                        (vm.pa_start(0) + offset) as *const u8,
-                        dtb.as_ptr(),
-                        dtb.len(),
-                    );
+                    let offset = config.image.device_tree_load_ipa - vm.config().memory_region()[0].ipa_start;
+                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
@@ -481,7 +462,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
                 panic!("core {} too many vcpu", cpu_id);
             }
 
-            vm_if_list_set_cpu_id(vm_id, cpu_id);
+            vm_if_set_cpu_id(vm_id, cpu_id);
 
             vm.set_has_master_cpu(true);
             vm.set_cpu_num(vm.cpu_num() + 1);
@@ -564,7 +545,7 @@ pub fn vmm_add_vm(vm_id: usize) {
     let vm_cfg = match vm_cfg_entry(vm_id) {
         Some(_vm_cfg) => _vm_cfg,
         None => {
-            println!("vmm_add_vm: failed to find config for vm {}",vm_id);
+            println!("vmm_add_vm: failed to find config for vm {}", vm_id);
             return;
         }
     };
@@ -573,8 +554,8 @@ pub fn vmm_add_vm(vm_id: usize) {
     if !vmm_init_cpu(vm.clone()) {
         println!("vmm_add_vm: vmm_init_cpu failed");
     }
-    use crate::kernel::vm_if_list_set_type;
-    vm_if_list_set_type(vm_id, vm_type(vm_id));
+    use crate::kernel::vm_if_set_type;
+    vm_if_set_type(vm_id, vm_type(vm_id));
 }
 
 pub fn vmm_init() {
