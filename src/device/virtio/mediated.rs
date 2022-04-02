@@ -4,7 +4,7 @@ use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
-    active_vm, add_async_used_info, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcGuestMsg,
+    active_vm, add_async_used_info, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
     interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
@@ -185,12 +185,12 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_sector(sector);
     mediated_blk.set_count(count);
 
-    let med_msg = HvcGuestMsg {
+    let med_msg = HvcDefaultMsg {
         fid: 3,    // HVC_MEDIATED
         event: 50, // HVC_MEDIATED_DEV_NOTIFY
     };
 
-    if !hvc_send_msg_to_vm(0, &med_msg) {
+    if !hvc_send_msg_to_vm(0, &HvcGuestMsg::Default(med_msg)) {
         println!("mediated_blk_read: failed to notify VM 0");
     }
 }
@@ -203,13 +203,13 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_sector(sector);
     mediated_blk.set_count(count);
 
-    let med_msg = HvcGuestMsg {
+    let med_msg = HvcDefaultMsg {
         fid: 3,    // HVC_MEDIATED
         event: 50, // HVC_MEDIATED_DRV_NOTIFY
     };
 
     // println!("mediated_blk_write send msg to vm0");
-    if !hvc_send_msg_to_vm(0, &med_msg) {
+    if !hvc_send_msg_to_vm(0, &HvcGuestMsg::Default(med_msg)) {
         println!("mediated_blk_write: failed to notify VM 0");
     }
 }

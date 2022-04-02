@@ -1,9 +1,11 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::mem::size_of;
 
 use spin::Mutex;
 
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
+use crate::arch::PAGE_SIZE;
 use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::config::{DEF_VM_CONFIG_TABLE, VmRegion};
@@ -15,6 +17,7 @@ use crate::mm::PageFrame;
 use super::mem::VM_MEM_REGION_MAX;
 use super::vcpu::Vcpu;
 
+pub const DIRTY_MEM_THRESHOLD: usize = 0x200;
 pub const VM_NUM_MAX: usize = 8;
 pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
@@ -90,16 +93,59 @@ pub fn vm_if_ivc_arg_ptr(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg_ptr
 }
-
+// new if for vm migration
 pub fn vm_if_init_mem_map(vm_id: usize, len: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.mem_map = Some(FlexBitmap::new(len));
 }
 
+pub fn vm_if_set_mem_map_cache(vm_id: usize, pf: PageFrame) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map_cache = Some(pf);
+}
+
 pub fn vm_if_dirty_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
+    println!("dirty vm {} mem bitmap", vm_id);
     vm_if.mem_map.as_mut().unwrap().init_dirty();
+    println!(
+        "vm_if_dirty_mem_map: bitmap[0] {}",
+        vm_if.mem_map.as_ref().unwrap().get(0)
+    );
 }
+
+pub fn vm_if_clear_mem_map(vm_id: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map.as_mut().unwrap().clear();
+}
+
+pub fn vm_if_cpy_mem_map(vm_id: usize) {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    let map = vm_if.mem_map.as_ref().unwrap();
+    println!(
+        "bitmap cache target addr 0x{:x}, bitmap[0] {}",
+        vm_if.mem_map_cache.as_ref().unwrap().pa(),
+        map.get(0)
+    );
+    memcpy_safe(
+        vm_if.mem_map_cache.as_ref().unwrap().pa() as *const u8,
+        map.slice() as *const _ as *const u8,
+        size_of::<u64>() * map.vec_len(),
+    );
+}
+
+pub fn vm_if_mem_map_page_num(vm_id: usize) -> usize {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    let map = vm_if.mem_map.as_ref().unwrap();
+    println!("vm{} bitmap byte num {}", vm_id, 8 * map.vec_len());
+    8 * map.vec_len() / PAGE_SIZE
+}
+
+pub fn vm_if_mem_map_dirty_sum(vm_id: usize) -> usize {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map.as_ref().unwrap().sum()
+}
+// End vm interface func implementation
 
 #[derive(Clone, Copy)]
 pub enum VmState {
@@ -132,6 +178,7 @@ pub struct VmInterface {
     pub ivc_arg: usize,
     pub ivc_arg_ptr: usize,
     pub mem_map: Option<FlexBitmap>,
+    pub mem_map_cache: Option<PageFrame>,
 }
 
 impl VmInterface {
@@ -144,6 +191,7 @@ impl VmInterface {
             ivc_arg: 0,
             ivc_arg_ptr: 0,
             mem_map: None,
+            mem_map_cache: None,
         }
     }
 }
@@ -358,6 +406,11 @@ impl Vm {
     pub fn add_region(&self, region: VmPa) {
         let mut vm_inner = self.inner.lock();
         vm_inner.pa_region.push(region);
+    }
+
+    pub fn region_num(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.pa_region.len()
     }
 
     pub fn pa_start(&self, idx: usize) -> usize {

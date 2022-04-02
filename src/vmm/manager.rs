@@ -1,7 +1,7 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
 use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
 use crate::kernel::{
@@ -62,14 +62,16 @@ pub fn vmm_set_up_vm(vm_id: usize) {
     );
 }
 
-pub fn vmm_boot_vm(vm_id: usize) {
+pub fn vmm_init_vm(vm_id: usize, boot: bool) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 {
         // TODO: this code should be replaced
-        if vm_id == 1 {
+        if vm_id == 0 {
+            panic!("not support boot for vm0");
+        } else if vm_id == 1 {
             init_tmp_config_for_bma1();
         } else if vm_id == 2 {
-            init_tmp_config_for_vm2();
+            init_tmp_config_for_bma2();
         }
 
         vmm_set_up_vm(vm_id);
@@ -105,6 +107,9 @@ pub fn vmm_boot_vm(vm_id: usize) {
         phys_id
     );
 
+    if !boot {
+        return;
+    }
     if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
         gicc_clear_current_irq(true);
         vmm_boot();
@@ -195,7 +200,7 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::VmmMsg(vmm) => match vmm.event {
             VmmEvent::VmmBoot => {
-                vmm_boot_vm(vmm.vmid);
+                vmm_init_vm(vmm.vmid, true);
             }
             VmmEvent::VmmAssignCpu => {
                 println!(

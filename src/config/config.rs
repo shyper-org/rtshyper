@@ -829,6 +829,85 @@ pub fn init_tmp_config_for_bma1() {
         },
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
+            allocate_bitmap: 0b0010,
+            master: 1,
+        })),
+        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+            emu_dev_list: emu_dev_config,
+        })),
+        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
+        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
+            dtb_device_list: vec![],
+        })),
+        med_blk_idx: Some(1),
+        cmdline: String::from(""),
+        cmdline_vec: None,
+    };
+    vm_cfg_add_vm_entry(bma_config);
+}
+
+pub fn init_tmp_config_for_bma2() {
+    println!("init_tmp_config_for_bma2");
+    // #################### bare metal app emu (vm1) ######################
+    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("intc@8000000")),
+        base_ipa: 0x8000000,
+        length: 0x1000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTGicd,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_blk@a000000")),
+        base_ipa: 0xa000000,
+        length: 0x1000,
+        irq_id: 32 + 0x10,
+        cfg_list: vec![0, 209715200], // 100G
+        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+        mediated: true,
+    });
+
+    // bma passthrough
+    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
+    pt_dev_config.regions = vec![
+        // PassthroughRegion {
+        //     ipa: 0x9000000,
+        //     pa: UART_1_ADDR,
+        //     length: 0x1000,
+        // },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: PLATFORM_GICV_BASE,
+            length: 0x2000,
+        },
+    ];
+    // pt_dev_config.irqs = vec![UART_1_INT];
+
+    // bma vm_region
+    let mut vm_region: Vec<VmRegion> = Vec::new();
+    vm_region.push(VmRegion {
+        ipa_start: 0x40000000,
+        length: 0x40000000,
+    });
+
+    // bma config
+    let bma_config = VmConfigEntry {
+        id: 0,
+        name: Some(String::from("guest-bma-1")),
+        name_vec: None,
+        os_type: VmType::VmTBma,
+        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
+        image: VmImageConfig {
+            kernel_img_name: None,
+            kernel_load_ipa: 0x40080000,
+            kernel_entry_point: 0x40080000,
+            device_tree_load_ipa: 0,
+            ramdisk_load_ipa: 0,
+        },
+        cpu: Arc::new(Mutex::new(VmCpuConfig {
+            num: 1,
             allocate_bitmap: 0b0100,
             master: 2,
         })),
@@ -839,7 +918,7 @@ pub fn init_tmp_config_for_bma1() {
         vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
             dtb_device_list: vec![],
         })),
-        med_blk_idx: Some(1),
+        med_blk_idx: Some(2),
         cmdline: String::from(""),
         cmdline_vec: None,
     };
@@ -866,9 +945,9 @@ pub fn init_tmp_config_for_vm1() {
         length: 0x1000,
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-        cfg_list: vec![0, 8388608],
+        // cfg_list: vec![0, 8388608],
         // cfg_list: vec![0, 67108864], // 32G
-        // cfg_list: vec![0, 209715200], // 100G
+        cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });

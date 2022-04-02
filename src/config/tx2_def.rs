@@ -203,7 +203,6 @@ pub fn mvm_config_init() {
     });
 
     // vm0 config
-
     let mvm_config_entry = VmConfigEntry {
         id: 0,
         // name: Some("privileged"),

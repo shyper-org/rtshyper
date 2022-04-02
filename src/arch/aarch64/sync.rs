@@ -39,7 +39,7 @@ pub fn data_abort_handler() {
     let elr = current_cpu().get_elr();
     // println!("emu_handler");
     if !emu_handler(&emu_ctx) {
-        println!(
+        panic!(
             "data_abort_handler: Failed to handler emul device request, ipa 0x{:x} elr 0x{:x}",
             emu_ctx.address, elr
         );
@@ -100,10 +100,7 @@ pub fn hvc_handler() {
             current_cpu().set_gpr(idx, val);
         }
         Err(_) => {
-            println!(
-                "Failed to handle hvc request fid 0x{:x} event 0x{:x}",
-                hvc_type, event
-            );
+            println!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
             let idx = 0;
             let val = usize::MAX;
             current_cpu().set_gpr(idx, val);

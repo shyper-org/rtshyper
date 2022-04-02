@@ -7,7 +7,7 @@
 
 use alloc::vec::Vec;
 
-use crate::lib::{bit_extract, bit_get, bit_set};
+use crate::lib::{bit_extract, bit_get, bit_num, bit_set};
 
 pub trait BitAlloc {
     // The bitmap has a total of CAP bits, numbered from 0 to CAP-1 inclusively.
@@ -134,11 +134,17 @@ impl FlexBitmap {
         }
     }
 
+    pub fn clear(&mut self) {
+        for i in 0..(self.len / 64) {
+            self.map[i] = 0;
+        }
+    }
+
     pub fn get(&self, idx: usize) -> usize {
         if idx > self.len {
             panic!("too large idx {} for get bitmap", idx);
         }
-        let val = idx / 64;
+        let val = self.map[idx / 64];
         bit_get(val, idx & 64)
     }
 
@@ -151,6 +157,22 @@ impl FlexBitmap {
         } else {
             self.map[idx / 64] &= !(1 << (idx & 64));
         }
+    }
+
+    pub fn slice(&self) -> &[usize] {
+        self.map.as_slice()
+    }
+
+    pub fn vec_len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn sum(&self) -> usize {
+        let mut sum = 0;
+        for val in &self.map {
+            sum += bit_num(*val, 64);
+        }
+        sum
     }
 }
 

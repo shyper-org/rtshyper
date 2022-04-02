@@ -63,6 +63,12 @@ pub const PTE_S2_NORMAL: usize = PTE_S2_FIELD_MEM_ATTR_NORMAL_INNER_WRITE_BACK_C
     | PTE_S2_FIELD_SH_OUTER_SHAREABLE
     | PTE_S2_FIELD_AF;
 
+pub const PTE_S2_RO: usize = PTE_S2_FIELD_MEM_ATTR_NORMAL_INNER_WRITE_BACK_CACHEABLE
+    | PTE_S2_FIELD_MEM_ATTR_NORMAL_OUTER_WRITE_BACK_CACHEABLE
+    | PTE_S2_FIELD_AP_RO
+    | PTE_S2_FIELD_SH_OUTER_SHAREABLE
+    | PTE_S2_FIELD_AF;
+
 pub const CPU_BANKED_ADDRESS: usize = 0x400000000;
 
 pub const fn pte_s1_field_attr_indx(idx: usize) -> usize {
@@ -305,14 +311,7 @@ impl PageTable {
         let size_2mb = 1 << LVL2_SHIFT;
         if ipa % size_2mb == 0 && len % size_2mb == 0 && pa % size_2mb == 0 {
             self.map_range_2mb(ipa, len, pa, pte);
-            if ipa == 0x17000000 {
-                println!("map 2mb for gp10b");
-                self.show_pt(ipa);
-            }
         } else {
-            if ipa == 0x17000000 {
-                println!("normal map for gp10b");
-            }
             self.map_range(ipa, len, pa, pte);
         }
     }
