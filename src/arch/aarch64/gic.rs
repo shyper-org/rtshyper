@@ -467,6 +467,7 @@ impl GicHypervisorInterface {
     }
 }
 
+#[repr(C)]
 #[derive(Debug)]
 pub struct GicState {
     pub hcr: u32,

@@ -4,13 +4,15 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
+use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL, PTE_S2_RO};
+use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
-use crate::arch::PAGE_SIZE;
 use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::config::{DEF_VM_CONFIG_TABLE, VmRegion};
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
+use crate::kernel::{AllocError, mem_page_alloc};
 use crate::lib::*;
 use crate::mm::PageFrame;
 
@@ -104,6 +106,11 @@ pub fn vm_if_set_mem_map_cache(vm_id: usize, pf: PageFrame) {
     vm_if.mem_map_cache = Some(pf);
 }
 
+pub fn vm_if_mem_map_cache(vm_id: usize) -> Option<PageFrame> {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map_cache.clone()
+}
+
 pub fn vm_if_dirty_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     println!("dirty vm {} mem bitmap", vm_id);
@@ -137,7 +144,6 @@ pub fn vm_if_cpy_mem_map(vm_id: usize) {
 pub fn vm_if_mem_map_page_num(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     let map = vm_if.mem_map.as_ref().unwrap();
-    println!("vm{} bitmap byte num {}", vm_id, 8 * map.vec_len());
     8 * map.vec_len() / PAGE_SIZE
 }
 
@@ -594,6 +600,54 @@ impl Vm {
         let mut vm_inner = self.inner.lock();
         vm_inner.ready = _ready;
     }
+
+    // init for migrate restore
+    pub fn context_vm_migrate_init(&self) {
+        let mvm = vm(0).unwrap();
+        for i in 0..self.ncpu() {
+            match mem_page_alloc() {
+                Ok(pf) => {
+                    mvm.pt_map_range(0xe30000000, PAGE_SIZE, pf.pa(), PTE_S2_NORMAL);
+                    let mut inner = self.inner.lock();
+                    inner.migrate_restore_pf.push(pf);
+                }
+                Err(_) => {
+                    panic!("context_vm_migrate_restore_init: mem_pages_alloc for vm context failed");
+                }
+            }
+        }
+    }
+
+    pub fn context_vm_migrate_save(&self) {
+        // TODO: 仅支持单核VM，支持多核并不困难，遍历所有vcpu即可
+        let vcpu = self.vcpu(0).unwrap();
+        let mvm = vm(0).unwrap();
+        println!(
+            "size of vm ctx {:x}, size of vcpu ctx {:x}",
+            size_of::<VmContext>(),
+            size_of::<Aarch64ContextFrame>()
+        );
+        match mem_page_alloc() {
+            Ok(pf) => {
+                vcpu.migrate_vm_ctx_save(pf.pa());
+                vcpu.migrate_vcpu_ctx_save(pf.pa() + PAGE_SIZE / 2);
+                mvm.pt_map_range(0xe20000000, PAGE_SIZE, pf.pa(), PTE_S2_RO);
+                let mut inner = self.inner.lock();
+                inner.migrate_save_pf.push(pf);
+            }
+            Err(_) => {
+                panic!("context_vm_migrate_save: mem_pages_alloc for vm context failed");
+            }
+        }
+    }
+
+    pub fn context_vm_migrate_restore(&self) {
+        let vcpu = self.vcpu(0).unwrap();
+        let inner = self.inner.lock();
+        let pa = inner.migrate_restore_pf[0].pa();
+        vcpu.migrate_vm_ctx_save(pa);
+        vcpu.migrate_vcpu_ctx_save(pa + PAGE_SIZE / 2);
+    }
 }
 
 #[repr(align(4096))]
@@ -620,6 +674,10 @@ pub struct VmInner {
     pub intc_dev_id: usize,
     pub int_bitmap: Option<BitMap<BitAlloc256>>,
 
+    // migration
+    pub migrate_save_pf: Vec<PageFrame>,
+    pub migrate_restore_pf: Vec<PageFrame>,
+
     // emul devs
     pub emu_devs: Vec<EmuDevs>,
 }
@@ -643,6 +701,8 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
+            migrate_save_pf: vec![],
+            migrate_restore_pf: vec![],
             emu_devs: Vec::new(),
         }
     }
@@ -665,6 +725,8 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
+            migrate_save_pf: vec![],
+            migrate_restore_pf: vec![],
             emu_devs: Vec::new(),
         }
     }

@@ -202,21 +202,6 @@ fn ipi_send(target_id: usize, msg: IpiMessage) -> bool {
 
 pub fn ipi_send_msg(target_id: usize, ipi_type: IpiType, ipi_message: IpiInnerMsg) -> bool {
     let msg = IpiMessage { ipi_type, ipi_message };
-    // if ipi_type as usize == 0 {
-    //     match ipi_message {
-    //         IpiInnerMsg::Initc(message) => {
-    //             println!(
-    //                 "Core[{}] send intc ipi to Core[{}], event {:#?}, int {}, val {}",
-    //                 cpu_id(),
-    //                 target_id,
-    //                 message.event,
-    //                 message.int_id,
-    //                 message.val
-    //             );
-    //         }
-    //         _ => {}
-    //     }
-    // }
     ipi_send(target_id, msg)
 }
 

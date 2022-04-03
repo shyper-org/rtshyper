@@ -5,12 +5,16 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
+use crate::arch::{PAGE_SIZE, PTE_S2_RO};
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
+use crate::kernel::{
+    AllocError, current_cpu, interrupt_vm_inject, map_migrate_vm_mem, mem_page_alloc, timer_enable, vm_if_set_state,
+};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
+use crate::mm::PageFrame;
 
 use super::{CpuState, Vm, VmType};
 
@@ -50,6 +54,42 @@ impl Vcpu {
             active_vcpu_id()
         );
         crate::board::platform_cpu_shutdown();
+    }
+
+    pub fn migrate_vm_ctx_save(&self, cache_pa: usize) {
+        let inner = self.inner.lock();
+        memcpy_safe(
+            cache_pa as *const u8,
+            &(inner.vm_ctx) as *const _ as *const u8,
+            size_of::<VmContext>(),
+        );
+    }
+
+    pub fn migrate_vcpu_ctx_save(&self, cache_pa: usize) {
+        let inner = self.inner.lock();
+        memcpy_safe(
+            cache_pa as *const u8,
+            &(inner.vcpu_ctx) as *const _ as *const u8,
+            size_of::<Aarch64ContextFrame>(),
+        );
+    }
+
+    pub fn migrate_vm_ctx_restore(&self, cache_pa: usize) {
+        let inner = self.inner.lock();
+        memcpy_safe(
+            &(inner.vm_ctx) as *const _ as *const u8,
+            cache_pa as *const u8,
+            size_of::<VmContext>(),
+        );
+    }
+
+    pub fn migrate_vcpu_ctx_restore(&self, cache_pa: usize) {
+        let inner = self.inner.lock();
+        memcpy_safe(
+            &(inner.vcpu_ctx) as *const _ as *const u8,
+            cache_pa as *const u8,
+            size_of::<Aarch64ContextFrame>(),
+        );
     }
 
     pub fn context_vm_store(&self) {
@@ -372,8 +412,12 @@ pub fn vcpu_alloc() -> Option<Vcpu> {
     Some(val.clone())
 }
 
-pub fn vcpu_idle() {
-    crate::kernel::cpu_idle();
+pub fn vcpu_idle(vcpu: Vcpu) {
+    loop {
+        unsafe {
+            asm!("wfi");
+        }
+    }
 }
 
 pub fn vcpu_run() {

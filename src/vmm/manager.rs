@@ -62,7 +62,7 @@ pub fn vmm_set_up_vm(vm_id: usize) {
     );
 }
 
-pub fn vmm_init_vm(vm_id: usize, boot: bool) {
+pub fn vmm_init_vm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 {
         // TODO: this code should be replaced
@@ -97,8 +97,12 @@ pub fn vmm_init_vm(vm_id: usize, boot: bool) {
             }
         }
         vmm_setup_config(vm_id);
+    } else {
+        println!("Core {} should not init vm {}", current_cpu().id, vm_id);
     }
+}
 
+pub fn vmm_boot_vm(vm_id: usize) {
     let phys_id = vm_if_get_cpu_id(vm_id);
     println!(
         "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
@@ -106,10 +110,6 @@ pub fn vmm_init_vm(vm_id: usize, boot: bool) {
         vm_id,
         phys_id
     );
-
-    if !boot {
-        return;
-    }
     if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
         gicc_clear_current_irq(true);
         vmm_boot();
@@ -200,7 +200,7 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::VmmMsg(vmm) => match vmm.event {
             VmmEvent::VmmBoot => {
-                vmm_init_vm(vmm.vmid, true);
+                vmm_boot_vm(vmm.vmid);
             }
             VmmEvent::VmmAssignCpu => {
                 println!(
