@@ -81,7 +81,11 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
             return handler(id, emu_ctx);
         }
     }
-    println!("emu_handler: no emul handler for data abort ipa 0x{:x}", ipa);
+    println!(
+        "emu_handler: no emul handler for Core {} data abort ipa 0x{:x}",
+        current_cpu().id,
+        ipa
+    );
     return false;
 }
 

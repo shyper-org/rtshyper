@@ -1,4 +1,4 @@
-use crate::arch::{PTE_S2_NORMAL, PTE_S2_RO};
+use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL, PTE_S2_RO};
 use crate::kernel::{
     active_vm, DIRTY_MEM_THRESHOLD, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_VM, HvcGuestMsg, HvcMigrateMsg,
     mem_pages_alloc, MIGRATE_COPY, MIGRATE_FINISH, vm, Vm, vm_if_clear_mem_map, vm_if_cpy_mem_map, vm_if_mem_map_cache,
@@ -14,9 +14,12 @@ pub fn migrate_memcpy(vmid: usize) {
             Ok(pf) => {
                 println!("bitmap size to page num {}", vm_if_mem_map_page_num(vmid));
                 // map dirty bitmap
-                active_vm()
-                    .unwrap()
-                    .pt_map_range(0xe00000000, vm_if_mem_map_page_num(vmid), pf.pa(), PTE_S2_RO);
+                active_vm().unwrap().pt_map_range(
+                    0xe00000000,
+                    PAGE_SIZE * vm_if_mem_map_page_num(vmid),
+                    pf.pa(),
+                    PTE_S2_RO,
+                );
                 vm_if_set_mem_map_cache(vmid, pf);
             }
             Err(_) => {
