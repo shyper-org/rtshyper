@@ -1,16 +1,11 @@
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::arch::{emu_intc_handler, emu_intc_init, partial_passthrough_intc_handler, partial_passthrough_intc_init};
 use crate::arch::PAGE_SIZE;
-use crate::arch::PageTable;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
-use crate::config::{vm_cfg_entry, vm_type, VmCpuConfig, VmImageConfig, VmMemoryConfig};
-use crate::config::VmConfigEntry;
-use crate::config::VmEmulatedDeviceConfig;
-use crate::config::VmPassthroughDeviceConfig;
+use crate::config::{vm_cfg_entry, vm_type};
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
@@ -20,7 +15,7 @@ use crate::kernel::{
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
-use crate::kernel::{active_vcpu_id, vcpu_idle, vcpu_run};
+use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
 use crate::lib::{barrier, trace};
@@ -34,7 +29,6 @@ fn vmm_init_memory(vm: Vm) -> bool {
     let mut vm_mem_size: usize = 0; // size for pages
 
     if let Ok(pt_dir_frame) = result {
-        println!("vm{} pt {:x}", vm_id, pt_dir_frame.pa());
         vm.set_pt(pt_dir_frame);
         vm.set_mem_region_num(config.memory_region().len());
     } else {
@@ -42,7 +36,7 @@ fn vmm_init_memory(vm: Vm) -> bool {
         return false;
     }
 
-    for (i, vm_region) in config.memory_region().iter().enumerate() {
+    for vm_region in config.memory_region() {
         let pa = mem_vm_region_alloc(vm_region.length);
         vm_mem_size += vm_region.length;
 

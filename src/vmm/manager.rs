@@ -1,7 +1,7 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2};
 use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
 use crate::kernel::{
@@ -88,7 +88,7 @@ pub fn vmm_init_vm(vm_id: usize) {
                         current_cpu().id,
                         vm_id
                     );
-                    continue;
+                    // continue;
                 }
                 Some(vm) => vm,
             };

@@ -5,16 +5,12 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::{PAGE_SIZE, PTE_S2_RO};
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::{
-    AllocError, current_cpu, interrupt_vm_inject, map_migrate_vm_mem, mem_page_alloc, timer_enable, vm_if_set_state,
-};
+use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
-use crate::mm::PageFrame;
 
 use super::{CpuState, Vm, VmType};
 
@@ -412,7 +408,7 @@ pub fn vcpu_alloc() -> Option<Vcpu> {
     Some(val.clone())
 }
 
-pub fn vcpu_idle(vcpu: Vcpu) {
+pub fn vcpu_idle(_vcpu: Vcpu) {
     loop {
         unsafe {
             asm!("wfi");

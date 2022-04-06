@@ -1,11 +1,10 @@
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use vm_fdt::{Error, FdtWriter, FdtWriterResult};
 
 use crate::board::PLAT_DESC;
 use crate::config::{DtbDevType, VmDtbDevConfig};
-use crate::config::{VmConfigEntry, VmCpuConfig, VmMemoryConfig};
+use crate::config::VmConfigEntry;
 use crate::device::EmuDeviceType;
 use crate::lib::bit_num;
 use crate::SYSTEM_FDT;
@@ -98,14 +97,15 @@ pub fn create_fdt(config: VmConfigEntry) -> Result<Vec<u8>, Error> {
 
     for emu_cfg in config.emulated_device_list() {
         match emu_cfg.emu_type {
-            EmuDeviceType::EmuDeviceTVirtioBlk | EmuDeviceType::EmuDeviceTVirtioNet | EmuDeviceType::EmuDeviceTVirtioConsole => {
-                println!("virtio fdt node init {} {:x}", emu_cfg.name.as_ref().unwrap(), emu_cfg.base_ipa);
-                create_virtio_node(
-                    &mut fdt,
-                    &emu_cfg.name.unwrap(),
-                    emu_cfg.irq_id,
-                    emu_cfg.base_ipa,
-                )?;
+            EmuDeviceType::EmuDeviceTVirtioBlk
+            | EmuDeviceType::EmuDeviceTVirtioNet
+            | EmuDeviceType::EmuDeviceTVirtioConsole => {
+                println!(
+                    "virtio fdt node init {} {:x}",
+                    emu_cfg.name.as_ref().unwrap(),
+                    emu_cfg.base_ipa
+                );
+                create_virtio_node(&mut fdt, &emu_cfg.name.unwrap(), emu_cfg.irq_id, emu_cfg.base_ipa)?;
             }
             EmuDeviceType::EmuDeviceTShyper => {
                 println!("shyper fdt node init {:x}", emu_cfg.base_ipa);
@@ -232,12 +232,7 @@ fn create_gic_node(fdt: &mut FdtWriter, gicc_addr: usize, gicd_addr: usize) -> F
     Ok(())
 }
 
-fn create_virtio_node(
-    fdt: &mut FdtWriter,
-    name: & str,
-    irq: usize,
-    address: usize,
-) -> FdtWriterResult<()> {
+fn create_virtio_node(fdt: &mut FdtWriter, name: &str, irq: usize, address: usize) -> FdtWriterResult<()> {
     let virtio = fdt.begin_node(name)?;
     fdt.property_null("dma-coherent")?;
     fdt.property_string("compatible", "virtio,mmio")?;
@@ -248,13 +243,7 @@ fn create_virtio_node(
     Ok(())
 }
 
-fn create_shyper_node(
-    fdt: &mut FdtWriter,
-    name: & str,
-    irq: usize,
-    address: usize,
-    len: usize,
-) -> FdtWriterResult<()> {
+fn create_shyper_node(fdt: &mut FdtWriter, name: &str, irq: usize, address: usize, len: usize) -> FdtWriterResult<()> {
     let shyper = fdt.begin_node(name)?;
     fdt.property_string("compatible", "shyper")?;
     fdt.property_array_u32("interrupts", &[0, irq as u32 - 32, 0x1])?;

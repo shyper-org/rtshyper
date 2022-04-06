@@ -872,11 +872,11 @@ pub fn init_tmp_config_for_bma2() {
     // bma passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
-        // PassthroughRegion {
-        //     ipa: 0x9000000,
-        //     pa: UART_1_ADDR,
-        //     length: 0x1000,
-        // },
+        PassthroughRegion {
+            ipa: 0x9000000,
+            pa: UART_1_ADDR,
+            length: 0x1000,
+        },
         PassthroughRegion {
             ipa: 0x8010000,
             pa: PLATFORM_GICV_BASE,

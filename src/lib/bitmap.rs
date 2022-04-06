@@ -7,7 +7,7 @@
 
 use alloc::vec::Vec;
 
-use crate::lib::{bit_extract, bit_get, bit_num, bit_set};
+use crate::lib::{bit_get, bit_num};
 
 pub trait BitAlloc {
     // The bitmap has a total of CAP bits, numbered from 0 to CAP-1 inclusively.
@@ -121,10 +121,7 @@ pub struct FlexBitmap {
 
 impl FlexBitmap {
     pub fn new(len: usize) -> FlexBitmap {
-        let mut map = vec![];
-        for i in 0..(len / 64) {
-            map.push(0);
-        }
+        let mut map = vec![0; len / 64];
         FlexBitmap { len, map }
     }
 

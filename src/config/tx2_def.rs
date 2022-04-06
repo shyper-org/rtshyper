@@ -9,13 +9,9 @@ use crate::device::EmuDeviceType;
 use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType};
 
 use super::{
-    AddrRegions,
-    DtbDevType, PassthroughRegion,
-    vm_cfg_add_mvm_entry, vm_cfg_set_config_name,
-    VmConfigEntry, VmCpuConfig,
-    VmDtbDevConfig, VMDtbDevConfigList,
-    VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig,
-    VmPassthroughDeviceConfig, VmRegion,
+    PassthroughRegion, vm_cfg_add_mvm_entry, vm_cfg_set_config_name, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList,
+    VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig,
+    VmRegion,
 };
 
 #[rustfmt::skip]

@@ -8,7 +8,6 @@ use core::task::Context;
 use spin::mutex::Mutex;
 use woke::{waker_ref, Woke};
 
-use crate::config::vm_num;
 use crate::device::{
     BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN,
     VIRTIO_BLK_T_OUT, Virtq,

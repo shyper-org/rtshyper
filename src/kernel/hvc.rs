@@ -1,27 +1,32 @@
-use core::any::Any;
+use alloc::collections::BTreeMap;
 use core::mem::size_of;
 
-use crate::arch::{PTE_S2_NORMAL, PTE_S2_RO};
+use spin::Mutex;
+
 use crate::arch::PAGE_SIZE;
 use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
-    active_vm, active_vm_id, AllocError, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register,
-    ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, mem_pages_alloc,
-    migrate_finish_ipi_handler, migrate_memcpy, vcpu_idle, vm, vm_if_clear_mem_map, vm_if_cpy_mem_map,
-    vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_get_type, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_cache,
-    vm_if_mem_map_dirty_sum, vm_if_mem_map_page_num, vm_if_set_ivc_arg_ptr, vm_if_set_mem_map_cache, VM_NUM_MAX,
-    VmType,
+    active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register, ipi_send_msg,
+    IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, migrate_finish_ipi_handler,
+    migrate_memcpy, vcpu_idle, vm, vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr,
+    vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
-use crate::kernel::IpiInnerMsg::HvcMsg;
 use crate::lib::{memcpy_safe, trace};
-use crate::mm::PageFrame;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_vm};
 
+static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
 const HVC_FINISH: usize = 0;
 // If failed, return -1.
 const HVC_ERR: usize = usize::MAX;
+
+// share mem type
+pub const MIGRATE_BITMAP: usize = 0;
+pub const VM_CONTEXT_SEND: usize = 1;
+pub const VM_CONTEXT_RECEIVE: usize = 2;
+pub const MIGRATE_SEND: usize = 3;
+pub const MIGRATE_RECEIVE: usize = 4;
 
 // hvc_fid
 pub const HVC_SYS: usize = 0;
@@ -45,12 +50,12 @@ pub const HVC_VMM_GET_VM_CFG: usize = 6;
 pub const HVC_VMM_SET_VM_CFG: usize = 7;
 pub const HVC_VMM_GET_VM_ID: usize = 8;
 pub const HVC_VMM_TRACE_VMEXIT: usize = 9;
-pub const HVC_VMM_MIGRATE_VM: usize = 10;
 // for src vm: send msg to MVM to ask for migrating
-pub const HVC_VMM_MIGRATE_MEMCPY: usize = 11;
+pub const HVC_VMM_MIGRATE_START: usize = 10;
 // for sender: copy dirty memory to receiver
-pub const HVC_VMM_MIGRATE_INIT_VM: usize = 12;
+pub const HVC_VMM_MIGRATE_MEMCPY: usize = 11;
 // for receiver: init new vm but not boot
+pub const HVC_VMM_MIGRATE_INIT_VM: usize = 12;
 pub const HVC_VMM_MIGRATE_VM_BOOT: usize = 13;
 pub const HVC_VMM_MIGRATE_VM_REMOVE: usize = 14;
 
@@ -62,6 +67,7 @@ pub const HVC_IVC_INIT_KEEP_ALIVE: usize = 3;
 pub const HVC_IVC_KEEP_ALIVE: usize = 4;
 pub const HVC_IVC_ACK: usize = 5;
 pub const HVC_IVC_GET_TIME: usize = 6;
+pub const HVC_IVC_SHARE_MEM: usize = 7;
 pub const HVC_IVC_SEND_SHAREMEM: usize = 0x10;
 //共享内存通信
 pub const HVC_IVC_GET_SHARED_MEM_IPA: usize = 0x11;
@@ -100,6 +106,21 @@ pub struct HvcMigrateMsg {
     pub page_num: usize, // bitmap page num
 }
 
+pub fn add_share_mem(mem_type: usize, base: usize) {
+    let mut list = SHARE_MEM_LIST.lock();
+    list.insert(mem_type, base);
+}
+
+pub fn get_share_mem(mem_type: usize) -> usize {
+    let list = SHARE_MEM_LIST.lock();
+    match list.get(&mem_type) {
+        None => {
+            panic!("there is not {} type share memory", mem_type);
+        }
+        Some(tup) => *tup,
+    }
+}
+
 pub fn hvc_guest_handler(
     hvc_type: usize,
     event: usize,
@@ -112,7 +133,6 @@ pub fn hvc_guest_handler(
     x6: usize,
 ) -> Result<usize, ()> {
     let mut res = false;
-    println!("fid {}, event {}", hvc_type, event);
     match hvc_type {
         HVC_SYS => {
             res = hvc_sys_handler(event, x0);
@@ -121,7 +141,7 @@ pub fn hvc_guest_handler(
             return hvc_vmm_handler(event, x0, x1);
         }
         HVC_IVC => {
-            res = hvc_ivc_handler(event, x0, x1, x2, x3, x4);
+            return hvc_ivc_handler(event, x0, x1);
         }
         HVC_MEDIATED => {
             res = hvc_mediated_handler(event, x0, x1, x2, x3);
@@ -186,30 +206,30 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     match event {
         HVC_VMM_LIST_VM => {
             todo!();
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_GET_VM_STATE => {
             todo!();
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_BOOT_VM => {
             vmm_init_vm(x0);
             vmm_boot_vm(x0);
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_SHUTDOWN_VM => {
             todo!();
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_REBOOT_VM => {
             todo!();
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_GET_VM_ID => {
             get_vm_id(x0);
-            Ok(0)
+            Ok(HVC_FINISH)
         }
-        HVC_VMM_MIGRATE_VM => {
+        HVC_VMM_MIGRATE_START => {
             // demo: migration for bma1
             let vm = active_vm().unwrap();
             if vm.id() == 0 {
@@ -219,26 +239,22 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             vm_if_dirty_mem_map(vm.id());
             // reset vm stage 2 page table to read only
             vm.pt_read_only();
-            println!("bma set dirty mem map and stage 2 page table");
             hvc_send_msg_to_vm(
                 0,
                 &HvcGuestMsg::Migrate(HvcMigrateMsg {
                     fid: HVC_VMM,
-                    event: HVC_VMM_MIGRATE_VM,
+                    event: HVC_VMM_MIGRATE_START,
                     vm_id: vm.id(),
                     oper: MIGRATE_START,
                     page_num: 0,
                 }),
             );
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_MEMCPY => {
             let dirty_mem_num = vm_if_mem_map_dirty_sum(x0);
-            println!("dirty sum 0x{:x}", dirty_mem_num);
             if dirty_mem_num < DIRTY_MEM_THRESHOLD {
-                println!("core 0 send finish ipi");
-                // TODO: FINISH
-                // TODO: End live vm, copy dirty mem and vm register struct
+                // Idle live vm, copy dirty mem and vm register struct
                 let ipi_msg = IpiHvcMsg {
                     src_vmid: 0,
                     trgt_vmid: x0,
@@ -257,27 +273,27 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             } else {
                 migrate_memcpy(x0);
             }
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_INIT_VM => {
             // TODO: vm_id = 2 is hard code
             vmm_init_vm(2);
             let vm = vm(2).unwrap();
-            // TODO: 0xd00000000 is hard code, need to rewrite
-            map_migrate_vm_mem(vm.clone(), 0xd00000000);
+            map_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
             vm.context_vm_migrate_init();
+            // Ok(new vm id), 2 is hard code
             Ok(2)
         }
         HVC_VMM_MIGRATE_VM_BOOT => {
-            println!("boot vm {}", x0);
+            println!("migrate boot vm {}", x0);
             let vm = vm(x0).unwrap();
             vm.context_vm_migrate_restore();
             vmm_boot_vm(x0);
-            Ok(0)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_VM_REMOVE => {
-            println!("remove vm {}", x0);
-            Ok(0)
+            println!("migrate remove vm {}", x0);
+            Ok(HVC_FINISH)
         }
         _ => {
             println!("hvc_vmm unknown event {}", event);
@@ -286,14 +302,26 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     }
 }
 
-fn hvc_ivc_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize, x4: usize) -> bool {
+fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     match event {
         HVC_IVC_UPDATE_MQ => {
-            return ivc_update_mq(x0, x1);
+            if ivc_update_mq(x0, x1) {
+                Ok(HVC_FINISH)
+            } else {
+                Err(())
+            }
+        }
+        HVC_IVC_SHARE_MEM => {
+            let vm = active_vm().unwrap();
+            let base = vm.share_mem_base();
+            vm.add_share_mem_base(x1);
+            add_share_mem(x0, base);
+            println!("VM{} add share mem 0x{:x} len 0x{:x}", active_vm_id(), base, x1);
+            Ok(base)
         }
         _ => {
             println!("hvc_ivc_handler: unknown event {}", event);
-            false
+            Err(())
         }
     }
 }
@@ -419,8 +447,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                     hvc_guest_notify(msg.trgt_vmid);
                 }
                 HVC_VMM => match msg.event {
-                    HVC_VMM_MIGRATE_VM => {
-                        println!("vm0 receive ipi and hvc notify");
+                    HVC_VMM_MIGRATE_START => {
                         hvc_guest_notify(msg.trgt_vmid);
                     }
                     HVC_VMM_MIGRATE_MEMCPY => {
@@ -440,6 +467,11 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                             }
                             Some(vcpu) => vcpu,
                         };
+                        // 当满足下序条件时需要拷贝cpu.ctx
+                        // 否则意味着当前核心有多个虚拟机共享，且被迁移虚拟机所在的核心尚未被调度到，寄存器数值无需更新
+                        if active_vm().unwrap().id() == msg.trgt_vmid {
+                            trgt_vcpu.save_cpu_ctx();
+                        }
                         let ipi_msg = IpiHvcMsg {
                             src_vmid: msg.trgt_vmid,
                             trgt_vmid: 0,
