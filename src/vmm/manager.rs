@@ -1,8 +1,11 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2};
-use crate::config::{vm_cfg_entry};
+use crate::config::{
+    init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_ramdisk_vm1, init_tmp_config_for_vm1,
+    init_tmp_config_for_vm2,
+};
+use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa,
@@ -123,12 +126,12 @@ pub fn vmm_init_vm(vm_id: usize) {
 
 pub fn vmm_boot_vm(vm_id: usize) {
     let phys_id = vm_if_get_cpu_id(vm_id);
-    println!(
-        "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
-        current_cpu().id,
-        vm_id,
-        phys_id
-    );
+    // println!(
+    //     "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
+    //     current_cpu().id,
+    //     vm_id,
+    //     phys_id
+    // );
     if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
         gicc_clear_current_irq(true);
         vmm_boot();

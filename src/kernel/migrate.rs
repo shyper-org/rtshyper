@@ -1,11 +1,17 @@
-use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL, PTE_S2_RO};
-use crate::kernel::{
-    active_vm, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg, HvcMigrateMsg,
-    mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_clear_mem_map,
-    vm_if_cpy_mem_map, vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map_cache,
-};
+use core::ptr;
 
-pub fn migrate_memcpy(vmid: usize) {
+use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO};
+use crate::arch::tlb_invalidate_guest_all;
+use crate::device::EmuContext;
+use crate::kernel::{
+    active_vm, current_cpu, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg,
+    HvcMigrateMsg, mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm,
+    vm_if_clear_mem_map, vm_if_copy_mem_map, vm_if_dirty_mem_map, vm_if_mem_map_cache, vm_if_mem_map_page_num,
+    vm_if_set_mem_map, vm_if_set_mem_map_cache,
+};
+use crate::lib::{cache_invalidate_d, ptr_read_write};
+
+pub fn migrate_ready(vmid: usize) {
     if vm_if_mem_map_cache(vmid).is_none() {
         let trgt_vm = vm(vmid).unwrap();
         map_migrate_vm_mem(trgt_vm, get_share_mem(MIGRATE_SEND));
@@ -26,9 +32,10 @@ pub fn migrate_memcpy(vmid: usize) {
             }
         }
     }
+}
+
+pub fn migrate_memcpy(vmid: usize) {
     // copy trgt_vm dirty mem map to kernel module
-    vm_if_cpy_mem_map(vmid);
-    vm_if_clear_mem_map(vmid);
 
     hvc_send_msg_to_vm(
         0,
@@ -60,8 +67,7 @@ pub fn migrate_finish_ipi_handler(vmid: usize) {
     println!("Core 0 handle finish ipi");
     // copy trgt_vm dirty mem map to kernel module
     let vm = vm(vmid).unwrap();
-    vm_if_cpy_mem_map(vmid);
-    vm_if_clear_mem_map(vmid);
+    vm_if_copy_mem_map(vmid);
     vm.context_vm_migrate_save();
     hvc_send_msg_to_vm(
         0,
@@ -73,4 +79,34 @@ pub fn migrate_finish_ipi_handler(vmid: usize) {
             page_num: vm_if_mem_map_page_num(vmid),
         }),
     );
+}
+
+pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
+    if emu_ctx.write {
+        // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
+        let vm = active_vm().unwrap();
+        vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
+        let mut bit = 0;
+        for i in 0..vm.region_num() {
+            let start = vm.pa_start(i);
+            let end = start + vm.pa_length(i);
+            if emu_ctx.address >= start && emu_ctx.address < end {
+                bit += (emu_ctx.address - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
+                vm_if_set_mem_map(current_cpu().id, bit);
+                break;
+            }
+            bit += vm.pa_length(i) / PAGE_SIZE;
+            if i + 1 == vm.region_num() {
+                panic!(
+                    "migrate_data_abort_handler: can not found addr 0x{:x} in vm{} pa region",
+                    emu_ctx.address,
+                    vm.id()
+                );
+            }
+        }
+        // flush tlb for updating page table
+        tlb_invalidate_guest_all();
+    } else {
+        panic!("migrate_data_abort_handler: permission should be read only");
+    }
 }
