@@ -231,6 +231,7 @@ pub fn async_task_exe() {
 }
 
 pub fn finish_async_task(ipi: bool) {
+    // println!("finish {} task", if ipi { "ipi" } else { "blk io" });
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
     let task = if ipi { ipi_list.remove(0) } else { io_list.remove(0) };

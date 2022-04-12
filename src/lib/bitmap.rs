@@ -145,14 +145,14 @@ impl FlexBitmap {
         bit_get(val, idx & 64)
     }
 
-    pub fn set(&mut self, idx: usize, val: bool) {
-        if idx > self.len {
-            panic!("too large idx {} for set bitmap", idx);
+    pub fn set(&mut self, bit: usize, val: bool) {
+        if bit > self.len {
+            panic!("too large idx {} for set bitmap", bit);
         }
         if val {
-            self.map[idx / 64] |= 1 << (idx & 64);
+            self.map[bit / 64] |= 1 << (bit & 64);
         } else {
-            self.map[idx / 64] &= !(1 << (idx & 64));
+            self.map[bit / 64] &= !(1 << (bit & 64));
         }
     }
 

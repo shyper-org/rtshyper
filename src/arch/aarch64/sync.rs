@@ -1,50 +1,65 @@
+use cortex_a::asm::ret;
+
 use crate::arch::{
-    exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write, exception_data_abort_access_reg,
-    exception_data_abort_access_reg_width, exception_data_abort_access_width, exception_data_abort_handleable,
-    exception_data_abort_is_translate_fault,
+    exception_data_abort_access_in_stage2, exception_data_abort_access_is_sign_ext,
+    exception_data_abort_access_is_write, exception_data_abort_access_reg, exception_data_abort_access_reg_width,
+    exception_data_abort_access_width, exception_data_abort_handleable, exception_data_abort_is_permission_fault,
+    exception_data_abort_is_translate_fault, exception_esr_el1, exception_iss,
 };
-use crate::arch::{exception_esr, exception_fault_ipa};
+use crate::arch::{exception_esr, exception_fault_addr};
 use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, EmuContext};
-use crate::kernel::{current_cpu, hvc_guest_handler};
+use crate::kernel::{current_cpu, hvc_guest_handler, migrate_data_abort_handler};
 
 pub fn data_abort_handler() {
-    if !exception_data_abort_handleable() {
-        panic!(
-            "Core {} data abort not handleable 0x{:x}, esr 0x{:x}",
-            current_cpu().id,
-            exception_fault_ipa(),
-            exception_esr()
-        );
-    }
-
-    if !exception_data_abort_is_translate_fault() {
-        panic!(
-            "Core {} data abort is translate fault 0x{:x}",
-            current_cpu().id,
-            exception_fault_ipa(),
-        );
-    }
-
     let emu_ctx = EmuContext {
-        address: exception_fault_ipa(),
+        address: exception_fault_addr(),
         width: exception_data_abort_access_width(),
         write: exception_data_abort_access_is_write(),
         sign_ext: exception_data_abort_access_is_sign_ext(),
         reg: exception_data_abort_access_reg(),
         reg_width: exception_data_abort_access_reg_width(),
     };
-
     let elr = current_cpu().get_elr();
-    // println!("emu_handler");
-    if !emu_handler(&emu_ctx) {
+
+    if !exception_data_abort_handleable() {
+        panic!(
+            "Core {} data abort not handleable 0x{:x}, esr 0x{:x}",
+            current_cpu().id,
+            exception_fault_addr(),
+            exception_esr()
+        );
+    }
+
+    if !exception_data_abort_is_translate_fault() {
+        if exception_data_abort_is_permission_fault() {
+            println!(
+                "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}",
+                exception_data_abort_access_is_write(),
+                emu_ctx.width,
+                emu_ctx.reg_width,
+                emu_ctx.address,
+                exception_iss(),
+                emu_ctx.reg,
+                current_cpu().get_gpr(emu_ctx.reg)
+            );
+            migrate_data_abort_handler(&emu_ctx);
+            println!("ret elr {:x}", elr);
+            return;
+        } else {
+            panic!(
+                "Core {} data abort is not translate fault 0x{:x}",
+                current_cpu().id,
+                exception_fault_addr(),
+            );
+        }
+    } else if !emu_handler(&emu_ctx) {
         panic!(
             "data_abort_handler: Failed to handler emul device request, ipa 0x{:x} elr 0x{:x}",
             emu_ctx.address, elr
         );
     }
-
     let val = elr + exception_next_instruction_step();
     current_cpu().set_elr(val);
 }

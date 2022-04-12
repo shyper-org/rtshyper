@@ -2,7 +2,7 @@ use core::arch::{asm, global_asm};
 
 use tock_registers::interfaces::*;
 
-use crate::arch::{data_abort_handler, hvc_handler, smc_handler};
+use crate::arch::{ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::arch::ContextFrame;
 use crate::kernel::{active_vm_id, current_cpu};
@@ -15,6 +15,11 @@ global_asm!(include_str!("exception.S"));
 #[inline(always)]
 pub fn exception_esr() -> usize {
     cortex_a::registers::ESR_EL2.get() as usize
+}
+
+#[inline(always)]
+pub fn exception_esr_el1() -> usize {
+    cortex_a::registers::ESR_EL1.get() as usize
 }
 
 #[inline(always)]
@@ -37,8 +42,9 @@ fn exception_hpfar() -> usize {
     hpfar as usize
 }
 
+// addr be ipa or pa
 #[inline(always)]
-pub fn exception_fault_ipa() -> usize {
+pub fn exception_fault_addr() -> usize {
     (exception_far() & 0xfff) | (exception_hpfar() << 8)
 }
 
@@ -69,6 +75,11 @@ pub fn exception_data_abort_is_translate_fault() -> bool {
 }
 
 #[inline(always)]
+pub fn exception_data_abort_is_permission_fault() -> bool {
+    (exception_iss() & 0b111111 & (0xf << 2)) == 12
+}
+
+#[inline(always)]
 pub fn exception_data_abort_access_width() -> usize {
     1 << ((exception_iss() >> 22) & 0b11)
 }
@@ -76,6 +87,11 @@ pub fn exception_data_abort_access_width() -> usize {
 #[inline(always)]
 pub fn exception_data_abort_access_is_write() -> bool {
     (exception_iss() & (1 << 6)) != 0
+}
+
+#[inline(always)]
+pub fn exception_data_abort_access_in_stage2() -> bool {
+    (exception_iss() & (1 << 7)) != 0
 }
 
 #[inline(always)]
@@ -135,7 +151,9 @@ unsafe extern "C" fn current_el_spx_serror() {
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     current_cpu().set_ctx(ctx);
-    // println!("exception class {}", exception_class());
+    if current_cpu().id == 1 {
+        println!("start lower_aarch64_synchronous exception class {}", exception_class());
+    }
     match exception_class() {
         0x24 => {
             // println!("Core[{}] data_abort_handler", cpu_id());
@@ -148,15 +166,24 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             hvc_handler();
         }
         _ => {
+            println!(
+                "x0 {:x}, x1 {:x}, x29 {:x}",
+                (*ctx).gpr(0),
+                (*ctx).gpr(1),
+                (*ctx).gpr(29)
+            );
             panic!(
                 "core {} vm {}: handler not presents for EC_{} @ipa 0x{:x}, @pc 0x{:x}",
                 current_cpu().id,
                 active_vm_id(),
                 exception_class(),
-                exception_fault_ipa(),
+                exception_fault_addr(),
                 (*ctx).elr()
             );
         }
+    }
+    if current_cpu().id == 1 {
+        println!("end lower_aarch64_synchronous",);
     }
     current_cpu().clear_ctx();
 }

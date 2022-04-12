@@ -16,7 +16,7 @@ use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessa
 use crate::kernel::InitcEvent;
 use crate::kernel::Vcpu;
 use crate::kernel::Vm;
-use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth};
+use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
 
 use super::gic::*;
 
@@ -2021,9 +2021,9 @@ pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext
     if emu_ctx.write {
         // todo: add offset match
         let val = current_cpu().get_gpr(emu_ctx.reg);
-        vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, val, false);
+        ptr_read_write(PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, emu_ctx.width, val, false);
     } else {
-        let res = vgicd_emu_ctx_rw(emu_ctx, PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, 0, true);
+        let res = ptr_read_write(PLATFORM_GICD_BASE + 0x8_0000_0000 + offset, emu_ctx.width, 0, true);
         current_cpu().set_gpr(emu_ctx.reg, res);
     }
 
@@ -2207,42 +2207,5 @@ pub fn vgic_set_hw_int(vm: Vm, int_id: usize) {
             }
             None => {}
         }
-    }
-}
-
-fn vgicd_emu_ctx_rw(emu_ctx: &EmuContext, addr: usize, val: usize, read: bool) -> usize {
-    if read {
-        if emu_ctx.width == 1 {
-            unsafe { ptr::read(addr as *const u8) as usize }
-        } else if emu_ctx.width == 2 {
-            unsafe { ptr::read(addr as *const u16) as usize }
-            // (unsafe { *(addr as *const u16) }) as usize
-        } else if emu_ctx.width == 4 {
-            unsafe { ptr::read(addr as *const u32) as usize }
-            // (unsafe { *(addr as *const u32) }) as usize
-        } else {
-            panic!("vgicd_emu_ctx_rw: illegal read len {}", emu_ctx.width);
-        }
-    } else {
-        if emu_ctx.width == 1 {
-            unsafe {
-                ptr::write(addr as *mut u8, val as u8);
-            }
-            // unsafe { *(addr as *mut u8) = val as u8; }
-        } else if emu_ctx.width == 2 {
-            unsafe {
-                ptr::write(addr as *mut u16, val as u16);
-            }
-            // unsafe { *(addr as *mut u16) = val as u16; }
-        } else if emu_ctx.width == 4 {
-            unsafe {
-                ptr::write(addr as *mut u32, val as u32);
-            }
-            // unsafe { *(addr as *mut u32) = val as u32; }
-        } else {
-            panic!("vgicd_emu_ctx_rw: illegal write len {}", emu_ctx.width);
-        }
-        // println!("write addr {:x}, val {:x}, width {}, is_enabler[0] {:x}", addr, val, emu_ctx.width, GICD.is_enabler(0));
-        0
     }
 }

@@ -925,6 +925,138 @@ pub fn init_tmp_config_for_bma2() {
     vm_cfg_add_vm_entry(bma_config);
 }
 
+pub fn init_tmp_config_for_ramdisk_vm1() {
+    println!("init_tmp_config_for_ramdisk_vm1");
+
+    // #################### vm1 emu ######################
+    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("intc@8000000")),
+        base_ipa: 0x8000000,
+        length: 0x1000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTGicd,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_console@a002000")),
+        base_ipa: 0xa002000,
+        length: 0x1000,
+        irq_id: 32 + 0x12,
+        cfg_list: vec![0, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_net@a001000")),
+        base_ipa: 0xa001000,
+        length: 0x1000,
+        irq_id: 32 + 0x11,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
+    // emu_dev_config.push(VmEmulatedDeviceConfig {
+    //     name: Some(String::from("vm_service")),
+    //     base_ipa: 0,
+    //     length: 0,
+    //     irq_id: HVC_IRQ,
+    //     cfg_list: Vec::new(),
+    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
+    //     mediated: false,
+    // });
+
+    // vm1 passthrough
+    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
+    pt_dev_config.regions = vec![
+        PassthroughRegion {
+            ipa: UART_1_ADDR,
+            pa: UART_1_ADDR,
+            length: 0x1000,
+        },
+        PassthroughRegion {
+            ipa: 0x8010000,
+            pa: PLATFORM_GICV_BASE,
+            length: 0x2000,
+        },
+    ];
+    pt_dev_config.irqs = vec![UART_1_INT, INTERRUPT_IRQ_GUEST_TIMER];
+    // pt_dev_config.irqs = vec![INTERRUPT_IRQ_GUEST_TIMER];
+
+    // vm1 vm_region
+    let mut vm_region: Vec<VmRegion> = Vec::new();
+    vm_region.push(VmRegion {
+        ipa_start: 0x80000000,
+        length: 0x40000000,
+    });
+
+    let mut vm_dtb_devs: Vec<VmDtbDevConfig> = vec![];
+    vm_dtb_devs.push(VmDtbDevConfig {
+        name: String::from("gicd"),
+        dev_type: DtbDevType::DevGicd,
+        irqs: vec![],
+        addr_region: AddrRegions {
+            ipa: 0x8000000,
+            length: 0x1000,
+        },
+    });
+    vm_dtb_devs.push(VmDtbDevConfig {
+        name: String::from("gicc"),
+        dev_type: DtbDevType::DevGicc,
+        irqs: vec![],
+        addr_region: AddrRegions {
+            ipa: 0x8010000,
+            length: 0x2000,
+        },
+    });
+    vm_dtb_devs.push(VmDtbDevConfig {
+        name: String::from("serial"),
+        dev_type: DtbDevType::DevSerial,
+        irqs: vec![UART_1_INT],
+        addr_region: AddrRegions {
+            ipa: UART_1_ADDR,
+            length: 0x1000,
+        },
+    });
+
+    // vm1 config
+    let vm1_config = VmConfigEntry {
+        id: 1,
+        // name: Some("guest-os-0"),
+        name: Some(String::from("guest-os-0")),
+        name_vec: None,
+        os_type: VmType::VmTOs,
+        image: VmImageConfig {
+            kernel_img_name: None,
+            kernel_load_ipa: 0x80080000,
+            kernel_entry_point: 0x80080000,
+            device_tree_load_ipa: 0x80000000,
+            ramdisk_load_ipa: 0x83000000,
+        },
+        // cmdline: "root=/dev/vda rw audit=0",
+        cmdline: String::from("earlycon console=hvc0,115200n8 audit=0"),
+        cmdline_vec: None,
+        med_blk_idx: None,
+
+        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
+        cpu: Arc::new(Mutex::new(VmCpuConfig {
+            num: 1,
+            allocate_bitmap: 0b0010,
+            master: 1,
+        })),
+        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+            emu_dev_list: emu_dev_config,
+        })),
+        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
+        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
+            dtb_device_list: vm_dtb_devs,
+        })),
+    };
+    println!("generate tmp_config for vm1");
+    vm_cfg_add_vm_entry(vm1_config);
+}
+
 pub fn init_tmp_config_for_vm1() {
     println!("init_tmp_config_for_vm1");
 

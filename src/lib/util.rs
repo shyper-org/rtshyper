@@ -1,6 +1,9 @@
+use core::ptr;
+
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
+use crate::kernel::{active_vm_id, current_cpu};
 
 pub static TRACE: Mutex<bool> = Mutex::new(true);
 
@@ -85,4 +88,53 @@ pub fn bitmap_find_nth(bitmap: usize, start: usize, size: usize, nth: usize, set
     }
 
     None
+}
+
+pub fn ptr_read_write(addr: usize, width: usize, val: usize, read: bool) -> usize {
+    if read {
+        if width == 1 {
+            unsafe { ptr::read(addr as *const u8) as usize }
+        } else if width == 2 {
+            unsafe { ptr::read(addr as *const u16) as usize }
+        } else if width == 4 {
+            unsafe { ptr::read(addr as *const u32) as usize }
+        } else if width == 8 {
+            unsafe { ptr::read(addr as *const u64) as usize }
+        } else {
+            panic!("ptr_read_write: illegal read len {}", width);
+        }
+    } else {
+        if width == 1 {
+            unsafe {
+                ptr::write(addr as *mut u8, val as u8);
+                if active_vm_id() == 1 {
+                    println!("write 1, addr 0x{:x}, val {:x}", addr, val as u8);
+                }
+            }
+        } else if width == 2 {
+            unsafe {
+                ptr::write(addr as *mut u16, val as u16);
+                if active_vm_id() == 1 {
+                    println!("write 2, addr 0x{:x}, val {:x}", addr, val as u16);
+                }
+            }
+        } else if width == 4 {
+            unsafe {
+                ptr::write(addr as *mut u32, val as u32);
+                if active_vm_id() == 1 {
+                    println!("write 4, addr 0x{:x}, val {:x}", addr, val as u32);
+                }
+            }
+        } else if width == 8 {
+            unsafe {
+                ptr::write(addr as *mut u64, val as u64);
+                if active_vm_id() == 1 {
+                    println!("write 8, addr 0x{:x}, val {:x}", addr, val as u64);
+                }
+            }
+        } else {
+            panic!("ptr_read_write: illegal write len {}", width);
+        }
+        0
+    }
 }

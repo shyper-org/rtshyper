@@ -4,7 +4,7 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL, PTE_S2_RO};
+use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
@@ -113,13 +113,18 @@ pub fn vm_if_dirty_mem_map(vm_id: usize) {
     vm_if.mem_map.as_mut().unwrap().init_dirty();
 }
 
+pub fn vm_if_set_mem_map(vm_id: usize, bit: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.mem_map.as_mut().unwrap().set(bit, true);
+}
+
 pub fn vm_if_clear_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.mem_map.as_mut().unwrap().clear();
 }
 
-pub fn vm_if_cpy_mem_map(vm_id: usize) {
-    let vm_if = VM_IF_LIST[vm_id].lock();
+pub fn vm_if_copy_mem_map(vm_id: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
     let map = vm_if.mem_map.as_ref().unwrap();
 
     memcpy_safe(
@@ -127,6 +132,8 @@ pub fn vm_if_cpy_mem_map(vm_id: usize) {
         map.slice() as *const _ as *const u8,
         size_of::<u64>() * map.vec_len(),
     );
+    // clear bitmap after copy
+    vm_if.mem_map.as_mut().unwrap().clear();
 }
 
 pub fn vm_if_mem_map_page_num(vm_id: usize) -> usize {
@@ -351,6 +358,26 @@ impl Vm {
         }
     }
 
+    // ap: access permission
+    pub fn pt_set_access_permission(&self, pa: usize, ap: usize) {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => {
+                for i in 0..vm_inner.mem_region_num {
+                    let start = vm_inner.pa_region[i].pa_start;
+                    let end = start + vm_inner.pa_region[i].pa_length;
+                    if start >= pa && pa < end {
+                        let ipa_start = pa + vm_inner.pa_region[i].offset as usize;
+                        pt.access_permission(ipa_start, PAGE_SIZE, ap);
+                    }
+                }
+            }
+            None => {
+                panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
+            }
+        }
+    }
+
     pub fn pt_read_only(&self) {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
@@ -358,7 +385,7 @@ impl Vm {
                 for i in 0..vm_inner.mem_region_num {
                     let ipa_start = vm_inner.pa_region[i].pa_start + vm_inner.pa_region[i].offset as usize;
                     let len = vm_inner.pa_region[i].pa_length;
-                    pt.read_only(ipa_start, len);
+                    pt.access_permission(ipa_start, len, PTE_S2_FIELD_AP_RO);
                 }
             }
             None => {

@@ -176,7 +176,8 @@ impl PageTable {
         self.directory.pa()
     }
 
-    pub fn read_only(&self, start: usize, len: usize) {
+    pub fn access_permission(&self, start: usize, len: usize, ap: usize) {
+        println!("start ipa 0x{:x}, len 0x{:x}", start, len);
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut ipa = start;
         while ipa < (start + len) {
@@ -189,15 +190,15 @@ impl PageTable {
             if !l2e.valid() {
                 ipa += 512 * 4096; // 2MB: 9 + 12 bits
                 continue;
-            } else if l2e.to_pte() & PTE_BLOCK != 0 {
-                let pte = l2e.to_pte() & !(0b11 << 6) | PTE_S2_FIELD_AP_RO;
+            } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
+                let pte = l2e.to_pte() & !(0b11 << 6) | ap;
                 l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
                 ipa += 512 * 4096; // 2MB: 9 + 12 bits
                 continue;
             }
             let l3e = l2e.entry(pt_lvl3_idx(ipa));
             if l3e.valid() {
-                let pte = l3e.to_pte() & !(0b11 << 6) | PTE_S2_FIELD_AP_RO;
+                let pte = l3e.to_pte() & !(0b11 << 6) | ap;
                 l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pte))
             }
             ipa += 4096; // 4KB: 12 bits
