@@ -151,9 +151,6 @@ unsafe extern "C" fn current_el_spx_serror() {
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     current_cpu().set_ctx(ctx);
-    if current_cpu().id == 1 {
-        println!("start lower_aarch64_synchronous exception class {}", exception_class());
-    }
     match exception_class() {
         0x24 => {
             // println!("Core[{}] data_abort_handler", cpu_id());
@@ -181,9 +178,6 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
                 (*ctx).elr()
             );
         }
-    }
-    if current_cpu().id == 1 {
-        println!("end lower_aarch64_synchronous",);
     }
     current_cpu().clear_ctx();
 }

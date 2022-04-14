@@ -198,9 +198,6 @@ impl VirtioBlkReq {
                     && (prev.iov_sum_up + node.iov_sum_up) / SECTOR_BSIZE < mediated_blk.dma_block_max()
                 {
                     prev.iov_sum_up += node.iov_sum_up;
-                    if prev.iov_sum_up > 1000000 {
-                        println!("append sum up {:x}", prev.iov_sum_up);
-                    }
                     prev.iov.append(&mut node.iov);
                     push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());
                 } else {
@@ -433,14 +430,9 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
 
 #[no_mangle]
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
-    // add_task(
-    //     Task::MediatedIpiTask(IpiMediatedMsg {
-    //         src_id: vm.id(),
-    //         vq: vq.clone(),
-    //         blk: blk.clone(),
-    //         // avail_idx: idx,
-    //     }),
-    // );
+    // if current_cpu().id == 1 {
+    //     add_task_count();
+    // }
     let task = AsyncTask::new(
         AsyncTaskData::AsyncIpiTask(IpiMediatedMsg {
             src_id: vm.id(),
@@ -567,18 +559,10 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
         req_node.iov_total = req_node.iov_sum_up;
-        let mut bar = false;
-        if req_node.iov_total > 1000000 {
-            bar = true;
-            println!("sum up {:x}", req_node.iov_total);
-        }
         req.add_req_node(req_node, vm.clone());
 
         process_count += 1;
         next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
-        if next_desc_idx_opt.is_some() && bar {
-            println!("next desc");
-        }
     }
 
     if !req.mediated() {

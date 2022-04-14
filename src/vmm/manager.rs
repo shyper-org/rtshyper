@@ -207,13 +207,14 @@ pub fn vmm_reboot_vm(vm: Vm) {
 }
 
 pub fn get_vm_id(id_ipa: usize) -> bool {
-    let id_pa = vm_ipa2pa(active_vm().unwrap(), id_ipa);
+    let vm = active_vm().unwrap();
+    let id_pa = vm_ipa2pa(vm.clone(), id_ipa);
     if id_pa == 0 {
         println!("illegal id_pa {:x}", id_pa);
         return false;
     }
     unsafe {
-        *(id_pa as *mut usize) = active_vm_id();
+        *(id_pa as *mut usize) = vm.id();
     }
     true
 }

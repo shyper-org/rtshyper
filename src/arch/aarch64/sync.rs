@@ -1,17 +1,13 @@
-use cortex_a::asm::ret;
-
 use crate::arch::{
-    exception_data_abort_access_in_stage2, exception_data_abort_access_is_sign_ext,
-    exception_data_abort_access_is_write, exception_data_abort_access_reg, exception_data_abort_access_reg_width,
-    exception_data_abort_access_width, exception_data_abort_handleable, exception_data_abort_is_permission_fault,
-    exception_data_abort_is_translate_fault, exception_esr_el1, exception_iss,
+    exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write, exception_data_abort_access_reg,
+    exception_data_abort_access_reg_width, exception_data_abort_access_width, exception_data_abort_handleable,
+    exception_data_abort_is_permission_fault, exception_data_abort_is_translate_fault,
 };
 use crate::arch::{exception_esr, exception_fault_addr};
 use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, EmuContext};
 use crate::kernel::{current_cpu, hvc_guest_handler, migrate_data_abort_handler};
-use crate::lib::time_current_us;
 
 pub const HVC_RETURN_REG: usize = 0;
 
@@ -37,18 +33,18 @@ pub fn data_abort_handler() {
 
     if !exception_data_abort_is_translate_fault() {
         if exception_data_abort_is_permission_fault() {
-            println!(
-                "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}",
-                exception_data_abort_access_is_write(),
-                emu_ctx.width,
-                emu_ctx.reg_width,
-                emu_ctx.address,
-                exception_iss(),
-                emu_ctx.reg,
-                current_cpu().get_gpr(emu_ctx.reg)
-            );
+            // println!(
+            //     "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}",
+            //     exception_data_abort_access_is_write(),
+            //     emu_ctx.width,
+            //     emu_ctx.reg_width,
+            //     emu_ctx.address,
+            //     exception_iss(),
+            //     emu_ctx.reg,
+            //     current_cpu().get_gpr(emu_ctx.reg)
+            // );
             migrate_data_abort_handler(&emu_ctx);
-            println!("ret elr {:x}", elr);
+            // no need to rewrite elr
             return;
         } else {
             panic!(
@@ -57,7 +53,8 @@ pub fn data_abort_handler() {
                 exception_fault_addr(),
             );
         }
-    } else if !emu_handler(&emu_ctx) {
+    }
+    if !emu_handler(&emu_ctx) {
         panic!(
             "data_abort_handler: Failed to handler emul device request, ipa 0x{:x} elr 0x{:x}",
             emu_ctx.address, elr
@@ -68,20 +65,14 @@ pub fn data_abort_handler() {
 }
 
 pub fn smc_handler() {
-    let idx = 0;
-    let fid = current_cpu().get_gpr(idx);
-    let idx = 1;
-    let x1 = current_cpu().get_gpr(idx);
-    let idx = 2;
-    let x2 = current_cpu().get_gpr(idx);
-    let idx = 3;
-    let x3 = current_cpu().get_gpr(idx);
+    let fid = current_cpu().get_gpr(0);
+    let x1 = current_cpu().get_gpr(1);
+    let x2 = current_cpu().get_gpr(2);
+    let x3 = current_cpu().get_gpr(3);
 
     if !smc_guest_handler(fid, x1, x2, x3) {
         println!("smc_handler: unknown fid 0x{:x}", fid);
-        let idx = 0;
-        let val = 0;
-        current_cpu().set_gpr(idx, val);
+        current_cpu().set_gpr(0, 0);
     }
 
     let elr = current_cpu().get_elr();
@@ -90,7 +81,7 @@ pub fn smc_handler() {
 }
 
 pub fn hvc_handler() {
-    let time_start = time_current_us();
+    // let time_start = timer_arch_get_counter();
     let x0 = current_cpu().get_gpr(0);
     let x1 = current_cpu().get_gpr(1);
     let x2 = current_cpu().get_gpr(2);
@@ -112,6 +103,12 @@ pub fn hvc_handler() {
             current_cpu().set_gpr(HVC_RETURN_REG, 0);
         }
     }
-    let time_end = time_current_us();
-    println!("hvc fid 0x{:x} event 0x{:x} cost time {}us", hvc_type, event, time_end - time_start);
+    // let time_end = timer_arch_get_counter();
+    // println!(
+    //     "hvc fid 0x{:x} event 0x{:x} counter {}, freq {:x}",
+    //     hvc_type,
+    //     event,
+    //     time_end - time_start,
+    //     timer_arch_get_frequency()
+    // );
 }

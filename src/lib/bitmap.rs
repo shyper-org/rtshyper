@@ -121,7 +121,7 @@ pub struct FlexBitmap {
 
 impl FlexBitmap {
     pub fn new(len: usize) -> FlexBitmap {
-        let mut map = vec![0; len / 64];
+        let map = vec![0; len / 64];
         FlexBitmap { len, map }
     }
 
