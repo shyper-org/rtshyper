@@ -142,7 +142,7 @@ impl FlexBitmap {
             panic!("too large idx {} for get bitmap", idx);
         }
         let val = self.map[idx / 64];
-        bit_get(val, idx & 64)
+        bit_get(val, idx % 64)
     }
 
     pub fn set(&mut self, bit: usize, val: bool) {
@@ -150,9 +150,29 @@ impl FlexBitmap {
             panic!("too large idx {} for set bitmap", bit);
         }
         if val {
-            self.map[bit / 64] |= 1 << (bit & 64);
+            self.map[bit / 64] |= 1 << (bit % 64);
         } else {
-            self.map[bit / 64] &= !(1 << (bit & 64));
+            self.map[bit / 64] &= !(1 << (bit % 64));
+        }
+    }
+
+    pub fn set_bits(&mut self, bit: usize, len: usize, val: bool) {
+        if bit + len > self.len {
+            panic!("set_bits: too large idx {} for set bitmap", bit);
+        }
+        // 默认2MB或1KB对齐
+        if len == 1 {
+            self.set(bit, val);
+        } else {
+            if bit % 64 != 0 || (bit + len) % 64 != 0 {
+                panic!("set_bits: bit start and len should align with 64");
+            }
+
+            let mut head = bit;
+            while head < (bit + len) {
+                self.map[head / 64] = if val { usize::MAX } else { 0 };
+                head += 64;
+            }
         }
     }
 

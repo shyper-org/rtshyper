@@ -176,9 +176,11 @@ impl PageTable {
         self.directory.pa()
     }
 
-    pub fn access_permission(&self, start: usize, len: usize, ap: usize) {
+    pub fn access_permission(&self, start: usize, len: usize, ap: usize) -> (usize, usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut ipa = start;
+        let mut size = 0;
+        let mut pa = 0;
         while ipa < (start + len) {
             let l1e = directory.entry(pt_lvl1_idx(ipa));
             if !l1e.valid() {
@@ -193,15 +195,20 @@ impl PageTable {
                 let pte = l2e.to_pte() & !(0b11 << 6) | ap;
                 l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
                 ipa += 512 * 4096; // 2MB: 9 + 12 bits
+                pa = l2e.to_pa();
+                size += 512 * 4096;
                 continue;
             }
             let l3e = l2e.entry(pt_lvl3_idx(ipa));
             if l3e.valid() {
                 let pte = l3e.to_pte() & !(0b11 << 6) | ap;
-                l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pte))
+                l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
+                pa = l3e.to_pa();
+                size += 4096;
             }
             ipa += 4096; // 4KB: 12 bits
         }
+        (pa, size)
     }
 
     pub fn map_2mb(&self, ipa: usize, pa: usize, pte: usize) {
