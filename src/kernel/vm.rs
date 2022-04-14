@@ -16,7 +16,7 @@ use crate::mm::PageFrame;
 
 use super::vcpu::Vcpu;
 
-pub const DIRTY_MEM_THRESHOLD: usize = 0x200;
+pub const DIRTY_MEM_THRESHOLD: usize = 0x1000;
 pub const VM_NUM_MAX: usize = 8;
 pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
@@ -113,9 +113,9 @@ pub fn vm_if_dirty_mem_map(vm_id: usize) {
     vm_if.mem_map.as_mut().unwrap().init_dirty();
 }
 
-pub fn vm_if_set_mem_map(vm_id: usize, bit: usize) {
+pub fn vm_if_set_mem_map(vm_id: usize, bit: usize, len: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.mem_map.as_mut().unwrap().set(bit, true);
+    vm_if.mem_map.as_mut().unwrap().set_bits(bit, len, true);
 }
 
 pub fn vm_if_clear_mem_map(vm_id: usize) {
@@ -376,7 +376,7 @@ impl Vm {
     }
 
     // ap: access permission
-    pub fn pt_set_access_permission(&self, pa: usize, ap: usize) {
+    pub fn pt_set_access_permission(&self, pa: usize, ap: usize) -> (usize, usize) {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
             Some(pt) => {
@@ -385,9 +385,10 @@ impl Vm {
                     let end = start + vm_inner.pa_region[i].pa_length;
                     if pa >= start && pa < end {
                         let ipa_start = pa + vm_inner.pa_region[i].offset as usize;
-                        pt.access_permission(ipa_start, PAGE_SIZE, ap);
+                        return pt.access_permission(ipa_start, PAGE_SIZE, ap);
                     }
                 }
+                (0, 0)
             }
             None => {
                 panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);

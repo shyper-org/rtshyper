@@ -81,14 +81,14 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
     if emu_ctx.write {
         // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
         let vm = active_vm().unwrap();
-        vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
+        let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
         let mut bit = 0;
         for i in 0..vm.region_num() {
             let start = vm.pa_start(i);
             let end = start + vm.pa_length(i);
             if emu_ctx.address >= start && emu_ctx.address < end {
-                bit += (emu_ctx.address - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
-                vm_if_set_mem_map(current_cpu().id, bit);
+                bit += (pa - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
+                vm_if_set_mem_map(current_cpu().id, bit, len / PAGE_SIZE);
                 break;
             }
             bit += vm.pa_length(i) / PAGE_SIZE;
