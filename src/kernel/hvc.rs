@@ -13,7 +13,7 @@ use crate::kernel::{
     migrate_memcpy, migrate_ready, vcpu_idle, vm, vm_if_copy_mem_map, vm_if_dirty_mem_map, vm_if_get_cpu_id,
     vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
-use crate::lib::{cache_invalidate_d, memcpy_safe, trace};
+use crate::lib::{memcpy_safe, trace};
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_vm};
 
 static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
@@ -257,6 +257,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_READY => {
+            // println!("core {} HVC_VMM_MIGRATE_READY", current_cpu().id);
             let cpu_trgt = vm_if_get_cpu_id(x0);
             migrate_ready(x0);
             send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_READY, cpu_trgt);
@@ -314,7 +315,7 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             let base = vm.share_mem_base();
             vm.add_share_mem_base(x1);
             add_share_mem(x0, base);
-            println!("VM{} add share mem 0x{:x} len 0x{:x}", active_vm_id(), base, x1);
+            // println!("VM{} add share mem 0x{:x} len 0x{:x}", active_vm_id(), base, x1);
             Ok(base)
         }
         _ => {
@@ -491,7 +492,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         // 当满足下序条件时需要拷贝cpu.ctx
                         // 否则意味着当前核心有多个虚拟机共享，且被迁移虚拟机所在的核心尚未被调度到，寄存器数值无需更新
                         if active_vm().unwrap().id() == msg.trgt_vmid {
-                            trgt_vcpu.save_cpu_ctx();
+                            trgt_vcpu.context_vm_store();
                         }
                         send_hvc_ipi(msg.trgt_vmid, 0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, 0);
                         vcpu_idle(trgt_vcpu);

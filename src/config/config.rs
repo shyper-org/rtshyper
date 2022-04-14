@@ -1179,7 +1179,7 @@ pub fn init_tmp_config_for_vm1() {
             ramdisk_load_ipa: 0, //0x83000000,
         },
         // cmdline: "root=/dev/vda rw audit=0",
-        cmdline: String::from("earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0"),
+        cmdline: String::from("earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0"),
         cmdline_vec: None,
         med_blk_idx: Some(0),
 

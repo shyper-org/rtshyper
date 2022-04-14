@@ -366,7 +366,7 @@ impl Vm {
                 for i in 0..vm_inner.mem_region_num {
                     let start = vm_inner.pa_region[i].pa_start;
                     let end = start + vm_inner.pa_region[i].pa_length;
-                    if start >= pa && pa < end {
+                    if pa >= start && pa < end {
                         let ipa_start = pa + vm_inner.pa_region[i].offset as usize;
                         pt.access_permission(ipa_start, PAGE_SIZE, ap);
                     }

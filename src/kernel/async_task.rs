@@ -18,6 +18,32 @@ use crate::kernel::{
 };
 use crate::lib::{memcpy_safe, trace};
 
+pub static TASK_IPI_COUNT: Mutex<usize> = Mutex::new(0);
+pub static TASK_COUNT: Mutex<usize> = Mutex::new(0);
+
+pub fn add_task_ipi_count() {
+    let mut count = TASK_IPI_COUNT.lock();
+    *count += 1;
+}
+
+pub fn add_task_count() {
+    let mut count = TASK_COUNT.lock();
+    if *count % 100 == 0 {
+        println!("task count {}, ipi count {}", *count, get_task_ipi_count());
+    }
+    *count += 1;
+}
+
+pub fn get_task_ipi_count() -> usize {
+    let count = TASK_IPI_COUNT.lock();
+    *count
+}
+
+pub fn get_task_count() -> usize {
+    let count = TASK_COUNT.lock();
+    *count
+}
+
 #[derive(Clone, Debug)]
 pub enum AsyncTaskState {
     Pending,
@@ -120,6 +146,7 @@ pub async fn async_ipi_req() {
             if current_cpu().id == 0 {
                 virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
             } else {
+                // add_task_ipi_count();
                 ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
             }
         }

@@ -106,12 +106,8 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             //     "result.0 0x{:x}, result.1 0x{:x}, result.2 0x{:x}",
             //     result.0, result.1, result.2
             // );
-            let idx = 1;
-            let val = result.1;
-            current_cpu().set_gpr(idx, val);
-            let idx = 2;
-            let val = result.2;
-            current_cpu().set_gpr(idx, val);
+            current_cpu().set_gpr(1, result.1);
+            current_cpu().set_gpr(2, result.2);
         }
         PSCI_FEATURES => match x1 {
             PSCI_VERSION | PSCI_CPU_ON_AARCH64 | PSCI_FEATURES => {
