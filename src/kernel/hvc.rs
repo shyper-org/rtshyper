@@ -135,7 +135,7 @@ pub fn hvc_guest_handler(
     x5: usize,
     x6: usize,
 ) -> Result<usize, ()> {
-    let mut res = false;
+    let res;
     match hvc_type {
         HVC_SYS => {
             res = hvc_sys_handler(event, x0);
@@ -147,7 +147,7 @@ pub fn hvc_guest_handler(
             return hvc_ivc_handler(event, x0, x1);
         }
         HVC_MEDIATED => {
-            res = hvc_mediated_handler(event, x0, x1, x2, x3);
+            res = hvc_mediated_handler(event, x0, x1);
         }
         HVC_CONFIG => {
             return hvc_config_handler(event, x0, x1, x2, x3, x4, x5, x6);
@@ -176,42 +176,24 @@ fn hvc_config_handler(
 ) -> Result<usize, ()> {
     match event {
         // HVC_CONFIG_ADD_VM
-        0 => {
-            vm_cfg_add_vm(x0, x1, x2, x3, x4, x5, x6)
-        }
+        0 => vm_cfg_add_vm(x0, x1, x2, x3, x4, x5, x6),
         // HVC_CONFIG_DELETE_VM
-        1 => {
-            vm_cfg_del_vm(x0)
-        }
+        1 => vm_cfg_del_vm(x0),
         // HVC_CONFIG_CPU
-        2 => {
-            vm_cfg_set_cpu(x0,x1,x2,x3)
-        }
+        2 => vm_cfg_set_cpu(x0, x1, x2, x3),
         // HVC_CONFIG_MEMORY_REGION
-        3 => {
-            vm_cfg_add_mem_region(x0,x1,x2)
-        }
+        3 => vm_cfg_add_mem_region(x0, x1, x2),
         // HVC_CONFIG_EMULATED_DEVICE
-        4 => {
-            vm_cfg_add_emu_dev(x0,x1,x2,x3,x4,x5,x6)
-        }
+        4 => vm_cfg_add_emu_dev(x0, x1, x2, x3, x4, x5, x6),
         // HVC_CONFIG_PASSTHROUGH_DEVICE_REGION
-        5 => {
-            vm_cfg_add_passthrough_device_region(x0,x1,x2,x3) 
-        }
+        5 => vm_cfg_add_passthrough_device_region(x0, x1, x2, x3),
         // HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS
-        6 => {
-            vm_cfg_add_passthrough_device_irqs(x0,x1,x2)
-        }
+        6 => vm_cfg_add_passthrough_device_irqs(x0, x1, x2),
         // HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS
-        7 => {
-            vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2)
-        }
+        7 => vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2),
         // HVC_CONFIG_DTB_DEVICE
-        8 => {
-            vm_cfg_add_dtb_dev(x0,x1,x2,x3,x4,x5,x6) 
-        }
-        // 
+        8 => vm_cfg_add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
+        //
         _ => {
             println!("hvc_config_handler unknown event {}", event);
             Err(())
@@ -343,7 +325,7 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     }
 }
 
-fn hvc_mediated_handler(event: usize, x0: usize, x1: usize, x2: usize, x3: usize) -> bool {
+fn hvc_mediated_handler(event: usize, x0: usize, x1: usize) -> bool {
     match event {
         HVC_MEDIATED_DEV_APPEND => {
             // println!("mediated dev_append");

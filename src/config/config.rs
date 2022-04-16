@@ -9,7 +9,7 @@ use crate::board::*;
 use crate::device::EmuDeviceType;
 use crate::kernel::{active_vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
-use crate::lib::{in_range, memcpy_safe};
+use crate::lib::{BitAlloc, BitAlloc16, BitMap, FlexBitmap, memcpy_safe};
 
 const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;
@@ -404,6 +404,7 @@ impl VmConfigEntry {
 #[derive(Clone)]
 pub struct VmConfigTable {
     pub name: Option<&'static str>,
+    pub vm_bitmap: BitAlloc16,
     pub vm_num: usize,
     pub entries: Vec<VmConfigEntry>,
 }
@@ -412,9 +413,27 @@ impl VmConfigTable {
     pub const fn default() -> VmConfigTable {
         VmConfigTable {
             name: None,
+            vm_bitmap: BitAlloc16::default(),
             vm_num: 0,
             entries: Vec::new(),
         }
+    }
+
+    pub fn generate_vm_id(&mut self) -> Result<usize, ()> {
+        for i in 0..VM_NUM_MAX {
+            if self.vm_bitmap.get(i) == 0 {
+                self.vm_bitmap.set(i);
+                return Ok(i);
+            }
+        }
+        Err(())
+    }
+
+    pub fn remove_vm_id(&mut self, vm_id: usize) {
+        if vm_id >= VM_NUM_MAX || self.vm_bitmap.get(vm_id) == 0 {
+            println!("illegal vm id {}", vm_id);
+        }
+        self.vm_bitmap.clear(vm_id);
     }
 }
 
@@ -448,50 +467,48 @@ pub fn vm_cfg_entry(vmid: usize) -> Option<VmConfigEntry> {
     return None;
 }
 
-pub fn vm_cfg_add_mvm_entry(mvm_cfg_entry: VmConfigEntry) {
-    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
-    if vm_config.entries.len() > 0 || vm_config.vm_num > 0 {
-        panic!("error in mvm config init, the def vm config table is not empty");
-    }
-    println!(
-        "\nSuccessfully add Manager VM {:?}, id {}, currently vm_num {}\n",
-        mvm_cfg_entry.clone().name.unwrap(),
-        mvm_cfg_entry.id(),
-        vm_config.vm_num
-    );
-
-    vm_config.vm_num += 1;
-    vm_config.entries.push(mvm_cfg_entry);
-}
-
-// Todo: gererate vm id in a more comprehensive way.
-pub fn vm_cfg_generate_vm_id(vm_num: usize) -> usize {
-    vm_num
-}
+// pub fn vm_cfg_add_mvm_entry(mvm_cfg_entry: VmConfigEntry) {
+//     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
+//     if vm_config.entries.len() > 0 || vm_config.vm_num > 0 {
+//         panic!("error in mvm config init, the def vm config table is not empty");
+//     }
+//     println!(
+//         "\nSuccessfully add Manager VM {:?}, id {}, currently vm_num {}\n",
+//         mvm_cfg_entry.clone().name.unwrap(),
+//         mvm_cfg_entry.id(),
+//         vm_config.vm_num
+//     );
+//
+//     vm_config.vm_num += 1;
+//     vm_config.entries.push(mvm_cfg_entry);
+// }
 
 /* Add VM config entry to DEF_VM_CONFIG_TABLE */
 pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()> {
-    println!("vm_cfg_add_vm_entry: add guest VM [{}]", vm_cfg_entry.id());
-
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
-    if vm_config.vm_num + 1 > VM_NUM_MAX {
-        println!("vm_cfg_add_vm_entry, vm num reached max value");
-        return Err(());
+    match vm_config.generate_vm_id() {
+        Ok(vm_id) => {
+            if vm_id == 0 && (vm_config.entries.len() > 0 || vm_config.vm_num > 0) {
+                panic!("error in mvm config init, the def vm config table is not empty");
+            }
+            vm_cfg_entry.set_id_cfg(vm_id);
+            vm_config.vm_num += 1;
+            vm_config.entries.push(vm_cfg_entry.clone());
+            println!(
+                "\nSuccessfully add {}[{}] name {:?}, currently vm_num {}\n",
+                if vm_id == 0 { "MVM" } else { "GVM" },
+                vm_cfg_entry.id(),
+                vm_cfg_entry.clone().name.unwrap(),
+                vm_config.vm_num
+            );
+
+            Ok(vm_id)
+        }
+        Err(_) => {
+            println!("vm_cfg_add_vm_entry, vm num reached max value");
+            Err(())
+        }
     }
-
-    vm_cfg_entry.set_id_cfg(vm_cfg_generate_vm_id(vm_config.vm_num));
-
-    vm_config.vm_num += 1;
-    vm_config.entries.push(vm_cfg_entry.clone());
-
-    println!(
-        "\nSuccessfully add GVM[{}] name {:?}, currently vm_num {}\n",
-        vm_cfg_entry.id(),
-        vm_cfg_entry.clone().name.unwrap(),
-        vm_config.vm_num
-    );
-
-    Ok(vm_cfg_entry.id())
 }
 
 /* Generate a new VM Config Entry, set basic value */
@@ -553,7 +570,7 @@ pub fn vm_cfg_add_vm(
     };
 
     // Generate a new VM config entry.
-    let mut new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
+    let new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
     println!("      cmdline is \"{:?}\"", new_vm_cfg.cmdline.clone());
@@ -802,7 +819,7 @@ pub fn vm_cfg_add_dtb_dev(
         println!("illegal dtb_dev name ipa {:x}", name_ipa);
         return Err(());
     }
-    let mut dtb_dev_name_u8 = vec![0 as u8; NAME_MAX_LEN];
+    let dtb_dev_name_u8 = vec![0 as u8; NAME_MAX_LEN];
     memcpy_safe(
         &dtb_dev_name_u8[0] as *const _ as *const u8,
         name_pa as *mut u8,
@@ -832,7 +849,7 @@ pub fn vm_cfg_add_dtb_dev(
     let mut dtb_irq_list: Vec<usize> = Vec::new();
 
     if irq_list_length > 0 {
-        let mut tmp_dtb_irq_list = vec![0 as usize, irq_list_length];
+        let tmp_dtb_irq_list = vec![0 as usize, irq_list_length];
         memcpy_safe(
             &tmp_dtb_irq_list[0] as *const _ as *const u8,
             irq_list_pa as *mut u8,
@@ -1043,9 +1060,9 @@ pub fn init_tmp_config_for_vm1() {
         length: 0x1000,
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-        cfg_list: vec![0, 8388608],
+        // cfg_list: vec![0, 8388608],
         // cfg_list: vec![0, 67108864], // 32G
-        // cfg_list: vec![0, 209715200], // 100G
+        cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
     });

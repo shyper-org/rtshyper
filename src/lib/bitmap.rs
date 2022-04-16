@@ -83,7 +83,7 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
 }
 
 #[repr(C)]
-// #[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct BitAlloc16(u16);
 
 impl BitAlloc16 {
@@ -114,6 +114,7 @@ impl BitAlloc for BitAlloc16 {
 }
 
 // flex bit map
+#[derive(Clone)]
 pub struct FlexBitmap {
     len: usize,
     map: Vec<usize>,

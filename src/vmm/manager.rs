@@ -1,10 +1,7 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{
-    init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_ramdisk_vm1, init_tmp_config_for_vm1,
-    init_tmp_config_for_vm2,
-};
+use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
 use crate::config::vm_cfg_entry;
 use crate::device::create_fdt;
 use crate::kernel::{
@@ -35,7 +32,7 @@ pub fn vmm_set_up_vm(vm_id: usize) {
     println!("vmm_set_up_vm: set up vm {} on cpu {}", vm_id, current_cpu().id);
     vmm_add_vm(vm_id);
 
-    let mut vm = vm(vm_id).unwrap();
+    let vm = vm(vm_id).unwrap();
 
     let mut cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
     let mut target_cpu_id = 0;
@@ -79,19 +76,20 @@ pub fn vmm_init_vm(vm_id: usize) {
         if vm_id == 0 {
             panic!("not support boot for vm0");
         } else {
-            let vm_cfg = match vm_cfg_entry(vm_id) {
-                Some(vm_cfg) => {
+            match vm_cfg_entry(vm_id) {
+                Some(_) => {
                     println!("vmm_init_vm: VM {} config exists", vm_id);
                 }
                 None => {
                     // Hard Code for Guest VM config, not recommended.
-                    if vm_id == 1 {
-                        println!("vmm_init_vm: init_tmp_config_for_vm1");
-                        init_tmp_config_for_vm1();
-                    } else if vm_id == 2 {
-                        println!("vmm_init_vm: init_tmp_config_for_vm2");
-                        init_tmp_config_for_vm2();
-                    }
+                    panic!("vmm_init_vm: vm{} not exit", vm_id);
+                    // if vm_id == 1 {
+                    //     println!("vmm_init_vm: init_tmp_config_for_vm1");
+                    //     init_tmp_config_for_vm1();
+                    // } else if vm_id == 2 {
+                    //     println!("vmm_init_vm: init_tmp_config_for_vm2");
+                    //     init_tmp_config_for_vm2();
+                    // }
                 }
             };
         }
