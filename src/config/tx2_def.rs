@@ -199,26 +199,25 @@ pub fn mvm_config_init() {
     });
 
     // vm0 config
+
     let mvm_config_entry = VmConfigEntry {
         id: 0,
         // name: Some("privileged"),
         name: Some(String::from("privileged")),
-        name_vec: None,
         os_type: VmType::VmTOs,
-        image: VmImageConfig {
+        cmdline:
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
+        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        
+        image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x90080000,
             kernel_entry_point: 0x90080000,
             device_tree_load_ipa: 0x90000000,
             ramdisk_load_ipa: 0,
-        },
-        cmdline_vec: None,
-        cmdline:
-        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        // "earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0",
-        // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        med_blk_idx: None,
-
+            mediated_block_index: None,
+        })),
         memory: Arc::new(Mutex::new(VmMemoryConfig{
             region: vm_region,
         })),

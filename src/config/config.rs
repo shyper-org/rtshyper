@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -7,11 +7,13 @@ use spin::Mutex;
 use crate::board::*;
 // use crate::board::*;
 use crate::device::EmuDeviceType;
-use crate::kernel::{active_vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
-use crate::lib::memcpy_safe;
+use crate::kernel::{active_vm, vm_ipa2pa, VmType, VM_NUM_MAX};
+use crate::lib::{memcpy_safe, in_range};
 
 const NAME_MAX_LEN: usize = 32;
+const CFG_MAX_NUM: usize = 0x10;
+const IRQ_MAX_NUM: usize = 0x40;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
 const EMULATED_DEV_MAX_NUM: usize = 16;
 
@@ -115,6 +117,7 @@ pub struct VmImageConfig {
     pub device_tree_load_ipa: usize,
     // pub ramdisk_filename: Option<&'static str>,
     pub ramdisk_load_ipa: usize,
+    pub mediated_block_index: Option<usize>,
 }
 
 impl VmImageConfig {
@@ -127,6 +130,19 @@ impl VmImageConfig {
             device_tree_load_ipa: 0,
             // ramdisk_filename: None,
             ramdisk_load_ipa: 0,
+            mediated_block_index: None,
+        }
+    }
+    pub fn new(kernel_load_ipa: usize, device_tree_load_ipa: usize) -> VmImageConfig {
+        VmImageConfig {
+            kernel_img_name: None,
+            kernel_load_ipa,
+            kernel_entry_point: kernel_load_ipa,
+            // device_tree_filename: None,
+            device_tree_load_ipa, 
+            // ramdisk_filename: None,
+            ramdisk_load_ipa: 0,
+            mediated_block_index: None,
         }
     }
 }
@@ -181,13 +197,10 @@ pub struct VmConfigEntry {
     pub id: usize,
     // Following configs are not intended to be modified during configuration.
     pub name: Option<String>,
-    pub name_vec: Option<Vec<char>>,
     pub os_type: VmType,
     pub cmdline: String,
-    pub cmdline_vec: Option<Vec<char>>,
-    pub med_blk_idx: Option<usize>,
-    pub image: VmImageConfig,
     // Following config can be modified during configuration.
+    pub image: Arc<Mutex<VmImageConfig>>,
     pub memory: Arc<Mutex<VmMemoryConfig>>,
     pub cpu: Arc<Mutex<VmCpuConfig>>,
     pub vm_emu_dev_confg: Arc<Mutex<VmEmulatedDeviceConfigList>>,
@@ -200,13 +213,35 @@ impl VmConfigEntry {
         VmConfigEntry {
             id: 0,
             name: Some(String::from("unknown")),
-            name_vec: None,
             os_type: VmType::VmTBma,
-            image: VmImageConfig::default(),
+            
             cmdline: String::from("root=/dev/vda rw audit=0"),
-            cmdline_vec: None,
-            med_blk_idx: None,
 
+            image:  Arc::new(Mutex::new(VmImageConfig::default())),
+            memory: Arc::new(Mutex::new(VmMemoryConfig::default())),
+            cpu: Arc::new(Mutex::new(VmCpuConfig::default())),
+            vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList::default())),
+            vm_pt_dev_confg: Arc::new(Mutex::new(VmPassthroughDeviceConfig::default())),
+            vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
+        }
+    }
+
+    pub fn new(
+        name: String,
+        cmdline: String,
+        vm_type: usize,
+        kernel_load_ipa: usize,
+        device_tree_load_ipa: usize,
+    ) -> VmConfigEntry {
+        VmConfigEntry {
+            id: 0,
+            name: Some(name),
+            os_type: VmType::from_usize(vm_type),
+            cmdline,
+            image:  Arc::new(Mutex::new(VmImageConfig::new(
+                kernel_load_ipa,
+                device_tree_load_ipa
+            ),)),
             memory: Arc::new(Mutex::new(VmMemoryConfig::default())),
             cpu: Arc::new(Mutex::new(VmCpuConfig::default())),
             vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList::default())),
@@ -221,6 +256,38 @@ impl VmConfigEntry {
 
     pub fn set_id_cfg(&mut self, id: usize) {
         self.id = id;
+    }
+
+    pub fn mediated_block_index(&self) -> Option<usize> {
+        let img_cfg = self.image.lock();
+        img_cfg.mediated_block_index
+    }
+
+    pub fn set_mediated_block_index(&mut self, med_blk_id: usize) {
+        let mut img_cfg = self.image.lock();
+        // println!("set_mediated_block_index {}",med_blk_id);
+        img_cfg.mediated_block_index = Some(med_blk_id);
+        // println!("set_mediated_block_index {} self.med_blk_idx {:?}",med_blk_id, img_cfg.mediated_block_index);
+    }
+
+    pub fn kernel_load_ipa(&self) -> usize {
+        let img_cfg = self.image.lock();
+        img_cfg.kernel_load_ipa
+    }
+
+    pub fn kernel_entry_point(&self) -> usize {
+        let img_cfg = self.image.lock();
+        img_cfg.kernel_entry_point
+    }
+
+    pub fn device_tree_load_ipa(&self) -> usize {
+        let img_cfg = self.image.lock();
+        img_cfg.device_tree_load_ipa
+    }
+
+    pub fn ramdisk_load_ipa(&self) -> usize {
+        let img_cfg = self.image.lock();
+        img_cfg.ramdisk_load_ipa
     }
 
     pub fn memory_region(&self) -> Vec<VmRegion> {
@@ -260,9 +327,9 @@ impl VmConfigEntry {
         emu_dev_cfg.emu_dev_list.clone()
     }
 
-    pub fn add_emulated_device_cfg(&self, _emu_dev_cfg: VmEmulatedDeviceConfig) {
+    pub fn add_emulated_device_cfg(&self, cfg: VmEmulatedDeviceConfig) {
         let mut emu_dev_cfgs = self.vm_emu_dev_confg.lock();
-        emu_dev_cfgs.emu_dev_list.push(_emu_dev_cfg);
+        emu_dev_cfgs.emu_dev_list.push(cfg);
     }
 
     pub fn passthrough_device_regions(&self) -> Vec<PassthroughRegion> {
@@ -290,14 +357,14 @@ impl VmConfigEntry {
         pt_dev_cfg.regions.push(pt_region_cfg)
     }
 
-    pub fn add_passthrough_device_irqs(&self, _irqs: &mut Vec<usize>) {
+    pub fn add_passthrough_device_irqs(&self, irqs: &mut Vec<usize>) {
         let mut pt_dev_cfg = self.vm_pt_dev_confg.lock();
-        pt_dev_cfg.irqs.append(_irqs);
+        pt_dev_cfg.irqs.append(irqs);
     }
 
-    pub fn add_passthrough_device_streams_ids(&self, _streams_ids: &mut Vec<usize>) {
+    pub fn add_passthrough_device_streams_ids(&self, streams_ids: &mut Vec<usize>) {
         let mut pt_dev_cfg = self.vm_pt_dev_confg.lock();
-        pt_dev_cfg.streams_ids.append(_streams_ids);
+        pt_dev_cfg.streams_ids.append(streams_ids);
     }
 
     pub fn dtb_device_list(&self) -> Vec<VmDtbDevConfig> {
@@ -305,9 +372,9 @@ impl VmConfigEntry {
         dtb_dev_cfg.dtb_device_list.clone()
     }
 
-    pub fn add_dtb_device(&self, _dtb_dev_cfg: VmDtbDevConfig) {
+    pub fn add_dtb_device(&self,cfg: VmDtbDevConfig) {
         let mut dtb_dev_cfg = self.vm_dtb_devs.lock();
-        dtb_dev_cfg.dtb_device_list.push(_dtb_dev_cfg);
+        dtb_dev_cfg.dtb_device_list.push(cfg);
     }
 
     pub fn gicc_addr(&self) -> usize {
@@ -375,9 +442,9 @@ pub fn vm_type(id: usize) -> VmType {
 
 pub fn vm_cfg_entry(vmid: usize) -> Option<VmConfigEntry> {
     let vm_config = DEF_VM_CONFIG_TABLE.lock();
-    for _vm_cfg_entry in vm_config.entries.iter() {
-        if _vm_cfg_entry.id == vmid {
-            return Some(_vm_cfg_entry.clone());
+    for vm_cfg_entry in vm_config.entries.iter() {
+        if vm_cfg_entry.id == vmid {
+            return Some(vm_cfg_entry.clone());
         }
     }
     println!("failed to find VM[{}] in vm cfg entry list", vmid);
@@ -441,7 +508,7 @@ pub fn vm_cfg_add_vm(
     device_tree_load_ipa: usize,
 ) -> Result<usize, ()> {
     println!("\n\nStart to prepare configuration for new VM");
-    println!("  vm_cfg_add_vm():");
+    println!("vm_cfg_add_vm():");
     println!(
         "   vm_type {} kernel_load_ipa 0x{:x} device_tree_load_ipa 0x{:x}",
         vm_type, kernel_load_ipa, device_tree_load_ipa
@@ -489,9 +556,13 @@ pub fn vm_cfg_add_vm(
     };
 
     // Generate a new VM config entry.
-    let mut new_vm_cfg = VmConfigEntry::default();
-    new_vm_cfg.name = Some(vm_name_str);
-    new_vm_cfg.cmdline = cmdline_str;
+    let mut new_vm_cfg = VmConfigEntry::new(
+        vm_name_str,
+        cmdline_str,
+        vm_type,
+        kernel_load_ipa,
+        device_tree_load_ipa,
+    );
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
     println!("      cmdline is \"{:?}\"", new_vm_cfg.cmdline.clone());
@@ -512,7 +583,7 @@ pub fn vm_cfg_add_mem_region(vmid: usize, ipa_start: usize, length: usize) -> Re
     };
     vm_cfg.add_memory_cfg(ipa_start, length);
     println!(
-        "VM[{}] vm_cfg_add_mem_region: add region start_ipa {:x} length {:x}",
+        "\nVM[{}] vm_cfg_add_mem_region: add region start_ipa {:x} length {:x}",
         vmid, ipa_start, length
     );
     Ok(0)
@@ -528,7 +599,7 @@ pub fn vm_cfg_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: u
     vm_cfg.set_cpu_cfg(num, allocate_bitmap, master);
 
     println!(
-        " VM[{}] vm_cfg_set_cpu: num {} allocate_bitmap {} master {}",
+        "\nVM[{}] vm_cfg_set_cpu: num {} allocate_bitmap {} master {}",
         vmid,
         vm_cfg.cpu_num(),
         vm_cfg.cpu_allocated_bitmap(),
@@ -548,7 +619,7 @@ pub fn vm_cfg_add_emu_dev(
     cfg_list_ipa: usize,
     emu_type: usize,
 ) -> Result<usize, ()> {
-    let vm_cfg = match vm_cfg_entry(vmid) {
+    let mut vm_cfg = match vm_cfg_entry(vmid) {
         Some(vm_cfg) => vm_cfg,
         None => return Err(()),
     };
@@ -563,31 +634,53 @@ pub fn vm_cfg_add_emu_dev(
     let name_u8 = vec![0 as u8; NAME_MAX_LEN];
     memcpy_safe(&name_u8[0] as *const _ as *const u8, name_pa as *mut u8, NAME_MAX_LEN);
     let name_str = match String::from_utf8(name_u8.clone()) {
-        Ok(_str) => _str,
+        Ok(str) => str,
         Err(error) => {
             println!("error: {:?} in parsing the emulated device name {:?}", error, name_u8);
             String::from("unknown")
         }
     };
+    // Copy emu device cfg list from user ipa.
+    let cfg_list_pa = vm_ipa2pa(active_vm().unwrap(), cfg_list_ipa);
+    if cfg_list_pa == 0 {
+        println!("illegal emulated device cfg_list_ipa {:x}", cfg_list_ipa);
+        return Err(());
+    }
+    let cfg_list = vec![0 as usize; CFG_MAX_NUM];
+    memcpy_safe(
+        &cfg_list[0] as *const _ as *const u8,
+        cfg_list_pa as *mut u8,
+        CFG_MAX_NUM * 8, // sizeof(usize) / sizeof(u8)
+    );
+    let med_blk_index = cfg_list[0];
 
     println!(
-        "VM[{}] vm_cfg_add_emu_dev: ori emu dev num {}\n    name {:?}\n     base ipa {:x} length {:x} irq_id {} emu_type{}",
+        concat!(
+            "\nVM[{}] vm_cfg_add_emu_dev: ori emu dev num {}\n",
+            "    name {:?}\n",
+            "     cfg_list {:?}\n",
+            "     base ipa {:x} length {:x} irq_id {} emu_type {}"
+        ),
         vmid,
         emu_cfg_list.len(),
-        name_str.clone(),
-        base_ipa, length, irq_id, emu_type
-    );
-
-    let _emu_dev_type = EmuDeviceType::from_usize(emu_type);
-    let emu_dev_cfg = VmEmulatedDeviceConfig {
-        name: Some(name_str),
+        name_str.clone().trim_end_matches(char::from(0)),
+        cfg_list,
         base_ipa,
         length,
         irq_id,
-        cfg_list: Vec::new(),
-        emu_type: match _emu_dev_type {
+        emu_type
+    );
+
+    let emu_dev_type = EmuDeviceType::from_usize(emu_type);
+    let emu_dev_cfg = VmEmulatedDeviceConfig {
+        name: Some(name_str.trim_end_matches(char::from(0)).to_string()),
+        base_ipa,
+        length,
+        irq_id,
+        cfg_list,
+        emu_type: match emu_dev_type {
             EmuDeviceType::EmuDeviceTVirtioBlkMediated => EmuDeviceType::EmuDeviceTVirtioBlk,
-            _ => _emu_dev_type,
+            _ => emu_dev_type.clone(),
         },
         mediated: match EmuDeviceType::from_usize(emu_type) {
             EmuDeviceType::EmuDeviceTVirtioBlkMediated => true,
@@ -595,6 +688,11 @@ pub fn vm_cfg_add_emu_dev(
         },
     };
     vm_cfg.add_emulated_device_cfg(emu_dev_cfg);
+
+    // Set GVM Mediated Blk Index Here.
+    if emu_dev_type == EmuDeviceType::EmuDeviceTVirtioBlkMediated {
+        vm_cfg.set_mediated_block_index(med_blk_index);
+    }
 
     Ok(0)
 }
@@ -615,7 +713,10 @@ pub fn vm_cfg_add_passthrough_device_region(
     let pt_dev_regions = vm_cfg.passthrough_device_regions();
 
     println!(
-        " VM[{}] vm_cfg_add_pt_dev: ori pt dev regions num {}\n     base_ipa {:x} base_pa {:x} length {:x}",
+        concat!(
+            "\nVM[{}] vm_cfg_add_pt_dev: ori pt dev regions num {}\n",
+            "     base_ipa {:x} base_pa {:x} length {:x}"
+        ),
         vmid,
         pt_dev_regions.len(),
         base_ipa,
@@ -630,7 +731,7 @@ pub fn vm_cfg_add_passthrough_device_region(
 /* Add passthrough device config irqs for VM */
 pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irqs_length: usize) -> Result<usize, ()> {
     println!(
-        " VM[{}] vm_cfg_add_pt_dev irqs:\n     base_ipa {:x} length {:x}",
+        "\nVM[{}] vm_cfg_add_pt_dev irqs:\n     base_ipa {:x} length {:x}",
         vmid, irqs_base_ipa, irqs_length
     );
 
@@ -663,7 +764,7 @@ pub fn vm_cfg_add_passthrough_device_streams_ids(
     streams_ids_length: usize,
 ) -> Result<usize, ()> {
     println!(
-        " VM[{}] vm_cfg_add_pt_dev streams ids:\n     streams_ids_base_ipa {:x} streams_ids_length {:x}",
+        "\nVM[{}] vm_cfg_add_pt_dev streams ids:\n     streams_ids_base_ipa {:x} streams_ids_length {:x}",
         vmid, streams_ids_base_ipa, streams_ids_length
     );
 
@@ -700,8 +801,8 @@ pub fn vm_cfg_add_dtb_dev(
     addr_region_length: usize,
 ) -> Result<usize, ()> {
     println!(
-        " VM[{}] vm_cfg_add_dtb_dev:\n     name_ipa {:x} dev_type {} irq_list_ipa {:x} irq_list_length {:x} addr_region_ipa {:x} addr_region_length {:x}",
-        vmid, name_ipa, dev_type, irq_list_ipa, irq_list_length, addr_region_ipa, addr_region_length
+        "\nVM[{}] vm_cfg_add_dtb_dev:\n     dev_type {} irq_list_length {} addr_region_ipa {:x} addr_region_length {:x}",
+        vmid,dev_type,irq_list_length,addr_region_ipa,addr_region_length
     );
 
     // Copy DTB device name from user ipa.
@@ -726,7 +827,10 @@ pub fn vm_cfg_add_dtb_dev(
             String::from("unknown")
         }
     };
-    println!("      get dtb dev name {:?}", dtb_dev_name_str);
+    println!(
+        "      get dtb dev name {:?}",
+        dtb_dev_name_str.trim_end_matches(char::from(0))
+    );
 
     // Copy DTB device irq list from user ipa.
     let irq_list_pa = vm_ipa2pa(active_vm().unwrap(), irq_list_ipa);
@@ -734,13 +838,19 @@ pub fn vm_cfg_add_dtb_dev(
         println!("illegal dtb_dev irq list ipa {:x}", irq_list_ipa);
         return Err(());
     }
-    let mut dtb_irq_list = vec![0 as usize, irq_list_length];
-    memcpy_safe(
-        &dtb_irq_list[0] as *const _ as *const u8,
-        irq_list_pa as *mut u8,
-        irq_list_length * 8, // sizeof(usize) / sizeof(u8)
-    );
+    let mut dtb_irq_list: Vec<usize> = Vec::new();
 
+    if irq_list_length > 0 {
+        let mut tmp_dtb_irq_list = vec![0 as usize, irq_list_length];
+        memcpy_safe(
+            &tmp_dtb_irq_list[0] as *const _ as *const u8,
+            irq_list_pa as *mut u8,
+            irq_list_length * 8, // sizeof(usize) / sizeof(u8)
+        );
+        for i in 0..irq_list_length {
+            dtb_irq_list.push(tmp_dtb_irq_list[i]);
+        }
+    }
     println!("      get dtb dev dtb_irq_list {:?}", dtb_irq_list);
 
     // Get VM config entry.
@@ -748,13 +858,9 @@ pub fn vm_cfg_add_dtb_dev(
         Some(vm_cfg) => vm_cfg,
         None => return Err(()),
     };
-    // Get passthrough device config list.
-    let dtb_devs = vm_cfg.dtb_device_list();
-
-    println!("       vm_cfg_add_dtb_dev: ori dtb dev num {}", dtb_devs.len());
-
+    // Get DTB device config list.
     let vm_dtb_dev = VmDtbDevConfig {
-        name: dtb_dev_name_str,
+        name: dtb_dev_name_str.trim_end_matches(char::from(0)).to_string(),
         dev_type: DtbDevType::from_usize(dev_type),
         irqs: dtb_irq_list,
         addr_region: AddrRegions {
@@ -764,165 +870,12 @@ pub fn vm_cfg_add_dtb_dev(
     };
 
     vm_cfg.add_dtb_device(vm_dtb_dev);
+
+    println!(
+        "      vm_cfg_add_dtb_dev: current dtb dev num {}",
+        vm_cfg.dtb_device_list().len()
+    );
     Ok(0)
-}
-
-pub fn init_tmp_config_for_bma1() {
-    println!("init_tmp_config_for_bma1");
-    // #################### bare metal app emu (vm1) ######################
-    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("intc@8000000")),
-        base_ipa: 0x8000000,
-        length: 0x1000,
-        irq_id: 0,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTGicd,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_blk@a000000")),
-        base_ipa: 0xa000000,
-        length: 0x1000,
-        irq_id: 32 + 0x10,
-        cfg_list: vec![0, 209715200], // 100G
-        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-        mediated: true,
-    });
-
-    // bma passthrough
-    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
-    pt_dev_config.regions = vec![
-        PassthroughRegion {
-            ipa: 0x9000000,
-            pa: UART_1_ADDR,
-            length: 0x1000,
-        },
-        PassthroughRegion {
-            ipa: 0x8010000,
-            pa: PLATFORM_GICV_BASE,
-            length: 0x2000,
-        },
-    ];
-    pt_dev_config.irqs = vec![UART_1_INT];
-
-    // bma vm_region
-    let mut vm_region: Vec<VmRegion> = Vec::new();
-    vm_region.push(VmRegion {
-        ipa_start: 0x40000000,
-        length: 0x40000000,
-    });
-
-    // bma config
-    let bma_config = VmConfigEntry {
-        id: 0,
-        name: Some(String::from("guest-bma-0")),
-        name_vec: None,
-        os_type: VmType::VmTBma,
-        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
-        image: VmImageConfig {
-            kernel_img_name: None,
-            kernel_load_ipa: 0x40080000,
-            kernel_entry_point: 0x40080000,
-            device_tree_load_ipa: 0,
-            ramdisk_load_ipa: 0,
-        },
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0010,
-            master: 1,
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
-            emu_dev_list: emu_dev_config,
-        })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
-            dtb_device_list: vec![],
-        })),
-        med_blk_idx: Some(1),
-        cmdline: String::from(""),
-        cmdline_vec: None,
-    };
-    vm_cfg_add_vm_entry(bma_config);
-}
-
-pub fn init_tmp_config_for_bma2() {
-    println!("init_tmp_config_for_bma2");
-    // #################### bare metal app emu (vm1) ######################
-    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("intc@8000000")),
-        base_ipa: 0x8000000,
-        length: 0x1000,
-        irq_id: 0,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTGicd,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_blk@a000000")),
-        base_ipa: 0xa000000,
-        length: 0x1000,
-        irq_id: 32 + 0x10,
-        cfg_list: vec![0, 209715200], // 100G
-        emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
-        mediated: true,
-    });
-
-    // bma passthrough
-    let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
-    pt_dev_config.regions = vec![
-        PassthroughRegion {
-            ipa: 0x9000000,
-            pa: UART_1_ADDR,
-            length: 0x1000,
-        },
-        PassthroughRegion {
-            ipa: 0x8010000,
-            pa: PLATFORM_GICV_BASE,
-            length: 0x2000,
-        },
-    ];
-    // pt_dev_config.irqs = vec![UART_1_INT];
-
-    // bma vm_region
-    let mut vm_region: Vec<VmRegion> = Vec::new();
-    vm_region.push(VmRegion {
-        ipa_start: 0x40000000,
-        length: 0x40000000,
-    });
-
-    // bma config
-    let bma_config = VmConfigEntry {
-        id: 0,
-        name: Some(String::from("guest-bma-1")),
-        name_vec: None,
-        os_type: VmType::VmTBma,
-        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
-        image: VmImageConfig {
-            kernel_img_name: None,
-            kernel_load_ipa: 0x40080000,
-            kernel_entry_point: 0x40080000,
-            device_tree_load_ipa: 0,
-            ramdisk_load_ipa: 0,
-        },
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0100,
-            master: 2,
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
-            emu_dev_list: emu_dev_config,
-        })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
-            dtb_device_list: vec![],
-        })),
-        med_blk_idx: Some(2),
-        cmdline: String::from(""),
-        cmdline_vec: None,
-    };
-    vm_cfg_add_vm_entry(bma_config);
 }
 
 pub fn init_tmp_config_for_vm1() {
@@ -945,20 +898,11 @@ pub fn init_tmp_config_for_vm1() {
         length: 0x1000,
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
-        // cfg_list: vec![0, 8388608],
+        cfg_list: vec![0, 8388608],
         // cfg_list: vec![0, 67108864], // 32G
-        cfg_list: vec![0, 209715200], // 100G
+        // cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_console@a002000")),
-        base_ipa: 0xa002000,
-        length: 0x1000,
-        irq_id: 32 + 0x12,
-        cfg_list: vec![0, 0xa002000],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
-        mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some(String::from("virtio_net@a001000")),
@@ -967,6 +911,15 @@ pub fn init_tmp_config_for_vm1() {
         irq_id: 32 + 0x11,
         cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
         emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_console@a002000")),
+        base_ipa: 0xa002000,
+        length: 0x1000,
+        irq_id: 32 + 0x12,
+        cfg_list: vec![0, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
         mediated: false,
     });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
@@ -1035,22 +988,19 @@ pub fn init_tmp_config_for_vm1() {
     // vm1 config
     let vm1_config = VmConfigEntry {
         id: 1,
-        // name: Some("guest-os-0"),
         name: Some(String::from("guest-os-0")),
-        name_vec: None,
         os_type: VmType::VmTOs,
-        image: VmImageConfig {
+        // cmdline: "root=/dev/vda rw audit=0",
+        cmdline: String::from("earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0"),
+
+        image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
-        },
-        // cmdline: "root=/dev/vda rw audit=0",
-        cmdline: String::from("earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0"),
-        cmdline_vec: None,
-        med_blk_idx: Some(0),
-
+            mediated_block_index: Some(0),
+        })),
         memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
@@ -1071,6 +1021,8 @@ pub fn init_tmp_config_for_vm1() {
 
 pub fn init_tmp_config_for_vm2() {
     println!("init_tmp_config_for_vm2");
+    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
+
     // #################### vm2 emu ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
@@ -1158,21 +1110,18 @@ pub fn init_tmp_config_for_vm2() {
     let vm2_config = VmConfigEntry {
         id: 2,
         name: Some(String::from("guest-os-1")),
-        // name: Some("guest-os-1"),
-        name_vec: None,
         os_type: VmType::VmTOs,
-        image: VmImageConfig {
+        // cmdline: "root=/dev/vda rw audit=0",
+        cmdline: String::from("earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0"),
+        
+        image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
-        },
-        // cmdline: "root=/dev/vda rw audit=0",
-        cmdline: String::from("earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0"),
-        cmdline_vec: None,
-        med_blk_idx: Some(1),
-
+            mediated_block_index: Some(1),
+        })),
         memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,

@@ -80,7 +80,7 @@ pub fn create_fdt(config: VmConfigEntry) -> Result<Vec<u8>, Error> {
     create_chosen_node(
         &mut fdt,
         &config.cmdline,
-        config.image.ramdisk_load_ipa,
+        config.ramdisk_load_ipa(),
         CPIO_RAMDISK.len(),
     )?;
     create_cpu_node(&mut fdt, config.clone())?;

@@ -1,8 +1,8 @@
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2};
-use crate::config::vm_cfg_entry;
+use crate::config::{init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::{vm_cfg_entry};
 use crate::device::create_fdt;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa,
@@ -23,15 +23,18 @@ pub fn vmm_shutdown_secondary_vm() {
     println!("Shutting down all VMs...");
 }
 
+/* Set up VM structure and finish cpu assignment before set up VM config.
+ * Only VM0 will go through this function.
+ *
+ * @param[in] vm_id: new added VM id.
+ */
 pub fn vmm_set_up_vm(vm_id: usize) {
     println!("vmm_set_up_vm: set up vm {} on cpu {}", vm_id, current_cpu().id);
     vmm_add_vm(vm_id);
 
-    // vmm_setup_config(vm_id);
-    let vm = vm(vm_id).unwrap();
-    let config = vm.config();
+    let mut vm = vm(vm_id).unwrap();
 
-    let mut cpu_allocate_bitmap = config.cpu_allocated_bitmap();
+    let mut cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
     let mut target_cpu_id = 0;
     let mut cpu_num = 0;
     while cpu_allocate_bitmap != 0 && target_cpu_id < PLATFORM_CPU_NUM_MAX {
@@ -58,20 +61,36 @@ pub fn vmm_set_up_vm(vm_id: usize) {
         "vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}",
         vm_id,
         cpu_num,
-        config.cpu_allocated_bitmap()
+        vm.config().cpu_allocated_bitmap()
     );
 }
 
+/* Init VM before boot.
+ * Only VM0 will go through this function.
+ *
+ * @param[in] vm_id: target VM id to boot.
+ */
 pub fn vmm_init_vm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 {
-        // TODO: this code should be replaced
         if vm_id == 0 {
             panic!("not support boot for vm0");
-        } else if vm_id == 1 {
-            init_tmp_config_for_bma1();
-        } else if vm_id == 2 {
-            init_tmp_config_for_bma2();
+        } else {
+            let vm_cfg = match vm_cfg_entry(vm_id) {
+                Some(vm_cfg) => {
+                    println!("vmm_init_vm: VM {} config exists", vm_id);
+                }
+                None => {
+                    // Hard Code for Guest VM config, not recommended.
+                    if vm_id == 1 {
+                        println!("vmm_init_vm: init_tmp_config_for_vm1");
+                        init_tmp_config_for_vm1();
+                    } else if vm_id == 2 {
+                        println!("vmm_init_vm: init_tmp_config_for_vm2");
+                        init_tmp_config_for_vm2();
+                    }
+                }
+            };
         }
 
         vmm_set_up_vm(vm_id);
@@ -161,7 +180,7 @@ pub fn vmm_reboot_vm(vm: Vm) {
         // init vm1 dtb
         match create_fdt(config.clone()) {
             Ok(dtb) => {
-                let offset = config.image.device_tree_load_ipa - vm.config().memory_region()[0].ipa_start;
+                let offset = config.device_tree_load_ipa() - vm.config().memory_region()[0].ipa_start;
                 println!("dtb size {}", dtb.len());
                 println!("pa 0x{:x}", vm.pa_start(0) + offset);
                 crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());

@@ -95,7 +95,7 @@ pub fn interrupt_init() {
 }
 
 pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
-    // println!("VM {} register interrupt {}", vm.vm_id(), id);
+    // println!("VM {} register interrupt {}", vm.id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
         println!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);

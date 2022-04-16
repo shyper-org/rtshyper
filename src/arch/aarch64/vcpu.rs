@@ -11,7 +11,7 @@ pub fn vcpu_arch_init(vm: Vm, vcpu: Vcpu) {
         VmType::VmTOs => {
             vcpu_inner
                 .vcpu_ctx
-                .set_argument(config.image.device_tree_load_ipa);
+                .set_argument(config.device_tree_load_ipa());
         }
         _ => {
             let arg = &config.memory_region()[0];
@@ -21,7 +21,7 @@ pub fn vcpu_arch_init(vm: Vm, vcpu: Vcpu) {
 
     vcpu_inner
         .vcpu_ctx
-        .set_exception_pc(config.image.kernel_entry_point);
+        .set_exception_pc(config.kernel_entry_point());
     vcpu_inner.vcpu_ctx.spsr = (SPSR_EL1::M::EL1h
         + SPSR_EL1::I::Masked
         + SPSR_EL1::F::Masked

@@ -94,28 +94,28 @@ pub fn vmm_init_image(vm: Vm) -> bool {
     //     println!("vmm_init_image: filename is missed");
     //     return false;
     // }
-    let config = vm.config().image;
+    let config = vm.config();
 
-    if config.kernel_load_ipa == 0 {
+    if config.kernel_load_ipa() == 0 {
         println!("vmm_init_image: kernel load ipa is null");
         return false;
     }
 
-    vm.set_entry_point(config.kernel_entry_point);
+    vm.set_entry_point(config.kernel_entry_point());
 
-    match &vm.config().os_type {
+    match &config.os_type {
         VmType::VmTBma => {
-            vmm_load_image(config.kernel_load_ipa, vm.clone(), include_bytes!("../../image/BMA"));
+            vmm_load_image(config.kernel_load_ipa(), vm.clone(), include_bytes!("../../image/BMA"));
             return true;
         }
         VmType::VmTOs => {
             if vm.id() == 0 {
                 println!("vm0 load L4T");
-                vmm_load_image(config.kernel_load_ipa, vm.clone(), include_bytes!("../../image/L4T"));
+                vmm_load_image(config.kernel_load_ipa(), vm.clone(), include_bytes!("../../image/L4T"));
             } else {
                 println!("gvm load vanilla");
                 vmm_load_image(
-                    config.kernel_load_ipa,
+                    config.kernel_load_ipa(),
                     vm.clone(),
                     // include_bytes!("../../image/vm1_arch_Image"),
                     include_bytes!("../../image/Image_vanilla"),
@@ -124,7 +124,7 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         }
     }
 
-    if config.device_tree_load_ipa != 0 {
+    if config.device_tree_load_ipa() != 0 {
         use crate::SYSTEM_FDT;
 
         // PLATFORM
@@ -136,25 +136,27 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-        {
-            let offset = config.device_tree_load_ipa - vm.config().memory_region()[0].ipa_start;
-            unsafe {
-                let src = SYSTEM_FDT.get().unwrap();
-                let len = src.len();
-                let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                dst.clone_from_slice(&src);
+            {
+                let offset = config.device_tree_load_ipa()
+                    - config.memory_region()[0].ipa_start;
+                unsafe {
+                    let src = SYSTEM_FDT.get().unwrap();
+                    let len = src.len();
+                    let dst =
+                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                    dst.clone_from_slice(&src);
+                }
+                println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
             }
-            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
-        }
     } else {
         println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
     }
 
-    if config.ramdisk_load_ipa != 0 {
+    if config.ramdisk_load_ipa() != 0 {
         println!("VM {} id {} load ramdisk initrd.gz", vm.id(), vm.config().name.unwrap());
         vmm_load_image(
-            config.ramdisk_load_ipa,
+            config.ramdisk_load_ipa(),
             vm.clone(),
             CPIO_RAMDISK,
             // include_bytes!("../../image/rootfs.cpio"),
@@ -340,25 +342,20 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
 // This func should run 1 time for each vm.
 pub fn vmm_setup_config(vm_id: usize) {
     let vm = match vm(vm_id) {
-        Some(_vm) => _vm,
+        Some(vm) => vm,
         None => {
             panic!("vmm_setup_config vm id {} doesn't exist", vm_id);
         }
     };
 
     let config = match vm_cfg_entry(vm_id) {
-        Some(_config) => _config,
+        Some(config) => config,
         None => {
             panic!("vmm_setup_config vm id {} config doesn't exist", vm_id);
         }
     };
 
-    println!(
-        "vmm_setup_config VM[{}] name {:?} current core {}",
-        vm_id,
-        config.name.clone().unwrap(),
-        current_cpu().id
-    );
+    println!("vmm_setup_config VM[{}] name {:?} current core {}", vm_id, config.name.clone().unwrap(), current_cpu().id);
 
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
@@ -375,8 +372,13 @@ pub fn vmm_setup_config(vm_id: usize) {
             // Init GVM dtb.
             match create_fdt(config.clone()) {
                 Ok(dtb) => {
-                    let offset = config.image.device_tree_load_ipa - vm.config().memory_region()[0].ipa_start;
-                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
+                    let offset = config.device_tree_load_ipa()
+                        - vm.config().memory_region()[0].ipa_start;
+                    crate::lib::memcpy_safe(
+                        (vm.pa_start(0) + offset) as *const u8,
+                        dtb.as_ptr(),
+                        dtb.len(),
+                    );
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
@@ -530,6 +532,11 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     // barrier();
 }
 
+
+/* Generate VM structure and push it to VM.
+ *
+ * @param[in]  vm_id: new added VM id.
+ */
 pub fn vmm_add_vm(vm_id: usize) {
     println!("vmm_add_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
     if push_vm(vm_id).is_err() {
@@ -537,7 +544,7 @@ pub fn vmm_add_vm(vm_id: usize) {
     }
     let vm = vm(vm_id).unwrap();
     let vm_cfg = match vm_cfg_entry(vm_id) {
-        Some(_vm_cfg) => _vm_cfg,
+        Some(vm_cfg) => vm_cfg,
         None => {
             println!("vmm_add_vm: failed to find config for vm {}", vm_id);
             return;

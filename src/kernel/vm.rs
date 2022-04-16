@@ -249,14 +249,31 @@ impl Vm {
         }
     }
 
+    // pub fn set_med_blk_id(&mut self, med_blk_id: usize) {
+    //     let mut vm_inner = self.inner.lock();
+    //     vm_inner.med_blk_id = Some(med_blk_id);
+    // }
+
     pub fn med_blk_id(&self) -> usize {
         let vm_inner = self.inner.lock();
-        match vm_inner.config.as_ref().unwrap().med_blk_idx {
+        // match self.config().mediated_block_index() {
+        //     None => {
+        //         panic!("vm {} do not have mediated blk", vm_inner.id);
+        //     }
+        //     Some(idx) => idx,
+        // }
+        match vm_inner.config.as_ref().unwrap().mediated_block_index() {
             None => {
                 panic!("vm {} do not have mediated blk", vm_inner.id);
             }
             Some(idx) => idx,
         }
+        // match vm_inner.med_blk_id {
+        //     None => {
+        //         panic!("vm {} do not have mediated blk", vm_inner.id);
+        //     }
+        //     Some(idx) => idx,
+        // }
     }
 
     pub fn dtb(&self) -> Option<*mut fdt::myctypes::c_void> {
@@ -681,6 +698,7 @@ pub struct VmInner {
 
     // emul devs
     pub emu_devs: Vec<EmuDevs>,
+    pub med_blk_id: Option<usize>,
 }
 
 impl VmInner {
@@ -706,6 +724,7 @@ impl VmInner {
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
             emu_devs: Vec::new(),
+            med_blk_id: None,
         }
     }
 
@@ -731,6 +750,7 @@ impl VmInner {
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
             emu_devs: Vec::new(),
+            med_blk_id: None,
         }
     }
 }
