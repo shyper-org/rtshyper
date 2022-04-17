@@ -255,12 +255,10 @@ impl VmConfigEntry {
         self.id = id;
     }
 
-    pub fn vm_name(&self) -> String{
+    pub fn vm_name(&self) -> String {
         match &self.name {
             Some(name) => name.to_string(),
-            None => {
-                String::from("unknown")
-            }
+            None => String::from("unknown"),
         }
     }
 
@@ -473,7 +471,7 @@ pub fn vm_type(vmid: usize) -> VmType {
 
 pub fn vm_id_list() -> Vec<usize> {
     let vm_config = DEF_VM_CONFIG_TABLE.lock();
-    let mut id_list:  Vec<usize> = Vec::new();
+    let mut id_list: Vec<usize> = Vec::new();
     for vm_cfg_entry in vm_config.entries.iter() {
         id_list.push(vm_cfg_entry.id)
     }
@@ -582,7 +580,7 @@ pub fn vm_cfg_add_vm(
     };
 
     // Generate a new VM config entry.
-    let mut new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
+    let new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
     println!("      cmdline is [{:?}]", new_vm_cfg.cmdline.clone());

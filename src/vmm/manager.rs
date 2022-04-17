@@ -1,17 +1,17 @@
 use alloc::vec::Vec;
-use alloc::string::{String, ToString};
 
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::vm_type;
-use crate::config::{vm_num, vm_id_list};
-use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::{vm_id_list, vm_num};
+// use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
+use crate::config::NAME_MAX_LEN;
 use crate::config::vm_cfg_entry;
+use crate::config::vm_type;
 use crate::device::create_fdt;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg,
-    vm_if_set_ivc_arg_ptr, vm_ipa2pa,
+    vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -219,7 +219,6 @@ pub fn get_vm_id(id_ipa: usize) -> bool {
     true
 }
 
-use crate::config::NAME_MAX_LEN;
 #[repr(C)]
 struct VMInfo {
     pub id: u32,
@@ -231,7 +230,7 @@ struct VMInfo {
 #[repr(C)]
 struct VMInfoList {
     pub vm_num: usize,
-    pub info_list: [VMInfo; 10],
+    pub info_list: [VMInfo; VM_NUM_MAX],
 }
 
 /* List VM info in hypervisor.
