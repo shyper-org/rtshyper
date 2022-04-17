@@ -11,7 +11,7 @@ use crate::kernel::{active_vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::lib::{BitAlloc, BitAlloc16, BitMap, FlexBitmap, memcpy_safe};
 
-const NAME_MAX_LEN: usize = 32;
+pub const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;
 const IRQ_MAX_NUM: usize = 0x40;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
@@ -255,6 +255,15 @@ impl VmConfigEntry {
         self.id = id;
     }
 
+    pub fn vm_name(&self) -> String{
+        match &self.name {
+            Some(name) => name.to_string(),
+            None => {
+                String::from("unknown")
+            }
+        }
+    }
+
     pub fn mediated_block_index(&self) -> Option<usize> {
         let img_cfg = self.image.lock();
         img_cfg.mediated_block_index
@@ -451,9 +460,24 @@ pub fn vm_num() -> usize {
     vm_config.entries.len()
 }
 
-pub fn vm_type(id: usize) -> VmType {
+pub fn vm_type(vmid: usize) -> VmType {
     let vm_config = DEF_VM_CONFIG_TABLE.lock();
-    vm_config.entries[id].os_type
+    for vm_cfg_entry in vm_config.entries.iter() {
+        if vm_cfg_entry.id == vmid {
+            return vm_cfg_entry.os_type;
+        }
+    }
+    println!("failed to find VM[{}] in vm cfg entry list", vmid);
+    return VmType::VmTOs;
+}
+
+pub fn vm_id_list() -> Vec<usize> {
+    let vm_config = DEF_VM_CONFIG_TABLE.lock();
+    let mut id_list:  Vec<usize> = Vec::new();
+    for vm_cfg_entry in vm_config.entries.iter() {
+        id_list.push(vm_cfg_entry.id)
+    }
+    id_list
 }
 
 pub fn vm_cfg_entry(vmid: usize) -> Option<VmConfigEntry> {
@@ -466,22 +490,6 @@ pub fn vm_cfg_entry(vmid: usize) -> Option<VmConfigEntry> {
     println!("failed to find VM[{}] in vm cfg entry list", vmid);
     return None;
 }
-
-// pub fn vm_cfg_add_mvm_entry(mvm_cfg_entry: VmConfigEntry) {
-//     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
-//     if vm_config.entries.len() > 0 || vm_config.vm_num > 0 {
-//         panic!("error in mvm config init, the def vm config table is not empty");
-//     }
-//     println!(
-//         "\nSuccessfully add Manager VM {:?}, id {}, currently vm_num {}\n",
-//         mvm_cfg_entry.clone().name.unwrap(),
-//         mvm_cfg_entry.id(),
-//         vm_config.vm_num
-//     );
-//
-//     vm_config.vm_num += 1;
-//     vm_config.entries.push(mvm_cfg_entry);
-// }
 
 /* Add VM config entry to DEF_VM_CONFIG_TABLE */
 pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()> {
@@ -604,7 +612,7 @@ pub fn vm_cfg_add_mem_region(vmid: usize, ipa_start: usize, length: usize) -> Re
 /* Set VM cpu config according to VM id */
 pub fn vm_cfg_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: usize) -> Result<usize, ()> {
     let vm_cfg = match vm_cfg_entry(vmid) {
-        Some(_vm_cfg) => _vm_cfg,
+        Some(vm_cfg) => vm_cfg,
         None => return Err(()),
     };
 
