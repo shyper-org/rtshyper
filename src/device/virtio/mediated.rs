@@ -17,6 +17,18 @@ pub fn mediated_blk_list_push(blk: MediatedBlk) {
     list.push(blk);
 }
 
+// TODO: not concern abort the num of sectors
+pub fn mediated_blk_request() -> Result<usize, ()> {
+    let mut list = MEDIATED_BLK_LIST.lock();
+    for (idx, blk) in list.iter_mut().enumerate() {
+        if blk.avail {
+            blk.avail = false;
+            return Ok(idx);
+        }
+    }
+    Err(())
+}
+
 pub fn mediated_blk_list_get(idx: usize) -> MediatedBlk {
     let list = MEDIATED_BLK_LIST.lock();
     list[idx].clone()
@@ -35,6 +47,7 @@ pub fn mediated_blk_list_get_from_pa(pa: usize) -> Option<MediatedBlk> {
 #[derive(Clone)]
 pub struct MediatedBlk {
     base_addr: usize,
+    avail: bool, // mediated blk will not be removed after append
 }
 
 impl MediatedBlk {
@@ -124,7 +137,10 @@ pub fn mediated_dev_init() {
 pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     let vm = active_vm().unwrap();
     let blk_pa = vm_ipa2pa(vm.clone(), mmio_ipa);
-    let mediated_blk = MediatedBlk { base_addr: blk_pa };
+    let mediated_blk = MediatedBlk {
+        base_addr: blk_pa,
+        avail: true,
+    };
     mediated_blk.set_nreq(0);
 
     let cache_pa = vm_ipa2pa(vm.clone(), mediated_blk.cache_ipa());

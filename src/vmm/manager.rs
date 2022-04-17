@@ -82,23 +82,6 @@ pub fn vmm_init_vm(vm_id: usize) {
     if current_cpu().id == 0 {
         if vm_id == 0 {
             panic!("not support boot for vm0");
-        } else {
-            match vm_cfg_entry(vm_id) {
-                Some(_) => {
-                    println!("vmm_init_vm: VM {} config exists", vm_id);
-                }
-                None => {
-                    // Hard Code for Guest VM config, not recommended.
-                    panic!("vmm_init_vm: vm{} not exit", vm_id);
-                    // if vm_id == 1 {
-                    //     println!("vmm_init_vm: init_tmp_config_for_vm1");
-                    //     init_tmp_config_for_vm1();
-                    // } else if vm_id == 2 {
-                    //     println!("vmm_init_vm: init_tmp_config_for_vm2");
-                    //     init_tmp_config_for_vm2();
-                    // }
-                }
-            };
         }
 
         vmm_set_up_vm(vm_id);

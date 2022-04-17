@@ -6,10 +6,10 @@ use spin::Mutex;
 
 use crate::board::*;
 // use crate::board::*;
-use crate::device::EmuDeviceType;
+use crate::device::{EmuDeviceType, mediated_blk_request};
 use crate::kernel::{active_vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
-use crate::lib::{BitAlloc, BitAlloc16, BitMap, FlexBitmap, memcpy_safe};
+use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
 
 pub const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;
@@ -672,7 +672,6 @@ pub fn vm_cfg_add_emu_dev(
         cfg_list_pa as *mut u8,
         CFG_MAX_NUM * 8, // sizeof(usize) / sizeof(u8)
     );
-    let med_blk_index = cfg_list[0];
 
     println!(
         concat!(
@@ -711,6 +710,10 @@ pub fn vm_cfg_add_emu_dev(
 
     // Set GVM Mediated Blk Index Here.
     if emu_dev_type == EmuDeviceType::EmuDeviceTVirtioBlkMediated {
+        let med_blk_index = match mediated_blk_request() {
+            Ok(idx) => idx,
+            Err(_) => panic!("no more medaited blk for vm {}", vmid),
+        };
         vm_cfg.set_mediated_block_index(med_blk_index);
     }
 

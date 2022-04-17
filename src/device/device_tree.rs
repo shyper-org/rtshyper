@@ -77,12 +77,7 @@ pub fn create_fdt(config: VmConfigEntry) -> Result<Vec<u8>, Error> {
     create_memory_node(&mut fdt, config.clone())?;
     create_timer_node(&mut fdt, 0x8)?;
     // todo: fix create_chosen_node size
-    create_chosen_node(
-        &mut fdt,
-        &config.cmdline,
-        config.ramdisk_load_ipa(),
-        CPIO_RAMDISK.len(),
-    )?;
+    create_chosen_node(&mut fdt, &config.cmdline, config.ramdisk_load_ipa(), CPIO_RAMDISK.len())?;
     create_cpu_node(&mut fdt, config.clone())?;
     if config.dtb_device_list().len() > 0 {
         create_serial_node(&mut fdt, &config.dtb_device_list())?;
