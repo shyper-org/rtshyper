@@ -535,11 +535,13 @@ pub fn vm_cfg_add_vm(
         return Err(());
     }
     let vm_name_u8 = vec![0 as u8; vm_name_length];
-    memcpy_safe(
-        &vm_name_u8[0] as *const _ as *const u8,
-        vm_name_pa as *mut u8,
-        vm_name_length,
-    );
+    if vm_name_length > 0 {
+        memcpy_safe(
+            &vm_name_u8[0] as *const _ as *const u8,
+            vm_name_pa as *mut u8,
+            vm_name_length,
+        );
+    }
 
     let vm_name_str = match String::from_utf8(vm_name_u8.clone()) {
         Ok(_str) => _str,
@@ -556,11 +558,13 @@ pub fn vm_cfg_add_vm(
         return Err(());
     }
     let cmdline_u8 = vec![0 as u8; cmdline_length];
-    memcpy_safe(
-        &cmdline_u8[0] as *const _ as *const u8,
-        cmdline_ipa as *mut u8,
-        cmdline_length,
-    );
+    if cmdline_length > 0 {
+        memcpy_safe(
+            &cmdline_u8[0] as *const _ as *const u8,
+            cmdline_ipa as *mut u8,
+            cmdline_length,
+        );
+    }
     let cmdline_str = match String::from_utf8(cmdline_u8.clone()) {
         Ok(_str) => _str,
         Err(error) => {
@@ -570,10 +574,10 @@ pub fn vm_cfg_add_vm(
     };
 
     // Generate a new VM config entry.
-    let new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
+    let mut new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
-    println!("      cmdline is \"{:?}\"", new_vm_cfg.cmdline.clone());
+    println!("      cmdline is [{:?}]", new_vm_cfg.cmdline.clone());
     vm_cfg_add_vm_entry(new_vm_cfg)
 }
 
@@ -750,11 +754,13 @@ pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irq
         return Err(());
     }
     let mut irqs = vec![0 as usize, irqs_length];
-    memcpy_safe(
-        &irqs[0] as *const _ as *const u8,
-        irqs_base_pa as *mut u8,
-        irqs_length * 8, // sizeof(usize) / sizeof(u8)
-    );
+    if irqs_length > 0 {
+        memcpy_safe(
+            &irqs[0] as *const _ as *const u8,
+            irqs_base_pa as *mut u8,
+            irqs_length * 8, // sizeof(usize) / sizeof(u8)
+        );
+    }
     println!("      irqs {:?}", irqs);
 
     let vm_cfg = match vm_cfg_entry(vmid) {
@@ -783,11 +789,13 @@ pub fn vm_cfg_add_passthrough_device_streams_ids(
         return Err(());
     }
     let mut streams_ids = vec![0 as usize, streams_ids_length];
-    memcpy_safe(
-        &streams_ids[0] as *const _ as *const u8,
-        streams_ids_base_pa as *mut u8,
-        streams_ids_length * 8, // sizeof(usize) / sizeof(u8)
-    );
+    if streams_ids_length > 0 {
+        memcpy_safe(
+            &streams_ids[0] as *const _ as *const u8,
+            streams_ids_base_pa as *mut u8,
+            streams_ids_length * 8, // sizeof(usize) / sizeof(u8)
+        );
+    }
     println!("      get streams_ids {:?}", streams_ids);
 
     let vm_cfg = match vm_cfg_entry(vmid) {
