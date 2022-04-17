@@ -275,13 +275,12 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_INIT_VM => {
-            // TODO: vm_id = 2 is hard code
-            vmm_init_vm(2);
-            let vm = vm(2).unwrap();
+            println!("migrate init vm {}", x0);
+            vmm_init_vm(x0);
+            let vm = vm(x0).unwrap();
             map_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
             vm.context_vm_migrate_init();
-            // Ok(new vm id), 2 is hard code
-            Ok(2)
+            Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_VM_BOOT => {
             println!("migrate boot vm {}", x0);
