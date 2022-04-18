@@ -397,7 +397,7 @@ pub fn vmm_setup_config(vm_id: usize) {
     if !vmm_init_passthrough_device(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_passthrough_device failed");
     }
-    add_async_used_info();
+    add_async_used_info(vm_id);
     println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }
 

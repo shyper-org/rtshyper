@@ -1,14 +1,18 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use alloc::collections::BTreeMap;
 
 use cortex_a::asm::ret;
 use spin::Mutex;
 
 use crate::config::vm_num;
 use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
+    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler,
+    VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, vm_if_list_get_cpu_id};
+use crate::kernel::{
+    current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, vm_if_list_get_cpu_id,
+};
 use crate::kernel::interrupt_vm_inject;
 use crate::lib::memcpy_safe;
 
@@ -80,7 +84,7 @@ impl Task {
     }
 }
 
-static MEDIATED_USED_INFO_LIST: Mutex<Vec<Vec<UsedInfo>>> = Mutex::new(vec![]);
+static MEDIATED_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::new(BTreeMap::new());
 static MEDIATED_IPI_TASK_LIST: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 static MEDIATED_IO_TASK_LIST: Mutex<Vec<Task>> = Mutex::new(Vec::new());
 
@@ -135,11 +139,7 @@ pub fn finish_task(ipi: bool) {
     let mut ipi_list = MEDIATED_IPI_TASK_LIST.lock();
     let mut io_list = MEDIATED_IO_TASK_LIST.lock();
 
-    let task_finish = if ipi {
-        ipi_list.remove(0)
-    } else {
-        io_list.remove(0)
-    };
+    let task_finish = if ipi { ipi_list.remove(0) } else { io_list.remove(0) };
 
     let task_next = if !ipi_list.is_empty() {
         Some(ipi_list[0].clone())
@@ -161,7 +161,11 @@ pub fn finish_task(ipi: bool) {
                 let msg = IpiMediatedNotifyMsg {
                     vm_id: task_msg.src_vmid,
                 };
-                ipi_send_msg(target_id, IpiType::IpiTMediatedNotify, IpiInnerMsg::MediatedNotifyMsg(msg));
+                ipi_send_msg(
+                    target_id,
+                    IpiType::IpiTMediatedNotify,
+                    IpiInnerMsg::MediatedNotifyMsg(msg),
+                );
             } else {
                 // println!("inject blk irq to vm {}", task_msg.src_vmid);
                 let vm = vm(task_msg.src_vmid).unwrap();
@@ -203,20 +207,27 @@ pub fn last_vm_io_task(vm_id: usize) -> bool {
 
 pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
     let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
-    if src_vmid >= used_info_list.len() {
-        println!("push_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());
-        return;
+    match used_info_list.get_mut(&src_vmid) {
+        Some(info_list) => {
+            info_list.push(UsedInfo {
+                desc_chain_head_idx,
+                used_len,
+            });
+        }
+        None => {
+            println!("sync_push_used_info: src_vmid {} not existed", src_vmid);
+        }
     }
-    used_info_list[src_vmid].push(UsedInfo {
-        desc_chain_head_idx,
-        used_len,
-    });
 }
 
 pub fn handle_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = MEDIATED_USED_INFO_LIST.lock();
     if src_vmid >= used_info_list.len() {
-        println!("handle_used_info: src_vmid {} larger than list size {}", src_vmid, used_info_list.len());
+        println!(
+            "sync_handle_used_info: src_vmid {} larger than list size {}",
+            src_vmid,
+            used_info_list.len()
+        );
         return;
     }
     let vq_size = vq.num();
@@ -237,17 +248,17 @@ pub fn init_mediated_used_info() {
 }
 
 pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
-    if let Task::MediatedIoTask(io_task_src) = src_task
-    {
+    if let Task::MediatedIoTask(io_task_src) = src_task {
         if let Task::MediatedIoTask(io_task_des) = des_task {
             let des_vm = vm(io_task_des.src_vmid).unwrap();
             let mediated_blk = mediated_blk_list_get(des_vm.med_blk_id());
 
-            if io_task_des.src_vmid == io_task_src.src_vmid &&
-                io_task_des.sector + io_task_des.count == io_task_src.sector &&
-                io_task_des.count + io_task_src.count < mediated_blk.dma_block_max() &&
-                io_task_des.io_type == io_task_src.io_type &&
-                io_task_des.blk_id == io_task_src.blk_id {
+            if io_task_des.src_vmid == io_task_src.src_vmid
+                && io_task_des.sector + io_task_des.count == io_task_src.sector
+                && io_task_des.count + io_task_src.count < mediated_blk.dma_block_max()
+                && io_task_des.io_type == io_task_src.io_type
+                && io_task_des.blk_id == io_task_src.blk_id
+            {
                 let mut iov_list = Vec::new();
                 for iov in &*io_task_des.iov_list {
                     iov_list.push(iov.clone());
@@ -255,18 +266,16 @@ pub fn merge_io_task(des_task: Task, src_task: Task) -> Option<Task> {
                 for iov in &*io_task_src.iov_list {
                     iov_list.push(iov.clone());
                 }
-                return Some(
-                    Task::MediatedIoTask(IoMediatedMsg {
-                        src_vmid: io_task_des.src_vmid,
-                        vq: io_task_des.vq.clone(),
-                        io_type: io_task_des.io_type,
-                        blk_id: io_task_des.blk_id,
-                        sector: io_task_des.sector,
-                        count: io_task_des.count + io_task_src.count,
-                        cache: io_task_des.cache,
-                        iov_list: Arc::new(iov_list),
-                    })
-                );
+                return Some(Task::MediatedIoTask(IoMediatedMsg {
+                    src_vmid: io_task_des.src_vmid,
+                    vq: io_task_des.vq.clone(),
+                    io_type: io_task_des.io_type,
+                    blk_id: io_task_des.blk_id,
+                    sector: io_task_des.sector,
+                    count: io_task_des.count + io_task_src.count,
+                    cache: io_task_des.cache,
+                    iov_list: Arc::new(iov_list),
+                }));
             }
         } else {
             panic!("merge_io_task: des task is not an io task");

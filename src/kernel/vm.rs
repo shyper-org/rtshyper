@@ -812,10 +812,10 @@ pub fn push_vm(id: usize) -> Result<(), ()> {
 
 pub fn vm(id: usize) -> Option<Vm> {
     let vm_list = VM_LIST.lock();
-    if vm_list.get(id).is_none() {
-        return None;
-    } else {
-        return Some(vm_list[id].clone());
+    let vm_ref = vm_list.iter().find(|&x| x.id() == id);
+    match vm_ref {
+        None => None,
+        Some(vm) => Some(vm.clone()),
     }
 }
 

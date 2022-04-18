@@ -1,6 +1,7 @@
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use alloc::collections::BTreeMap;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::Context;
@@ -70,7 +71,7 @@ pub struct IoAsyncMsg {
 
 static ASYNC_IPI_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
 static ASYNC_IO_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
-static ASYNC_USED_INFO_LIST: Mutex<Vec<Vec<UsedInfo>>> = Mutex::new(vec![]);
+static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::new(BTreeMap::new());
 
 #[derive(Clone)]
 pub enum AsyncTaskData {
@@ -320,38 +321,36 @@ pub fn last_vm_async_io_task(vm_id: usize) -> bool {
 
 pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    if src_vmid >= used_info_list.len() {
-        println!(
-            "push_used_info: src_vmid {} larger than list size {}",
-            src_vmid,
-            used_info_list.len()
-        );
-        return;
+    match used_info_list.get_mut(&src_vmid) {
+        Some(info_list) => {
+            info_list.push(UsedInfo {
+                desc_chain_head_idx,
+                used_len,
+            });
+        }
+        None => {
+            println!("async_push_used_info: src_vmid {} not existed", src_vmid);
+        }
     }
-    used_info_list[src_vmid].push(UsedInfo {
-        desc_chain_head_idx,
-        used_len,
-    });
 }
 
 pub fn update_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    if src_vmid >= used_info_list.len() {
-        println!(
-            "handle_used_info: src_vmid {} larger than list size {}",
-            src_vmid,
-            used_info_list.len()
-        );
-        return;
+    match used_info_list.get_mut(&src_vmid) {
+        Some(info_list) => {
+            let vq_size = vq.num();
+            for info in info_list.iter() {
+                vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
+            }
+            info_list.clear();
+        }
+        None => {
+            println!("async_push_used_info: src_vmid {} not existed", src_vmid);
+        }
     }
-    let vq_size = vq.num();
-    for info in &*used_info_list[src_vmid] {
-        vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
-    }
-    used_info_list[src_vmid].clear();
 }
 
-pub fn add_async_used_info() {
+pub fn add_async_used_info(vm_id: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    used_info_list.push(Vec::new());
+    used_info_list.insert(vm_id,Vec::new());
 }

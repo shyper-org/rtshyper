@@ -710,7 +710,10 @@ pub fn vm_cfg_add_emu_dev(
     if emu_dev_type == EmuDeviceType::EmuDeviceTVirtioBlkMediated {
         let med_blk_index = match mediated_blk_request() {
             Ok(idx) => idx,
-            Err(_) => panic!("no more medaited blk for vm {}", vmid),
+            Err(_) => {
+                println!("no more medaited blk for vm {}", vmid);
+                return Err(())
+            }
         };
         vm_cfg.set_mediated_block_index(med_blk_index);
     }
@@ -1078,7 +1081,7 @@ pub fn init_tmp_config_for_vm1() {
         irq_id: 32 + 0x10,
         // cfg_list: vec![DISK_PARTITION_2_START, DISK_PARTITION_2_SIZE],
         // cfg_list: vec![0, 8388608],
-        // cfg_list: vec![0, 67108864], // 32G
+        // cfg_list: vec![0, 67108864i], // 32G
         cfg_list: vec![0, 209715200], // 100G
         emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
         mediated: true,
