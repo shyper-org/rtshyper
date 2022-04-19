@@ -12,7 +12,6 @@ use super::AllocError;
 const TOTAL_MEM_REGION_MAX: usize = 16;
 
 pub struct MemRegion {
-    pub idx: usize,
     pub base: usize,
     pub size: usize,
     pub free: usize,
@@ -22,7 +21,6 @@ pub struct MemRegion {
 impl MemRegion {
     pub const fn new() -> MemRegion {
         MemRegion {
-            idx: 0,
             base: 0,
             size: 0,
             free: 0,
@@ -30,8 +28,7 @@ impl MemRegion {
         }
     }
 
-    pub fn init(&mut self, idx: usize, base: usize, size: usize, free: usize, last: usize) {
-        self.idx = idx;
+    pub fn init(&mut self, base: usize, size: usize, free: usize, last: usize) {
         self.base = base;
         self.size = size;
         self.free = free;
@@ -45,8 +42,8 @@ pub struct HeapRegion {
 }
 
 impl HeapRegion {
-    pub fn region_init(&mut self, idx: usize, base: usize, size: usize, free: usize, last: usize) {
-        self.region.init(idx, base, size, free, last);
+    pub fn region_init(&mut self, base: usize, size: usize, free: usize, last: usize) {
+        self.region.init(base, size, free, last);
     }
 
     pub fn alloc_page(&mut self) -> Result<PageFrame, AllocError> {

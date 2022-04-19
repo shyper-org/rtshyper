@@ -38,7 +38,7 @@ fn mem_heap_region_init() {
     // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
 
     let mut heap_lock = HEAPREGION.lock();
-    (*heap_lock).region_init(0, base, size, size, 0);
+    (*heap_lock).region_init(base, size, size, 0);
 
     drop(heap_lock);
 
@@ -68,7 +68,6 @@ fn mem_vm_region_init() {
     for i in 0..vm_region_num {
         let mut mem_region = MemRegion::new();
         mem_region.init(
-            i,
             PLAT_DESC.mem_desc.regions[i + 1].base,
             PLAT_DESC.mem_desc.regions[i + 1].size / PAGE_SIZE,
             PLAT_DESC.mem_desc.regions[i + 1].size / PAGE_SIZE,
@@ -141,12 +140,61 @@ pub fn mem_vm_region_alloc(size: usize) -> usize {
     let mut vm_region = VMREGION.lock();
     for i in 0..vm_region.region.len() {
         if vm_region.region[i].free >= size / PAGE_SIZE {
-            let start_addr = vm_region.region[i].base + vm_region.region[i].last * PAGE_SIZE;
-            vm_region.region[i].last += size / PAGE_SIZE;
-            vm_region.region[i].free -= size / PAGE_SIZE;
+            let start_addr = vm_region.region[i].base;
+            let region_size = vm_region.region[i].size;
+            if vm_region.region[i].size > size / PAGE_SIZE {
+                vm_region.push(MemRegion {
+                    base: start_addr + size,
+                    size: region_size - size / PAGE_SIZE,
+                    free: region_size - size / PAGE_SIZE,
+                    last: 0, // never use in vm mem region
+                });
+                vm_region.region[i].size = size / PAGE_SIZE;
+            }
+            vm_region.region[i].free = 0;
+
             return start_addr;
         }
     }
 
     0
+}
+
+pub fn mem_vm_region_free(start: usize, size: usize) {
+    let mut vm_region = VMREGION.lock();
+    let mut free_idx = None;
+    // free mem region
+    for (idx, region) in vm_region.region.iter_mut().enumerate() {
+        if start == region.base && region.free == 0 {
+            region.free += size / PAGE_SIZE;
+            free_idx = Some(idx);
+            break;
+        }
+    }
+    // merge mem region
+    while free_idx.is_some() {
+        let merge_idx = free_idx.unwrap();
+        let base = vm_region.region[merge_idx].base;
+        let size = vm_region.region[merge_idx].size;
+        free_idx = None;
+        for (idx, region) in vm_region.region.iter_mut().enumerate() {
+            if region.free != 0 && base == region.base + region.size * PAGE_SIZE {
+                // merge free region into curent region
+                region.size += size;
+                region.free += size;
+                free_idx = Some(if idx < merge_idx { idx } else { idx - 1 });
+                vm_region.region.remove(merge_idx);
+                break;
+            } else if region.free != 0 && base + size * PAGE_SIZE == region.base {
+                // merge curent region into free region
+                let size = region.size;
+                vm_region.region[merge_idx].size += size;
+                vm_region.region[merge_idx].free += size;
+                free_idx = Some(if merge_idx < idx { merge_idx } else { merge_idx - 1 });
+                vm_region.region.remove(idx);
+                break;
+            }
+        }
+    }
+    println!("Free mem from pa 0x{:x} to 0x{:x}", start, start + size);
 }

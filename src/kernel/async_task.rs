@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::collections::BTreeMap;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::Context;
@@ -14,7 +14,7 @@ use crate::device::{
     VIRTIO_BLK_T_OUT, Virtq,
 };
 use crate::kernel::{
-    current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
+    current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, Vm,
     vm_if_get_cpu_id,
 };
 use crate::lib::{memcpy_safe, trace};
@@ -297,8 +297,14 @@ pub fn finish_async_task(ipi: bool) {
                         IpiInnerMsg::MediatedNotifyMsg(msg),
                     );
                 } else {
-                    let vm = vm(task.src_vmid).unwrap();
-                    interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
+                    match vm(task.src_vmid) {
+                        None => {
+                            println!("finish_async_task: vm[{}] no exist", task.src_vmid);
+                        }
+                        Some(vm) => {
+                            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
+                        }
+                    }
                 }
             }
         }
@@ -352,5 +358,11 @@ pub fn update_used_info(vq: Virtq, src_vmid: usize) {
 
 pub fn add_async_used_info(vm_id: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    used_info_list.insert(vm_id,Vec::new());
+    used_info_list.insert(vm_id, Vec::new());
+}
+
+pub fn remove_async_used_info(vm_id: usize) {
+    let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
+    used_info_list.remove(&vm_id);
+    println!("VM[{}] remove async used info", vm_id);
 }

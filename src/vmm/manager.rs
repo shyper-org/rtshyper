@@ -10,8 +10,8 @@ use crate::config::vm_cfg_entry;
 use crate::config::vm_type;
 use crate::device::create_fdt;
 use crate::kernel::{
-    active_vcpu_id, active_vm, current_cpu, vcpu_run, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg,
-    vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
+    active_vcpu_id, active_vm, cpu_idle, current_cpu, timer_enable, vcpu_run, vm, Vm, vm_if_get_state, vm_if_reset,
+    vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -24,6 +24,7 @@ pub enum VmmEvent {
     VmmReboot,
     VmmShutdown,
     VmmAssignCpu,
+    VmmRemoveCpu,
 }
 
 pub fn vmm_shutdown_secondary_vm() {
@@ -290,6 +291,13 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
                     vmm.vmid
                 );
                 vmm_assign_vcpu(vmm.vmid);
+            }
+            VmmEvent::VmmRemoveCpu => {
+                current_cpu().vcpu_pool().remove_vcpu(vmm.vmid);
+                if current_cpu().vcpu_pool().running() == 0 {
+                    gicc_clear_current_irq(true);
+                    cpu_idle();
+                }
             }
             _ => {
                 todo!();

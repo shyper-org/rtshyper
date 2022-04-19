@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::board::*;
 // use crate::board::*;
-use crate::device::{EmuDeviceType, mediated_blk_request};
+use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
@@ -517,6 +517,26 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
     }
 }
 
+pub fn vm_cfg_remove_vm_entry(vm_id: usize) {
+    let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
+    for (idx, vm_cfg_entry) in vm_config.entries.iter().enumerate() {
+        if vm_cfg_entry.id == vm_id {
+            vm_config.vm_num -= 1;
+            vm_config.remove_vm_id(vm_id);
+            match vm_config.entries[idx].mediated_block_index() {
+                None => {}
+                Some(block_idx) => {
+                    mediated_blk_free(block_idx);
+                }
+            }
+            vm_config.entries.remove(idx);
+            println!("remove VM[{}] config from vm-config-table", vm_id);
+            return;
+        }
+    }
+    println!("VM[{}] config not found in vm-config-table", vm_id);
+}
+
 /* Generate a new VM Config Entry, set basic value */
 pub fn vm_cfg_add_vm(
     vm_name_ipa: usize,
@@ -712,7 +732,7 @@ pub fn vm_cfg_add_emu_dev(
             Ok(idx) => idx,
             Err(_) => {
                 println!("no more medaited blk for vm {}", vmid);
-                return Err(())
+                return Err(());
             }
         };
         vm_cfg.set_mediated_block_index(med_blk_index);

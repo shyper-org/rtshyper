@@ -14,7 +14,7 @@ use crate::kernel::{
     vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
 use crate::lib::{memcpy_safe, trace};
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_vm, vmm_list_vm};
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_vm, vmm_list_vm, vmm_remove_vm};
 
 static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
@@ -60,7 +60,7 @@ pub const HVC_VMM_MIGRATE_FINISH: usize = 13;
 // for receiver: init new vm but not boot
 pub const HVC_VMM_MIGRATE_INIT_VM: usize = 14;
 pub const HVC_VMM_MIGRATE_VM_BOOT: usize = 15;
-pub const HVC_VMM_MIGRATE_VM_REMOVE: usize = 16;
+pub const HVC_VMM_VM_REMOVE: usize = 16;
 
 // hvc_ivc_event
 pub const HVC_IVC_UPDATE_MQ: usize = 0;
@@ -207,9 +207,7 @@ fn hvc_sys_handler(event: usize, x0: usize) -> bool {
 
 fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     match event {
-        HVC_VMM_LIST_VM => {
-            vmm_list_vm(x0)
-        }
+        HVC_VMM_LIST_VM => vmm_list_vm(x0),
         HVC_VMM_GET_VM_STATE => {
             todo!();
             Ok(HVC_FINISH)
@@ -288,8 +286,9 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             vmm_boot_vm(x0);
             Ok(HVC_FINISH)
         }
-        HVC_VMM_MIGRATE_VM_REMOVE => {
-            println!("migrate remove vm {}", x0);
+        HVC_VMM_VM_REMOVE => {
+            println!("remove vm {}", x0);
+            vmm_remove_vm(x0);
             Ok(HVC_FINISH)
         }
         _ => {

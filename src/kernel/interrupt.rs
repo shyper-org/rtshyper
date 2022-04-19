@@ -108,6 +108,12 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     true
 }
 
+pub fn interrupt_vm_remove(vm: Vm, id: usize) {
+    let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
+    // vgic and vm will be removed with struct vm
+    glb_bitmap_lock.clear(id);
+}
+
 pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
     if vcpu.phys_id() != current_cpu().id {
         println!(

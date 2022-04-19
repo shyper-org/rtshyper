@@ -29,6 +29,11 @@ pub fn mediated_blk_request() -> Result<usize, ()> {
     Err(())
 }
 
+pub fn mediated_blk_free(idx: usize) {
+    let mut list = MEDIATED_BLK_LIST.lock();
+    list[idx].avail = true;
+}
+
 pub fn mediated_blk_list_get(idx: usize) -> MediatedBlk {
     let list = MEDIATED_BLK_LIST.lock();
     list[idx].clone()

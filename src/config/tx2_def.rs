@@ -206,8 +206,8 @@ pub fn mvm_config_init() {
         name: Some(String::from("privileged")),
         os_type: VmType::VmTOs,
         cmdline:
-        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
@@ -217,10 +217,10 @@ pub fn mvm_config_init() {
             ramdisk_load_ipa: 0,
             mediated_block_index: None,
         })),
-        memory: Arc::new(Mutex::new(VmMemoryConfig{
+        memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
         })),
-        cpu: Arc::new(Mutex::new(VmCpuConfig{
+        cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0001,
             master: 0,

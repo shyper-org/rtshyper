@@ -136,19 +136,17 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         // );
         // // END QEMU
         #[cfg(feature = "tx2")]
-            {
-                let offset = config.device_tree_load_ipa()
-                    - config.memory_region()[0].ipa_start;
-                unsafe {
-                    let src = SYSTEM_FDT.get().unwrap();
-                    let len = src.len();
-                    let dst =
-                        core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                    dst.clone_from_slice(&src);
-                }
-                println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-                vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        {
+            let offset = config.device_tree_load_ipa() - config.memory_region()[0].ipa_start;
+            unsafe {
+                let src = SYSTEM_FDT.get().unwrap();
+                let len = src.len();
+                let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
+                dst.clone_from_slice(&src);
             }
+            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        }
     } else {
         println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
     }
@@ -355,7 +353,12 @@ pub fn vmm_setup_config(vm_id: usize) {
         }
     };
 
-    println!("vmm_setup_config VM[{}] name {:?} current core {}", vm_id, config.name.clone().unwrap(), current_cpu().id);
+    println!(
+        "vmm_setup_config VM[{}] name {:?} current core {}",
+        vm_id,
+        config.name.clone().unwrap(),
+        current_cpu().id
+    );
 
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
@@ -372,13 +375,8 @@ pub fn vmm_setup_config(vm_id: usize) {
             // Init GVM dtb.
             match create_fdt(config.clone()) {
                 Ok(dtb) => {
-                    let offset = config.device_tree_load_ipa()
-                        - vm.config().memory_region()[0].ipa_start;
-                    crate::lib::memcpy_safe(
-                        (vm.pa_start(0) + offset) as *const u8,
-                        dtb.as_ptr(),
-                        dtb.len(),
-                    );
+                    let offset = config.device_tree_load_ipa() - vm.config().memory_region()[0].ipa_start;
+                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
@@ -500,7 +498,8 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             vcpu.set_phys_id(cpu_id);
             if let Some(mvm) = vcpu.vm() {
                 if mvm.id() == 0 {
-                    current_cpu().set_active_vcpu(vcpu.clone());
+                    vcpu_pool.set_active_vcpu(i);
+                    current_cpu().set_active_vcpu(Some(vcpu.clone()));
                 }
             }
             println!("core {} i {} vcpu_num {} arch_reset", cpu_id, i, vcpu_pool.vcpu_num());
@@ -531,7 +530,6 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     }
     // barrier();
 }
-
 
 /* Generate VM structure and push it to VM.
  *

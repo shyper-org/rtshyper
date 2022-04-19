@@ -177,9 +177,14 @@ impl Cpu {
         }
     }
 
-    pub fn set_active_vcpu(&mut self, vcpu: Vcpu) {
-        vcpu.set_state(VcpuState::VcpuAct);
-        self.active_vcpu = Some(vcpu);
+    pub fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
+        self.active_vcpu = active_vcpu.clone();
+        match active_vcpu {
+            None => {}
+            Some(vcpu) => {
+                vcpu.set_state(VcpuState::VcpuAct);
+            }
+        }
     }
 }
 

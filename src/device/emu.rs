@@ -112,3 +112,17 @@ pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize
         handler,
     });
 }
+
+pub fn emu_remove_dev(vm_id: usize, dev_id: usize, address: usize, size: usize) {
+    let mut emu_devs_list = EMU_DEVS_LIST.lock();
+    for (idx, emu_dev) in emu_devs_list.iter().enumerate() {
+        if vm_id == emu_dev.vm_id && emu_dev.ipa == address && emu_dev.id == dev_id && emu_dev.size == size {
+            emu_devs_list.remove(idx);
+            return;
+        }
+    }
+    panic!(
+        "emu_remove_dev: emu dev not exist address 0x{:x} size 0x{:x}",
+        address, size
+    );
+}

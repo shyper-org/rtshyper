@@ -408,6 +408,17 @@ pub fn vcpu_alloc() -> Option<Vcpu> {
     Some(val.clone())
 }
 
+pub fn vcpu_remove(vcpu: Vcpu) {
+    let mut vcpu_list = VCPU_LIST.lock();
+    for (idx, core) in vcpu_list.iter().enumerate() {
+        if core.id() == vcpu.id() && core.vm_id() == vcpu.vm_id() {
+            vcpu_list.remove(idx);
+            return;
+        }
+    }
+    panic!("illegal vm{} vcpu{}, not exist in vcpu_list", vcpu.vm_id(), vcpu.id());
+}
+
 pub fn vcpu_idle(_vcpu: Vcpu) {
     loop {
         unsafe {

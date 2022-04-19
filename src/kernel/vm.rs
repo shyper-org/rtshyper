@@ -29,6 +29,11 @@ pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
 ];
 
+pub fn vm_if_reset(vm_id: usize) {
+    let mut vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.reset();
+}
+
 pub fn vm_if_set_state(vm_id: usize, vm_state: VmState) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.state = vm_state;
@@ -58,6 +63,7 @@ pub fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     );
 }
 
+// todo: rewrite return val to Option<usize>
 pub fn vm_if_get_cpu_id(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id
@@ -195,6 +201,17 @@ impl VmInterface {
             mem_map_cache: None,
         }
     }
+
+    fn reset(&mut self) {
+        self.master_cpu_id = 0;
+        self.state = VmState::VmPending;
+        self.vm_type = VmType::VmTBma;
+        self.mac = [0; 6];
+        self.ivc_arg = 0;
+        self.ivc_arg_ptr = 0;
+        self.mem_map = None;
+        self.mem_map_cache = None;
+    }
 }
 
 #[derive(Clone)]
@@ -305,6 +322,11 @@ impl Vm {
     pub fn push_vcpu(&self, vcpu: Vcpu) {
         let mut vm_inner = self.inner.lock();
         vm_inner.vcpu_list.push(vcpu);
+    }
+
+    pub fn clear_vcpu(&self) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.vcpu_list.clear();
     }
 
     pub fn set_has_master_cpu(&self, has_master: bool) {
@@ -808,6 +830,11 @@ pub fn push_vm(id: usize) -> Result<(), ()> {
     let vm = Vm::new(id);
     vm_list.push(vm);
     Ok(())
+}
+
+pub fn remove_vm(id: usize) -> Vm {
+    let mut vm_list = VM_LIST.lock();
+    vm_list.remove(id)
 }
 
 pub fn vm(id: usize) -> Option<Vm> {

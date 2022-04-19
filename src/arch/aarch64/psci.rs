@@ -149,7 +149,7 @@ fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
 
     current_cpu().vcpu_pool().add_running();
     if current_cpu().active_vcpu.is_none() {
-        current_cpu().set_active_vcpu(vcpu.clone());
+        current_cpu().set_active_vcpu(Some(vcpu.clone()));
     }
 
     match &current_cpu().sched {

@@ -3,8 +3,9 @@ use alloc::vec::Vec;
 
 use spin::mutex::Mutex;
 
+use crate::arch::interrupt_arch_enable;
 use crate::board::{PLAT_DESC, SchedRule};
-use crate::kernel::{active_vm_id, current_cpu, SchedType, SchedulerRR, Vcpu, VcpuState};
+use crate::kernel::{active_vm_id, current_cpu, SchedType, SchedulerRR, timer_enable, Vcpu, VcpuState};
 
 pub const VCPU_POOL_MAX: usize = 4;
 
@@ -46,7 +47,13 @@ impl VcpuPool {
     }
 
     pub fn next_vcpu_idx(&self) -> usize {
-        let pool = self.inner.lock();
+        let mut pool = self.inner.lock();
+        if pool.content.len() == 0 {
+            panic!("Core[{}] vcpu pool content len is 0", current_cpu().id);
+        }
+        if pool.active_idx >= pool.content.len() {
+            pool.active_idx = 0;
+        }
         for i in (pool.active_idx + 1)..pool.content.len() {
             match pool.content[i].vcpu.state() {
                 VcpuState::VcpuInv => {}
@@ -81,7 +88,7 @@ impl VcpuPool {
             panic!("illegal vcpu for cpu {}", current_cpu().id);
         }
 
-        // a new vcpu power on by psci will come here
+        // a new vcpu power on by psci will come here (current_vcpu same with next_vcpu)
         if current_cpu().active_vcpu.is_some() && next_vcpu.vm_id() == active_vm_id() {
             next_vcpu.context_vm_restore();
             return;
@@ -101,7 +108,7 @@ impl VcpuPool {
         }
 
         self.set_active_vcpu(idx);
-        current_cpu().set_active_vcpu(next_vcpu.clone());
+        current_cpu().set_active_vcpu(Some(next_vcpu.clone()));
 
         next_vcpu.context_vm_restore();
         next_vcpu.inject_int_inlist();
@@ -193,6 +200,45 @@ impl VcpuPool {
         pool.append_vcpu(vcpu.clone());
 
         true
+    }
+
+    pub fn remove_vcpu(&self, vm_id: usize) {
+        let mut pool = self.inner.lock();
+        for (idx, content) in pool.content.iter_mut().enumerate() {
+            if content.vcpu.vm_id() == vm_id {
+                pool.content.remove(idx);
+                pool.running -= 1;
+                let vcpu_num = pool.running;
+                if vcpu_num <= 1 {
+                    // no need for vcpu schedule
+                    timer_enable(false);
+                }
+                if vcpu_num == 0 {
+                    // hard code: remove el1 timer interrupt 27
+                    interrupt_arch_enable(27, false);
+                }
+
+                if idx < pool.active_idx && vcpu_num >= 1 {
+                    pool.active_idx -= 1;
+                } else if idx == pool.active_idx {
+                    // cpu.active_vcpu need remove
+                    current_cpu().set_active_vcpu(None);
+                    if vcpu_num > 1 {
+                        drop(pool);
+                        let idx = self.next_vcpu_idx();
+                        self.yield_vcpu(idx);
+                    }
+                }
+                println!(
+                    "Core[{}] remove VM[{}] vcpu, running vcpu num is {}",
+                    current_cpu().id,
+                    vm_id,
+                    vcpu_num
+                );
+                return;
+            }
+        }
+        panic!("no vcpu from vm{} exist in Core{} vcpu_pool", vm_id, current_cpu().id);
     }
 }
 

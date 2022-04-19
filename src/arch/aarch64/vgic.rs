@@ -2151,13 +2151,6 @@ pub fn emu_intc_init(vm: Vm, emu_dev_id: usize) {
     }
 
     vm.set_emu_devs(emu_dev_id, EmuDevs::Vgic(vgic.clone()));
-
-    // if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
-    //     panic!(
-    //         "emu_intc_init: failed to register ipi {}",
-    //         IpiType::IpiTIntc as usize
-    //     )
-    // }
 }
 
 pub fn partial_passthrough_intc_init(vm: Vm) {
