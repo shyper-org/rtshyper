@@ -6,10 +6,11 @@ use spin::Mutex;
 
 use crate::board::*;
 // use crate::board::*;
-use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
-use crate::kernel::{active_vm, vm_ipa2pa, VM_NUM_MAX, VmType};
+use crate::device::{EmuDeviceType,mediated_blk_free, mediated_blk_request};
+use crate::kernel::{active_vm, vm_ipa2pa, vm, VM_NUM_MAX, VmType, Vm};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
+use crate::vmm::vmm_init_gvm;
 
 pub const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;
@@ -112,6 +113,7 @@ impl VmMemoryConfig {
 pub struct VmImageConfig {
     pub kernel_img_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
+    pub kernel_load_pa: usize,
     pub kernel_entry_point: usize,
     // pub device_tree_filename: Option<&'static str>,
     pub device_tree_load_ipa: usize,
@@ -125,6 +127,7 @@ impl VmImageConfig {
         VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0,
+            kernel_load_pa: 0,
             kernel_entry_point: 0,
             // device_tree_filename: None,
             device_tree_load_ipa: 0,
@@ -137,6 +140,7 @@ impl VmImageConfig {
         VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa,
+            kernel_load_pa: 0,
             kernel_entry_point: kernel_load_ipa,
             // device_tree_filename: None,
             device_tree_load_ipa,
@@ -277,6 +281,16 @@ impl VmConfigEntry {
     pub fn kernel_load_ipa(&self) -> usize {
         let img_cfg = self.image.lock();
         img_cfg.kernel_load_ipa
+    }
+
+    pub fn set_kernel_load_pa(&mut self, kernel_load_pa: usize) {
+        let mut img_cfg = self.image.lock();
+        img_cfg.kernel_load_pa = kernel_load_pa
+    }
+
+    pub fn kernel_load_pa(&self) -> usize {
+        let img_cfg = self.image.lock();
+        img_cfg.kernel_load_pa
     }
 
     pub fn kernel_entry_point(&self) -> usize {
@@ -548,11 +562,6 @@ pub fn vm_cfg_add_vm(
     device_tree_load_ipa: usize,
 ) -> Result<usize, ()> {
     println!("\n\nStart to prepare configuration for new VM");
-    println!("vm_cfg_add_vm():");
-    println!(
-        "   vm_type {} kernel_load_ipa 0x{:x} device_tree_load_ipa 0x{:x}",
-        vm_type, kernel_load_ipa, device_tree_load_ipa
-    );
 
     // Copy VM name from user ipa.
     let vm_name_pa = vm_ipa2pa(active_vm().unwrap(), vm_name_ipa);
@@ -866,7 +875,7 @@ pub fn vm_cfg_add_dtb_dev(
         NAME_MAX_LEN,
     );
     let dtb_dev_name_str = match String::from_utf8(dtb_dev_name_u8.clone()) {
-        Ok(_str) => _str,
+        Ok(str) => str,
         Err(error) => {
             println!(
                 "error: {:?} in parsing the DTB device name {:?}",
@@ -919,10 +928,93 @@ pub fn vm_cfg_add_dtb_dev(
 
     vm_cfg.add_dtb_device(vm_dtb_dev);
 
-    println!(
-        "      vm_cfg_add_dtb_dev: current dtb dev num {}",
-        vm_cfg.dtb_device_list().len()
-    );
+    Ok(0)
+}
+
+/**
+ * Final Step for GVM configuration.
+ * Set up GVM configuration;
+ * Set VM kernel image load region;
+ */
+fn vm_cfg_finish_configuration(vmid: usize, img_size: usize) -> Vm {
+    // Set up GVM configuration.
+    vmm_init_gvm(vmid);
+
+    // Get VM structure.
+    let vm = match vm(vmid) {
+        None => {
+            panic!("vm_cfg_upload_kernel_image:failed to init VM[{}]", vmid);
+        }
+        Some(vm) => vm,
+    };
+
+    let mut config = vm.config();
+    let load_ipa = config.kernel_load_ipa();
+
+    // Find actual physical memory region according to kernel image ipa.
+    for (idx, region) in config.memory_region().iter().enumerate() {
+        if load_ipa < region.ipa_start || load_ipa + img_size > region.ipa_start + region.length {
+            continue;
+        }
+        let offset = load_ipa - region.ipa_start;
+        println!(
+            "VM [{}] {} kernel image region: ipa=<0x{:x}>, pa=<0x{:x}>, img_size=<{}KB>",
+            vm.id(),
+            config.vm_name(),
+            load_ipa,
+            vm.pa_start(idx) + offset,
+            img_size / 1024
+        );
+        config.set_kernel_load_pa(vm.pa_start(idx) + offset);
+    }
+    vm
+}
+
+/**
+ * Load kernel image file from MVM user space.
+ * It's the last step in GVM configuration.
+ */
+pub fn vm_cfg_upload_kernel_image(
+    vmid: usize,
+    img_size: usize,
+    cache_ipa: usize,
+    load_offset: usize,
+    load_size: usize,
+) -> Result<usize, ()> {
+    // Before upload kernel image, set GVM.
+    let vm = match vm(vmid) {
+        None => {
+            println!(
+                "\nSuccessfully add configuration file for VM [{}]\nStart to init...",
+                vmid
+            );
+            // This code should only run once.
+            vm_cfg_finish_configuration(vmid, img_size)
+        }
+        Some(vm) => vm,
+    };
+    let config = vm.config();
+
+    // Get cache pa.
+    let cache_pa = vm_ipa2pa(active_vm().unwrap(), cache_ipa);
+    if cache_pa == 0 {
+        println!("illegal cache ipa {:x}", cache_ipa);
+        return Err(());
+    }
+    let src = unsafe { core::slice::from_raw_parts_mut((cache_pa) as *mut u8, load_size) };
+
+    // Get kernel image load pa.
+    let load_pa = config.kernel_load_pa();
+    if load_pa == 0 {
+        println!(
+            "vm_cfg_upload_kernel_image: failed to get kernel image load pa of VM[{}]",
+            vmid
+        );
+        return Err(());
+    }
+    // Copy from user space.
+    let dst = unsafe { core::slice::from_raw_parts_mut((load_pa + load_offset) as *mut u8, load_size) };
+    dst.copy_from_slice(src);
     Ok(0)
 }
 
@@ -981,6 +1073,7 @@ pub fn init_tmp_config_for_bma1() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
+            kernel_load_pa: 0,
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
@@ -1058,6 +1151,7 @@ pub fn init_tmp_config_for_bma2() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
+            kernel_load_pa: 0,
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
@@ -1198,6 +1292,7 @@ pub fn init_tmp_config_for_vm1() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
+            kernel_load_pa: 0,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
@@ -1318,6 +1413,7 @@ pub fn init_tmp_config_for_vm2() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x80080000,
+            kernel_load_pa: 0,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,

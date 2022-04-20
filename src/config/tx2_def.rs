@@ -212,6 +212,7 @@ pub fn mvm_config_init() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x90080000,
+            kernel_load_pa: 0,
             kernel_entry_point: 0x90080000,
             device_tree_load_ipa: 0x90000000,
             ramdisk_load_ipa: 0,

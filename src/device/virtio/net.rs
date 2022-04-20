@@ -374,7 +374,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
             // println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
             return true;
         }
-        Some(_vm) => _vm,
+        Some(vm) => vm,
     };
     let nic = match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(x) => x,

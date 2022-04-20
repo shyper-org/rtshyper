@@ -14,7 +14,7 @@ use crate::kernel::{
     vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
 use crate::lib::{memcpy_safe, trace};
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_vm, vmm_list_vm, vmm_remove_vm};
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_gvm, vmm_list_vm, vmm_remove_vm};
 
 static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
@@ -81,6 +81,18 @@ pub const HVC_IVC_SEND_SHAREMEM_TEST_SPEED: usize = 0x12; //共享内存通信�
 pub const HVC_MEDIATED_DEV_APPEND: usize = 0x30;
 pub const HVC_MEDIATED_DEV_NOTIFY: usize = 0x31;
 pub const HVC_MEDIATED_DRV_NOTIFY: usize = 0x32;
+
+// hvc_config_event
+pub const HVC_CONFIG_ADD_VM: usize = 0;
+pub const HVC_CONFIG_DELETE_VM: usize = 1;
+pub const HVC_CONFIG_CPU: usize = 2;
+pub const HVC_CONFIG_MEMORY_REGION: usize = 3;
+pub const HVC_CONFIG_EMULATED_DEVICE: usize = 4;
+pub const HVC_CONFIG_PASSTHROUGH_DEVICE_REGION: usize = 5;
+pub const HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS: usize = 6;
+pub const HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS: usize = 7;
+pub const HVC_CONFIG_DTB_DEVICE: usize = 8;
+pub const HVC_CONFIG_UPLOAD_KERNEL_IMAGE: usize = 9;
 
 pub const HVC_IRQ: usize = 32 + 0x20;
 
@@ -175,25 +187,16 @@ fn hvc_config_handler(
     x6: usize,
 ) -> Result<usize, ()> {
     match event {
-        // HVC_CONFIG_ADD_VM
-        0 => vm_cfg_add_vm(x0, x1, x2, x3, x4, x5, x6),
-        // HVC_CONFIG_DELETE_VM
-        1 => vm_cfg_del_vm(x0),
-        // HVC_CONFIG_CPU
-        2 => vm_cfg_set_cpu(x0, x1, x2, x3),
-        // HVC_CONFIG_MEMORY_REGION
-        3 => vm_cfg_add_mem_region(x0, x1, x2),
-        // HVC_CONFIG_EMULATED_DEVICE
-        4 => vm_cfg_add_emu_dev(x0, x1, x2, x3, x4, x5, x6),
-        // HVC_CONFIG_PASSTHROUGH_DEVICE_REGION
-        5 => vm_cfg_add_passthrough_device_region(x0, x1, x2, x3),
-        // HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS
-        6 => vm_cfg_add_passthrough_device_irqs(x0, x1, x2),
-        // HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS
-        7 => vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2),
-        // HVC_CONFIG_DTB_DEVICE
-        8 => vm_cfg_add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
-        //
+        HVC_CONFIG_ADD_VM => vm_cfg_add_vm(x0, x1, x2, x3, x4, x5, x6),
+        HVC_CONFIG_DELETE_VM => vm_cfg_del_vm(x0),
+        HVC_CONFIG_CPU => vm_cfg_set_cpu(x0, x1, x2, x3),
+        HVC_CONFIG_MEMORY_REGION => vm_cfg_add_mem_region(x0, x1, x2),
+        HVC_CONFIG_EMULATED_DEVICE => vm_cfg_add_emu_dev(x0, x1, x2, x3, x4, x5, x6),
+        HVC_CONFIG_PASSTHROUGH_DEVICE_REGION => vm_cfg_add_passthrough_device_region(x0, x1, x2, x3),
+        HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS => vm_cfg_add_passthrough_device_irqs(x0, x1, x2),
+        HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS => vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2),
+        HVC_CONFIG_DTB_DEVICE => vm_cfg_add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
+        HVC_CONFIG_UPLOAD_KERNEL_IMAGE => vm_cfg_upload_kernel_image(x0,x1,x2,x3,x4),
         _ => {
             println!("hvc_config_handler unknown event {}", event);
             Err(())
@@ -213,7 +216,6 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_BOOT_VM => {
-            vmm_init_vm(x0);
             vmm_boot_vm(x0);
             Ok(HVC_FINISH)
         }
@@ -273,7 +275,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_MIGRATE_INIT_VM => {
             println!("migrate init vm {}", x0);
-            vmm_init_vm(x0);
+            vmm_init_gvm(x0);
             let vm = vm(x0).unwrap();
             map_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
             vm.context_vm_migrate_init();

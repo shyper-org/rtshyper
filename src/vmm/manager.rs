@@ -16,7 +16,7 @@ use crate::kernel::{
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::lib::memcpy_safe;
-use crate::vmm::{vmm_add_vm, vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
+use crate::vmm::{vmm_push_vm, vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
@@ -31,23 +31,30 @@ pub fn vmm_shutdown_secondary_vm() {
     println!("Shutting down all VMs...");
 }
 
-/* Set up VM structure and finish cpu assignment before set up VM config.
+/* Finish cpu assignment before set up VM config.
  * Only VM0 will go through this function.
  *
  * @param[in] vm_id: new added VM id.
  */
-pub fn vmm_set_up_vm(vm_id: usize) {
-    println!("vmm_set_up_vm: set up vm {} on cpu {}", vm_id, current_cpu().id);
-    vmm_add_vm(vm_id);
-
-    let vm = vm(vm_id).unwrap();
+pub fn vmm_set_up_cpu(vm_id: usize) {
+    println!("vmm_set_up_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
+    let vm = match vm(vm_id) {
+        None => {
+            panic!(
+                "vmm_set_up_cpu: on core {}, VM [{}] is not added yet",
+                current_cpu().id,
+                vm_id
+            );
+        }
+        Some(vm) => vm,
+    };
 
     let mut cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
     let mut target_cpu_id = 0;
     let mut cpu_num = 0;
     while cpu_allocate_bitmap != 0 && target_cpu_id < PLATFORM_CPU_NUM_MAX {
         if cpu_allocate_bitmap & 1 != 0 {
-            println!("vmm_set_up_vm: vm {} physical cpu id {}", vm_id, target_cpu_id);
+            println!("vmm_set_up_cpu: vm {} physical cpu id {}", vm_id, target_cpu_id);
             cpu_num += 1;
 
             let m = IpiVmmMsg {
@@ -56,7 +63,7 @@ pub fn vmm_set_up_vm(vm_id: usize) {
             };
             if target_cpu_id != current_cpu().id {
                 if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                    println!("vmm_set_up_vm: failed to send ipi to Core {}", target_cpu_id);
+                    println!("vmm_set_up_cpu: failed to send ipi to Core {}", target_cpu_id);
                 }
             } else {
                 vmm_assign_vcpu(vm_id);
@@ -66,50 +73,45 @@ pub fn vmm_set_up_vm(vm_id: usize) {
         target_cpu_id += 1;
     }
     println!(
-        "vmm_set_up_vm: vm {} total physical cpu num {} bitmap {:#b}",
+        "vmm_set_up_cpu: vm {} total physical cpu num {} bitmap {:#b}",
         vm_id,
         cpu_num,
         vm.config().cpu_allocated_bitmap()
     );
+
+    // Waiting till others set up.
+    loop {
+        println!(
+            "vmm_set_up_cpu: on core {},waiting VM [{}] to be set up",
+            current_cpu().id,
+            vm_id
+        );
+
+        if vm.ready() {
+            break;
+        }
+    }
 }
 
 /* Init VM before boot.
- * Only VM0 will go through this function.
+ * Only VM0 will call this function.
  *
  * @param[in] vm_id: target VM id to boot.
  */
-pub fn vmm_init_vm(vm_id: usize) {
+pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 {
         if vm_id == 0 {
             panic!("not support boot for vm0");
         }
 
-        vmm_set_up_vm(vm_id);
-        loop {
-            println!(
-                "vmm_boot_vm: on core {},waiting vm[{}] to be set up",
-                current_cpu().id,
-                vm_id
-            );
-            let vm = match vm(vm_id) {
-                None => {
-                    panic!(
-                        "vmm_boot_vm: on core {}, vm[{}] is not added yet",
-                        current_cpu().id,
-                        vm_id
-                    );
-                    // continue;
-                }
-                Some(vm) => vm,
-            };
-            if vm.ready() {
-                break;
-            }
-        }
+        vmm_push_vm(vm_id);
+
+        vmm_set_up_cpu(vm_id);
+
         vmm_setup_config(vm_id);
     } else {
-        println!("Core {} should not init vm {}", current_cpu().id, vm_id);
+        println!("Core {} should not init VM [{}]", current_cpu().id, vm_id);
     }
 }
 

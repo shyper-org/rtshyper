@@ -83,17 +83,12 @@ fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
         }
         let dst = unsafe { core::slice::from_raw_parts_mut((vm.pa_start(idx) + offset) as *mut u8, size) };
         dst.clone_from_slice(bin);
-        // dst = bin;
         return;
     }
     panic!("vmm_load_image: Image config conflicts with memory config");
 }
 
 pub fn vmm_init_image(vm: Vm) -> bool {
-    // if config.kernel_name.is_none() {
-    //     println!("vmm_init_image: filename is missed");
-    //     return false;
-    // }
     let config = vm.config();
 
     if config.kernel_load_ipa() == 0 {
@@ -103,25 +98,11 @@ pub fn vmm_init_image(vm: Vm) -> bool {
 
     vm.set_entry_point(config.kernel_entry_point());
 
-    match &config.os_type {
-        VmType::VmTBma => {
-            vmm_load_image(config.kernel_load_ipa(), vm.clone(), include_bytes!("../../image/BMA"));
-            return true;
-        }
-        VmType::VmTOs => {
-            if vm.id() == 0 {
-                println!("vm0 load L4T");
-                vmm_load_image(config.kernel_load_ipa(), vm.clone(), include_bytes!("../../image/L4T"));
-            } else {
-                println!("gvm load vanilla");
-                vmm_load_image(
-                    config.kernel_load_ipa(),
-                    vm.clone(),
-                    // include_bytes!("../../image/vm1_arch_Image"),
-                    include_bytes!("../../image/Image_vanilla"),
-                );
-            }
-        }
+    // Only load MVM kernel image "L4T" from binding.
+    // Load GVM kernel image from shyper-cli, you may check it for more information.
+    if vm.id() == 0 && config.os_type == VmType::VmTOs {
+        println!("MVM loading L4T");
+        vmm_load_image(config.kernel_load_ipa(), vm.clone(), include_bytes!("../../image/L4T"));
     }
 
     if config.device_tree_load_ipa() != 0 {
@@ -151,17 +132,9 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
     }
 
-    if config.ramdisk_load_ipa() != 0 {
-        println!("VM {} id {} load ramdisk initrd.gz", vm.id(), vm.config().name.unwrap());
-        vmm_load_image(
-            config.ramdisk_load_ipa(),
-            vm.clone(),
-            CPIO_RAMDISK,
-            // include_bytes!("../../image/rootfs.cpio"),
-        );
-    } else {
-        println!("VM {} id {} ramdisk not found", vm.id(), vm.config().name.unwrap());
-    }
+    // ...
+    // Todo: support loading ramdisk from MVM shyper-cli.
+    // ...
     true
 }
 
@@ -337,7 +310,12 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
     }
 }
 
-// This func should run 1 time for each vm.
+/* Setup VM Configuration before boot.
+ * Only VM0 will call this function.
+ * This func should run 1 time for each vm.
+ *
+ * @param[in] vm_id: target VM id to set up config.
+ */
 pub fn vmm_setup_config(vm_id: usize) {
     let vm = match vm(vm_id) {
         Some(vm) => vm,
@@ -535,8 +513,8 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
  *
  * @param[in]  vm_id: new added VM id.
  */
-pub fn vmm_add_vm(vm_id: usize) {
-    println!("vmm_add_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
+pub fn vmm_push_vm(vm_id: usize) {
+    println!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
     if push_vm(vm_id).is_err() {
         return;
     }
@@ -544,14 +522,14 @@ pub fn vmm_add_vm(vm_id: usize) {
     let vm_cfg = match vm_cfg_entry(vm_id) {
         Some(vm_cfg) => vm_cfg,
         None => {
-            println!("vmm_add_vm: failed to find config for vm {}", vm_id);
+            println!("vmm_push_vm: failed to find config for vm {}", vm_id);
             return;
         }
     };
     vm.set_config_entry(Some(vm_cfg));
 
     if !vmm_init_cpu(vm.clone()) {
-        println!("vmm_add_vm: vmm_init_cpu failed");
+        println!("vmm_push_vm: vmm_init_cpu failed");
     }
     use crate::kernel::vm_if_set_type;
     vm_if_set_type(vm_id, vm_type(vm_id));
@@ -564,7 +542,7 @@ pub fn vmm_init() {
         // Set up basic config.
         super::vmm_init_config();
         // Add VM 0
-        vmm_add_vm(0);
+        vmm_push_vm(0);
     }
     barrier();
 
