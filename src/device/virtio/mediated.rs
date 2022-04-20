@@ -161,8 +161,22 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     true
 }
 
-pub fn mediated_blk_notify_handler(_dev_ipa_reg: usize) -> bool {
-    set_io_task_state(0, AsyncTaskState::Finish);
+pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
+    let dev_pa_reg = vm_ipa2pa(active_vm().unwrap(), dev_ipa_reg);
+
+    // check weather src vm is still alive
+    let mediated_blk = match mediated_blk_list_get_from_pa(dev_pa_reg) {
+        Some(blk) => blk,
+        None => {
+            println!("illegal mediated blk pa {:x} ipa {:x}", dev_pa_reg, dev_ipa_reg);
+            return false;
+        }
+    };
+    if mediated_blk.avail == false {
+        set_io_task_state(0, AsyncTaskState::Finish);
+    } else {
+        println!("Mediated blk not belong to any VM");
+    }
     async_task_exe();
     return true;
 }

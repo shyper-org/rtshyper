@@ -206,8 +206,10 @@ impl VcpuPool {
         let mut pool = self.inner.lock();
         for (idx, content) in pool.content.iter_mut().enumerate() {
             if content.vcpu.vm_id() == vm_id {
+                if content.vcpu.state() as usize != VcpuState::VcpuInv as usize {
+                    pool.running -= 1;
+                }
                 pool.content.remove(idx);
-                pool.running -= 1;
                 let vcpu_num = pool.running;
                 if vcpu_num <= 1 {
                     // no need for vcpu schedule
@@ -223,7 +225,7 @@ impl VcpuPool {
                 } else if idx == pool.active_idx {
                     // cpu.active_vcpu need remove
                     current_cpu().set_active_vcpu(None);
-                    if vcpu_num > 1 {
+                    if vcpu_num >= 1 {
                         drop(pool);
                         let idx = self.next_vcpu_idx();
                         self.yield_vcpu(idx);

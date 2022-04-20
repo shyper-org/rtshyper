@@ -3,7 +3,7 @@ use crate::device::emu_remove_dev;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     cpu_idle, current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, mem_vm_region_free,
-    remove_async_used_info, remove_vm, vcpu_remove, vm, Vm,
+    remove_async_used_info, remove_vm, remove_vm_async_task, vcpu_remove, vm, Vm,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
@@ -22,7 +22,8 @@ pub fn vmm_remove_vm(vm_id: usize) {
         Some(vm) => vm,
     };
 
-    let config = vm.config();
+    // vcpu
+    vmm_remove_vcpu(vm.clone());
     // reset vm interface
     vm_if_reset(vm_id);
     // free mem
@@ -33,12 +34,10 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vmm_remove_emulated_device(vm.clone());
     // pass dev
     vmm_remove_passthrough_device(vm.clone());
-    // todo: clear async task list
-
+    // clear async task list
+    remove_vm_async_task(vm_id);
     // async used info
     remove_async_used_info(vm_id);
-    // vcpu
-    vmm_remove_vcpu(vm);
     // remove vm: page table / mmio / vgic will be removed with struct vm
     vmm_remove_vm_list(vm_id);
     // remove vm cfg

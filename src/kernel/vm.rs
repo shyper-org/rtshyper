@@ -823,18 +823,23 @@ pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
 
 pub fn push_vm(id: usize) -> Result<(), ()> {
     let mut vm_list = VM_LIST.lock();
-    if id < vm_list.len() {
+    if vm_list.iter().any(|x| x.id() == id) {
         println!("push_vm: vm {} already exists", id);
-        return Err(());
+        Err(())
+    } else {
+        vm_list.push(Vm::new(id));
+        Ok(())
     }
-    let vm = Vm::new(id);
-    vm_list.push(vm);
-    Ok(())
 }
 
 pub fn remove_vm(id: usize) -> Vm {
     let mut vm_list = VM_LIST.lock();
-    vm_list.remove(id)
+    match vm_list.iter().position(|x| x.id() == id) {
+        None => {
+            panic!("VM[{}] not exist in VM LIST", id);
+        }
+        Some(idx) => vm_list.remove(idx),
+    }
 }
 
 pub fn vm(id: usize) -> Option<Vm> {

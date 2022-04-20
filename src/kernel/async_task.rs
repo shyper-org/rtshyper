@@ -366,3 +366,10 @@ pub fn remove_async_used_info(vm_id: usize) {
     used_info_list.remove(&vm_id);
     println!("VM[{}] remove async used info", vm_id);
 }
+
+pub fn remove_vm_async_task(vm_id: usize) {
+    let mut io_list = ASYNC_IO_TASK_LIST.lock();
+    let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
+    io_list.retain(|x| x.src_vmid != vm_id);
+    ipi_list.retain(|x| x.src_vmid != vm_id);
+}

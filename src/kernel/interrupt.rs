@@ -112,6 +112,10 @@ pub fn interrupt_vm_remove(vm: Vm, id: usize) {
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     // vgic and vm will be removed with struct vm
     glb_bitmap_lock.clear(id);
+    // todo: for interrupt 16~31, need to check by vm config
+    if id >= GIC_PRIVINT_NUM {
+        interrupt_cpu_enable(id, false);
+    }
 }
 
 pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
