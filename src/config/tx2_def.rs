@@ -50,6 +50,15 @@ pub fn mvm_config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_console@a003000")),
+        base_ipa: 0xa003000,
+        length: 0x1000,
+        irq_id: 32 + 0x13,
+        cfg_list: vec![2, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some(String::from("vm_service")),
         base_ipa: 0,
         length: 0,
@@ -193,10 +202,10 @@ pub fn mvm_config_init() {
         ipa_start: 0x90000000,
         length: 0x60000000,
     });
-    vm_region.push(VmRegion {
-        ipa_start: 0xf0200000,
-        length: 0xc0000000,
-    });
+    // vm_region.push(VmRegion {
+    //     ipa_start: 0xf0200000,
+    //     length: 0xc0000000,
+    // });
 
     // vm0 config
 

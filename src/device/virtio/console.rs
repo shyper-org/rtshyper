@@ -70,9 +70,16 @@ impl ConsoleDesc {
         let inner = self.inner.lock();
         (inner.oppo_end_vmid, inner.oppo_end_ipa)
     }
+
+    pub fn migrate_save(&self, src_desc: ConsoleDesc) {
+        let mut dst_inner = self.inner.lock();
+        let src_inner = src_desc.inner.lock();
+        dst_inner = src_inner; // ConsoleDescInner have Copy trait
+    }
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct ConsoleDescInner {
     oppo_end_vmid: u16,
     oppo_end_ipa: u64,
@@ -176,7 +183,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         Some(vm) => vm,
     };
 
-    let console = match trgt_vm.emu_console_dev(trgt_console_ipa) {
+    let console = match trgt_vm.emu_console_dev(trgt_console_ipa as usize) {
         EmuDevs::VirtioConsole(x) => x,
         _ => {
             println!(

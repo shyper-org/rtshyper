@@ -16,7 +16,7 @@ use crate::mm::PageFrame;
 
 use super::vcpu::Vcpu;
 
-pub const DIRTY_MEM_THRESHOLD: usize = 0x1000;
+pub const DIRTY_MEM_THRESHOLD: usize = 0x80000;
 pub const VM_NUM_MAX: usize = 8;
 pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
@@ -522,6 +522,14 @@ impl Vm {
         }
     }
 
+    // TODO: should copy from or copy to addr, not copy from other vm
+    pub fn migrate_emu_dev(&self, src_vm: Vm) {
+        let mut vm_inner = self.inner.lock();
+        for (idx, emu_dev) in vm_inner.emu_devs.iter_mut().enumerate() {
+            emu_dev.migrate_save(src_vm.emu_dev(idx));
+        }
+    }
+
     pub fn emu_dev(&self, dev_id: usize) -> EmuDevs {
         let vm_inner = self.inner.lock();
         vm_inner.emu_devs[dev_id].clone()
@@ -545,36 +553,26 @@ impl Vm {
         return EmuDevs::None;
     }
 
-    pub fn emu_blk_dev(&self, id: usize) -> EmuDevs {
-        let vm_inner = self.inner.lock();
-        let mut dev_num = 0;
-
-        for i in 0..vm_inner.emu_devs.len() {
-            match vm_inner.emu_devs[i] {
-                EmuDevs::VirtioBlk(_) => {
-                    if dev_num == id {
-                        return vm_inner.emu_devs[i].clone();
-                    }
-                    dev_num += 1;
-                }
-                _ => {}
+    pub fn emu_blk_dev(&self) -> EmuDevs {
+        for emu in &self.inner.lock().emu_devs {
+            if let EmuDevs::VirtioBlk(_) = emu {
+                return emu.clone();
             }
         }
         return EmuDevs::None;
     }
 
     // Get console dev by ipa.
-    pub fn emu_console_dev(&self, ipa: u64) -> EmuDevs {
-        let mut emu_dev_id = -1;
-        for idx in 0..self.config().emulated_device_list().len() {
-            if self.config().emulated_device_list()[idx].base_ipa == ipa as usize {
-                emu_dev_id = idx as i32;
+    pub fn emu_console_dev(&self, ipa: usize) -> EmuDevs {
+        for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
+            if emu_dev_cfg.base_ipa == ipa {
+                return self.inner.lock().emu_devs[idx].clone();
             }
         }
-        if emu_dev_id > 0 {
-            let vm_inner = self.inner.lock();
-            return vm_inner.emu_devs[emu_dev_id as usize].clone();
-        }
+        // println!("emu_console_dev ipa {:x}", ipa);
+        // for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
+        //     println!("emu dev[{}], ipa 0x{:x}", idx, emu_dev_cfg.base_ipa);
+        // }
         return EmuDevs::None;
     }
 

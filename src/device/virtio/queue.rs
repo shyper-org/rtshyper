@@ -18,6 +18,7 @@ pub const VRING_USED_F_NO_NOTIFY: usize = 1;
 pub const DESC_QUEUE_SIZE: usize = 32768;
 
 #[repr(C, align(16))]
+#[derive(Copy, Clone)]
 struct VringDesc {
     /*Address (guest-physical)*/
     pub addr: usize,
@@ -30,6 +31,7 @@ struct VringDesc {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct VringAvail {
     flags: u16,
     idx: u16,
@@ -37,12 +39,14 @@ struct VringAvail {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct VringUsedElem {
     pub id: u32,
     pub len: u32,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct VringUsed {
     flags: u16,
     idx: u16,
@@ -373,6 +377,30 @@ impl Virtq {
         let inner = self.inner.lock();
         let used = inner.used.as_ref().unwrap();
         used.idx
+    }
+
+    pub fn migrate_save(&self, vq: Virtq) {
+        let mut dst_inner = self.inner.lock();
+        let src_inner = vq.inner.lock();
+        dst_inner.ready = src_inner.ready;
+        dst_inner.vq_index = src_inner.vq_index;
+        dst_inner.num = src_inner.num;
+        // TODO: no sure this virtio queue copy can work
+        let desc_addr = src_inner.desc_table.as_ref().unwrap() as *const _ as usize;
+        dst_inner.desc_table =
+            Some(unsafe { slice::from_raw_parts_mut(desc_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
+        let avail_addr = src_inner.desc_table.as_ref().unwrap() as *const _ as usize;
+        dst_inner.avail = Some(unsafe { &mut *(avail_addr as *mut VringAvail) });
+        let used_addr = src_inner.desc_table.as_ref().unwrap() as *const _ as usize;
+        dst_inner.used = Some(unsafe { &mut *(used_addr as *mut VringUsed) });
+
+        dst_inner.last_avail_idx = src_inner.last_avail_idx;
+        dst_inner.last_used_idx = src_inner.last_used_idx;
+        dst_inner.used_flags = src_inner.used_flags;
+        dst_inner.desc_table_addr = src_inner.desc_table_addr;
+        dst_inner.avail_addr = src_inner.avail_addr;
+        dst_inner.used_addr = src_inner.used_addr;
+        dst_inner.notify_handler = src_inner.notify_handler;
     }
 }
 

@@ -32,7 +32,7 @@ pub fn migrate_ready(vmid: usize) {
 
 pub fn migrate_memcpy(vmid: usize) {
     // copy trgt_vm dirty mem map to kernel module
-
+    println!("migrate_memcpy, vm_id {}", vmid);
     hvc_send_msg_to_vm(
         0,
         &HvcGuestMsg::Migrate(HvcMigrateMsg {
@@ -59,20 +59,25 @@ pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
     }
 }
 
-pub fn migrate_finish_ipi_handler(vmid: usize) {
-    println!("Core 0 handle finish ipi");
+pub fn migrate_finish_ipi_handler(vm_id: usize) {
+    println!("Core 0 handle VM[{}] finish ipi", vm_id);
+    // TODO: hard code for dst_vm;
+    let dst_vm = vm(2).unwrap();
+
     // copy trgt_vm dirty mem map to kernel module
-    let vm = vm(vmid).unwrap();
-    vm_if_copy_mem_map(vmid);
+    let vm = vm(vm_id).unwrap();
+    vm_if_copy_mem_map(vm_id);
     vm.context_vm_migrate_save();
+    // TODO: migrate vm dev
+    dst_vm.migrate_emu_dev(vm.clone());
     hvc_send_msg_to_vm(
         0,
         &HvcGuestMsg::Migrate(HvcMigrateMsg {
             fid: HVC_VMM,
             event: HVC_VMM_MIGRATE_START,
-            vm_id: vmid,
+            vm_id,
             oper: MIGRATE_FINISH,
-            page_num: vm_if_mem_map_page_num(vmid),
+            page_num: vm_if_mem_map_page_num(vm_id),
         }),
     );
 }

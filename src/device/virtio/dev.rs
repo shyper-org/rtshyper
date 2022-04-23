@@ -28,12 +28,49 @@ pub enum DevStat {
     None,
 }
 
+impl DevStat {
+    pub fn copy_from(&self, stat: DevStat) {
+        match self {
+            DevStat::BlkStat(_) => {
+                panic!("DevStat reserve for blk state");
+            }
+            DevStat::NicStat(dst_stat) => {
+                if let DevStat::NicStat(src_stat) = stat {
+                    dst_stat.migrate_save(src_stat);
+                }
+            }
+            DevStat::None => {}
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum DevDesc {
     BlkDesc(BlkDesc),
     NetDesc(NetDesc),
     ConsoleDesc(ConsoleDesc),
     None,
+}
+
+impl DevDesc {
+    pub fn copy_from(&mut self, desc: DevDesc) {
+        match self {
+            DevDesc::BlkDesc(blk) => {
+                todo!("reserve for emu blk");
+            }
+            DevDesc::NetDesc(dst_desc) => {
+                if let DevDesc::NetDesc(src_desc) = desc {
+                    dst_desc.migrate_save(src_desc.clone());
+                }
+            }
+            DevDesc::ConsoleDesc(dst_desc) => {
+                if let DevDesc::ConsoleDesc(src_desc) = desc {
+                    dst_desc.migrate_save(src_desc.clone());
+                }
+            }
+            DevDesc::None => {}
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -107,6 +144,21 @@ impl VirtDev {
     pub fn mediated(&self) -> bool {
         let inner = self.inner.lock();
         inner.mediated()
+    }
+
+    pub fn migrate_save(&self, src_dev: VirtDev) {
+        let mut inner = self.inner.lock();
+        let src_dev_inner = src_dev.inner.lock();
+        inner.activated = src_dev_inner.activated;
+        inner.dev_type = src_dev_inner.dev_type;
+        inner.features = src_dev_inner.features;
+        inner.generation = src_dev_inner.generation;
+        inner.int_id = src_dev_inner.int_id;
+        inner.desc.copy_from(src_dev_inner.desc.clone());
+        // reserve inner.req
+        inner.req = DevReq::None;
+        // inner.cache is set by fn dev_init, no need to copy here
+        inner.stat.copy_from(src_dev_inner.stat.clone());
     }
 }
 
