@@ -91,6 +91,22 @@ impl VirtMmioRegs {
         self.drv_feature = 0;
         self.q_sel = 0;
     }
+
+    pub fn migrate_save(&mut self, src: &VirtMmioRegs) {
+        self.magic = src.magic;
+        self.version = src.version;
+        self.device_id = src.device_id;
+        self.vendor_id = src.vendor_id;
+        self.dev_feature = src.dev_feature;
+        self.dev_feature_sel = src.dev_feature_sel;
+        self.drv_feature = src.drv_feature;
+        self.drv_feature_sel = src.drv_feature_sel;
+        self.q_sel = src.q_sel;
+        self.q_num_max = src.q_num_max;
+        self.irt_stat = src.irt_stat;
+        self.irt_ack = src.irt_ack;
+        self.dev_stat = src.dev_stat;
+    }
 }
 
 #[derive(Clone)]
@@ -301,6 +317,18 @@ impl VirtioMmio {
         let vq = inner.vq[idx].clone();
         drop(inner);
         return vq.call_notify_handler(self.clone());
+    }
+
+    pub fn migrate_save(&self, virtio_mmio: VirtioMmio) {
+        let mut dst_dev = self.inner.lock();
+        let src_dev = virtio_mmio.inner.lock();
+        dst_dev.id = src_dev.id;
+        dst_dev.driver_features = src_dev.driver_features;
+        dst_dev.regs.migrate_save(&src_dev.regs);
+        dst_dev.dev.migrate_save(src_dev.dev.clone());
+        for (idx, vq) in dst_dev.vq.iter_mut().enumerate() {
+            vq.migrate_save(src_dev.vq[idx].clone());
+        }
     }
 }
 
@@ -625,11 +653,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
     }
 
     mmio.mmio_reg_init(virt_dev_type);
-    mmio.dev_init(
-        virt_dev_type,
-        &vm_cfg.emulated_device_list()[emu_dev_id],
-        mediated,
-    );
+    mmio.dev_init(virt_dev_type, &vm_cfg.emulated_device_list()[emu_dev_id], mediated);
     // no need to set vm_if_list
     mmio.virtio_queue_init(virt_dev_type);
 

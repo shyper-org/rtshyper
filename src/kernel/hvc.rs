@@ -242,9 +242,9 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_MIGRATE_START => {
             // demo: migration for bma1
-            let vm = active_vm().unwrap();
-            if vm.id() == 0 {
+            if x0 == 0 {
                 println!("migration for mvm is not supported");
+                return Err(());
             }
             // init vm dirty memory bitmap
             // vm_if_dirty_mem_map(vm.id());
@@ -257,7 +257,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
                 &HvcGuestMsg::Migrate(HvcMigrateMsg {
                     fid: HVC_VMM,
                     event: HVC_VMM_MIGRATE_START,
-                    vm_id: vm.id(),
+                    vm_id: x0,
                     oper: MIGRATE_START,
                     page_num: 0,
                 }),
@@ -265,8 +265,13 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_READY => {
-            // println!("core {} HVC_VMM_MIGRATE_READY", current_cpu().id);
             let cpu_trgt = vm_if_get_cpu_id(x0);
+            println!(
+                "core {} HVC_VMM_MIGRATE_READY, cpu trgt {}, vmid {}",
+                current_cpu().id,
+                cpu_trgt,
+                x0
+            );
             migrate_ready(x0);
             send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_READY, cpu_trgt);
             Ok(HVC_FINISH)
@@ -274,6 +279,11 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         HVC_VMM_MIGRATE_MEMCPY => {
             let dirty_mem_num = vm_if_mem_map_dirty_sum(x0);
             let cpu_trgt = vm_if_get_cpu_id(x0);
+            println!(
+                "HVC_VMM_MIGRATE_MEMCPY x0 {}, cpu_trgt {}, dirty_mem_num {}",
+                x0, cpu_trgt, dirty_mem_num
+            );
+
             if dirty_mem_num < DIRTY_MEM_THRESHOLD {
                 // Idle live vm, copy dirty mem and vm register struct
                 send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, cpu_trgt);
@@ -284,7 +294,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_MIGRATE_INIT_VM => {
             println!("migrate init vm {}", x0);
-            vmm_init_gvm(x0);
+            // vmm_init_gvm(x0);
             let vm = vm(x0).unwrap();
             map_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
             vm.context_vm_migrate_init();
@@ -469,11 +479,16 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                     HVC_VMM_MIGRATE_READY => {
                         // in gvm
                         // init vm dirty memory bitmap
-                        vm_if_dirty_mem_map(active_vm_id());
+                        println!(
+                            "HVC_VMM_MIGRATE_READY ipi src vm {} trgt vm {}",
+                            msg.src_vmid, msg.trgt_vmid
+                        );
+                        let vm = vm(msg.trgt_vmid);
+                        vm_if_dirty_mem_map(msg.trgt_vmid);
                         // reset vm stage 2 page table to read only
-                        active_vm().unwrap().pt_read_only();
+                        vm.unwrap().pt_read_only();
                         tlb_invalidate_guest_all();
-                        vm_if_copy_mem_map(active_vm_id());
+                        vm_if_copy_mem_map(msg.trgt_vmid);
                         send_hvc_ipi(msg.trgt_vmid, 0, HVC_VMM, HVC_VMM_MIGRATE_MEMCPY, 0);
                     }
                     HVC_VMM_MIGRATE_MEMCPY => {
@@ -489,6 +504,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         }
                     }
                     HVC_VMM_MIGRATE_FINISH => {
+                        println!("HVC_VMM_MIGRATE_FINISH ipi handler cpu {}", current_cpu().id);
                         // 被迁移VM收到该ipi标志vcpu_idle，VM0收到该ipi标志最后一次内存拷贝
                         if current_cpu().id == 0 {
                             migrate_finish_ipi_handler(msg.src_vmid);

@@ -97,9 +97,16 @@ impl NetDesc {
         };
         return value;
     }
+
+    pub fn migrate_save(&self, src_desc: NetDesc) {
+        let mut inner = self.inner.lock();
+        let src_inner = src_desc.inner.lock();
+        inner = src_inner;
+    }
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct NetDescInner {
     mac: [u8; 6],
     status: u16,
