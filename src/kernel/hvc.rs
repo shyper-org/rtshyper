@@ -14,7 +14,8 @@ use crate::kernel::{
     vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
 use crate::lib::{memcpy_safe, trace};
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_gvm, vmm_list_vm, vmm_remove_vm};
+use crate::vmm::vmm_reboot;
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_gvm, vmm_list_vm, vmm_remove_vm, vmm_reboot_vm};
 
 static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
@@ -99,6 +100,7 @@ pub const HVC_IRQ: usize = 32 + 0x20;
 #[repr(C)]
 pub enum HvcGuestMsg {
     Default(HvcDefaultMsg),
+    Manage(HvcManageMsg),
     Migrate(HvcMigrateMsg),
 }
 
@@ -106,6 +108,13 @@ pub enum HvcGuestMsg {
 pub struct HvcDefaultMsg {
     pub fid: usize,
     pub event: usize,
+}
+
+#[repr(C)]
+pub struct HvcManageMsg {
+    pub fid: usize,
+    pub event: usize,
+    pub vm_id: usize,
 }
 
 pub const MIGRATE_START: usize = 0;
@@ -196,7 +205,7 @@ fn hvc_config_handler(
         HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS => vm_cfg_add_passthrough_device_irqs(x0, x1, x2),
         HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS => vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2),
         HVC_CONFIG_DTB_DEVICE => vm_cfg_add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
-        HVC_CONFIG_UPLOAD_KERNEL_IMAGE => vm_cfg_upload_kernel_image(x0,x1,x2,x3,x4),
+        HVC_CONFIG_UPLOAD_KERNEL_IMAGE => vm_cfg_upload_kernel_image(x0, x1, x2, x3, x4),
         _ => {
             println!("hvc_config_handler unknown event {}", event);
             Err(())
@@ -224,7 +233,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_REBOOT_VM => {
-            todo!();
+            vmm_reboot_vm(x0);
             Ok(HVC_FINISH)
         }
         HVC_VMM_GET_VM_ID => {
@@ -386,6 +395,14 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
             );
             (msg.fid, msg.event)
         }
+        HvcGuestMsg::Manage(msg) => {
+            memcpy_safe(
+                target_addr as *const u8,
+                msg as *const _ as *const u8,
+                size_of::<HvcManageMsg>(),
+            );
+            (msg.fid, msg.event)
+        }
     };
 
     let cpu_trgt = vm_if_get_cpu_id(vm_id);
@@ -497,6 +514,14 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         vcpu_idle(trgt_vcpu);
                     }
                     _ => {}
+                },
+                HVC_CONFIG => match msg.event {
+                    HVC_CONFIG_UPLOAD_KERNEL_IMAGE => {
+                        hvc_guest_notify(msg.trgt_vmid);
+                    }
+                    _ => {
+                        todo!();
+                    }
                 },
                 _ => {
                     todo!();

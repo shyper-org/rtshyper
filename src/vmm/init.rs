@@ -10,8 +10,8 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    active_vm_id, add_async_used_info, cpu_idle, current_cpu, push_vm, shyper_init, VcpuState, vm_if_init_mem_map,
-    VM_IF_LIST, vm_if_set_cpu_id, VmPa, VmType,
+    active_vm_id, add_async_used_info, cpu_idle, current_cpu, shyper_init, VcpuState, vm_if_init_mem_map, VM_IF_LIST,
+    vm_if_set_cpu_id, VmPa, VmType,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -62,9 +62,10 @@ fn vmm_init_memory(vm: Vm) -> bool {
     true
 }
 
-fn vmm_load_image(load_ipa: usize, vm: Vm, bin: &[u8]) {
+pub fn vmm_load_image(vm: Vm, bin: &[u8]) {
     let size = bin.len();
     let config = vm.config();
+    let load_ipa = config.kernel_load_ipa();
     for (idx, region) in config.memory_region().iter().enumerate() {
         if load_ipa < region.ipa_start || load_ipa + size > region.ipa_start + region.length {
             continue;
@@ -102,64 +103,48 @@ pub fn vmm_init_image(vm: Vm) -> bool {
     // Load GVM kernel image from shyper-cli, you may check it for more information.
     if vm.id() == 0 && config.os_type == VmType::VmTOs {
         println!("MVM loading L4T");
-        vmm_load_image(config.kernel_load_ipa(), vm.clone(), include_bytes!("../../image/L4T"));
+        vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
     }
 
     if config.device_tree_load_ipa() != 0 {
-        use crate::SYSTEM_FDT;
-
-        // PLATFORM
-        // #[cfg(feature = "qemu")]
-        // vmm_load_image(
-        //     config.device_tree_filename.unwrap(),
-        //     config.device_tree_load_ipa,
-        //     vm.clone(),
-        // );
-        // // END QEMU
-        #[cfg(feature = "tx2")]
-        {
+        // Init dtb for Linux.
+        if vm.id() == 0 {
+            // Init dtb for MVM.
+            use crate::SYSTEM_FDT;
             let offset = config.device_tree_load_ipa() - config.memory_region()[0].ipa_start;
+            println!("MVM[{}] dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
             unsafe {
                 let src = SYSTEM_FDT.get().unwrap();
                 let len = src.len();
                 let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
                 dst.clone_from_slice(&src);
+                vmm_setup_fdt(vm.clone());
             }
-            println!("vm {} dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
+        } else {
+            // Init dtb for GVM.
+            match create_fdt(config.clone()) {
+                Ok(dtb) => {
+                    let offset = config.device_tree_load_ipa() - vm.config().memory_region()[0].ipa_start;
+                    println!("GVM[{}] dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
+                }
+                _ => {
+                    panic!("vmm_setup_config: create fdt for vm{} fail", vm.id());
+                }
+            }
         }
     } else {
-        println!("VM {} id {} device tree not found", vm.id(), vm.config().name.unwrap());
+        println!(
+            "VM {} id {} device tree load ipa is not set",
+            vm.id(),
+            vm.config().vm_name()
+        );
     }
 
     // ...
     // Todo: support loading ramdisk from MVM shyper-cli.
     // ...
-    true
-}
-
-fn vmm_init_cpu(vm: Vm) -> bool {
-    for i in 0..vm.config().cpu_num() {
-        use crate::kernel::vcpu_alloc;
-        if let Some(vcpu) = vcpu_alloc() {
-            vm.push_vcpu(vcpu.clone());
-            vcpu.init(vm.clone(), i);
-        } else {
-            println!("failed to allocte vcpu");
-            return false;
-        }
-    }
-
-    // remain to be init when assigning vcpu
-    vm.set_cpu_num(0);
-    vm.set_ncpu(0);
-    println!(
-        "VM {} init cpu: cores=<{}>, allocat_bits=<0b{:b}>",
-        vm.id(),
-        vm.config().cpu_num(),
-        vm.config().cpu_allocated_bitmap()
-    );
-
     true
 }
 
@@ -348,24 +333,6 @@ pub fn vmm_setup_config(vm_id: usize) {
     if !vmm_init_image(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_image failed");
     }
-    if let VmType::VmTOs = config.os_type {
-        if vm_id != 0 {
-            // Init GVM dtb.
-            match create_fdt(config.clone()) {
-                Ok(dtb) => {
-                    let offset = config.device_tree_load_ipa() - vm.config().memory_region()[0].ipa_start;
-                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
-                }
-                _ => {
-                    panic!("vmm_setup_config: create fdt for vm{} fail", vm_id);
-                }
-            }
-        } else {
-            unsafe {
-                vmm_setup_fdt(vm.clone());
-            }
-        }
-    }
 
     if !vmm_init_emulated_device(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_emulated_device failed");
@@ -509,32 +476,6 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     // barrier();
 }
 
-/* Generate VM structure and push it to VM.
- *
- * @param[in]  vm_id: new added VM id.
- */
-pub fn vmm_push_vm(vm_id: usize) {
-    println!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
-    if push_vm(vm_id).is_err() {
-        return;
-    }
-    let vm = vm(vm_id).unwrap();
-    let vm_cfg = match vm_cfg_entry(vm_id) {
-        Some(vm_cfg) => vm_cfg,
-        None => {
-            println!("vmm_push_vm: failed to find config for vm {}", vm_id);
-            return;
-        }
-    };
-    vm.set_config_entry(Some(vm_cfg));
-
-    if !vmm_init_cpu(vm.clone()) {
-        println!("vmm_push_vm: vmm_init_cpu failed");
-    }
-    use crate::kernel::vm_if_set_type;
-    vm_if_set_type(vm_id, vm_type(vm_id));
-}
-
 pub fn vmm_init() {
     barrier();
 
@@ -542,7 +483,8 @@ pub fn vmm_init() {
         // Set up basic config.
         super::vmm_init_config();
         // Add VM 0
-        vmm_push_vm(0);
+        super::vmm_push_vm(0);
+        super::vmm_alloc_vcpu(0);
     }
     barrier();
 
