@@ -5,7 +5,7 @@ use crate::kernel::{
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
-use crate::vmm::vmm_reboot_vm;
+use crate::vmm::vmm_reboot;
 
 use super::smc::smc_call;
 
@@ -70,7 +70,7 @@ pub fn power_arch_sys_shutdown() {
 }
 
 fn psci_guest_sys_reset() {
-    vmm_reboot_vm(active_vm().unwrap());
+    vmm_reboot();
 }
 
 #[inline(never)]
