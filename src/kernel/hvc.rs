@@ -3,19 +3,19 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::PAGE_SIZE;
+use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register, ipi_send_msg,
     IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, migrate_finish_ipi_handler,
-    migrate_memcpy, migrate_ready, vcpu_idle, vm, vm_if_copy_mem_map, vm_if_dirty_mem_map, vm_if_get_cpu_id,
-    vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
+    migrate_memcpy, migrate_ready, update_request, vcpu_idle, vm, vm_if_copy_mem_map, vm_if_dirty_mem_map,
+    vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
 use crate::lib::{memcpy_safe, trace};
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_gvm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
 use crate::vmm::vmm_reboot;
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_gvm, vmm_list_vm, vmm_remove_vm, vmm_reboot_vm};
 
 static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
@@ -29,6 +29,7 @@ pub const VM_CONTEXT_SEND: usize = 1;
 pub const VM_CONTEXT_RECEIVE: usize = 2;
 pub const MIGRATE_SEND: usize = 3;
 pub const MIGRATE_RECEIVE: usize = 4;
+pub const LIVE_UPDATE_IMG: usize = 5;
 
 // hvc_fid
 pub const HVC_SYS: usize = 0;
@@ -40,6 +41,7 @@ pub const HVC_CONFIG: usize = 0x11;
 // hvc_sys_event
 pub const HVC_SYS_REBOOT: usize = 0;
 pub const HVC_SYS_SHUTDOWN: usize = 1;
+pub const HVC_SYS_UPDATE: usize = 3;
 
 // hvc_vmm_event
 pub const HVC_VMM_LIST_VM: usize = 0;
@@ -159,7 +161,7 @@ pub fn hvc_guest_handler(
     let res;
     match hvc_type {
         HVC_SYS => {
-            res = hvc_sys_handler(event, x0);
+            return hvc_sys_handler(event, x0);
         }
         HVC_VMM => {
             return hvc_vmm_handler(event, x0, x1);
@@ -213,8 +215,14 @@ fn hvc_config_handler(
     }
 }
 
-fn hvc_sys_handler(event: usize, x0: usize) -> bool {
-    true
+fn hvc_sys_handler(event: usize, x0: usize) -> Result<usize, ()> {
+    match event {
+        HVC_SYS_UPDATE => {
+            update_request();
+            Ok(0)
+        }
+        _ => Err(()),
+    }
 }
 
 fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
@@ -321,6 +329,10 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         HVC_IVC_SHARE_MEM => {
             let vm = active_vm().unwrap();
             let base = vm.share_mem_base();
+            if x0 == LIVE_UPDATE_IMG {
+                // hard code for pa 0x88000000, x1 should be 0x8000000
+                vm.pt_map_range(base, x1, 0x88000000, PTE_S2_NORMAL);
+            }
             vm.add_share_mem_base(x1);
             add_share_mem(x0, base);
             // println!("VM{} add share mem 0x{:x} len 0x{:x}", active_vm_id(), base, x1);

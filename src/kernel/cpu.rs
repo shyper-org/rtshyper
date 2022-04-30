@@ -14,7 +14,7 @@ use crate::kernel::IpiMessage;
 use crate::lib::trace;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 256;
 pub const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C)]

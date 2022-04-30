@@ -32,6 +32,11 @@ tx2_release:
 	bash upload_release
 	${OBJDUMP} -d target/aarch64-tx2/release/rust_hypervisor > target/aarch64-tx2/release/t.txt
 
+tx2_update:
+	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2-update.json --features "tx2 update" --release
+	bash upload_update
+	${OBJDUMP} -d target/aarch64-tx2-update/release/rust_hypervisor > target/aarch64-tx2-update/release/update.txt
+
 run:
 	${QEMU} \
 		-machine virt,virtualization=on,gic-version=2\
