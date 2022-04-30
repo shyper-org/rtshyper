@@ -9,7 +9,10 @@ use crate::lib::memset_safe;
 
 use super::interface::*;
 
+#[cfg(not(feature = "update"))]
 global_asm!(include_str!("start.S"));
+#[cfg(feature = "update")]
+global_asm!(include_str!("start_update.S"));
 
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 // const PAGE_SIZE: usize = 4096;

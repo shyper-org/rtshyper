@@ -136,6 +136,7 @@ set_loop:
 	ble way_loop // if not, iterate way_loop
 	ret
 
+// TODO: need to support multi update
 .global update_request
 update_request:
     sub sp, sp, #24
@@ -145,9 +146,8 @@ update_request:
     adr x0, .   // read pc to x0
     mov x1, #0x88000000
     cmp x0, x1
-    bgt 1b
-    bl  live_update
-1:
+    bgt live_update
+
     ldr x30, [sp, #16]
     ldp x0, x1, [sp, #0]
     add sp, sp, #24
@@ -156,17 +156,14 @@ update_request:
 live_update:
     sub sp, sp, #24
     stp x0, x1, [sp, #0]
-    str x30, [spp, #16]
+    str x30, [sp, #16]
 
-    adr x0, .   // read pc to x0
-    sub x0, x0, #12 // sub str instruction
-    mov x1, #0x5000000
-    add x0, x0, x1
-    blr  x0
+    bl  rust_shyper_update
 
     ldr x30, [sp, #16]
     ldp x0, x1, [sp, #0]
     add sp, sp, #24
+
     ret
 
 .align 12

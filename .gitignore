@@ -3,3 +3,4 @@ run*
 /.vscode
 upload_release
 upload
+upload_update
