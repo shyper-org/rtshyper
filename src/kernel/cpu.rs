@@ -14,7 +14,7 @@ use crate::kernel::IpiMessage;
 use crate::lib::trace;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 256;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
 pub const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C)]
@@ -26,7 +26,7 @@ pub struct CpuPt {
     pub lvl3: [usize; PTE_PER_PAGE],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum CpuState {
     CpuInv = 0,
     CpuIdle = 1,
@@ -272,7 +272,7 @@ pub fn cpu_idle() {
     }
 }
 
-static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [
+pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [
     Cpu::default(),
     Cpu::default(),
     Cpu::default(),

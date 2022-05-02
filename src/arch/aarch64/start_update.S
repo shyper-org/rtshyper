@@ -81,7 +81,7 @@ _start:
     mov x1, 1
     msr spsel, x1
     ldr x1, =CPU
-    add x1, x1, #(0x4000 + (4096 * 256))
+    add x1, x1, #(0x4000 + (4096 * 128))
     sub	x1, x1, #0x110
     mov sp, x1
 
@@ -139,31 +139,35 @@ set_loop:
 // TODO: need to support multi update
 .global update_request
 update_request:
-    sub sp, sp, #24
+    sub sp, sp, #32
     stp x0, x1, [sp, #0]
-    str x30, [sp, #16]
+    str x2, [sp, #16]
+    str x30, [sp, #24]
 
-    adr x0, .   // read pc to x0
-    mov x1, #0x88000000
-    cmp x0, x1
-    bgt live_update
-
-    ldr x30, [sp, #16]
+    adr x1, .   // read pc to x0
+    mov x2, #0x88000000
+    cmp x1, x2
+    blt 1b
+    bl live_update
+1:
+    ldr x30, [sp, #24]
+    ldr x2, [sp, #16]
     ldp x0, x1, [sp, #0]
-    add sp, sp, #24
+    add sp, sp, #32
     ret
 
 live_update:
-    sub sp, sp, #24
+    sub sp, sp, #32
     stp x0, x1, [sp, #0]
-    str x30, [sp, #16]
+    str x2, [sp, #16]
+    str x30, [sp, #24]
 
     bl  rust_shyper_update
 
-    ldr x30, [sp, #16]
+    ldr x30, [sp, #24]
+    ldr x2, [sp, #16]
     ldp x0, x1, [sp, #0]
-    add sp, sp, #24
-
+    add sp, sp, #32
     ret
 
 .align 12

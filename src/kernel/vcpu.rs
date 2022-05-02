@@ -14,7 +14,7 @@ use crate::lib::{cache_invalidate_d, memcpy_safe};
 
 use super::{CpuState, Vm, VmType};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum VcpuState {
     VcpuInv = 0,
     VcpuPend = 1,
@@ -395,7 +395,7 @@ impl VcpuInner {
     }
 }
 
-static VCPU_LIST: Mutex<Vec<Vcpu>> = Mutex::new(Vec::new());
+pub static VCPU_LIST: Mutex<Vec<Vcpu>> = Mutex::new(Vec::new());
 
 pub fn vcpu_alloc() -> Option<Vcpu> {
     let mut vcpu_list = VCPU_LIST.lock();

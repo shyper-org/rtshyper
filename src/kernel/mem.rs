@@ -17,7 +17,7 @@ pub fn mem_init() {
     println!("Mem init ok");
 }
 
-fn mem_heap_region_init() {
+pub fn mem_heap_region_init() {
     extern "C" {
         // Note: link-time label, see aarch64.lds
         fn _image_end();
