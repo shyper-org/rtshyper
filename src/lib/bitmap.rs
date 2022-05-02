@@ -83,8 +83,14 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
 }
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, Eq)]
 pub struct BitAlloc16(u16);
+
+impl PartialEq for BitAlloc16 {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 impl BitAlloc16 {
     pub const fn default() -> BitAlloc16 {

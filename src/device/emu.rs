@@ -37,7 +37,7 @@ pub struct EmuDevEntry {
     handler: EmuDevHandler,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum EmuDeviceType {
     EmuDeviceTConsole = 0,
     EmuDeviceTGicd = 1,

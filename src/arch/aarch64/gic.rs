@@ -468,7 +468,7 @@ impl GicHypervisorInterface {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct GicState {
     pub hcr: u32,
     eisr: [u32; GIC_LIST_REGS_NUM / 32],

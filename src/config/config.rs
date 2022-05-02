@@ -6,8 +6,8 @@ use spin::Mutex;
 
 use crate::board::*;
 // use crate::board::*;
-use crate::device::{EmuDeviceType,mediated_blk_free, mediated_blk_request};
-use crate::kernel::{active_vm, vm_ipa2pa, vm, VM_NUM_MAX, VmType, Vm};
+use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
+use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
 use crate::vmm::vmm_init_gvm;
@@ -18,7 +18,7 @@ const IRQ_MAX_NUM: usize = 0x40;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
 const EMULATED_DEV_MAX_NUM: usize = 16;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum DtbDevType {
     DevSerial = 0,
     DevGicd = 1,
@@ -59,11 +59,17 @@ impl VmEmulatedDeviceConfigList {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy, Debug, Eq)]
 pub struct PassthroughRegion {
     pub ipa: usize,
     pub pa: usize,
     pub length: usize,
+}
+
+impl PartialEq for PassthroughRegion {
+    fn eq(&self, other: &Self) -> bool {
+        self.ipa == other.ipa && self.pa == other.pa && self.length == other.length
+    }
 }
 
 #[derive(Default, Clone)]
@@ -83,7 +89,7 @@ impl VmPassthroughDeviceConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, Eq)]
 pub struct VmRegion {
     pub ipa_start: usize,
     pub length: usize,
@@ -98,6 +104,12 @@ impl VmRegion {
     }
 }
 
+impl PartialEq for VmRegion {
+    fn eq(&self, other: &Self) -> bool {
+        self.ipa_start == other.ipa_start && self.length == other.length
+    }
+}
+
 #[derive(Clone)]
 pub struct VmMemoryConfig {
     pub region: Vec<VmRegion>,
@@ -109,7 +121,7 @@ impl VmMemoryConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct VmImageConfig {
     pub kernel_img_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
@@ -151,7 +163,7 @@ impl VmImageConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct VmCpuConfig {
     pub num: usize,
     pub allocate_bitmap: u32,
@@ -168,7 +180,7 @@ impl VmCpuConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct AddrRegions {
     pub ipa: usize,
     pub length: usize,
@@ -458,9 +470,9 @@ impl VmConfigTable {
     }
 }
 
-lazy_static! {
-    pub static ref DEF_VM_CONFIG_TABLE: Mutex<VmConfigTable> = Mutex::new(VmConfigTable::default());
-}
+// lazy_static! {
+pub static DEF_VM_CONFIG_TABLE: Mutex<VmConfigTable> = Mutex::new(VmConfigTable::default());
+// }
 
 pub fn vm_cfg_set_config_name(name: &'static str) {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
@@ -859,7 +871,7 @@ pub fn vm_cfg_add_dtb_dev(
 ) -> Result<usize, ()> {
     println!(
         "\nVM[{}] vm_cfg_add_dtb_dev:\n     dev_type {} irq_list_length {} addr_region_ipa {:x} addr_region_length {:x}",
-        vmid,dev_type,irq_list_length,addr_region_ipa,addr_region_length
+        vmid, dev_type, irq_list_length, addr_region_ipa, addr_region_length
     );
 
     // Copy DTB device name from user ipa.
@@ -997,7 +1009,7 @@ pub fn vm_cfg_upload_kernel_image(
 
     println!(
         "VM[{}] Upload kernel image. cache_ipa:{:x} load_offset:{:x} load_size:{:x}",
-        vmid, cache_ipa, load_offset,load_size
+        vmid, cache_ipa, load_offset, load_size
     );
     // Get cache pa.
     let cache_pa = vm_ipa2pa(active_vm().unwrap(), cache_ipa);

@@ -129,7 +129,7 @@ impl VmCtxFpsimd {
 
 #[repr(C)]
 #[repr(align(16))]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct VmContext {
     // generic timer
     pub cntvoff_el2: u64,
