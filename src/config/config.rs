@@ -618,7 +618,8 @@ pub fn vm_cfg_add_vm(
 
 /* Delete a VM config entry */
 pub fn vm_cfg_del_vm(vmid: usize) -> Result<usize, ()> {
-    println!("VM[{}] vm_cfg_del_vm: wait for implementation", vmid);
+    println!("VM[{}] delete config entry", vmid);
+    vm_cfg_remove_vm_entry(vmid);
     Ok(0)
 }
 
