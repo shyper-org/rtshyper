@@ -37,7 +37,7 @@ pub fn mem_heap_region_init() {
     memset_safe(base as *mut u8, 0, size as usize * PAGE_SIZE);
     // core::intrinsics::volatile_set_memory(ptr, 0, size as usize * PAGE_SIZE);
 
-    let mut heap_lock = HEAPREGION.lock();
+    let mut heap_lock = HEAP_REGION.lock();
     (*heap_lock).region_init(base, size, size, 0);
 
     drop(heap_lock);
@@ -75,7 +75,7 @@ fn mem_vm_region_init() {
         );
         pages += PLAT_DESC.mem_desc.regions[i + 1].size / PAGE_SIZE;
 
-        let mut vm_region_lock = VMREGION.lock();
+        let mut vm_region_lock = VM_REGION.lock();
         (*vm_region_lock).push(mem_region);
     }
 
@@ -94,7 +94,7 @@ pub enum AllocError {
 }
 
 pub fn mem_heap_reset() {
-    let heap = HEAPREGION.lock();
+    let heap = HEAP_REGION.lock();
     memset_safe(heap.region.base as *mut u8, 0, heap.region.size * PAGE_SIZE);
 }
 
@@ -103,7 +103,7 @@ pub fn mem_heap_alloc(page_num: usize, _aligned: bool) -> Result<PageFrame, Allo
         return Err(AllocZeroPage);
     }
 
-    let mut heap = HEAPREGION.lock();
+    let mut heap = HEAP_REGION.lock();
     if page_num > heap.region.free {
         return Err(OutOfFrame);
     }
@@ -125,7 +125,7 @@ pub fn mem_pages_alloc(page_num: usize) -> Result<PageFrame, AllocError> {
 
 pub fn mem_pages_free(addr: usize, page_num: usize) -> bool {
     if page_num == 1 {
-        let mut heap = HEAPREGION.lock();
+        let mut heap = HEAP_REGION.lock();
         return heap.free_page(addr);
     } else {
         println!(
@@ -137,7 +137,7 @@ pub fn mem_pages_free(addr: usize, page_num: usize) -> bool {
 }
 
 pub fn mem_vm_region_alloc(size: usize) -> usize {
-    let mut vm_region = VMREGION.lock();
+    let mut vm_region = VM_REGION.lock();
     for i in 0..vm_region.region.len() {
         if vm_region.region[i].free >= size / PAGE_SIZE {
             let start_addr = vm_region.region[i].base;
@@ -161,7 +161,7 @@ pub fn mem_vm_region_alloc(size: usize) -> usize {
 }
 
 pub fn mem_vm_region_free(start: usize, size: usize) {
-    let mut vm_region = VMREGION.lock();
+    let mut vm_region = VM_REGION.lock();
     let mut free_idx = None;
     // free mem region
     for (idx, region) in vm_region.region.iter_mut().enumerate() {

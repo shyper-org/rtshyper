@@ -11,11 +11,18 @@ use super::AllocError;
 
 const TOTAL_MEM_REGION_MAX: usize = 16;
 
+#[derive(Copy, Clone, Eq, Debug)]
 pub struct MemRegion {
     pub base: usize,
     pub size: usize,
     pub free: usize,
     pub last: usize,
+}
+
+impl PartialEq for MemRegion {
+    fn eq(&self, other: &Self) -> bool {
+        self.base == other.base && self.size == other.size && self.free == other.free && self.last == other.last
+    }
 }
 
 impl MemRegion {
@@ -154,13 +161,13 @@ impl VmRegion {
 }
 
 lazy_static! {
-    pub static ref HEAPREGION: Mutex<HeapRegion> = Mutex::new(HeapRegion {
+    pub static ref HEAP_REGION: Mutex<HeapRegion> = Mutex::new(HeapRegion {
         map: BitAlloc64K::default(),
         region: MemRegion::new(),
     });
 }
 
-pub static VMREGION: Mutex<VmRegion> = Mutex::new(VmRegion {
+pub static VM_REGION: Mutex<VmRegion> = Mutex::new(VmRegion {
     region: Vec::<MemRegion>::new(),
 });
 
@@ -170,6 +177,6 @@ pub fn bits_to_pages(bits: usize) -> usize {
 }
 
 pub fn pa_in_heap_region(pa: usize) -> bool {
-    let heap_region = HEAPREGION.lock();
+    let heap_region = HEAP_REGION.lock();
     pa > heap_region.region.base && pa < (heap_region.region.base * PAGE_SIZE + heap_region.region.size)
 }

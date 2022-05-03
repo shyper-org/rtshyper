@@ -30,14 +30,15 @@ pub struct EmuContext {
 }
 
 pub struct EmuDevEntry {
-    vm_id: usize,
-    id: usize,
-    ipa: usize,
-    size: usize,
-    handler: EmuDevHandler,
+    pub emu_type: EmuDeviceType,
+    pub vm_id: usize,
+    pub id: usize,
+    pub ipa: usize,
+    pub size: usize,
+    pub handler: EmuDevHandler,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EmuDeviceType {
     EmuDeviceTConsole = 0,
     EmuDeviceTGicd = 1,
@@ -89,7 +90,14 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     return false;
 }
 
-pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize, handler: EmuDevHandler) {
+pub fn emu_register_dev(
+    emu_type: EmuDeviceType,
+    vm_id: usize,
+    dev_id: usize,
+    address: usize,
+    size: usize,
+    handler: EmuDevHandler,
+) {
     let mut emu_devs_list = EMU_DEVS_LIST.lock();
     if emu_devs_list.len() >= EMU_DEV_NUM_MAX {
         panic!("emu_register_dev: can't register more devs");
@@ -105,6 +113,7 @@ pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize
     }
 
     emu_devs_list.push(EmuDevEntry {
+        emu_type,
         vm_id,
         id: dev_id,
         ipa: address,

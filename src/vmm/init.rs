@@ -157,13 +157,21 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
             EmuDeviceTGicd => {
                 dev_name = "interrupt controller";
                 vm.set_intc_dev_id(idx);
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_intc_handler);
+                emu_register_dev(
+                    EmuDeviceTGicd,
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_intc_handler,
+                );
                 emu_intc_init(vm.clone(), idx);
             }
             EmuDeviceTGPPT => {
                 dev_name = "partial passthrough interrupt controller";
                 vm.set_intc_dev_id(idx);
                 emu_register_dev(
+                    EmuDeviceTGPPT,
                     vm.id(),
                     idx,
                     emu_dev.base_ipa,
@@ -174,14 +182,28 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
             }
             EmuDeviceTVirtioBlk => {
                 dev_name = "virtio block";
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
+                emu_register_dev(
+                    EmuDeviceTVirtioBlk,
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_virtio_mmio_handler,
+                );
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
             }
             EmuDeviceTVirtioNet => {
                 dev_name = "virtio net";
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
+                emu_register_dev(
+                    EmuDeviceTVirtioNet,
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_virtio_mmio_handler,
+                );
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
@@ -193,7 +215,14 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
             }
             EmuDeviceTVirtioConsole => {
                 dev_name = "virtio console";
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
+                emu_register_dev(
+                    EmuDeviceTVirtioConsole,
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_virtio_mmio_handler,
+                );
                 if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
                     return false;
                 }
