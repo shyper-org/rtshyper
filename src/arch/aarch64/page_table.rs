@@ -160,8 +160,8 @@ impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
 }
 
 pub struct PageTable {
-    directory: PageFrame,
-    pages: Mutex<Vec<PageFrame>>,
+    pub directory: PageFrame,
+    pub pages: Mutex<Vec<PageFrame>>,
 }
 
 impl PageTable {

@@ -4,7 +4,7 @@ use crate::lib::{memset_safe, trace};
 
 #[derive(Clone, Debug)]
 pub struct PageFrame {
-    pa: usize,
+    pub pa: usize,
 }
 
 impl PageFrame {

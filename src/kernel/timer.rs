@@ -52,7 +52,7 @@ fn timer_notify_after(us: usize) {
     timer_arch_enable_irq();
 }
 
-fn timer_irq_handler(_arg: usize) {
+pub fn timer_irq_handler(_arg: usize) {
     use crate::arch::timer_arch_disable_irq;
 
     timer_arch_disable_irq();
