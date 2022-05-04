@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -6,13 +7,16 @@ use spin::Mutex;
 
 use crate::arch::{
     emu_intc_handler, emu_intc_init, gic_maintenance_handler, GIC_PRIVINT_NUM, PageTable,
-    partial_passthrough_intc_handler, partial_passthrough_intc_init,
+    partial_passthrough_intc_handler, partial_passthrough_intc_init, Vgic,
 };
 use crate::config::{
     DEF_VM_CONFIG_TABLE, VmConfigEntry, VmConfigTable, VmDtbDevConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
     VmEmulatedDeviceConfigList, VmMemoryConfig, VmPassthroughDeviceConfig,
 };
-use crate::device::{EMU_DEVS_LIST, EmuDevEntry, EmuDeviceType, EmuDevs};
+use crate::device::{
+    EMU_DEVS_LIST, EmuDevEntry, EmuDeviceType, EmuDevs, virtio_blk_notify_handler, virtio_console_notify_handler,
+    virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
+};
 use crate::device::emu_virtio_mmio_handler;
 use crate::kernel::{
     CPU, Cpu, CPU_IF_LIST, CPU_LIST, CpuIf, current_cpu, HEAP_REGION, HeapRegion, INTERRUPT_GLB_BITMAP,
@@ -79,11 +83,9 @@ pub fn update_request() {
 pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
     // TODO: SHARED_MEM
     // TODO: vm0_dtb?
-    // TODO: ipi_register
     // TODO: gic
     // TODO: vgic
     // TODO: cpu
-    // TODO: vm
     // TODO: mediated dev
     heap_init();
     mem_heap_region_init();
@@ -104,8 +106,7 @@ pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
         // INTERRUPT_HYPER_BITMAP, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS
         let interrupt_hyper_bitmap = &*(address_list.interrupt_hyper_bitmap as *const Mutex<BitMap<BitAlloc256>>);
         let interrupt_glb_bitmap = &*(address_list.interrupt_glb_bitmap as *const Mutex<BitMap<BitAlloc256>>);
-        let interrupt_handlers =
-            &*(address_list.interrupt_hyper_bitmap as *const Mutex<[InterruptHandler; INTERRUPT_NUM_MAX]>);
+        let interrupt_handlers = &*(address_list.interrupt_handlers as *const Mutex<BTreeMap<usize, InterruptHandler>>);
         interrupt_update(interrupt_hyper_bitmap, interrupt_glb_bitmap, interrupt_handlers);
 
         let cpu = &*(address_list.cpu as *const Cpu);
@@ -121,10 +122,11 @@ pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
 
         // VM_LIST
         let vm_list = &*(address_list.vm_list as *const Mutex<Vec<Vm>>);
+        vm_list_update(vm_list);
 
         // VCPU_LIST
         let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
-        vcpu_update(vcpu_list);
+        vcpu_update(vcpu_list, vm_list);
     }
 }
 
@@ -132,6 +134,7 @@ pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
 pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
     let mut vm_list = VM_LIST.lock();
     vm_list.clear();
+    drop(vm_list);
     for vm in src_vm_list.lock().iter() {
         let old_inner = vm.inner.lock();
         let pt = match &old_inner.pt {
@@ -189,21 +192,46 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                 for dev in old_inner.emu_devs.iter() {
                     // TODO: wip
                     let new_dev = match dev {
-                        EmuDevs::Vgic(vgic) => {}
-                        EmuDevs::VirtioBlk(blk) => {}
-                        EmuDevs::VirtioNet(net) => {}
-                        EmuDevs::VirtioConsole(console) => {}
-                        EmuDevs::None => {}
+                        EmuDevs::Vgic(vgic) => {
+                            // set vgic after vcpu update
+                            EmuDevs::None
+                        }
+                        EmuDevs::VirtioBlk(blk) => {
+                            let mmio = VirtioMmio::new(0);
+                            mmio.save_mmio(
+                                blk.clone(),
+                                if blk.dev().mediated() {
+                                    Some(virtio_mediated_blk_notify_handler)
+                                } else {
+                                    Some(virtio_blk_notify_handler)
+                                },
+                            );
+                            EmuDevs::VirtioBlk(mmio)
+                        }
+                        EmuDevs::VirtioNet(net) => {
+                            let mmio = VirtioMmio::new(0);
+                            mmio.save_mmio(net.clone(), Some(virtio_net_notify_handler));
+                            EmuDevs::VirtioBlk(mmio)
+                        }
+                        EmuDevs::VirtioConsole(console) => {
+                            let mmio = VirtioMmio::new(0);
+                            mmio.save_mmio(console.clone(), Some(virtio_console_notify_handler));
+                            EmuDevs::VirtioBlk(mmio)
+                        }
+                        EmuDevs::None => EmuDevs::None,
                     };
+                    emu_devs.push(new_dev);
                 }
                 emu_devs
             },
             med_blk_id: old_inner.med_blk_id,
         };
+        let mut vm_list = VM_LIST.lock();
         vm_list.push(Vm {
             inner: Arc::new(Mutex::new(new_inner)),
         });
     }
+    println!("Update VM_LIST");
 }
 
 pub fn heap_region_update(src_heap_region: &Mutex<HeapRegion>) {
@@ -212,6 +240,7 @@ pub fn heap_region_update(src_heap_region: &Mutex<HeapRegion>) {
     heap_region.map = src_region.map;
     heap_region.region = src_region.region;
     assert_eq!(heap_region.region, src_region.region);
+    println!("Update HEAP_REGION");
 }
 
 pub fn vm_region_update(src_vm_region: &Mutex<VmRegion>) {
@@ -221,37 +250,39 @@ pub fn vm_region_update(src_vm_region: &Mutex<VmRegion>) {
         vm_region.region.push(*mem_region);
     }
     assert_eq!(vm_region.region, src_vm_region.lock().region);
+    println!("Update {} region for VM_REGION", vm_region.region.len());
 }
 
 pub fn interrupt_update(
     src_hyper_bitmap: &Mutex<BitMap<BitAlloc256>>,
     src_glb_bitmap: &Mutex<BitMap<BitAlloc256>>,
-    src_handlers: &Mutex<[InterruptHandler; INTERRUPT_NUM_MAX]>,
+    src_handlers: &Mutex<BTreeMap<usize, InterruptHandler>>,
 ) {
     let mut hyper_bitmap = INTERRUPT_HYPER_BITMAP.lock();
     hyper_bitmap = src_hyper_bitmap.lock();
     let mut glb_bitmap = INTERRUPT_GLB_BITMAP.lock();
     glb_bitmap = src_glb_bitmap.lock();
     let mut handlers = INTERRUPT_HANDLERS.lock();
-    for (idx, handler) in src_handlers.lock().iter().enumerate() {
-        if idx >= GIC_PRIVINT_NUM {
-            break;
-        }
+    for (int_id, handler) in src_handlers.lock().iter() {
         match handler {
             InterruptHandler::IpiIrqHandler(_) => {
-                handlers[idx] = InterruptHandler::IpiIrqHandler(ipi_irq_handler);
+                handlers.insert(*int_id, InterruptHandler::IpiIrqHandler(ipi_irq_handler));
             }
             InterruptHandler::GicMaintenanceHandler(_) => {
-                handlers[idx] = InterruptHandler::GicMaintenanceHandler(gic_maintenance_handler);
+                handlers.insert(
+                    *int_id,
+                    InterruptHandler::GicMaintenanceHandler(gic_maintenance_handler),
+                );
             }
             InterruptHandler::TimeIrqHandler(_) => {
-                handlers[idx] = InterruptHandler::TimeIrqHandler(timer_irq_handler);
+                handlers.insert(*int_id, InterruptHandler::TimeIrqHandler(timer_irq_handler));
             }
             InterruptHandler::None => {
-                handlers[idx] = InterruptHandler::None;
+                handlers.insert(*int_id, InterruptHandler::None);
             }
         }
     }
+    println!("Update INTERRUPT_GLB_BITMAP / INTERRUPT_HYPER_BITMAP / INTERRUPT_HANDLERS");
 }
 
 pub fn emu_dev_list_update(src_emu_dev_list: &Mutex<Vec<EmuDevEntry>>) {
@@ -277,6 +308,7 @@ pub fn emu_dev_list_update(src_emu_dev_list: &Mutex<Vec<EmuDevEntry>>) {
             handler: emu_handler,
         });
     }
+    println!("Update {} emu dev for EMU_DEVS_LIST", emu_dev_list.len());
 }
 
 pub fn vm_config_table_update(src_vm_config_table: &Mutex<VmConfigTable>) {
@@ -381,7 +413,7 @@ pub fn vm_config_table_update(src_vm_config_table: &Mutex<VmConfigTable>) {
     println!("Update {} VM to DEF_VM_CONFIG_TABLE", vm_config_table.vm_num);
 }
 
-pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>) {
+pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>>) {
     let mut vcpu_list = VCPU_LIST.lock();
     vcpu_list.clear();
     for vcpu in src_vcpu_list.lock().iter() {
@@ -416,6 +448,20 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>) {
         };
         vm.unwrap().push_vcpu(vcpu.clone());
         vcpu_list.push(vcpu);
+    }
+
+    // Add vgic emu dev for vm
+    for src_vm in src_vm_list.lock().iter() {
+        let src_vgic = src_vm.vgic();
+        let new_vgic = Vgic::default();
+        new_vgic.save_vgic(src_vgic.clone());
+
+        let vm = vm(src_vm.id()).unwrap();
+        if let EmuDevs::None = vm.emu_dev(vm.intc_dev_id()) {
+        } else {
+            panic!("illegal vgic emu dev idx in vm.emu_devs");
+        }
+        vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));
     }
     assert_eq!(vcpu_list.len(), src_vcpu_list.lock().len());
     println!("Update {} Vcpu to VCPU_LIST", vcpu_list.len());

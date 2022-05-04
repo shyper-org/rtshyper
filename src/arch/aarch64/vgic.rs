@@ -12,9 +12,7 @@ use crate::device::EmuDevs;
 use crate::kernel::{active_vcpu_id, current_cpu, restore_vcpu_gic, save_vcpu_gic};
 use crate::kernel::{active_vm, active_vm_id, active_vm_ncpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType};
-use crate::kernel::InitcEvent;
-use crate::kernel::Vcpu;
-use crate::kernel::Vm;
+use crate::kernel::{InitcEvent, Vcpu, Vm, vm};
 use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
 
 use super::gic::*;
@@ -29,6 +27,38 @@ impl VgicInt {
     fn new(id: usize) -> VgicInt {
         VgicInt {
             inner: Arc::new(Mutex::new(VgicIntInner::new(id))),
+            lock: Arc::new(Mutex::new(())),
+        }
+    }
+
+    // back up for hyper fresh
+    pub fn fresh_back_up(&self) -> VgicInt {
+        let inner = self.inner.lock();
+        let owner = {
+            match &inner.owner {
+                None => None,
+                Some(vcpu) => {
+                    let vm_id = vcpu.vm_id();
+                    let vm = vm(vm_id).unwrap();
+                    vm.vcpu(vcpu.id())
+                }
+            }
+        };
+        VgicInt {
+            inner: Arc::new(Mutex::new(VgicIntInner {
+                owner,
+                id: inner.id,
+                hw: inner.hw,
+                in_lr: inner.in_lr,
+                lr: inner.lr,
+                enabled: inner.enabled,
+                state: inner.state,
+                prio: inner.prio,
+                targets: inner.targets,
+                cfg: inner.cfg,
+                in_pend: inner.in_pend,
+                in_act: inner.in_act,
+            })),
             lock: Arc::new(Mutex::new(())),
         }
     }
@@ -290,7 +320,7 @@ impl Vgicd {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Sgis {
     pend: u8,
     act: u8,
@@ -347,10 +377,53 @@ pub struct Vgic {
 }
 
 impl Vgic {
-    fn default() -> Vgic {
+    pub fn default() -> Vgic {
         Vgic {
             vgicd: Mutex::new(Vgicd::default()),
             cpu_priv: Mutex::new(Vec::new()),
+        }
+    }
+
+    // reset vcpu in save vgic, use for hypervisor fresh
+    pub fn save_vgic(&self, src_vgic: Arc<Vgic>) {
+        let src_vgicd = src_vgic.vgicd.lock();
+        let mut cur_vgicd = self.vgicd.lock();
+        cur_vgicd.ctlr = src_vgicd.ctlr;
+        cur_vgicd.iidr = src_vgicd.iidr;
+        cur_vgicd.typer = src_vgicd.typer;
+        for interrupt in src_vgicd.interrupts.iter() {
+            cur_vgicd.interrupts.push(interrupt.fresh_back_up());
+        }
+
+        let src_cpu_priv = src_vgic.cpu_priv.lock();
+        let mut cur_cpu_priv = self.cpu_priv.lock();
+        for cpu_priv in src_cpu_priv.iter() {
+            let vgic_cpu_priv = VgicCpuPriv {
+                curr_lrs: cpu_priv.curr_lrs,
+                sgis: cpu_priv.sgis,
+                interrupts: {
+                    let mut interrupts = vec![];
+                    for interrupt in cpu_priv.interrupts.iter() {
+                        interrupts.push(interrupt.fresh_back_up());
+                    }
+                    interrupts
+                },
+                pend_list: {
+                    let mut pend_list = VecDeque::new();
+                    for pend_int in cpu_priv.pend_list.iter() {
+                        pend_list.push_back(pend_int.fresh_back_up());
+                    }
+                    pend_list
+                },
+                act_list: {
+                    let mut act_list = VecDeque::new();
+                    for act_int in cpu_priv.act_list.iter() {
+                        act_list.push_back(act_int.fresh_back_up());
+                    }
+                    act_list
+                },
+            };
+            cur_cpu_priv.push(vgic_cpu_priv);
         }
     }
 

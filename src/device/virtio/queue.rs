@@ -379,7 +379,7 @@ impl Virtq {
         used.idx
     }
 
-    pub fn migrate_save(&self, vq: Virtq) {
+    pub fn save_vq(&self, vq: Virtq, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
         let mut dst_inner = self.inner.lock();
         let src_inner = vq.inner.lock();
         dst_inner.ready = src_inner.ready;
@@ -400,7 +400,7 @@ impl Virtq {
         dst_inner.desc_table_addr = src_inner.desc_table_addr;
         dst_inner.avail_addr = src_inner.avail_addr;
         dst_inner.used_addr = src_inner.used_addr;
-        dst_inner.notify_handler = src_inner.notify_handler;
+        dst_inner.notify_handler = notify_handler;
     }
 }
 

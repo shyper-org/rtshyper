@@ -1,3 +1,5 @@
+use alloc::collections::BTreeMap;
+
 use spin::Mutex;
 
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
@@ -14,8 +16,9 @@ pub const INTERRUPT_IRQ_IPI: usize = 1;
 
 pub static INTERRUPT_HYPER_BITMAP: Mutex<BitMap<BitAlloc256>> = Mutex::new(BitAlloc4K::default());
 pub static INTERRUPT_GLB_BITMAP: Mutex<BitMap<BitAlloc256>> = Mutex::new(BitAlloc4K::default());
-pub static INTERRUPT_HANDLERS: Mutex<[InterruptHandler; INTERRUPT_NUM_MAX]> =
-    Mutex::new([InterruptHandler::None; INTERRUPT_NUM_MAX]);
+// pub static INTERRUPT_HANDLERS: Mutex<[InterruptHandler; INTERRUPT_NUM_MAX]> =
+//     Mutex::new([InterruptHandler::None; INTERRUPT_NUM_MAX]);
+pub static INTERRUPT_HANDLERS: Mutex<BTreeMap<usize, InterruptHandler>> = Mutex::new(BTreeMap::new());
 
 #[derive(Copy, Clone)]
 pub enum InterruptHandler {
@@ -45,7 +48,8 @@ pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
         let mut irq_handler_lock = INTERRUPT_HANDLERS.lock();
         let mut hyper_bitmap_lock = INTERRUPT_HYPER_BITMAP.lock();
         let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
-        irq_handler_lock[int_id] = handler;
+        // irq_handler_lock[int_id] = handler;
+        irq_handler_lock.insert(int_id, handler);
         hyper_bitmap_lock.set(int_id);
         glb_bitmap_lock.set(int_id)
     }
@@ -134,7 +138,7 @@ pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     if interrupt_is_reserved(int_id) {
         let irq_handler_list = INTERRUPT_HANDLERS.lock();
-        let irq_handler = irq_handler_list[int_id].clone();
+        let irq_handler = irq_handler_list.get(&int_id).unwrap().clone();
         drop(irq_handler_list);
         match irq_handler {
             InterruptHandler::IpiIrqHandler(ipi_handler) => {
