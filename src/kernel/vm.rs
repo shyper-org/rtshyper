@@ -313,8 +313,14 @@ impl Vm {
     pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
         let vm_inner = self.inner.lock();
         if vm_inner.vcpu_list.len() > index {
+            assert_eq!(index, vm_inner.vcpu_list[index].id());
             Some(vm_inner.vcpu_list[index].clone())
         } else {
+            println!(
+                "vcpu idx {} is to large than vcpu_list len {}",
+                index,
+                vm_inner.vcpu_list.len()
+            );
             None
         }
     }
@@ -385,6 +391,11 @@ impl Vm {
     pub fn set_config_entry(&self, config: Option<VmConfigEntry>) {
         let mut vm_inner = self.inner.lock();
         vm_inner.config = config;
+    }
+
+    pub fn intc_dev_id(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        vm_inner.intc_dev_id
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
@@ -523,10 +534,10 @@ impl Vm {
     }
 
     // TODO: should copy from or copy to addr, not copy from other vm
-    pub fn migrate_emu_dev(&self, src_vm: Vm) {
+    pub fn migrate_emu_devs(&self, src_vm: Vm) {
         let mut vm_inner = self.inner.lock();
         for (idx, emu_dev) in vm_inner.emu_devs.iter_mut().enumerate() {
-            emu_dev.migrate_save(src_vm.emu_dev(idx));
+            emu_dev.migrate_emu_devs(src_vm.emu_dev(idx));
         }
     }
 

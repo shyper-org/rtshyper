@@ -42,6 +42,21 @@ impl ConsoleDesc {
         }
     }
 
+    pub fn back_up(&self) -> ConsoleDesc {
+        let current_inner = self.inner.lock();
+        let inner = ConsoleDescInner {
+            oppo_end_vmid: current_inner.oppo_end_vmid,
+            oppo_end_ipa: current_inner.oppo_end_ipa,
+            cols: current_inner.cols,
+            rows: current_inner.rows,
+            max_nr_ports: current_inner.max_nr_ports,
+            emerg_wr: current_inner.emerg_wr,
+        };
+        ConsoleDesc {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+
     pub fn cfg_init(&self, oppo_end_vmid: u16, oppo_end_ipa: u64) {
         let mut inner = self.inner.lock();
         inner.oppo_end_vmid = oppo_end_vmid;

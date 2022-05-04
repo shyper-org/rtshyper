@@ -92,7 +92,7 @@ impl VirtMmioRegs {
         self.q_sel = 0;
     }
 
-    pub fn migrate_save(&mut self, src: &VirtMmioRegs) {
+    pub fn save_regs(&mut self, src: &VirtMmioRegs) {
         self.magic = src.magic;
         self.version = src.version;
         self.device_id = src.device_id;
@@ -319,15 +319,15 @@ impl VirtioMmio {
         return vq.call_notify_handler(self.clone());
     }
 
-    pub fn migrate_save(&self, virtio_mmio: VirtioMmio) {
+    pub fn save_mmio(&self, virtio_mmio: VirtioMmio, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
         let mut dst_dev = self.inner.lock();
         let src_dev = virtio_mmio.inner.lock();
         dst_dev.id = src_dev.id;
         dst_dev.driver_features = src_dev.driver_features;
-        dst_dev.regs.migrate_save(&src_dev.regs);
-        dst_dev.dev.migrate_save(src_dev.dev.clone());
+        dst_dev.regs.save_regs(&src_dev.regs);
+        dst_dev.dev.save_virt_dev(src_dev.dev.clone());
         for (idx, vq) in dst_dev.vq.iter_mut().enumerate() {
-            vq.migrate_save(src_dev.vq[idx].clone());
+            vq.save_vq(src_dev.vq[idx].clone(), notify_handler);
         }
     }
 }

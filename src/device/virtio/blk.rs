@@ -37,6 +37,7 @@ pub const VIRTIO_BLK_S_OK: usize = 0;
 pub const VIRTIO_BLK_S_UNSUPP: usize = 2;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct BlkGeometry {
     cylinders: u16,
     heads: u8,
@@ -54,6 +55,7 @@ impl BlkGeometry {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 struct BlkTopology {
     // # of logical blocks per physical block (log2)
     physical_block_exp: u8,
@@ -87,6 +89,13 @@ impl BlkDesc {
             inner: Arc::new(Mutex::new(BlkDescInner::default())),
         }
     }
+    pub fn back_up(&self) -> BlkDesc {
+        let current_inner = self.inner.lock();
+        let inner = *current_inner;
+        BlkDesc {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
 
     pub fn cfg_init(&self, bsize: usize) {
         let mut inner = self.inner.lock();
@@ -111,6 +120,7 @@ impl BlkDesc {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct BlkDescInner {
     capacity: usize,
     size_max: u32,
@@ -181,6 +191,50 @@ impl VirtioBlkReq {
         VirtioBlkReq {
             inner: Arc::new(Mutex::new(VirtioBlkReqInner::default())),
             req_list: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub fn back_up(&self) -> VirtioBlkReq {
+        let current_inner = self.inner.lock();
+        let current_req_list = self.req_list.lock();
+        let inner = VirtioBlkReqInner {
+            region: BlkReqRegion {
+                start: current_inner.region.start,
+                size: current_inner.region.size,
+            },
+            mediated: current_inner.mediated,
+            process_list: {
+                let mut list = vec![];
+                for process in current_inner.process_list.iter() {
+                    list.push(*process)
+                }
+                list
+            },
+        };
+        let mut req_list = vec![];
+        for req in current_req_list.iter() {
+            req_list.push(VirtioBlkReqNode {
+                req_type: req.req_type,
+                reserved: req.reserved,
+                sector: req.sector,
+                desc_chain_head_idx: req.desc_chain_head_idx,
+                iov: {
+                    let mut iov = vec![];
+                    for io in req.iov.iter() {
+                        iov.push(BlkIov {
+                            data_bg: io.data_bg,
+                            len: io.len,
+                        });
+                    }
+                    iov
+                },
+                iov_sum_up: req.iov_sum_up,
+                iov_total: req.iov_total,
+            });
+        }
+        VirtioBlkReq {
+            inner: Arc::new(Mutex::new(inner)),
+            req_list: Arc::new(Mutex::new(req_list)),
         }
     }
 

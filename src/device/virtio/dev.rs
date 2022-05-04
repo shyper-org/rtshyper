@@ -10,6 +10,7 @@ use crate::device::{console_features, ConsoleDesc};
 use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
 use crate::device::{BlkStat, NicStat};
+use crate::device::DevReq::BlkReq;
 use crate::kernel::mem_pages_alloc;
 use crate::mm::PageFrame;
 
@@ -29,17 +30,17 @@ pub enum DevStat {
 }
 
 impl DevStat {
-    pub fn copy_from(&self, stat: DevStat) {
-        match self {
-            DevStat::BlkStat(_) => {
-                panic!("DevStat reserve for blk state");
+    pub fn copy_from(&mut self, stat: DevStat) {
+        match stat {
+            DevStat::BlkStat(src_stat) => {
+                *self = DevStat::BlkStat(src_stat.back_up());
             }
-            DevStat::NicStat(dst_stat) => {
-                if let DevStat::NicStat(src_stat) = stat {
-                    dst_stat.migrate_save(src_stat);
-                }
+            DevStat::NicStat(src_stat) => {
+                *self = DevStat::NicStat(src_stat.back_up());
             }
-            DevStat::None => {}
+            DevStat::None => {
+                *self = DevStat::None;
+            }
         }
     }
 }
@@ -54,21 +55,17 @@ pub enum DevDesc {
 
 impl DevDesc {
     pub fn copy_from(&mut self, desc: DevDesc) {
-        match self {
-            DevDesc::BlkDesc(blk) => {
-                todo!("reserve for emu blk");
+        match desc {
+            DevDesc::BlkDesc(src_desc) => {
+                *self = DevDesc::BlkDesc(src_desc);
             }
-            DevDesc::NetDesc(dst_desc) => {
-                if let DevDesc::NetDesc(src_desc) = desc {
-                    dst_desc.migrate_save(src_desc.clone());
-                }
+            DevDesc::NetDesc(src_desc) => {
+                *self = DevDesc::NetDesc(src_desc.back_up());
             }
-            DevDesc::ConsoleDesc(dst_desc) => {
-                if let DevDesc::ConsoleDesc(src_desc) = desc {
-                    dst_desc.migrate_save(src_desc.clone());
-                }
+            DevDesc::ConsoleDesc(src_desc) => {
+                *self = DevDesc::ConsoleDesc(src_desc.back_up());
             }
-            DevDesc::None => {}
+            DevDesc::None => *self = DevDesc::None,
         }
     }
 }
@@ -77,6 +74,19 @@ impl DevDesc {
 pub enum DevReq {
     BlkReq(VirtioBlkReq),
     None,
+}
+
+impl DevReq {
+    pub fn copy_from(&mut self, src_req: DevReq) {
+        match src_req {
+            DevReq::BlkReq(req) => {
+                *self = BlkReq(req.back_up());
+            }
+            DevReq::None => {
+                *self = DevReq::None;
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -146,7 +156,7 @@ impl VirtDev {
         inner.mediated()
     }
 
-    pub fn migrate_save(&self, src_dev: VirtDev) {
+    pub fn save_virt_dev(&self, src_dev: VirtDev) {
         let mut inner = self.inner.lock();
         let src_dev_inner = src_dev.inner.lock();
         inner.activated = src_dev_inner.activated;
@@ -155,9 +165,12 @@ impl VirtDev {
         inner.generation = src_dev_inner.generation;
         inner.int_id = src_dev_inner.int_id;
         inner.desc.copy_from(src_dev_inner.desc.clone());
-        // reserve inner.req
-        inner.req = DevReq::None;
+        inner.req.copy_from(src_dev_inner.req.clone());
         // inner.cache is set by fn dev_init, no need to copy here
+        inner.cache = match &src_dev_inner.cache {
+            None => None,
+            Some(page) => Some(PageFrame::new(page.pa)),
+        };
         inner.stat.copy_from(src_dev_inner.stat.clone());
     }
 }

@@ -4,7 +4,10 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::Vgic;
-use crate::device::VirtioMmio;
+use crate::device::{
+    virtio_blk_notify_handler, virtio_console_notify_handler, virtio_mediated_blk_notify_handler,
+    virtio_net_notify_handler, VirtioMmio,
+};
 use crate::kernel::{current_cpu, vm};
 use crate::lib::in_range;
 
@@ -21,33 +24,39 @@ pub enum EmuDevs {
 }
 
 impl EmuDevs {
-    pub fn migrate_save(&mut self, src_dev: EmuDevs) {
+    pub fn migrate_emu_devs(&mut self, src_dev: EmuDevs) {
         match self {
             EmuDevs::Vgic(vgic) => {
-                // TODO not sure this can work;
                 if let EmuDevs::Vgic(src_vgic) = src_dev {
-                    *vgic = src_vgic.clone();
+                    vgic.save_vgic(src_vgic.clone());
                 } else {
                     println!("EmuDevs::migrate_save: illegal src dev type for vgic");
                 }
             }
             EmuDevs::VirtioBlk(mmio) => {
                 if let EmuDevs::VirtioBlk(src_mmio) = src_dev {
-                    mmio.migrate_save(src_mmio);
+                    mmio.save_mmio(
+                        src_mmio.clone(),
+                        if src_mmio.dev().mediated() {
+                            Some(virtio_mediated_blk_notify_handler)
+                        } else {
+                            Some(virtio_blk_notify_handler)
+                        },
+                    );
                 } else {
                     println!("EmuDevs::migrate_save: illegal src dev type for virtio blk");
                 }
             }
             EmuDevs::VirtioNet(mmio) => {
                 if let EmuDevs::VirtioNet(src_mmio) = src_dev {
-                    mmio.migrate_save(src_mmio);
+                    mmio.save_mmio(src_mmio, Some(virtio_net_notify_handler));
                 } else {
                     println!("EmuDevs::migrate_save: illegal src dev type for virtio net");
                 }
             }
             EmuDevs::VirtioConsole(mmio) => {
                 if let EmuDevs::VirtioConsole(src_mmio) = src_dev {
-                    mmio.migrate_save(src_mmio);
+                    mmio.save_mmio(src_mmio, Some(virtio_console_notify_handler));
                 } else {
                     println!("EmuDevs::migrate_save: illegal src dev type for virtio console");
                 }

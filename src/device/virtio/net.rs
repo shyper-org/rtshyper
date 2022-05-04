@@ -76,6 +76,17 @@ impl NetDesc {
         }
     }
 
+    pub fn back_up(&self) -> NetDesc {
+        let current_inner = self.inner.lock();
+        let inner = NetDescInner {
+            mac: current_inner.mac,
+            status: current_inner.status,
+        };
+        NetDesc {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+
     pub fn cfg_init(&self, mac: &Vec<usize>) {
         let mut inner = self.inner.lock();
         inner.mac[0] = mac[0] as u8;

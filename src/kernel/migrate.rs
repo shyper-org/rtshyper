@@ -69,7 +69,7 @@ pub fn migrate_finish_ipi_handler(vm_id: usize) {
     vm_if_copy_mem_map(vm_id);
     vm.context_vm_migrate_save();
     // TODO: migrate vm dev
-    dst_vm.migrate_emu_dev(vm.clone());
+    dst_vm.migrate_emu_devs(vm.clone());
     hvc_send_msg_to_vm(
         0,
         &HvcGuestMsg::Migrate(HvcMigrateMsg {
