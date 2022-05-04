@@ -214,7 +214,7 @@ impl VmInterface {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct VmPa {
     pub pa_start: usize,
     pub pa_length: usize,

@@ -12,13 +12,13 @@ use crate::config::{
     DEF_VM_CONFIG_TABLE, VmConfigEntry, VmConfigTable, VmDtbDevConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
     VmEmulatedDeviceConfigList, VmMemoryConfig, VmPassthroughDeviceConfig,
 };
-use crate::device::{EMU_DEVS_LIST, EmuDevEntry, EmuDeviceType};
+use crate::device::{EMU_DEVS_LIST, EmuDevEntry, EmuDeviceType, EmuDevs};
 use crate::device::emu_virtio_mmio_handler;
 use crate::kernel::{
     CPU, Cpu, CPU_IF_LIST, CPU_LIST, CpuIf, current_cpu, HEAP_REGION, HeapRegion, INTERRUPT_GLB_BITMAP,
     INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, INTERRUPT_NUM_MAX, InterruptHandler, ipi_irq_handler,
     mem_heap_region_init, MemRegion, SchedType, SchedulerRR, timer_irq_handler, Vcpu, VCPU_LIST, VcpuInner, VcpuPool,
-    VcpuState, Vm, VM_LIST, VM_REGION, VmInner, VmRegion,
+    VcpuState, vm, Vm, VM_LIST, VM_REGION, VmInner, VmPa, VmRegion,
 };
 use crate::lib::{BitAlloc256, BitMap};
 use crate::mm::{heap_init, PageFrame};
@@ -111,10 +111,6 @@ pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
         let cpu = &*(address_list.cpu as *const Cpu);
         let cpu_if = &*(address_list.cpu_if as *const Mutex<Vec<CpuIf>>);
 
-        // VCPU_LIST
-        let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
-        vcpu_update(vcpu_list);
-
         // VM_REGION
         let vm_region = &*(address_list.vm_region as *const Mutex<VmRegion>);
         vm_region_update(vm_region);
@@ -125,9 +121,14 @@ pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
 
         // VM_LIST
         let vm_list = &*(address_list.vm_list as *const Mutex<Vec<Vm>>);
+
+        // VCPU_LIST
+        let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
+        vcpu_update(vcpu_list);
     }
 }
 
+// Set vm.vcpu_list in vcpu_update
 pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
     let mut vm_list = VM_LIST.lock();
     vm_list.clear();
@@ -143,6 +144,7 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                 for page in page_table.pages.lock().iter() {
                     new_page_table.pages.lock().push(PageFrame::new(page.pa));
                 }
+                Some(new_page_table)
             }
         };
 
@@ -152,21 +154,55 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
             config: None,
             dtb: old_inner.dtb, // maybe need to reset
             pt,
-            mem_region_num: 0,
-            pa_region: vec![],
-            entry_point: 0,
-            has_master: false,
+            mem_region_num: old_inner.mem_region_num,
+            pa_region: {
+                let mut pa_region = vec![];
+                for region in old_inner.pa_region.iter() {
+                    pa_region.push(*region);
+                }
+                pa_region
+            },
+            entry_point: old_inner.entry_point,
+            has_master: old_inner.has_master,
             vcpu_list: vec![],
-            cpu_num: 0,
-            ncpu: 0,
-            intc_dev_id: 0,
-            int_bitmap: None,
-            share_mem_base: 0,
-            migrate_save_pf: vec![],
-            migrate_restore_pf: vec![],
-            emu_devs: vec![],
-            med_blk_id: None,
+            cpu_num: old_inner.cpu_num,
+            ncpu: old_inner.ncpu,
+            intc_dev_id: old_inner.intc_dev_id,
+            int_bitmap: old_inner.int_bitmap,
+            share_mem_base: old_inner.share_mem_base,
+            migrate_save_pf: {
+                let mut pf = vec![];
+                for page in old_inner.migrate_save_pf.iter() {
+                    pf.push(PageFrame::new(page.pa));
+                }
+                pf
+            },
+            migrate_restore_pf: {
+                let mut pf = vec![];
+                for page in old_inner.migrate_restore_pf.iter() {
+                    pf.push(PageFrame::new(page.pa));
+                }
+                pf
+            },
+            emu_devs: {
+                let mut emu_devs = vec![];
+                for dev in old_inner.emu_devs.iter() {
+                    // TODO: wip
+                    let new_dev = match dev {
+                        EmuDevs::Vgic(vgic) => {}
+                        EmuDevs::VirtioBlk(blk) => {}
+                        EmuDevs::VirtioNet(net) => {}
+                        EmuDevs::VirtioConsole(console) => {}
+                        EmuDevs::None => {}
+                    };
+                }
+                emu_devs
+            },
+            med_blk_id: old_inner.med_blk_id,
         };
+        vm_list.push(Vm {
+            inner: Arc::new(Mutex::new(new_inner)),
+        });
     }
 }
 
@@ -345,30 +381,41 @@ pub fn vm_config_table_update(src_vm_config_table: &Mutex<VmConfigTable>) {
     println!("Update {} VM to DEF_VM_CONFIG_TABLE", vm_config_table.vm_num);
 }
 
-// TODO: set vcpu.vm later
 pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>) {
     let mut vcpu_list = VCPU_LIST.lock();
     vcpu_list.clear();
     for vcpu in src_vcpu_list.lock().iter() {
         let src_inner = vcpu.inner.lock();
+        let src_vm_option = src_inner.vm.clone();
+        let vm = match src_vm_option {
+            None => None,
+            Some(src_vm) => {
+                let vm_id = src_vm.id();
+                vm(vm_id)
+            }
+        };
+
         let mut vcpu_inner = VcpuInner {
             id: src_inner.id,
             phys_id: src_inner.phys_id,
             state: src_inner.state,
-            vm: None,
-            int_list: vec![],
+            vm: vm.clone(),
+            int_list: {
+                let mut int_list = vec![];
+                for int in src_inner.int_list.iter() {
+                    int_list.push(*int);
+                }
+                int_list
+            },
             vcpu_ctx: src_inner.vcpu_ctx,
             vm_ctx: src_inner.vm_ctx,
         };
-        // need to check
-        for int in src_inner.int_list.iter() {
-            vcpu_inner.int_list.push(*int);
-        }
         assert_eq!(vcpu_inner.int_list, src_inner.int_list);
-
-        vcpu_list.push(Vcpu {
+        let vcpu = Vcpu {
             inner: Arc::new((Mutex::new(vcpu_inner))),
-        })
+        };
+        vm.unwrap().push_vcpu(vcpu.clone());
+        vcpu_list.push(vcpu);
     }
     assert_eq!(vcpu_list.len(), src_vcpu_list.lock().len());
     println!("Update {} Vcpu to VCPU_LIST", vcpu_list.len());
