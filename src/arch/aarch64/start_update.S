@@ -157,17 +157,25 @@ update_request:
     ret
 
 live_update:
-    sub sp, sp, #32
+    sub sp, sp, #40
     stp x0, x1, [sp, #0]
-    str x2, [sp, #16]
-    str x30, [sp, #24]
+    stp x2, x3, [sp, #16]
+    str x30, [sp, #32]
 
+    mov x3, x0
+    ldr x0, =_bss_begin
+    ldr x1, =_bss_end
+    sub x2, x1, x0
+    mov x1, xzr
+    bl  memset
+
+    mov x0, x3
     bl  rust_shyper_update
 
-    ldr x30, [sp, #24]
-    ldr x2, [sp, #16]
+    ldr x30, [sp, #32]
+    ldp x2, x3, [sp, #16]
     ldp x0, x1, [sp, #0]
-    add sp, sp, #32
+    add sp, sp, #40
     ret
 
 .align 12

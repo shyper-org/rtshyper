@@ -10,7 +10,7 @@ use crate::kernel::{
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::trace;
 
-static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
+pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
 pub fn mediated_blk_list_push(blk: MediatedBlk) {
     let mut list = MEDIATED_BLK_LIST.lock();
@@ -51,8 +51,8 @@ pub fn mediated_blk_list_get_from_pa(pa: usize) -> Option<MediatedBlk> {
 
 #[derive(Clone)]
 pub struct MediatedBlk {
-    base_addr: usize,
-    avail: bool, // mediated blk will not be removed after append
+    pub base_addr: usize,
+    pub avail: bool, // mediated blk will not be removed after append
 }
 
 impl MediatedBlk {

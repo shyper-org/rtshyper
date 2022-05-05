@@ -46,6 +46,11 @@ impl VcpuPool {
         pool.base_slice
     }
 
+    pub fn set_slice(&self, slice: usize) {
+        let mut pool = self.inner.lock();
+        pool.base_slice = slice;
+    }
+
     pub fn next_vcpu_idx(&self) -> usize {
         let mut pool = self.inner.lock();
         if pool.content.len() == 0 {
@@ -145,6 +150,11 @@ impl VcpuPool {
         pool.running += 1;
     }
 
+    pub fn set_running(&self, running: usize) {
+        let mut pool = self.inner.lock();
+        pool.running = running;
+    }
+
     pub fn pop_vcpu_through_vmid(&self, vmid: usize) -> Option<Vcpu> {
         let pool = self.inner.lock();
         for i in 0..pool.content.len() {
@@ -183,12 +193,17 @@ impl VcpuPool {
     pub fn set_active_vcpu(&self, idx: usize) -> Vcpu {
         let mut pool = self.inner.lock();
         if idx >= pool.content.len() {
-            panic!("to large idx {} for vcpu_pool", idx);
+            panic!("To large idx {} for vcpu_pool", idx);
         }
         let vcpu = pool.content[idx].vcpu.clone();
         pool.active_idx = idx;
         vcpu.set_state(VcpuState::VcpuAct);
         vcpu.clone()
+    }
+
+    pub fn active_idx(&self) -> usize {
+        let pool = self.inner.lock();
+        pool.active_idx
     }
 
     pub fn append_vcpu(&self, vcpu: Vcpu) -> bool {

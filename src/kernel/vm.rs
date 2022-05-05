@@ -472,7 +472,12 @@ impl Vm {
 
     pub fn config(&self) -> VmConfigEntry {
         let vm_inner = self.inner.lock();
-        vm_inner.config.as_ref().unwrap().clone()
+        match &vm_inner.config {
+            None => {
+                panic!("VM[{}] do not have vm config entry", vm_inner.id);
+            }
+            Some(config) => config.clone(),
+        }
     }
 
     pub fn add_region(&self, region: VmPa) {
@@ -814,20 +819,6 @@ impl VmInner {
     }
 }
 
-// static VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
-// lazy_static! {
-//     pub static ref VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([Vm::default(); VM_NUM_MAX]);
-// }
-// pub static VM_LIST: Mutex<[Vm; VM_NUM_MAX]> = Mutex::new([
-//     Vm::default(),
-//     Vm::default(),
-//     Vm::default(),
-//     Vm::default(),
-//     Vm::default(),
-//     Vm::default(),
-//     Vm::default(),
-//     Vm::default(),
-// ]);
 pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
 
 pub fn push_vm(id: usize) -> Result<(), ()> {

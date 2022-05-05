@@ -160,12 +160,10 @@ impl VmRegion {
     }
 }
 
-lazy_static! {
-    pub static ref HEAP_REGION: Mutex<HeapRegion> = Mutex::new(HeapRegion {
-        map: BitAlloc64K::default(),
-        region: MemRegion::new(),
-    });
-}
+pub static HEAP_REGION: Mutex<HeapRegion> = Mutex::new(HeapRegion {
+    map: BitAlloc64K::default(),
+    region: MemRegion::new(),
+});
 
 pub static VM_REGION: Mutex<VmRegion> = Mutex::new(VmRegion {
     region: Vec::<MemRegion>::new(),

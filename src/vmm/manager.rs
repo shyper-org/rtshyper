@@ -9,18 +9,18 @@ use crate::config::NAME_MAX_LEN;
 use crate::config::vm_cfg_entry;
 use crate::config::vm_type;
 use crate::device::create_fdt;
-use crate::kernel::HVC_CONFIG;
-use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
-use crate::kernel::HVC_VMM;
-use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::kernel::{
-    active_vcpu_id, active_vm, cpu_idle, current_cpu, timer_enable, vcpu_run, vm, push_vm, Vm, vm_if_get_state,
+    active_vcpu_id, active_vm, cpu_idle, current_cpu, push_vm, timer_enable, vcpu_run, vm, Vm, vm_if_get_state,
     vm_if_reset, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcManageMsg};
-use crate::lib::{memcpy_safe, memset_safe, bit_extract};
+use crate::kernel::HVC_CONFIG;
+use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
+use crate::kernel::HVC_VMM;
+use crate::kernel::HVC_VMM_REBOOT_VM;
+use crate::lib::{bit_extract, memcpy_safe, memset_safe};
 use crate::vmm::{vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
 use crate::vmm::vmm_load_image;
 
@@ -75,8 +75,8 @@ pub fn vmm_alloc_vcpu(vm_id: usize) {
     for i in 0..vm.config().cpu_num() {
         use crate::kernel::vcpu_alloc;
         if let Some(vcpu) = vcpu_alloc() {
-            vm.push_vcpu(vcpu.clone());
             vcpu.init(vm.clone(), i);
+            vm.push_vcpu(vcpu.clone());
         } else {
             println!("failed to allocte vcpu");
             return;
@@ -147,11 +147,10 @@ pub fn vmm_set_up_cpu(vm_id: usize) {
     // Waiting till others set up.
     loop {
         println!(
-            "vmm_set_up_cpu: on core {},waiting VM [{}] to be set up",
+            "vmm_set_up_cpu: on core {}, waiting VM [{}] to be set up",
             current_cpu().id,
             vm_id
         );
-
         if vm.ready() {
             break;
         }
@@ -252,7 +251,7 @@ pub fn vmm_reboot_vm(arg: usize) {
     if !hvc_send_msg_to_vm(vm_id, &HvcGuestMsg::Manage(msg)) {
         println!("vmm_reboot_vm: failed to notify VM 0");
     }
-}  
+}
 
 /* Reset vm os at current core.
  *

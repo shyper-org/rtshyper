@@ -67,6 +67,7 @@ pub struct IpiVmmMsg {
     pub event: VmmEvent,
 }
 
+// only support for mediated blk
 #[derive(Clone)]
 pub struct IpiMediatedMsg {
     pub src_id: usize,
@@ -75,12 +76,12 @@ pub struct IpiMediatedMsg {
     // pub avail_idx: u16,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct IpiMediatedNotifyMsg {
     pub vm_id: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct IpiHvcMsg {
     pub src_vmid: usize,
     pub trgt_vmid: usize,
@@ -88,7 +89,7 @@ pub struct IpiHvcMsg {
     pub event: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct IpiIntInjectMsg {
     pub vm_id: usize,
     pub int_id: usize,
@@ -99,7 +100,7 @@ pub enum IpiType {
     IpiTIntc = 0,
     IpiTPower = 1,
     IpiTEthernetMsg = 2,
-    IpiTEthernetAck = 3,
+    IpiTHyperFresh = 3,
     IpiTHvc = 4,
     IpiTVMM = 5,
     IpiTMediatedDev = 6,
@@ -117,6 +118,7 @@ pub enum IpiInnerMsg {
     MediatedNotifyMsg(IpiMediatedNotifyMsg),
     HvcMsg(IpiHvcMsg),
     IntInjectMsg(IpiIntInjectMsg),
+    HyperFreshMsg(),
     None,
 }
 
@@ -140,7 +142,7 @@ impl IpiHandler {
     }
 }
 
-static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
+pub static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
 
 pub fn ipi_irq_handler() {
     // println!("ipi handler");
