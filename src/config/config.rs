@@ -267,7 +267,7 @@ impl VmConfigEntry {
         self.id
     }
 
-    pub fn set_id_cfg(&mut self, id: usize) {
+    pub fn set_id(&mut self, id: usize) {
         self.id = id;
     }
 
@@ -523,7 +523,7 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
             if vm_id == 0 && (vm_config.entries.len() > 0 || vm_config.vm_num > 0) {
                 panic!("error in mvm config init, the def vm config table is not empty");
             }
-            vm_cfg_entry.set_id_cfg(vm_id);
+            vm_cfg_entry.set_id(vm_id);
             vm_config.vm_num += 1;
             vm_config.entries.push(vm_cfg_entry.clone());
             println!(

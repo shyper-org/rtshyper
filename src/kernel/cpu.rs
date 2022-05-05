@@ -19,18 +19,30 @@ pub const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C)]
 #[repr(align(4096))]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, Eq)]
 pub struct CpuPt {
     pub lvl1: [usize; PTE_PER_PAGE],
     pub lvl2: [usize; PTE_PER_PAGE],
     pub lvl3: [usize; PTE_PER_PAGE],
 }
 
-#[derive(Copy, Clone, Debug)]
+impl PartialEq for CpuPt {
+    fn eq(&self, other: &Self) -> bool {
+        self.lvl1 == other.lvl1 && self.lvl2 == other.lvl2 && self.lvl3 == other.lvl3
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq)]
 pub enum CpuState {
     CpuInv = 0,
     CpuIdle = 1,
     CpuRun = 2,
+}
+
+impl PartialEq for CpuState {
+    fn eq(&self, other: &Self) -> bool {
+        *self as usize == *other as usize
+    }
 }
 
 pub struct CpuIf {

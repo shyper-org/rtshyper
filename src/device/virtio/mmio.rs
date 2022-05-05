@@ -326,8 +326,10 @@ impl VirtioMmio {
         dst_dev.driver_features = src_dev.driver_features;
         dst_dev.regs.save_regs(&src_dev.regs);
         dst_dev.dev.save_virt_dev(src_dev.dev.clone());
-        for (idx, vq) in dst_dev.vq.iter_mut().enumerate() {
-            vq.save_vq(src_dev.vq[idx].clone(), notify_handler);
+        for vq in src_dev.vq.iter() {
+            let new_vq = Virtq::default();
+            new_vq.save_vq(vq.clone(), notify_handler);
+            dst_dev.vq.push(new_vq);
         }
     }
 }

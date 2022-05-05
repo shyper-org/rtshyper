@@ -5,8 +5,8 @@ use tock_registers::interfaces::*;
 
 const CTL_IMASK: usize = 1 << 1;
 
-static TIMER_FREQ: Mutex<usize> = Mutex::new(0);
-static TIMER_SLICE: Mutex<usize> = Mutex::new(0);
+pub static TIMER_FREQ: Mutex<usize> = Mutex::new(0);
+pub static TIMER_SLICE: Mutex<usize> = Mutex::new(0);
 
 pub fn timer_arch_set(num: usize) {
     let slice_lock = TIMER_SLICE.lock();

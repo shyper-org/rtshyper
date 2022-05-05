@@ -3,57 +3,87 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use spin::Mutex;
+use spin::{Mutex, RwLock};
 
 use crate::arch::{
-    emu_intc_handler, emu_intc_init, gic_maintenance_handler, GIC_PRIVINT_NUM, PageTable,
-    partial_passthrough_intc_handler, partial_passthrough_intc_init, Vgic,
+    emu_intc_handler, emu_intc_init, GIC_LRS_NUM, gic_maintenance_handler, GIC_PRIVINT_NUM, gicc_clear_current_irq,
+    PageTable, partial_passthrough_intc_handler, partial_passthrough_intc_init, psci_ipi_handler, TIMER_FREQ,
+    TIMER_SLICE, Vgic, vgic_ipi_handler,
 };
 use crate::config::{
-    DEF_VM_CONFIG_TABLE, VmConfigEntry, VmConfigTable, VmDtbDevConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
-    VmEmulatedDeviceConfigList, VmMemoryConfig, VmPassthroughDeviceConfig,
+    DEF_VM_CONFIG_TABLE, vm_cfg_entry, VmConfigEntry, VmConfigTable, VmDtbDevConfig, VMDtbDevConfigList,
+    VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmMemoryConfig, VmPassthroughDeviceConfig,
 };
 use crate::device::{
-    EMU_DEVS_LIST, EmuDevEntry, EmuDeviceType, EmuDevs, virtio_blk_notify_handler, virtio_console_notify_handler,
-    virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
+    EMU_DEVS_LIST, emu_virtio_mmio_handler, EmuDevEntry, EmuDeviceType, EmuDevs, ethernet_ipi_rev_handler,
+    MEDIATED_BLK_LIST, mediated_ipi_handler, mediated_notify_ipi_handler, MediatedBlk, virtio_blk_notify_handler,
+    virtio_console_notify_handler, virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
 };
-use crate::device::emu_virtio_mmio_handler;
 use crate::kernel::{
-    CPU, Cpu, CPU_IF_LIST, CPU_LIST, CpuIf, current_cpu, HEAP_REGION, HeapRegion, INTERRUPT_GLB_BITMAP,
-    INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, INTERRUPT_NUM_MAX, InterruptHandler, ipi_irq_handler,
-    mem_heap_region_init, MemRegion, SchedType, SchedulerRR, timer_irq_handler, Vcpu, VCPU_LIST, VcpuInner, VcpuPool,
-    VcpuState, vm, Vm, VM_LIST, VM_REGION, VmInner, VmPa, VmRegion,
+    CPU, Cpu, cpu_idle, CPU_IF_LIST, CPU_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion, hvc_ipi_handler,
+    INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler, INTERRUPT_NUM_MAX,
+    InterruptHandler, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg, IpiMediatedMsg,
+    IpiMessage, IpiType, mem_heap_region_init, MemRegion, SchedType, SchedulerRR, timer_irq_handler, Vcpu, VCPU_LIST,
+    VcpuInner, VcpuPool, VcpuState, vm, Vm, VM_IF_LIST, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner, VmInterface, VmPa,
+    VmRegion,
 };
-use crate::lib::{BitAlloc256, BitMap};
+use crate::lib::{BitAlloc256, BitMap, FlexBitmap};
 use crate::mm::{heap_init, PageFrame};
+use crate::vmm::vmm_ipi_handler;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum FreshStatus {
+    Start,
+    FreshVM,
+    Finish,
+    None,
+}
+
+static FRESH_STATUS: RwLock<FreshStatus> = RwLock::new(FreshStatus::None);
+
+fn set_fresh_status(status: FreshStatus) {
+    *FRESH_STATUS.write() = status;
+}
+
+fn fresh_status() -> FreshStatus {
+    *FRESH_STATUS.read()
+}
+
+#[repr(C)]
 pub struct HypervisorAddr {
-    cpu: usize,
-    cpu_if: usize,
-    vcpu_list: usize,
+    cpu_id: usize,
+    vm_list: usize,
     vm_config_table: usize,
+    vcpu_list: usize,
+    cpu: usize,
     emu_dev_list: usize,
     interrupt_hyper_bitmap: usize,
     interrupt_glb_bitmap: usize,
     interrupt_handlers: usize,
     vm_region: usize,
     heap_region: usize,
-    vm_list: usize,
+    vm_if_list: usize,
+    gic_lrs_num: usize,
+    // address for ipi
+    cpu_if_list: usize,
+    ipi_handler_list: usize,
+    // arch time
+    time_freq: usize,
+    time_slice: usize,
+    // mediated blk
+    mediated_blk_list: usize,
+}
+
+pub fn hyper_fresh_ipi_handler(_msg: &IpiMessage) {
+    update_request();
 }
 
 pub fn update_request() {
-    println!("src hypervisor send update request");
+    // println!("Src Hypervisor Core[{}] send update request", current_cpu().id);
     extern "C" {
         pub fn update_request(address_list: &HypervisorAddr);
     }
-    // unsafe {
-    //     list = *(addr as *const _);
-    // }
-    // println!("cpuif len {}", list.lock().len());
     unsafe {
-        let cpu = &CPU as *const _ as usize;
-        let cpu_if = &CPU_IF_LIST as *const _ as usize;
-        let vcpu_list = &VCPU_LIST as *const _ as usize;
         let vm_config_table = &DEF_VM_CONFIG_TABLE as *const _ as usize;
         let emu_dev_list = &EMU_DEVS_LIST as *const _ as usize;
         let interrupt_hyper_bitmap = &INTERRUPT_HYPER_BITMAP as *const _ as usize;
@@ -62,10 +92,18 @@ pub fn update_request() {
         let vm_region = &VM_REGION as *const _ as usize;
         let heap_region = &HEAP_REGION as *const _ as usize;
         let vm_list = &VM_LIST as *const _ as usize;
+        let vm_if_list = &VM_IF_LIST as *const _ as usize;
+        let vcpu_list = &VCPU_LIST as *const _ as usize;
+        let cpu = &CPU as *const _ as usize;
+        let cpu_if_list = &CPU_IF_LIST as *const _ as usize;
+        let gic_lrs_num = &GIC_LRS_NUM as *const _ as usize;
+        let ipi_handler_list = &IPI_HANDLER_LIST as *const _ as usize;
+        let time_freq = &TIMER_FREQ as *const _ as usize;
+        let time_slice = &TIMER_SLICE as *const _ as usize;
+        let mediated_blk_list = &MEDIATED_BLK_LIST as *const _ as usize;
+
         let addr_list = HypervisorAddr {
-            cpu,
-            cpu_if,
-            vcpu_list,
+            cpu_id: current_cpu().id,
             vm_config_table,
             emu_dev_list,
             interrupt_hyper_bitmap,
@@ -74,60 +112,294 @@ pub fn update_request() {
             vm_region,
             heap_region,
             vm_list,
+            vm_if_list,
+            vcpu_list,
+            cpu,
+            cpu_if_list,
+            gic_lrs_num,
+            ipi_handler_list,
+            time_freq,
+            time_slice,
+            mediated_blk_list,
         };
         update_request(&addr_list);
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
+pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
     // TODO: SHARED_MEM
     // TODO: vm0_dtb?
-    // TODO: gic
-    // TODO: vgic
-    // TODO: cpu
     // TODO: mediated dev
-    heap_init();
-    mem_heap_region_init();
+    // TODO: async task
+    if address_list.cpu_id == 0 {
+        heap_init();
+        mem_heap_region_init();
+        set_fresh_status(FreshStatus::Start);
+        unsafe {
+            // DEF_VM_CONFIG_TABLE
+            let vm_config_table = &*(address_list.vm_config_table as *const Mutex<VmConfigTable>);
+            vm_config_table_update(vm_config_table);
 
-    println!("in rust_shyper_update");
-    println!("cpu if addr {:x}", address_list.cpu_if);
-    println!("cpu addr {:x}", address_list.cpu);
-    println!("vm_config_table addr {:x}", address_list.vm_config_table);
-    unsafe {
-        // DEF_VM_CONFIG_TABLE
-        let vm_config_table = &*(address_list.vm_config_table as *const Mutex<VmConfigTable>);
-        vm_config_table_update(vm_config_table);
+            // VM_LIST
+            let vm_list = &*(address_list.vm_list as *const Mutex<Vec<Vm>>);
+            vm_list_update(vm_list);
 
-        // EMU_DEVS_LIST
-        let emu_dev_list = &*(address_list.emu_dev_list as *const Mutex<Vec<EmuDevEntry>>);
-        emu_dev_list_update(emu_dev_list);
+            // VCPU_LIST
+            let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
+            vcpu_update(vcpu_list, vm_list);
 
-        // INTERRUPT_HYPER_BITMAP, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS
-        let interrupt_hyper_bitmap = &*(address_list.interrupt_hyper_bitmap as *const Mutex<BitMap<BitAlloc256>>);
-        let interrupt_glb_bitmap = &*(address_list.interrupt_glb_bitmap as *const Mutex<BitMap<BitAlloc256>>);
-        let interrupt_handlers = &*(address_list.interrupt_handlers as *const Mutex<BTreeMap<usize, InterruptHandler>>);
-        interrupt_update(interrupt_hyper_bitmap, interrupt_glb_bitmap, interrupt_handlers);
+            set_fresh_status(FreshStatus::FreshVM);
+            // CPU: Must update after vcpu and vm
+            let cpu = &*(address_list.cpu as *const Cpu);
+            current_cpu_update(cpu);
 
-        let cpu = &*(address_list.cpu as *const Cpu);
-        let cpu_if = &*(address_list.cpu_if as *const Mutex<Vec<CpuIf>>);
+            // EMU_DEVS_LIST
+            let emu_dev_list = &*(address_list.emu_dev_list as *const Mutex<Vec<EmuDevEntry>>);
+            emu_dev_list_update(emu_dev_list);
 
-        // VM_REGION
-        let vm_region = &*(address_list.vm_region as *const Mutex<VmRegion>);
-        vm_region_update(vm_region);
+            // INTERRUPT_HYPER_BITMAP, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS
+            let interrupt_hyper_bitmap = &*(address_list.interrupt_hyper_bitmap as *const Mutex<BitMap<BitAlloc256>>);
+            let interrupt_glb_bitmap = &*(address_list.interrupt_glb_bitmap as *const Mutex<BitMap<BitAlloc256>>);
+            let interrupt_handlers =
+                &*(address_list.interrupt_handlers as *const Mutex<BTreeMap<usize, InterruptHandler>>);
+            interrupt_update(interrupt_hyper_bitmap, interrupt_glb_bitmap, interrupt_handlers);
 
-        // HEAP_REGION
-        let heap_region = &*(address_list.heap_region as *const Mutex<HeapRegion>);
-        heap_region_update(heap_region);
+            // VM_REGION
+            let vm_region = &*(address_list.vm_region as *const Mutex<VmRegion>);
+            vm_region_update(vm_region);
 
-        // VM_LIST
-        let vm_list = &*(address_list.vm_list as *const Mutex<Vec<Vm>>);
-        vm_list_update(vm_list);
+            // HEAP_REGION
+            let heap_region = &*(address_list.heap_region as *const Mutex<HeapRegion>);
+            heap_region_update(heap_region);
 
-        // VCPU_LIST
-        let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
-        vcpu_update(vcpu_list, vm_list);
+            // GIC_LRS_NUM
+            let gic_lrs_num = &*(address_list.gic_lrs_num as *const Mutex<usize>);
+            gic_lrs_num_update(gic_lrs_num);
+
+            // VM_IF_LIST
+            let vm_if_list = &*(address_list.vm_if_list as *const [Mutex<VmInterface>; VM_NUM_MAX]);
+            vm_if_list_update(vm_if_list);
+
+            // IPI_HANDLER_LIST
+            let ipi_handler_list = &*(address_list.ipi_handler_list as *const Mutex<Vec<IpiHandler>>);
+            ipi_handler_list_update(ipi_handler_list);
+
+            // cpu_if_list
+            let cpu_if = &*(address_list.cpu_if_list as *const Mutex<Vec<CpuIf>>);
+            cpu_if_update(cpu_if);
+
+            // TIMER_FREQ & TIMER_SLICE
+            let time_freq = &*(address_list.time_freq as *const Mutex<usize>);
+            let time_slice = &*(address_list.time_slice as *const Mutex<usize>);
+            arch_time_update(time_freq, time_slice);
+
+            // MEDIATED_BLK_LIST
+            let mediated_blk_list = &*(address_list.mediated_blk_list as *const Mutex<Vec<MediatedBlk>>);
+            mediated_blk_list_update(mediated_blk_list);
+
+            set_fresh_status(FreshStatus::Finish);
+        }
+    } else {
+        while fresh_status() != FreshStatus::FreshVM && fresh_status() != FreshStatus::Finish {}
+        if fresh_status() == FreshStatus::FreshVM || fresh_status() == FreshStatus::Finish {
+            // CPU: Must update after vcpu and vm
+            let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
+            current_cpu_update(cpu);
+        }
     }
+    fresh_hyper();
+}
+
+pub fn fresh_hyper() {
+    extern "C" {
+        pub fn fresh_cpu();
+        pub fn fresh_hyper(ctx: usize);
+    }
+    if current_cpu().id == 0 {
+        let ctx = current_cpu().ctx.unwrap();
+        println!("CPU[{}] ctx {:x}", current_cpu().id, ctx);
+        current_cpu().clear_ctx();
+        unsafe { fresh_hyper(ctx) };
+    } else {
+        match current_cpu().cpu_state {
+            CpuState::CpuInv => {
+                panic!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuInv);
+            }
+            CpuState::CpuIdle => {
+                println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuIdle);
+                unsafe { fresh_cpu() };
+                println!("current cpu irq {}", current_cpu().current_irq);
+                gicc_clear_current_irq(true);
+                cpu_idle();
+            }
+            CpuState::CpuRun => {
+                println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuRun);
+                let ctx = current_cpu().ctx.unwrap();
+                current_cpu().clear_ctx();
+                unsafe { fresh_hyper(ctx) };
+            }
+        }
+    }
+}
+
+pub fn mediated_blk_list_update(src_mediated_blk_list: &Mutex<Vec<MediatedBlk>>) {
+    let mut mediated_blk_list = MEDIATED_BLK_LIST.lock();
+    mediated_blk_list.clear();
+    for blk in src_mediated_blk_list.lock().iter() {
+        mediated_blk_list.push(MediatedBlk {
+            base_addr: blk.base_addr,
+            avail: blk.avail,
+        });
+    }
+}
+
+pub fn arch_time_update(src_time_freq: &Mutex<usize>, src_time_slice: &Mutex<usize>) {
+    *TIMER_FREQ.lock() = *src_time_freq.lock();
+    *TIMER_SLICE.lock() = *src_time_slice.lock();
+}
+
+pub fn cpu_if_update(src_cpu_if: &Mutex<Vec<CpuIf>>) {
+    let mut cpu_if_list = CPU_IF_LIST.lock();
+    cpu_if_list.clear();
+    for cpu_if in src_cpu_if.lock().iter() {
+        let mut new_cpu_if = CpuIf::default();
+        for msg in cpu_if.msg_queue.iter() {
+            // Copy ipi msg
+            let new_ipi_msg = match msg.ipi_message.clone() {
+                IpiInnerMsg::Initc(initc) => IpiInnerMsg::Initc(initc),
+                IpiInnerMsg::Power(power) => IpiInnerMsg::Power(power),
+                IpiInnerMsg::EnternetMsg(eth_msg) => IpiInnerMsg::EnternetMsg(eth_msg),
+                IpiInnerMsg::VmmMsg(vmm_msg) => IpiInnerMsg::VmmMsg(vmm_msg),
+                IpiInnerMsg::MediatedMsg(mediated_msg) => {
+                    let mmio_id = mediated_msg.blk.id();
+                    let vm_id = mediated_msg.src_id;
+                    let vq_idx = mediated_msg.vq.vq_indx();
+
+                    let vm = vm(vm_id).unwrap();
+                    match vm.emu_dev(mmio_id) {
+                        EmuDevs::VirtioBlk(blk) => {
+                            let new_vq = blk.vq(vq_idx).clone().unwrap();
+                            IpiInnerMsg::MediatedMsg(IpiMediatedMsg {
+                                src_id: vm_id,
+                                vq: new_vq.clone(),
+                                blk: blk.clone(),
+                            })
+                        }
+                        _ => {
+                            panic!("illegal mmio dev type in cpu_if_update");
+                        }
+                    }
+                }
+                IpiInnerMsg::MediatedNotifyMsg(notify_msg) => IpiInnerMsg::MediatedNotifyMsg(notify_msg),
+                IpiInnerMsg::HvcMsg(hvc_msg) => IpiInnerMsg::HvcMsg(hvc_msg),
+                IpiInnerMsg::IntInjectMsg(inject_msg) => IpiInnerMsg::IntInjectMsg(inject_msg),
+                IpiInnerMsg::HyperFreshMsg() => IpiInnerMsg::HyperFreshMsg(),
+                IpiInnerMsg::None => IpiInnerMsg::None,
+            };
+            new_cpu_if.msg_queue.push(IpiMessage {
+                ipi_type: msg.ipi_type,
+                ipi_message: new_ipi_msg,
+            })
+        }
+        cpu_if_list.push(new_cpu_if);
+    }
+    println!("Update CPU_IF_LIST");
+}
+
+pub fn ipi_handler_list_update(src_ipi_handler_list: &Mutex<Vec<IpiHandler>>) {
+    for ipi_handler in src_ipi_handler_list.lock().iter() {
+        let handler = match ipi_handler.ipi_type {
+            IpiType::IpiTIntc => vgic_ipi_handler,
+            IpiType::IpiTPower => psci_ipi_handler,
+            IpiType::IpiTEthernetMsg => ethernet_ipi_rev_handler,
+            IpiType::IpiTHvc => hvc_ipi_handler,
+            IpiType::IpiTVMM => vmm_ipi_handler,
+            IpiType::IpiTMediatedDev => mediated_ipi_handler,
+            IpiType::IpiTMediatedNotify => mediated_notify_ipi_handler,
+            IpiType::IpiTIntInject => interrupt_inject_ipi_handler,
+            IpiType::IpiTHyperFresh => hyper_fresh_ipi_handler,
+        };
+        ipi_register(ipi_handler.ipi_type, handler);
+    }
+    println!("Update IPI_HANDLER_LIST");
+}
+
+pub fn vm_if_list_update(src_vm_if_list: &[Mutex<VmInterface>; VM_NUM_MAX]) {
+    for (idx, vm_if_lock) in src_vm_if_list.iter().enumerate() {
+        let vm_if = vm_if_lock.lock();
+        let mut cur_vm_if = VM_IF_LIST[idx].lock();
+        cur_vm_if.master_cpu_id = vm_if.master_cpu_id;
+        cur_vm_if.state = vm_if.state;
+        cur_vm_if.vm_type = vm_if.vm_type;
+        cur_vm_if.mac = vm_if.mac;
+        cur_vm_if.ivc_arg = vm_if.ivc_arg;
+        cur_vm_if.ivc_arg_ptr = vm_if.ivc_arg_ptr;
+        cur_vm_if.mem_map = match &vm_if.mem_map {
+            None => None,
+            Some(mem_map) => Some(FlexBitmap {
+                len: mem_map.len,
+                map: {
+                    let mut map = vec![];
+                    for v in mem_map.map.iter() {
+                        map.push(*v);
+                    }
+                    map
+                },
+            }),
+        };
+        cur_vm_if.mem_map_cache = match &vm_if.mem_map_cache {
+            None => None,
+            Some(cache) => Some(PageFrame::new(cache.pa)),
+        };
+    }
+    println!("Update VM_IF_LIST")
+}
+
+pub fn current_cpu_update(src_cpu: &Cpu) {
+    let cpu = current_cpu();
+    // only need to alloc a new VcpuPool from heap, other props all map at 0x400000000
+    // current_cpu().sched = src_cpu.sched;
+    match &src_cpu.sched {
+        SchedType::SchedRR(rr) => {
+            let new_rr = SchedulerRR {
+                pool: VcpuPool::default(),
+            };
+            for idx in 0..rr.pool.vcpu_num() {
+                let src_vcpu = rr.pool.vcpu(idx);
+                let vm_id = src_vcpu.vm_id();
+                let new_vcpu = vm(vm_id).unwrap().vcpu(src_vcpu.id()).unwrap();
+                new_rr.pool.append_vcpu(new_vcpu.clone());
+            }
+            new_rr.pool.set_running(rr.pool.running());
+            new_rr.pool.set_slice(rr.pool.slice());
+            if rr.pool.active_idx() < rr.pool.vcpu_num() {
+                new_rr.pool.set_active_vcpu(rr.pool.active_idx());
+                cpu.active_vcpu = Some(new_rr.pool.vcpu(rr.pool.active_idx()));
+            } else {
+                cpu.active_vcpu = None;
+            }
+            cpu.sched = SchedType::SchedRR(new_rr);
+        }
+        SchedType::None => {
+            cpu.sched = SchedType::None;
+        }
+    }
+
+    assert_eq!(cpu.id, src_cpu.id);
+    assert_eq!(cpu.ctx, src_cpu.ctx);
+    assert_eq!(cpu.cpu_state, src_cpu.cpu_state);
+    assert_eq!(cpu.assigned, src_cpu.assigned);
+    assert_eq!(cpu.current_irq, src_cpu.current_irq);
+    assert_eq!(cpu.cpu_pt, src_cpu.cpu_pt);
+    assert_eq!(cpu.stack, src_cpu.stack);
+    println!("Update CPU[{}]", cpu.id);
+}
+
+pub fn gic_lrs_num_update(src_gic_lrs_num: &Mutex<usize>) {
+    let gic_lrs_num = *src_gic_lrs_num.lock();
+    *GIC_LRS_NUM.lock() = gic_lrs_num;
+    println!("Update GIC_LRS_NUM");
 }
 
 // Set vm.vcpu_list in vcpu_update
@@ -154,7 +426,7 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
         let new_inner = VmInner {
             id: old_inner.id,
             ready: old_inner.ready,
-            config: None,
+            config: vm_cfg_entry(old_inner.id),
             dtb: old_inner.dtb, // maybe need to reset
             pt,
             mem_region_num: old_inner.mem_region_num,
@@ -211,12 +483,12 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                         EmuDevs::VirtioNet(net) => {
                             let mmio = VirtioMmio::new(0);
                             mmio.save_mmio(net.clone(), Some(virtio_net_notify_handler));
-                            EmuDevs::VirtioBlk(mmio)
+                            EmuDevs::VirtioNet(mmio)
                         }
                         EmuDevs::VirtioConsole(console) => {
                             let mmio = VirtioMmio::new(0);
                             mmio.save_mmio(console.clone(), Some(virtio_console_notify_handler));
-                            EmuDevs::VirtioBlk(mmio)
+                            EmuDevs::VirtioConsole(mmio)
                         }
                         EmuDevs::None => EmuDevs::None,
                     };
@@ -236,7 +508,7 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
 
 pub fn heap_region_update(src_heap_region: &Mutex<HeapRegion>) {
     let mut heap_region = HEAP_REGION.lock();
-    let mut src_region = src_heap_region.lock();
+    let src_region = src_heap_region.lock();
     heap_region.map = src_region.map;
     heap_region.region = src_region.region;
     assert_eq!(heap_region.region, src_region.region);
@@ -259,9 +531,9 @@ pub fn interrupt_update(
     src_handlers: &Mutex<BTreeMap<usize, InterruptHandler>>,
 ) {
     let mut hyper_bitmap = INTERRUPT_HYPER_BITMAP.lock();
-    hyper_bitmap = src_hyper_bitmap.lock();
+    *hyper_bitmap = *src_hyper_bitmap.lock();
     let mut glb_bitmap = INTERRUPT_GLB_BITMAP.lock();
-    glb_bitmap = src_glb_bitmap.lock();
+    *glb_bitmap = *src_glb_bitmap.lock();
     let mut handlers = INTERRUPT_HANDLERS.lock();
     for (int_id, handler) in src_handlers.lock().iter() {
         match handler {
@@ -427,7 +699,7 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
             }
         };
 
-        let mut vcpu_inner = VcpuInner {
+        let vcpu_inner = VcpuInner {
             id: src_inner.id,
             phys_id: src_inner.phys_id,
             state: src_inner.state,
@@ -465,20 +737,4 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
     }
     assert_eq!(vcpu_list.len(), src_vcpu_list.lock().len());
     println!("Update {} Vcpu to VCPU_LIST", vcpu_list.len());
-}
-
-pub fn cpu_update(src_cpu: &Cpu) {
-    // only need to alloc a new VcpuPool from heap, other props all map at 0x400000000
-    // current_cpu().sched = src_cpu.sched;
-    match &src_cpu.sched {
-        SchedType::SchedRR(rr) => {
-            let new_rr = SchedulerRR {
-                pool: VcpuPool::default(),
-            };
-            current_cpu().sched = SchedType::SchedRR(new_rr);
-        }
-        SchedType::None => {
-            current_cpu().sched = SchedType::None;
-        }
-    }
 }
