@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -15,17 +16,20 @@ use crate::config::{
     VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmMemoryConfig, VmPassthroughDeviceConfig,
 };
 use crate::device::{
-    EMU_DEVS_LIST, emu_virtio_mmio_handler, EmuDevEntry, EmuDeviceType, EmuDevs, ethernet_ipi_rev_handler,
+    BlkIov, EMU_DEVS_LIST, emu_virtio_mmio_handler, EmuDevEntry, EmuDeviceType, EmuDevs, ethernet_ipi_rev_handler,
     MEDIATED_BLK_LIST, mediated_ipi_handler, mediated_notify_ipi_handler, MediatedBlk, virtio_blk_notify_handler,
     virtio_console_notify_handler, virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
 };
 use crate::kernel::{
-    CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion, hvc_ipi_handler,
-    INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler, InterruptHandler,
-    IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType,
-    mem_heap_region_init, SchedType, SchedulerRR, timer_irq_handler, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm,
-    VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner, VmInterface, VmRegion,
+    async_blk_io_req, ASYNC_IO_TASK_LIST, async_ipi_req, ASYNC_IPI_TASK_LIST, ASYNC_USED_INFO_LIST, AsyncTask,
+    AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion,
+    hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler,
+    InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg,
+    IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, timer_irq_handler, UsedInfo,
+    Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner,
+    VmInterface, VmRegion,
 };
+use crate::kernel::AsyncTaskData::AsyncIpiTask;
 use crate::lib::{BitAlloc256, BitMap, FlexBitmap};
 use crate::mm::{heap_init, PageFrame};
 use crate::vmm::vmm_ipi_handler;
@@ -72,6 +76,10 @@ pub struct HypervisorAddr {
     time_slice: usize,
     // mediated blk
     mediated_blk_list: usize,
+    // async task
+    async_ipi_task_list: usize,
+    async_io_task_list: usize,
+    async_used_info_list: usize,
 }
 
 pub fn hyper_fresh_ipi_handler(_msg: &IpiMessage) {
@@ -101,6 +109,9 @@ pub fn update_request() {
         let time_freq = &TIMER_FREQ as *const _ as usize;
         let time_slice = &TIMER_SLICE as *const _ as usize;
         let mediated_blk_list = &MEDIATED_BLK_LIST as *const _ as usize;
+        let async_ipi_task_list = &ASYNC_IPI_TASK_LIST as *const _ as usize;
+        let async_io_task_list = &ASYNC_IO_TASK_LIST as *const _ as usize;
+        let async_used_info_list = &ASYNC_USED_INFO_LIST as *const _ as usize;
 
         let addr_list = HypervisorAddr {
             cpu_id: current_cpu().id,
@@ -121,6 +132,9 @@ pub fn update_request() {
             time_freq,
             time_slice,
             mediated_blk_list,
+            async_ipi_task_list,
+            async_io_task_list,
+            async_used_info_list,
         };
         update_request(&addr_list);
     }
@@ -198,6 +212,13 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
             let mediated_blk_list = &*(address_list.mediated_blk_list as *const Mutex<Vec<MediatedBlk>>);
             mediated_blk_list_update(mediated_blk_list);
 
+            // ASYNC_IPI_TASK_LIST、ASYNC_IO_TASK_LIST、ASYNC_USED_INFO_LIST
+            let async_ipi_task_list = &*(address_list.async_ipi_task_list as *const Mutex<Vec<AsyncTask>>);
+            let async_io_task_list = &*(address_list.async_io_task_list as *const Mutex<Vec<AsyncTask>>);
+            let async_used_info_list =
+                &*(address_list.async_used_info_list as *const Mutex<BTreeMap<usize, Vec<UsedInfo>>>);
+            async_task_update(async_ipi_task_list, async_io_task_list, async_used_info_list);
+
             set_fresh_status(FreshStatus::Finish);
         }
     } else {
@@ -255,6 +276,106 @@ pub fn fresh_hyper() {
             }
         }
     }
+}
+
+pub fn async_task_update(
+    src_async_ipi_task_list: &Mutex<Vec<AsyncTask>>,
+    src_async_io_task_list: &Mutex<Vec<AsyncTask>>,
+    src_async_used_info_list: &Mutex<BTreeMap<usize, Vec<UsedInfo>>>,
+) {
+    let mut async_ipi_task_list = ASYNC_IPI_TASK_LIST.lock();
+    let mut async_io_task_list = ASYNC_IO_TASK_LIST.lock();
+    let mut async_used_info_list = ASYNC_USED_INFO_LIST.lock();
+    assert_eq!(async_ipi_task_list.len(), 0);
+    assert_eq!(async_io_task_list.len(), 0);
+    assert_eq!(async_used_info_list.len(), 0);
+    for ipi_task in src_async_ipi_task_list.lock().iter() {
+        let vm_id = ipi_task.src_vmid;
+        let vm = vm(vm_id).unwrap();
+        let task_data = match &ipi_task.task_data {
+            AsyncTaskData::AsyncIpiTask(mediated_msg) => {
+                assert_eq!(mediated_msg.src_id, vm_id);
+                let mmio_id = mediated_msg.blk.id();
+                let vq_idx = mediated_msg.vq.vq_indx();
+                match vm.emu_dev(mmio_id) {
+                    EmuDevs::VirtioBlk(blk) => {
+                        let new_vq = blk.vq(vq_idx).clone().unwrap();
+                        AsyncTaskData::AsyncIpiTask(IpiMediatedMsg {
+                            src_id: vm_id,
+                            vq: new_vq.clone(),
+                            blk: blk.clone(),
+                        })
+                    }
+                    _ => panic!("illegal mmio dev type in async_task_update"),
+                }
+            }
+            AsyncTaskData::AsyncIoTask(_) => panic!("Find an IO Task in IPI task list"),
+        };
+        async_ipi_task_list.push(AsyncTask {
+            task_data,
+            src_vmid: vm_id,
+            state: Arc::new(Mutex::new(*ipi_task.state.lock())),
+            task: Arc::new(Mutex::new(Box::pin(async_ipi_req()))),
+        })
+    }
+    for io_task in src_async_io_task_list.lock().iter() {
+        let vm_id = io_task.src_vmid;
+        let vm = vm(vm_id).unwrap();
+        let task_data = match &io_task.task_data {
+            AsyncIpiTask(_) => panic!("Find an IPI Task in IO task list"),
+            AsyncTaskData::AsyncIoTask(io_msg) => {
+                assert_eq!(vm_id, io_msg.src_vmid);
+                let vq_idx = io_msg.vq.vq_indx();
+                match vm.emu_blk_dev() {
+                    EmuDevs::VirtioBlk(blk) => {
+                        let new_vq = blk.vq(vq_idx).clone().unwrap();
+                        AsyncTaskData::AsyncIoTask(IoAsyncMsg {
+                            src_vmid: vm_id,
+                            vq: new_vq.clone(),
+                            io_type: io_msg.io_type,
+                            blk_id: io_msg.blk_id,
+                            sector: io_msg.sector,
+                            count: io_msg.count,
+                            cache: io_msg.cache,
+                            iov_list: Arc::new({
+                                let mut list = vec![];
+                                for iov in io_msg.iov_list.iter() {
+                                    list.push(BlkIov {
+                                        data_bg: iov.data_bg,
+                                        len: iov.len,
+                                    });
+                                }
+                                list
+                            }),
+                        })
+                    }
+                    _ => panic!("illegal mmio dev type in async_task_update"),
+                }
+            }
+        };
+        async_io_task_list.push(AsyncTask {
+            task_data,
+            src_vmid: vm_id,
+            state: Arc::new(Mutex::new(*io_task.state.lock())),
+            task: Arc::new(Mutex::new(Box::pin(async_blk_io_req()))),
+        })
+    }
+    for (key, used_info) in src_async_used_info_list.lock().iter() {
+        let mut new_used_info = vec![];
+        for info in used_info.iter() {
+            new_used_info.push(UsedInfo {
+                desc_chain_head_idx: info.desc_chain_head_idx,
+                used_len: info.used_len,
+            })
+        }
+        async_used_info_list.insert(*key, new_used_info);
+    }
+    println!("Update {} ipi task for ASYNC_IPI_TASK_LIST", async_ipi_task_list.len());
+    println!("Update {} io task for ASYNC_IO_TASK_LIST", async_io_task_list.len());
+    println!(
+        "Update {} used info for ASYNC_USED_INFO_LIST",
+        async_used_info_list.len()
+    );
 }
 
 pub fn mediated_blk_list_update(src_mediated_blk_list: &Mutex<Vec<MediatedBlk>>) {

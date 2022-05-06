@@ -45,7 +45,7 @@ pub fn get_task_count() -> usize {
     *count
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AsyncTaskState {
     Pending,
     Running,
@@ -69,9 +69,9 @@ pub struct IoAsyncMsg {
     pub iov_list: Arc<Vec<BlkIov>>,
 }
 
-static ASYNC_IPI_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
-static ASYNC_IO_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
-static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::new(BTreeMap::new());
+pub static ASYNC_IPI_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
+pub static ASYNC_IO_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
+pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::new(BTreeMap::new());
 
 #[derive(Clone)]
 pub enum AsyncTaskData {
