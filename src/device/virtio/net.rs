@@ -112,7 +112,7 @@ impl NetDesc {
     pub fn migrate_save(&self, src_desc: NetDesc) {
         let mut inner = self.inner.lock();
         let src_inner = src_desc.inner.lock();
-        inner = src_inner;
+        *inner = *src_inner;
     }
 }
 

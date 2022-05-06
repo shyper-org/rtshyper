@@ -858,6 +858,7 @@ pub fn vm_list_size() -> usize {
 
 pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
     if ipa == 0 {
+        println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
         return 0;
     }
 

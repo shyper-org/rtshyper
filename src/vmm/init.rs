@@ -421,7 +421,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             };
             let vcpu_id = vcpu.id();
 
-            // only vm0 vcpu state should set to pend here
+            // only vm0 vcpu[0] state should set to pend here
             if current_cpu().vcpu_pool().running() == 0 && vm_id == 0 {
                 vcpu.set_state(VcpuState::VcpuPend);
                 current_cpu().vcpu_pool().add_running();
@@ -471,7 +471,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             let vcpu = vcpu_pool.vcpu(i);
             vcpu.set_phys_id(cpu_id);
             if let Some(mvm) = vcpu.vm() {
-                if mvm.id() == 0 {
+                if mvm.id() == 0 && current_cpu().id == 0 {
                     vcpu_pool.set_active_vcpu(i);
                     current_cpu().set_active_vcpu(Some(vcpu.clone()));
                 }
@@ -505,7 +505,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     // barrier();
 }
 
-pub fn vmm_init() {
+pub fn mvm_init() {
     barrier();
 
     if current_cpu().id == 0 {

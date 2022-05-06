@@ -108,7 +108,7 @@ impl NicStat {
     pub fn migrate_save(&self, src_stat: NicStat) {
         let mut dst_inner = self.inner.lock();
         let src_inner = src_stat.inner.lock();
-        dst_inner = src_inner;
+        *dst_inner = *src_inner;
     }
 
     pub fn send_req(&self) -> usize {

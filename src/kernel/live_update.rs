@@ -3,12 +3,12 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use cortex_a::asm::nop;
 use spin::{Mutex, RwLock};
 
 use crate::arch::{
-    emu_intc_handler, emu_intc_init, GIC_LRS_NUM, gic_maintenance_handler, GIC_PRIVINT_NUM, gicc_clear_current_irq,
-    PageTable, partial_passthrough_intc_handler, partial_passthrough_intc_init, psci_ipi_handler, TIMER_FREQ,
-    TIMER_SLICE, Vgic, vgic_ipi_handler,
+    emu_intc_handler, GIC_LRS_NUM, gic_maintenance_handler, gicc_clear_current_irq, PageTable,
+    partial_passthrough_intc_handler, psci_ipi_handler, TIMER_FREQ, TIMER_SLICE, Vgic, vgic_ipi_handler,
 };
 use crate::config::{
     DEF_VM_CONFIG_TABLE, vm_cfg_entry, VmConfigEntry, VmConfigTable, VmDtbDevConfig, VMDtbDevConfigList,
@@ -20,12 +20,11 @@ use crate::device::{
     virtio_console_notify_handler, virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
 };
 use crate::kernel::{
-    CPU, Cpu, cpu_idle, CPU_IF_LIST, CPU_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion, hvc_ipi_handler,
-    INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler, INTERRUPT_NUM_MAX,
-    InterruptHandler, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg, IpiMediatedMsg,
-    IpiMessage, IpiType, mem_heap_region_init, MemRegion, SchedType, SchedulerRR, timer_irq_handler, Vcpu, VCPU_LIST,
-    VcpuInner, VcpuPool, VcpuState, vm, Vm, VM_IF_LIST, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner, VmInterface, VmPa,
-    VmRegion,
+    CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion, hvc_ipi_handler,
+    INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler, InterruptHandler,
+    IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType,
+    mem_heap_region_init, SchedType, SchedulerRR, timer_irq_handler, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm,
+    VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner, VmInterface, VmRegion,
 };
 use crate::lib::{BitAlloc256, BitMap, FlexBitmap};
 use crate::mm::{heap_init, PageFrame};
@@ -40,6 +39,7 @@ enum FreshStatus {
 }
 
 static FRESH_STATUS: RwLock<FreshStatus> = RwLock::new(FreshStatus::None);
+// static FRESH_STATUS: FreshStatus = FreshStatus::None;
 
 fn set_fresh_status(status: FreshStatus) {
     *FRESH_STATUS.write() = status;
@@ -201,10 +201,14 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
             set_fresh_status(FreshStatus::Finish);
         }
     } else {
-        while fresh_status() != FreshStatus::FreshVM && fresh_status() != FreshStatus::Finish {}
+        let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
+        while fresh_status() != FreshStatus::FreshVM && fresh_status() != FreshStatus::Finish {
+            for i in 0..10000 {
+                nop();
+            }
+        }
         if fresh_status() == FreshStatus::FreshVM || fresh_status() == FreshStatus::Finish {
             // CPU: Must update after vcpu and vm
-            let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
             current_cpu_update(cpu);
         }
     }
@@ -229,12 +233,22 @@ pub fn fresh_hyper() {
             CpuState::CpuIdle => {
                 println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuIdle);
                 unsafe { fresh_cpu() };
-                println!("current cpu irq {}", current_cpu().current_irq);
+                println!(
+                    "Core[{}] current cpu irq {}",
+                    current_cpu().id,
+                    current_cpu().current_irq
+                );
                 gicc_clear_current_irq(true);
                 cpu_idle();
             }
             CpuState::CpuRun => {
                 println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuRun);
+                println!(
+                    "Core[{}] current cpu irq {}",
+                    current_cpu().id,
+                    current_cpu().current_irq
+                );
+                gicc_clear_current_irq(true);
                 let ctx = current_cpu().ctx.unwrap();
                 current_cpu().clear_ctx();
                 unsafe { fresh_hyper(ctx) };
@@ -245,6 +259,7 @@ pub fn fresh_hyper() {
 
 pub fn mediated_blk_list_update(src_mediated_blk_list: &Mutex<Vec<MediatedBlk>>) {
     let mut mediated_blk_list = MEDIATED_BLK_LIST.lock();
+    assert_eq!(mediated_blk_list.len(), 0);
     mediated_blk_list.clear();
     for blk in src_mediated_blk_list.lock().iter() {
         mediated_blk_list.push(MediatedBlk {
@@ -261,6 +276,7 @@ pub fn arch_time_update(src_time_freq: &Mutex<usize>, src_time_slice: &Mutex<usi
 
 pub fn cpu_if_update(src_cpu_if: &Mutex<Vec<CpuIf>>) {
     let mut cpu_if_list = CPU_IF_LIST.lock();
+    assert_eq!(cpu_if_list.len(), 0);
     cpu_if_list.clear();
     for cpu_if in src_cpu_if.lock().iter() {
         let mut new_cpu_if = CpuIf::default();
@@ -405,6 +421,7 @@ pub fn gic_lrs_num_update(src_gic_lrs_num: &Mutex<usize>) {
 // Set vm.vcpu_list in vcpu_update
 pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
     let mut vm_list = VM_LIST.lock();
+    assert_eq!(vm_list.len(), 0);
     vm_list.clear();
     drop(vm_list);
     for vm in src_vm_list.lock().iter() {
@@ -412,7 +429,7 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
         let pt = match &old_inner.pt {
             None => None,
             Some(page_table) => {
-                let mut new_page_table = PageTable {
+                let new_page_table = PageTable {
                     directory: PageFrame::new(page_table.directory.pa),
                     pages: Mutex::new(vec![]),
                 };
@@ -459,9 +476,12 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                 }
                 pf
             },
+            med_blk_id: old_inner.med_blk_id,
             emu_devs: {
                 let mut emu_devs = vec![];
-                for dev in old_inner.emu_devs.iter() {
+                drop(old_inner);
+                let old_emu_devs = vm.inner.lock().emu_devs.clone();
+                for dev in old_emu_devs.iter() {
                     // TODO: wip
                     let new_dev = match dev {
                         EmuDevs::Vgic(vgic) => {
@@ -470,6 +490,18 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                         }
                         EmuDevs::VirtioBlk(blk) => {
                             let mmio = VirtioMmio::new(0);
+                            assert_eq!(
+                                (blk.vq(0).unwrap().desc_table()),
+                                vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().desc_table_addr())
+                            );
+                            assert_eq!(
+                                (blk.vq(0).unwrap().used()),
+                                vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().used_addr())
+                            );
+                            assert_eq!(
+                                (blk.vq(0).unwrap().avail()),
+                                vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().avail_addr())
+                            );
                             mmio.save_mmio(
                                 blk.clone(),
                                 if blk.dev().mediated() {
@@ -482,11 +514,35 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                         }
                         EmuDevs::VirtioNet(net) => {
                             let mmio = VirtioMmio::new(0);
+                            assert_eq!(
+                                (net.vq(0).unwrap().desc_table()),
+                                vm_ipa2pa(vm.clone(), net.vq(0).unwrap().desc_table_addr())
+                            );
+                            assert_eq!(
+                                (net.vq(0).unwrap().used()),
+                                vm_ipa2pa(vm.clone(), net.vq(0).unwrap().used_addr())
+                            );
+                            assert_eq!(
+                                (net.vq(0).unwrap().avail()),
+                                vm_ipa2pa(vm.clone(), net.vq(0).unwrap().avail_addr())
+                            );
                             mmio.save_mmio(net.clone(), Some(virtio_net_notify_handler));
                             EmuDevs::VirtioNet(mmio)
                         }
                         EmuDevs::VirtioConsole(console) => {
                             let mmio = VirtioMmio::new(0);
+                            assert_eq!(
+                                (console.vq(0).unwrap().desc_table()),
+                                vm_ipa2pa(vm.clone(), console.vq(0).unwrap().desc_table_addr())
+                            );
+                            assert_eq!(
+                                (console.vq(0).unwrap().used()),
+                                vm_ipa2pa(vm.clone(), console.vq(0).unwrap().used_addr())
+                            );
+                            assert_eq!(
+                                (console.vq(0).unwrap().avail()),
+                                vm_ipa2pa(vm.clone(), console.vq(0).unwrap().avail_addr())
+                            );
                             mmio.save_mmio(console.clone(), Some(virtio_console_notify_handler));
                             EmuDevs::VirtioConsole(mmio)
                         }
@@ -496,7 +552,6 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                 }
                 emu_devs
             },
-            med_blk_id: old_inner.med_blk_id,
         };
         let mut vm_list = VM_LIST.lock();
         vm_list.push(Vm {
@@ -517,6 +572,7 @@ pub fn heap_region_update(src_heap_region: &Mutex<HeapRegion>) {
 
 pub fn vm_region_update(src_vm_region: &Mutex<VmRegion>) {
     let mut vm_region = VM_REGION.lock();
+    assert_eq!(vm_region.region.len(), 0);
     vm_region.region.clear();
     for mem_region in src_vm_region.lock().region.iter() {
         vm_region.region.push(*mem_region);
@@ -559,6 +615,7 @@ pub fn interrupt_update(
 
 pub fn emu_dev_list_update(src_emu_dev_list: &Mutex<Vec<EmuDevEntry>>) {
     let mut emu_dev_list = EMU_DEVS_LIST.lock();
+    assert_eq!(emu_dev_list.len(), 0);
     emu_dev_list.clear();
     for emu_dev_entry in src_emu_dev_list.lock().iter() {
         let emu_handler = match emu_dev_entry.emu_type {
@@ -589,6 +646,7 @@ pub fn vm_config_table_update(src_vm_config_table: &Mutex<VmConfigTable>) {
     vm_config_table.name = src_config_table.name;
     vm_config_table.vm_bitmap = src_config_table.vm_bitmap;
     vm_config_table.vm_num = src_config_table.vm_num;
+    assert_eq!(vm_config_table.entries.len(), 0);
     vm_config_table.entries.clear();
     for entry in src_config_table.entries.iter() {
         let image = *entry.image.lock();
@@ -687,6 +745,7 @@ pub fn vm_config_table_update(src_vm_config_table: &Mutex<VmConfigTable>) {
 
 pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>>) {
     let mut vcpu_list = VCPU_LIST.lock();
+    assert_eq!(vcpu_list.len(), 0);
     vcpu_list.clear();
     for vcpu in src_vcpu_list.lock().iter() {
         let src_inner = vcpu.inner.lock();
@@ -716,7 +775,7 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
         };
         assert_eq!(vcpu_inner.int_list, src_inner.int_list);
         let vcpu = Vcpu {
-            inner: Arc::new((Mutex::new(vcpu_inner))),
+            inner: Arc::new(Mutex::new(vcpu_inner)),
         };
         vm.unwrap().push_vcpu(vcpu.clone());
         vcpu_list.push(vcpu);
