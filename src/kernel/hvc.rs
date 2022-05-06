@@ -5,20 +5,17 @@ use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::arch::tlb_invalidate_guest_all;
-use crate::board::{PLAT_DESC, PLATFORM_CPU_NUM_MAX};
+use crate::board::PLAT_DESC;
 use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
-    active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_intra_broadcast_msg,
-    ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem,
-    migrate_finish_ipi_handler, migrate_memcpy, migrate_ready, update_request, vcpu_idle, vm, vm_if_copy_mem_map,
-    vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum,
-    vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
+    active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register, ipi_send_msg,
+    IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, migrate_finish_ipi_handler,
+    migrate_memcpy, migrate_ready, update_request, vcpu_idle, vm, vm_if_copy_mem_map, vm_if_dirty_mem_map,
+    vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
-use crate::kernel::IpiType::IpiTHyperFresh;
 use crate::lib::{memcpy_safe, trace};
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_init_gvm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
-use crate::vmm::vmm_reboot;
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
 
 static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.

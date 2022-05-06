@@ -8,7 +8,6 @@ use crate::board::*;
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
-use crate::kernel::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
 use crate::vmm::vmm_init_gvm;
 

@@ -132,6 +132,7 @@ impl VirtioQueue for VirtioMmio {
             VirtioDeviceType::Net => {
                 self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
                 let mut inner = self.inner.lock();
+                // Not support feature VIRTIO_NET_F_CTRL_VQ (no control queue)
                 for i in 0..2 {
                     inner.vq.push(Virtq::default());
                     inner.vq[i].reset(i);
@@ -142,7 +143,7 @@ impl VirtioQueue for VirtioMmio {
             VirtioDeviceType::Console => {
                 self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
                 let mut inner = self.inner.lock();
-                for i in 0..3 {
+                for i in 0..4 {
                     inner.vq.push(Virtq::default());
                     inner.vq[i].reset(i);
                     use crate::device::virtio_console_notify_handler;

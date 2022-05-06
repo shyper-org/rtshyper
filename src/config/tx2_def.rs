@@ -231,8 +231,8 @@ pub fn mvm_config_init() {
             region: vm_region,
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0001,
+            num: 2,
+            allocate_bitmap: 0b0011,
             master: 0,
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList{emu_dev_list: emu_dev_config,})),

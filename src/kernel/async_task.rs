@@ -14,7 +14,7 @@ use crate::device::{
     VIRTIO_BLK_T_OUT, Virtq,
 };
 use crate::kernel::{
-    current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm, Vm,
+    current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
     vm_if_get_cpu_id,
 };
 use crate::lib::{memcpy_safe, trace};

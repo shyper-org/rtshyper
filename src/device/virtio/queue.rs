@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, current_cpu, Vm};
+use crate::kernel::{active_vm, current_cpu, Vm, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 use crate::lib::trace;
 
@@ -208,7 +208,6 @@ impl Virtq {
         let desc = inner.desc_table.as_ref().unwrap();
         println!("[*desc_ring*]");
         for i in 0..size {
-            use crate::kernel::vm_ipa2pa;
             let desc_addr = vm_ipa2pa(vm.clone(), desc[i].addr);
             println!(
                 "index {}   desc_addr_ipa 0x{:x}   desc_addr_pa 0x{:x}   len 0x{:x}   flags {}  next {}",
@@ -322,6 +321,30 @@ impl Virtq {
         inner.used_addr
     }
 
+    pub fn desc_table(&self) -> usize {
+        let inner = self.inner.lock();
+        match &inner.desc_table {
+            None => 0,
+            Some(desc_table) => &(desc_table[0]) as *const _ as usize,
+        }
+    }
+
+    pub fn avail(&self) -> usize {
+        let inner = self.inner.lock();
+        match &inner.avail {
+            None => 0,
+            Some(avail) => (*avail) as *const _ as usize,
+        }
+    }
+
+    pub fn used(&self) -> usize {
+        let inner = self.inner.lock();
+        match &inner.used {
+            None => 0,
+            Some(used) => (*used) as *const _ as usize,
+        }
+    }
+
     pub fn ready(&self) -> usize {
         let inner = self.inner.lock();
         inner.ready
@@ -385,14 +408,28 @@ impl Virtq {
         dst_inner.ready = src_inner.ready;
         dst_inner.vq_index = src_inner.vq_index;
         dst_inner.num = src_inner.num;
-        // TODO: no sure this virtio queue copy can work
-        let desc_addr = src_inner.desc_table.as_ref().unwrap() as *const _ as usize;
-        dst_inner.desc_table =
-            Some(unsafe { slice::from_raw_parts_mut(desc_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
-        let avail_addr = src_inner.desc_table.as_ref().unwrap() as *const _ as usize;
-        dst_inner.avail = Some(unsafe { &mut *(avail_addr as *mut VringAvail) });
-        let used_addr = src_inner.desc_table.as_ref().unwrap() as *const _ as usize;
-        dst_inner.used = Some(unsafe { &mut *(used_addr as *mut VringUsed) });
+
+        dst_inner.desc_table = match &src_inner.desc_table {
+            None => None,
+            Some(desc_table) => {
+                let desc_addr = &desc_table[0] as *const _ as usize;
+                Some(unsafe { slice::from_raw_parts_mut(desc_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) })
+            }
+        };
+        dst_inner.avail = match &src_inner.avail {
+            None => None,
+            Some(avail) => {
+                let avail_addr = *avail as *const _ as usize;
+                Some(unsafe { &mut *(avail_addr as *mut VringAvail) })
+            }
+        };
+        dst_inner.used = match &src_inner.used {
+            None => None,
+            Some(used) => {
+                let used_addr = *used as *const _ as usize;
+                Some(unsafe { &mut *(used_addr as *mut VringUsed) })
+            }
+        };
 
         dst_inner.last_avail_idx = src_inner.last_avail_idx;
         dst_inner.last_used_idx = src_inner.last_used_idx;

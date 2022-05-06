@@ -8,10 +8,9 @@ use crate::config::{vm_id_list, vm_num};
 use crate::config::NAME_MAX_LEN;
 use crate::config::vm_cfg_entry;
 use crate::config::vm_type;
-use crate::device::create_fdt;
 use crate::kernel::{
-    active_vcpu_id, active_vm, cpu_idle, current_cpu, push_vm, timer_enable, vcpu_run, vm, Vm, vm_if_get_state,
-    vm_if_reset, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
+    active_vcpu_id, active_vm, cpu_idle, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg,
+    vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -22,7 +21,6 @@ use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::lib::{bit_extract, memcpy_safe, memset_safe};
 use crate::vmm::{vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_setup_fdt};
-use crate::vmm::vmm_load_image;
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
@@ -317,7 +315,7 @@ pub fn vmm_load_image_from_mvm(vm: Vm) {
     let msg = HvcManageMsg {
         fid: HVC_CONFIG,
         event: HVC_CONFIG_UPLOAD_KERNEL_IMAGE,
-        vm_id: vm.id(),
+        vm_id,
     };
     // println!("mediated_blk_write send msg to vm0");
     if !hvc_send_msg_to_vm(0, &HvcGuestMsg::Manage(msg)) {

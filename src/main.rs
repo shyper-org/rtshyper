@@ -10,8 +10,8 @@
 #[macro_use]
 extern crate alloc;
 extern crate fdt;
-#[macro_use]
-extern crate lazy_static;
+// #[macro_use]
+// extern crate lazy_static;
 extern crate log;
 
 // extern crate rlibc;
@@ -24,7 +24,7 @@ extern crate log;
 use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
-use vmm::{vmm_boot, vmm_init};
+use vmm::{mvm_init, vmm_boot};
 
 use crate::kernel::{cpu_sched_init, hvc_init};
 
@@ -91,7 +91,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     // if cpu_id == 0 {
     //     tmp();
     // }
-    vmm_init();
+    mvm_init();
     if cpu_id == 0 {
         mediated_dev_init();
     }

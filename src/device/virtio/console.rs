@@ -89,7 +89,7 @@ impl ConsoleDesc {
     pub fn migrate_save(&self, src_desc: ConsoleDesc) {
         let mut dst_inner = self.inner.lock();
         let src_inner = src_desc.inner.lock();
-        dst_inner = src_inner; // ConsoleDescInner have Copy trait
+        *dst_inner = *src_inner; // ConsoleDescInner have Copy trait
     }
 }
 
