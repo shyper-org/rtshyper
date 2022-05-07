@@ -29,8 +29,7 @@ use crate::kernel::{
     Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner,
     VmInterface, VmRegion,
 };
-use crate::kernel::AsyncTaskData::AsyncIpiTask;
-use crate::lib::{BitAlloc256, BitMap, FlexBitmap};
+use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap};
 use crate::mm::{heap_init, PageFrame};
 use crate::vmm::vmm_ipi_handler;
 
@@ -164,6 +163,8 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
             vcpu_update(vcpu_list, vm_list);
 
             set_fresh_status(FreshStatus::FreshVM);
+            barrier();
+
             // CPU: Must update after vcpu and vm
             let cpu = &*(address_list.cpu as *const Cpu);
             current_cpu_update(cpu);
@@ -223,11 +224,12 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
         }
     } else {
         let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
-        while fresh_status() != FreshStatus::FreshVM && fresh_status() != FreshStatus::Finish {
-            for i in 0..10000 {
-                nop();
-            }
-        }
+        // while fresh_status() != FreshStatus::FreshVM && fresh_status() != FreshStatus::Finish {
+        //     for _ in 0..1000 {
+        //         nop();
+        //     }
+        // }
+        barrier();
         if fresh_status() == FreshStatus::FreshVM || fresh_status() == FreshStatus::Finish {
             // CPU: Must update after vcpu and vm
             current_cpu_update(cpu);
@@ -243,7 +245,7 @@ pub fn fresh_hyper() {
     }
     if current_cpu().id == 0 {
         let ctx = current_cpu().ctx.unwrap();
-        println!("CPU[{}] ctx {:x}", current_cpu().id, ctx);
+        // println!("CPU[{}] ctx {:x}", current_cpu().id, ctx);
         current_cpu().clear_ctx();
         unsafe { fresh_hyper(ctx) };
     } else {
@@ -254,21 +256,21 @@ pub fn fresh_hyper() {
             CpuState::CpuIdle => {
                 println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuIdle);
                 unsafe { fresh_cpu() };
-                println!(
-                    "Core[{}] current cpu irq {}",
-                    current_cpu().id,
-                    current_cpu().current_irq
-                );
+                // println!(
+                //     "Core[{}] current cpu irq {}",
+                //     current_cpu().id,
+                //     current_cpu().current_irq
+                // );
                 gicc_clear_current_irq(true);
                 cpu_idle();
             }
             CpuState::CpuRun => {
                 println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuRun);
-                println!(
-                    "Core[{}] current cpu irq {}",
-                    current_cpu().id,
-                    current_cpu().current_irq
-                );
+                // println!(
+                //     "Core[{}] current cpu irq {}",
+                //     current_cpu().id,
+                //     current_cpu().current_irq
+                // );
                 gicc_clear_current_irq(true);
                 let ctx = current_cpu().ctx.unwrap();
                 current_cpu().clear_ctx();
@@ -322,7 +324,7 @@ pub fn async_task_update(
         let vm_id = io_task.src_vmid;
         let vm = vm(vm_id).unwrap();
         let task_data = match &io_task.task_data {
-            AsyncIpiTask(_) => panic!("Find an IPI Task in IO task list"),
+            AsyncTaskData::AsyncIpiTask(_) => panic!("Find an IPI Task in IO task list"),
             AsyncTaskData::AsyncIoTask(io_msg) => {
                 assert_eq!(vm_id, io_msg.src_vmid);
                 let vq_idx = io_msg.vq.vq_indx();
@@ -399,7 +401,7 @@ pub fn cpu_if_update(src_cpu_if: &Mutex<Vec<CpuIf>>) {
     let mut cpu_if_list = CPU_IF_LIST.lock();
     assert_eq!(cpu_if_list.len(), 0);
     cpu_if_list.clear();
-    for cpu_if in src_cpu_if.lock().iter() {
+    for (idx, cpu_if) in src_cpu_if.lock().iter().enumerate() {
         let mut new_cpu_if = CpuIf::default();
         for msg in cpu_if.msg_queue.iter() {
             // Copy ipi msg
@@ -439,6 +441,7 @@ pub fn cpu_if_update(src_cpu_if: &Mutex<Vec<CpuIf>>) {
                 ipi_message: new_ipi_msg,
             })
         }
+        println!("Update {} ipi msg for CpuIf[{}]", new_cpu_if.msg_queue.len(), idx);
         cpu_if_list.push(new_cpu_if);
     }
     println!("Update CPU_IF_LIST");
