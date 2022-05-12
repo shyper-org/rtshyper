@@ -167,7 +167,7 @@ fn create_cpu_node(fdt: &mut FdtWriter, config: VmConfigEntry) -> FdtWriterResul
     fdt.property_u32("#size-cells", 0)?;
     fdt.property_u32("#address-cells", 0x2)?;
 
-    let cpu_num = bit_num(config.cpu_num() as usize, PLAT_DESC.cpu_desc.num);
+    let cpu_num = bit_num(config.cpu_allocated_bitmap() as usize, PLAT_DESC.cpu_desc.num);
     for cpu_id in 0..cpu_num {
         let cpu_name = format!("cpu@{:x}", cpu_id);
         let cpu_node = fdt.begin_node(&cpu_name)?;

@@ -51,6 +51,21 @@ pub fn mem_heap_region_init() {
     println!("Memory Heap init ok");
 }
 
+/// Reserve Heap Memory from base_addr to base_addr + size
+/// #Example
+/// ```
+/// mem_heap_region_reserve(0x88000000, 0x8000000);
+/// ```
+pub fn mem_heap_region_reserve(base_addr: usize, size: usize) {
+    let mut heap = HEAP_REGION.lock();
+    heap.reserve_pages(base_addr, round_up(size, PAGE_SIZE) / PAGE_SIZE);
+    println!(
+        "Reserve Heap Region 0x{:x} ~ 0x{:x}",
+        base_addr,
+        base_addr + round_up(size, PAGE_SIZE)
+    );
+}
+
 fn mem_vm_region_init() {
     if PLAT_DESC.mem_desc.region_num - 1 > TOTAL_MEM_REGION_MAX {
         panic!("Platform memory regions overrun!");

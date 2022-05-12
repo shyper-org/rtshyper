@@ -4,7 +4,6 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use cortex_a::asm::nop;
 use spin::{Mutex, RwLock};
 
 use crate::arch::{
@@ -25,9 +24,9 @@ use crate::kernel::{
     AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion,
     hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler,
     InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg,
-    IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, timer_irq_handler, UsedInfo,
-    Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInner,
-    VmInterface, VmRegion,
+    IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, SHARE_MEM_LIST,
+    timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST,
+    VM_NUM_MAX, VM_REGION, VmInner, VmInterface, VmRegion,
 };
 use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap};
 use crate::mm::{heap_init, PageFrame};
@@ -51,6 +50,11 @@ fn set_fresh_status(status: FreshStatus) {
 fn fresh_status() -> FreshStatus {
     *FRESH_STATUS.read()
 }
+
+#[cfg(not(feature = "update"))]
+pub const UPDATE_IMG_BASE_ADDR: usize = 0x88000000;
+#[cfg(feature = "update")]
+pub const UPDATE_IMG_BASE_ADDR: usize = 0x83000000;
 
 #[repr(C)]
 pub struct HypervisorAddr {
@@ -79,6 +83,8 @@ pub struct HypervisorAddr {
     async_ipi_task_list: usize,
     async_io_task_list: usize,
     async_used_info_list: usize,
+    // shared mem
+    shared_mem_list: usize,
 }
 
 pub fn hyper_fresh_ipi_handler(_msg: &IpiMessage) {
@@ -111,6 +117,7 @@ pub fn update_request() {
         let async_ipi_task_list = &ASYNC_IPI_TASK_LIST as *const _ as usize;
         let async_io_task_list = &ASYNC_IO_TASK_LIST as *const _ as usize;
         let async_used_info_list = &ASYNC_USED_INFO_LIST as *const _ as usize;
+        let shared_mem_list = &SHARE_MEM_LIST as *const _ as usize;
 
         let addr_list = HypervisorAddr {
             cpu_id: current_cpu().id,
@@ -134,6 +141,7 @@ pub fn update_request() {
             async_ipi_task_list,
             async_io_task_list,
             async_used_info_list,
+            shared_mem_list,
         };
         update_request(&addr_list);
     }
@@ -143,8 +151,6 @@ pub fn update_request() {
 pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
     // TODO: SHARED_MEM
     // TODO: vm0_dtb?
-    // TODO: mediated dev
-    // TODO: async task
     if address_list.cpu_id == 0 {
         heap_init();
         mem_heap_region_init();
@@ -220,21 +226,21 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
                 &*(address_list.async_used_info_list as *const Mutex<BTreeMap<usize, Vec<UsedInfo>>>);
             async_task_update(async_ipi_task_list, async_io_task_list, async_used_info_list);
 
+            let shared_mem_list = &*(address_list.shared_mem_list as *const Mutex<BTreeMap<usize, usize>>);
+            shared_mem_list_update(shared_mem_list);
+
             set_fresh_status(FreshStatus::Finish);
         }
     } else {
         let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
-        // while fresh_status() != FreshStatus::FreshVM && fresh_status() != FreshStatus::Finish {
-        //     for _ in 0..1000 {
-        //         nop();
-        //     }
-        // }
         barrier();
         if fresh_status() == FreshStatus::FreshVM || fresh_status() == FreshStatus::Finish {
             // CPU: Must update after vcpu and vm
             current_cpu_update(cpu);
         }
     }
+    // TODO: need to optimize
+    barrier();
     fresh_hyper();
 }
 
@@ -277,6 +283,13 @@ pub fn fresh_hyper() {
                 unsafe { fresh_hyper(ctx) };
             }
         }
+    }
+}
+
+pub fn shared_mem_list_update(src_shared_mem_list: &Mutex<BTreeMap<usize, usize>>) {
+    let mut shared_mem_list = SHARE_MEM_LIST.lock();
+    for (key, val) in src_shared_mem_list.lock().iter() {
+        shared_mem_list.insert(*key, *val);
     }
 }
 

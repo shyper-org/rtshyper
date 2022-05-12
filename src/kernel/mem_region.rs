@@ -14,9 +14,9 @@ const TOTAL_MEM_REGION_MAX: usize = 16;
 #[derive(Copy, Clone, Eq, Debug)]
 pub struct MemRegion {
     pub base: usize,
-    pub size: usize,
-    pub free: usize,
-    pub last: usize,
+    pub size: usize, // bit
+    pub free: usize, // bit
+    pub last: usize, // bit
 }
 
 impl PartialEq for MemRegion {
@@ -51,6 +51,17 @@ pub struct HeapRegion {
 impl HeapRegion {
     pub fn region_init(&mut self, base: usize, size: usize, free: usize, last: usize) {
         self.region.init(base, size, free, last);
+    }
+
+    // base addr need to align to PAGE_SIZE
+    pub fn reserve_pages(&mut self, base: usize, size: usize) {
+        let offset = (base - self.region.base) / PAGE_SIZE;
+        for i in 0..size {
+            if self.map.get(offset + i) != 0 {
+                panic!("Heap Page 0x{:x} has been alloc", base + i * PAGE_SIZE);
+            }
+            self.map.set(offset + i);
+        }
     }
 
     pub fn alloc_page(&mut self) -> Result<PageFrame, AllocError> {
