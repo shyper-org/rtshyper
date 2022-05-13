@@ -327,7 +327,12 @@ impl Vm {
 
     pub fn push_vcpu(&self, vcpu: Vcpu) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.vcpu_list.push(vcpu);
+        if vcpu.id() >= vm_inner.vcpu_list.len() {
+            vm_inner.vcpu_list.push(vcpu);
+        } else {
+            println!("VM[{}] insert VCPU {}", vm_inner.id, vcpu.id());
+            vm_inner.vcpu_list.insert(vcpu.id(), vcpu);
+        }
     }
 
     pub fn clear_vcpu(&self) {

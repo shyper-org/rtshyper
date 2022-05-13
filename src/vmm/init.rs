@@ -5,7 +5,7 @@ use crate::arch::PAGE_SIZE;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
-use crate::config::{vm_cfg_entry, vm_type};
+use crate::config::{vm_cfg_entry};
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;

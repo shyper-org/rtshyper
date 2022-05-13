@@ -10,6 +10,7 @@ use crate::arch::{
     emu_intc_handler, GIC_LRS_NUM, gic_maintenance_handler, gicc_clear_current_irq, PageTable,
     partial_passthrough_intc_handler, psci_ipi_handler, TIMER_FREQ, TIMER_SLICE, Vgic, vgic_ipi_handler,
 };
+use crate::board::PLAT_DESC;
 use crate::config::{
     DEF_VM_CONFIG_TABLE, vm_cfg_entry, VmConfigEntry, VmConfigTable, VmDtbDevConfig, VMDtbDevConfigList,
     VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmMemoryConfig, VmPassthroughDeviceConfig,
@@ -23,17 +24,17 @@ use crate::kernel::{
     async_blk_io_req, ASYNC_IO_TASK_LIST, async_ipi_req, ASYNC_IPI_TASK_LIST, ASYNC_USED_INFO_LIST, AsyncTask,
     AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion,
     hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler,
-    InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, IpiHandler, IpiInnerMsg,
-    IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, SHARE_MEM_LIST,
+    InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, ipi_send_msg, IpiHandler,
+    IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, SHARE_MEM_LIST,
     timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST,
-    VM_NUM_MAX, VM_REGION, VmInner, VmInterface, VmRegion,
+    VM_NUM_MAX, VM_REGION, VmInterface, VmRegion,
 };
-use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap};
+use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
 use crate::vmm::vmm_ipi_handler;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum FreshStatus {
+pub enum FreshStatus {
     Start,
     FreshVM,
     Finish,
@@ -47,7 +48,7 @@ fn set_fresh_status(status: FreshStatus) {
     *FRESH_STATUS.write() = status;
 }
 
-fn fresh_status() -> FreshStatus {
+pub fn fresh_status() -> FreshStatus {
     *FRESH_STATUS.read()
 }
 
@@ -94,67 +95,78 @@ pub fn hyper_fresh_ipi_handler(_msg: &IpiMessage) {
 pub fn update_request() {
     // println!("Src Hypervisor Core[{}] send update request", current_cpu().id);
     extern "C" {
-        pub fn update_request(address_list: &HypervisorAddr);
+        pub fn update_request(address_list: &HypervisorAddr, alloc: bool);
+    }
+    let vm_config_table = &DEF_VM_CONFIG_TABLE as *const _ as usize;
+    let emu_dev_list = &EMU_DEVS_LIST as *const _ as usize;
+    let interrupt_hyper_bitmap = &INTERRUPT_HYPER_BITMAP as *const _ as usize;
+    let interrupt_glb_bitmap = &INTERRUPT_GLB_BITMAP as *const _ as usize;
+    let interrupt_handlers = &INTERRUPT_HANDLERS as *const _ as usize;
+    let vm_region = &VM_REGION as *const _ as usize;
+    let heap_region = &HEAP_REGION as *const _ as usize;
+    let vm_list = &VM_LIST as *const _ as usize;
+    let vm_if_list = &VM_IF_LIST as *const _ as usize;
+    let vcpu_list = &VCPU_LIST as *const _ as usize;
+    let cpu = unsafe { &CPU as *const _ as usize };
+    let cpu_if_list = &CPU_IF_LIST as *const _ as usize;
+    let gic_lrs_num = &GIC_LRS_NUM as *const _ as usize;
+    let ipi_handler_list = &IPI_HANDLER_LIST as *const _ as usize;
+    let time_freq = &TIMER_FREQ as *const _ as usize;
+    let time_slice = &TIMER_SLICE as *const _ as usize;
+    let mediated_blk_list = &MEDIATED_BLK_LIST as *const _ as usize;
+    let async_ipi_task_list = &ASYNC_IPI_TASK_LIST as *const _ as usize;
+    let async_io_task_list = &ASYNC_IO_TASK_LIST as *const _ as usize;
+    let async_used_info_list = &ASYNC_USED_INFO_LIST as *const _ as usize;
+    let shared_mem_list = &SHARE_MEM_LIST as *const _ as usize;
+
+    let addr_list = HypervisorAddr {
+        cpu_id: current_cpu().id,
+        vm_config_table,
+        emu_dev_list,
+        interrupt_hyper_bitmap,
+        interrupt_glb_bitmap,
+        interrupt_handlers,
+        vm_region,
+        heap_region,
+        vm_list,
+        vm_if_list,
+        vcpu_list,
+        cpu,
+        cpu_if_list,
+        gic_lrs_num,
+        ipi_handler_list,
+        time_freq,
+        time_slice,
+        mediated_blk_list,
+        async_ipi_task_list,
+        async_io_task_list,
+        async_used_info_list,
+        shared_mem_list,
+    };
+    if current_cpu().id == 0 {
+        unsafe {
+            update_request(&addr_list, true);
+        }
+        for cpu_id in 0..PLAT_DESC.cpu_desc.num {
+            if cpu_id != current_cpu().id {
+                ipi_send_msg(cpu_id, IpiType::IpiTHyperFresh, IpiInnerMsg::HyperFreshMsg());
+            }
+        }
     }
     unsafe {
-        let vm_config_table = &DEF_VM_CONFIG_TABLE as *const _ as usize;
-        let emu_dev_list = &EMU_DEVS_LIST as *const _ as usize;
-        let interrupt_hyper_bitmap = &INTERRUPT_HYPER_BITMAP as *const _ as usize;
-        let interrupt_glb_bitmap = &INTERRUPT_GLB_BITMAP as *const _ as usize;
-        let interrupt_handlers = &INTERRUPT_HANDLERS as *const _ as usize;
-        let vm_region = &VM_REGION as *const _ as usize;
-        let heap_region = &HEAP_REGION as *const _ as usize;
-        let vm_list = &VM_LIST as *const _ as usize;
-        let vm_if_list = &VM_IF_LIST as *const _ as usize;
-        let vcpu_list = &VCPU_LIST as *const _ as usize;
-        let cpu = &CPU as *const _ as usize;
-        let cpu_if_list = &CPU_IF_LIST as *const _ as usize;
-        let gic_lrs_num = &GIC_LRS_NUM as *const _ as usize;
-        let ipi_handler_list = &IPI_HANDLER_LIST as *const _ as usize;
-        let time_freq = &TIMER_FREQ as *const _ as usize;
-        let time_slice = &TIMER_SLICE as *const _ as usize;
-        let mediated_blk_list = &MEDIATED_BLK_LIST as *const _ as usize;
-        let async_ipi_task_list = &ASYNC_IPI_TASK_LIST as *const _ as usize;
-        let async_io_task_list = &ASYNC_IO_TASK_LIST as *const _ as usize;
-        let async_used_info_list = &ASYNC_USED_INFO_LIST as *const _ as usize;
-        let shared_mem_list = &SHARE_MEM_LIST as *const _ as usize;
-
-        let addr_list = HypervisorAddr {
-            cpu_id: current_cpu().id,
-            vm_config_table,
-            emu_dev_list,
-            interrupt_hyper_bitmap,
-            interrupt_glb_bitmap,
-            interrupt_handlers,
-            vm_region,
-            heap_region,
-            vm_list,
-            vm_if_list,
-            vcpu_list,
-            cpu,
-            cpu_if_list,
-            gic_lrs_num,
-            ipi_handler_list,
-            time_freq,
-            time_slice,
-            mediated_blk_list,
-            async_ipi_task_list,
-            async_io_task_list,
-            async_used_info_list,
-            shared_mem_list,
-        };
-        update_request(&addr_list);
+        update_request(&addr_list, false);
     }
 }
 
 #[no_mangle]
-pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
-    // TODO: SHARED_MEM
+pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool) {
     // TODO: vm0_dtb?
-    if address_list.cpu_id == 0 {
+    let mut time0 = 0;
+    let mut time1 = 0;
+    if alloc {
+        // cpu id is 0
         heap_init();
         mem_heap_region_init();
-        set_fresh_status(FreshStatus::Start);
         unsafe {
             // DEF_VM_CONFIG_TABLE
             let vm_config_table = &*(address_list.vm_config_table as *const Mutex<VmConfigTable>);
@@ -162,14 +174,27 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
 
             // VM_LIST
             let vm_list = &*(address_list.vm_list as *const Mutex<Vec<Vm>>);
-            vm_list_update(vm_list);
+            vm_list_alloc(vm_list);
 
             // VCPU_LIST
             let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
-            vcpu_update(vcpu_list, vm_list);
+            vcpu_list_alloc(vcpu_list);
+        }
+        println!("Finish Alloc VM and VCPU");
+        return;
+    }
 
+    if address_list.cpu_id == 0 {
+        set_fresh_status(FreshStatus::Start);
+        unsafe {
+            // VM_LIST
+            let vm_list = &*(address_list.vm_list as *const Mutex<Vec<Vm>>);
+            vm_list_update(vm_list);
+
+            // VCPU_LIST (add vgic)
+            let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
+            vcpu_update(vcpu_list, vm_list);
             set_fresh_status(FreshStatus::FreshVM);
-            barrier();
 
             // CPU: Must update after vcpu and vm
             let cpu = &*(address_list.cpu as *const Cpu);
@@ -206,10 +231,6 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
             let ipi_handler_list = &*(address_list.ipi_handler_list as *const Mutex<Vec<IpiHandler>>);
             ipi_handler_list_update(ipi_handler_list);
 
-            // cpu_if_list
-            let cpu_if = &*(address_list.cpu_if_list as *const Mutex<Vec<CpuIf>>);
-            cpu_if_update(cpu_if);
-
             // TIMER_FREQ & TIMER_SLICE
             let time_freq = &*(address_list.time_freq as *const Mutex<usize>);
             let time_slice = &*(address_list.time_slice as *const Mutex<usize>);
@@ -219,6 +240,14 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
             let mediated_blk_list = &*(address_list.mediated_blk_list as *const Mutex<Vec<MediatedBlk>>);
             mediated_blk_list_update(mediated_blk_list);
 
+            // SHARED_MEM_LIST
+            let shared_mem_list = &*(address_list.shared_mem_list as *const Mutex<BTreeMap<usize, usize>>);
+            shared_mem_list_update(shared_mem_list);
+
+            // cpu_if_list
+            let cpu_if = &*(address_list.cpu_if_list as *const Mutex<Vec<CpuIf>>);
+            cpu_if_update(cpu_if);
+
             // ASYNC_IPI_TASK_LIST、ASYNC_IO_TASK_LIST、ASYNC_USED_INFO_LIST
             let async_ipi_task_list = &*(address_list.async_ipi_task_list as *const Mutex<Vec<AsyncTask>>);
             let async_io_task_list = &*(address_list.async_io_task_list as *const Mutex<Vec<AsyncTask>>);
@@ -226,21 +255,27 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr) {
                 &*(address_list.async_used_info_list as *const Mutex<BTreeMap<usize, Vec<UsedInfo>>>);
             async_task_update(async_ipi_task_list, async_io_task_list, async_used_info_list);
 
-            let shared_mem_list = &*(address_list.shared_mem_list as *const Mutex<BTreeMap<usize, usize>>);
-            shared_mem_list_update(shared_mem_list);
-
             set_fresh_status(FreshStatus::Finish);
         }
     } else {
         let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
-        barrier();
-        if fresh_status() == FreshStatus::FreshVM || fresh_status() == FreshStatus::Finish {
-            // CPU: Must update after vcpu and vm
-            current_cpu_update(cpu);
-        }
+        time0 = time_current_us();
+        // CPU: Must update after vcpu and vm alloc
+        current_cpu_update(cpu);
+        time1 = time_current_us();
     }
     // TODO: need to optimize
     barrier();
+    let time2 = time_current_us();
+    if current_cpu().id != 0 {
+        println!(
+            "Core[{}] total time {}, handle time {}, wait1 {}",
+            current_cpu().id,
+            time2 - time0,
+            time1 - time0,
+            time2 - time1
+        );
+    }
     fresh_hyper();
 }
 
@@ -555,15 +590,102 @@ pub fn gic_lrs_num_update(src_gic_lrs_num: &Mutex<usize>) {
     println!("Update GIC_LRS_NUM");
 }
 
+// alloc vm_list
+pub fn vm_list_alloc(src_vm_list: &Mutex<Vec<Vm>>) {
+    let mut vm_list = VM_LIST.lock();
+    for vm in src_vm_list.lock().iter() {
+        vm_list.push(Vm::new(vm.id()));
+    }
+    assert_eq!(vm_list.len(), src_vm_list.lock().len());
+    println!("Alloc {} VM in VM_LIST", vm_list.len());
+}
+
 // Set vm.vcpu_list in vcpu_update
 pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
-    let mut vm_list = VM_LIST.lock();
-    assert_eq!(vm_list.len(), 0);
-    vm_list.clear();
-    drop(vm_list);
-    for vm in src_vm_list.lock().iter() {
-        let old_inner = vm.inner.lock();
-        let pt = match &old_inner.pt {
+    // let mut vm_list = VM_LIST.lock();
+    assert_eq!(VM_LIST.lock().len(), src_vm_list.lock().len());
+    // vm_list.clear();
+    // drop(vm_list);
+    for (idx, vm) in src_vm_list.lock().iter().enumerate() {
+        let emu_devs = {
+            let mut emu_devs = vec![];
+            // drop(old_inner);
+            let old_emu_devs = vm.inner.lock().emu_devs.clone();
+            for dev in old_emu_devs.iter() {
+                // TODO: wip
+                let new_dev = match dev {
+                    EmuDevs::Vgic(vgic) => {
+                        // set vgic after vcpu update
+                        EmuDevs::None
+                    }
+                    EmuDevs::VirtioBlk(blk) => {
+                        let mmio = VirtioMmio::new(0);
+                        assert_eq!(
+                            (blk.vq(0).unwrap().desc_table()),
+                            vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().desc_table_addr())
+                        );
+                        assert_eq!(
+                            (blk.vq(0).unwrap().used()),
+                            vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().used_addr())
+                        );
+                        assert_eq!(
+                            (blk.vq(0).unwrap().avail()),
+                            vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().avail_addr())
+                        );
+                        mmio.save_mmio(
+                            blk.clone(),
+                            if blk.dev().mediated() {
+                                Some(virtio_mediated_blk_notify_handler)
+                            } else {
+                                Some(virtio_blk_notify_handler)
+                            },
+                        );
+                        EmuDevs::VirtioBlk(mmio)
+                    }
+                    EmuDevs::VirtioNet(net) => {
+                        let mmio = VirtioMmio::new(0);
+                        assert_eq!(
+                            (net.vq(0).unwrap().desc_table()),
+                            vm_ipa2pa(vm.clone(), net.vq(0).unwrap().desc_table_addr())
+                        );
+                        assert_eq!(
+                            (net.vq(0).unwrap().used()),
+                            vm_ipa2pa(vm.clone(), net.vq(0).unwrap().used_addr())
+                        );
+                        assert_eq!(
+                            (net.vq(0).unwrap().avail()),
+                            vm_ipa2pa(vm.clone(), net.vq(0).unwrap().avail_addr())
+                        );
+                        mmio.save_mmio(net.clone(), Some(virtio_net_notify_handler));
+                        EmuDevs::VirtioNet(mmio)
+                    }
+                    EmuDevs::VirtioConsole(console) => {
+                        let mmio = VirtioMmio::new(0);
+                        assert_eq!(
+                            (console.vq(0).unwrap().desc_table()),
+                            vm_ipa2pa(vm.clone(), console.vq(0).unwrap().desc_table_addr())
+                        );
+                        assert_eq!(
+                            (console.vq(0).unwrap().used()),
+                            vm_ipa2pa(vm.clone(), console.vq(0).unwrap().used_addr())
+                        );
+                        assert_eq!(
+                            (console.vq(0).unwrap().avail()),
+                            vm_ipa2pa(vm.clone(), console.vq(0).unwrap().avail_addr())
+                        );
+                        mmio.save_mmio(console.clone(), Some(virtio_console_notify_handler));
+                        EmuDevs::VirtioConsole(mmio)
+                    }
+                    EmuDevs::None => EmuDevs::None,
+                };
+                emu_devs.push(new_dev);
+            }
+            emu_devs
+        };
+        let dst_vm = VM_LIST.lock()[idx].clone();
+        let mut dst_inner = dst_vm.inner.lock();
+        let src_inner = vm.inner.lock();
+        let pt = match &src_inner.pt {
             None => None,
             Some(page_table) => {
                 let new_page_table = PageTable {
@@ -576,124 +698,41 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                 Some(new_page_table)
             }
         };
-
-        let new_inner = VmInner {
-            id: old_inner.id,
-            ready: old_inner.ready,
-            config: vm_cfg_entry(old_inner.id),
-            dtb: old_inner.dtb, // maybe need to reset
-            pt,
-            mem_region_num: old_inner.mem_region_num,
-            pa_region: {
-                let mut pa_region = vec![];
-                for region in old_inner.pa_region.iter() {
-                    pa_region.push(*region);
-                }
-                pa_region
-            },
-            entry_point: old_inner.entry_point,
-            has_master: old_inner.has_master,
-            vcpu_list: vec![],
-            cpu_num: old_inner.cpu_num,
-            ncpu: old_inner.ncpu,
-            intc_dev_id: old_inner.intc_dev_id,
-            int_bitmap: old_inner.int_bitmap,
-            share_mem_base: old_inner.share_mem_base,
-            migrate_save_pf: {
-                let mut pf = vec![];
-                for page in old_inner.migrate_save_pf.iter() {
-                    pf.push(PageFrame::new(page.pa));
-                }
-                pf
-            },
-            migrate_restore_pf: {
-                let mut pf = vec![];
-                for page in old_inner.migrate_restore_pf.iter() {
-                    pf.push(PageFrame::new(page.pa));
-                }
-                pf
-            },
-            med_blk_id: old_inner.med_blk_id,
-            emu_devs: {
-                let mut emu_devs = vec![];
-                drop(old_inner);
-                let old_emu_devs = vm.inner.lock().emu_devs.clone();
-                for dev in old_emu_devs.iter() {
-                    // TODO: wip
-                    let new_dev = match dev {
-                        EmuDevs::Vgic(vgic) => {
-                            // set vgic after vcpu update
-                            EmuDevs::None
-                        }
-                        EmuDevs::VirtioBlk(blk) => {
-                            let mmio = VirtioMmio::new(0);
-                            assert_eq!(
-                                (blk.vq(0).unwrap().desc_table()),
-                                vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().desc_table_addr())
-                            );
-                            assert_eq!(
-                                (blk.vq(0).unwrap().used()),
-                                vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().used_addr())
-                            );
-                            assert_eq!(
-                                (blk.vq(0).unwrap().avail()),
-                                vm_ipa2pa(vm.clone(), blk.vq(0).unwrap().avail_addr())
-                            );
-                            mmio.save_mmio(
-                                blk.clone(),
-                                if blk.dev().mediated() {
-                                    Some(virtio_mediated_blk_notify_handler)
-                                } else {
-                                    Some(virtio_blk_notify_handler)
-                                },
-                            );
-                            EmuDevs::VirtioBlk(mmio)
-                        }
-                        EmuDevs::VirtioNet(net) => {
-                            let mmio = VirtioMmio::new(0);
-                            assert_eq!(
-                                (net.vq(0).unwrap().desc_table()),
-                                vm_ipa2pa(vm.clone(), net.vq(0).unwrap().desc_table_addr())
-                            );
-                            assert_eq!(
-                                (net.vq(0).unwrap().used()),
-                                vm_ipa2pa(vm.clone(), net.vq(0).unwrap().used_addr())
-                            );
-                            assert_eq!(
-                                (net.vq(0).unwrap().avail()),
-                                vm_ipa2pa(vm.clone(), net.vq(0).unwrap().avail_addr())
-                            );
-                            mmio.save_mmio(net.clone(), Some(virtio_net_notify_handler));
-                            EmuDevs::VirtioNet(mmio)
-                        }
-                        EmuDevs::VirtioConsole(console) => {
-                            let mmio = VirtioMmio::new(0);
-                            assert_eq!(
-                                (console.vq(0).unwrap().desc_table()),
-                                vm_ipa2pa(vm.clone(), console.vq(0).unwrap().desc_table_addr())
-                            );
-                            assert_eq!(
-                                (console.vq(0).unwrap().used()),
-                                vm_ipa2pa(vm.clone(), console.vq(0).unwrap().used_addr())
-                            );
-                            assert_eq!(
-                                (console.vq(0).unwrap().avail()),
-                                vm_ipa2pa(vm.clone(), console.vq(0).unwrap().avail_addr())
-                            );
-                            mmio.save_mmio(console.clone(), Some(virtio_console_notify_handler));
-                            EmuDevs::VirtioConsole(mmio)
-                        }
-                        EmuDevs::None => EmuDevs::None,
-                    };
-                    emu_devs.push(new_dev);
-                }
-                emu_devs
-            },
+        assert_eq!(dst_inner.id, src_inner.id);
+        dst_inner.ready = src_inner.ready;
+        dst_inner.config = vm_cfg_entry(src_inner.id);
+        dst_inner.pt = pt;
+        dst_inner.mem_region_num = src_inner.mem_region_num;
+        dst_inner.pa_region = {
+            let mut pa_region = vec![];
+            for region in src_inner.pa_region.iter() {
+                pa_region.push(*region);
+            }
+            pa_region
         };
-        let mut vm_list = VM_LIST.lock();
-        vm_list.push(Vm {
-            inner: Arc::new(Mutex::new(new_inner)),
-        });
+        dst_inner.entry_point = src_inner.entry_point;
+        dst_inner.has_master = src_inner.has_master;
+        dst_inner.cpu_num = src_inner.cpu_num;
+        dst_inner.ncpu = src_inner.ncpu;
+        dst_inner.intc_dev_id = src_inner.intc_dev_id;
+        dst_inner.int_bitmap = src_inner.int_bitmap;
+        dst_inner.share_mem_base = src_inner.share_mem_base;
+        dst_inner.migrate_save_pf = {
+            let mut pf = vec![];
+            for page in src_inner.migrate_save_pf.iter() {
+                pf.push(PageFrame::new(page.pa));
+            }
+            pf
+        };
+        dst_inner.migrate_restore_pf = {
+            let mut pf = vec![];
+            for page in src_inner.migrate_restore_pf.iter() {
+                pf.push(PageFrame::new(page.pa));
+            }
+            pf
+        };
+        dst_inner.med_blk_id = src_inner.med_blk_id;
+        dst_inner.emu_devs = emu_devs;
     }
     println!("Update VM_LIST");
 }
@@ -880,10 +919,8 @@ pub fn vm_config_table_update(src_vm_config_table: &Mutex<VmConfigTable>) {
     println!("Update {} VM to DEF_VM_CONFIG_TABLE", vm_config_table.vm_num);
 }
 
-pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>>) {
+pub fn vcpu_list_alloc(src_vcpu_list: &Mutex<Vec<Vcpu>>) {
     let mut vcpu_list = VCPU_LIST.lock();
-    assert_eq!(vcpu_list.len(), 0);
-    vcpu_list.clear();
     for vcpu in src_vcpu_list.lock().iter() {
         let src_inner = vcpu.inner.lock();
         let src_vm_option = src_inner.vm.clone();
@@ -894,28 +931,40 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
                 vm(vm_id)
             }
         };
-
-        let vcpu_inner = VcpuInner {
-            id: src_inner.id,
-            phys_id: src_inner.phys_id,
-            state: src_inner.state,
-            vm: vm.clone(),
-            int_list: {
-                let mut int_list = vec![];
-                for int in src_inner.int_list.iter() {
-                    int_list.push(*int);
-                }
-                int_list
-            },
-            vcpu_ctx: src_inner.vcpu_ctx,
-            vm_ctx: src_inner.vm_ctx,
-        };
-        assert_eq!(vcpu_inner.int_list, src_inner.int_list);
+        let mut vcpu_inner = VcpuInner::default();
+        vcpu_inner.vm = vm.clone();
+        vcpu_inner.id = src_inner.id;
+        vcpu_inner.phys_id = src_inner.phys_id;
         let vcpu = Vcpu {
             inner: Arc::new(Mutex::new(vcpu_inner)),
         };
         vm.unwrap().push_vcpu(vcpu.clone());
         vcpu_list.push(vcpu);
+    }
+    assert_eq!(vcpu_list.len(), src_vcpu_list.lock().len());
+    println!("Alloc {} VCPU to VCPU_LIST", vcpu_list.len());
+}
+
+pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>>) {
+    let vcpu_list = VCPU_LIST.lock();
+    assert_eq!(vcpu_list.len(), src_vcpu_list.lock().len());
+    for (idx, vcpu) in src_vcpu_list.lock().iter().enumerate() {
+        let src_inner = vcpu.inner.lock();
+        let mut dst_inner = vcpu_list[idx].inner.lock();
+
+        assert_eq!(dst_inner.id, src_inner.id);
+        assert_eq!(dst_inner.phys_id, src_inner.phys_id);
+        dst_inner.state = src_inner.state;
+        dst_inner.int_list = {
+            let mut int_list = vec![];
+            for int in src_inner.int_list.iter() {
+                int_list.push(*int);
+            }
+            int_list
+        };
+        dst_inner.vcpu_ctx = src_inner.vcpu_ctx;
+        dst_inner.vm_ctx = src_inner.vm_ctx;
+        assert_eq!(dst_inner.int_list, src_inner.int_list);
     }
 
     // Add vgic emu dev for vm
@@ -931,6 +980,5 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
         }
         vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));
     }
-    assert_eq!(vcpu_list.len(), src_vcpu_list.lock().len());
     println!("Update {} Vcpu to VCPU_LIST", vcpu_list.len());
 }

@@ -39,3 +39,14 @@ pub fn barrier() {
         while count.read() < next_count {}
     }
 }
+
+#[inline(never)]
+pub fn add_barrier_count() {
+    unsafe {
+        let lock_addr = &CPU_GLB_SYNC.lock as *const _ as usize;
+        spin_lock(lock_addr);
+        let mut count = Volatile::new(&mut CPU_GLB_SYNC.count);
+        count.update(|count| *count += 1);
+        spin_unlock(lock_addr);
+    }
+}

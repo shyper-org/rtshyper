@@ -5,7 +5,6 @@ use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::arch::tlb_invalidate_guest_all;
-use crate::board::PLAT_DESC;
 use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
@@ -220,11 +219,11 @@ fn hvc_sys_handler(event: usize, x0: usize) -> Result<usize, ()> {
     match event {
         HVC_SYS_UPDATE => {
             mem_heap_region_reserve(UPDATE_IMG_BASE_ADDR, x0);
-            for cpu_id in 0..PLAT_DESC.cpu_desc.num {
-                if cpu_id != current_cpu().id {
-                    ipi_send_msg(cpu_id, IpiType::IpiTHyperFresh, IpiInnerMsg::HyperFreshMsg());
-                }
-            }
+            // for cpu_id in 0..PLAT_DESC.cpu_desc.num {
+            //     if cpu_id != current_cpu().id {
+            //         ipi_send_msg(cpu_id, IpiType::IpiTHyperFresh, IpiInnerMsg::HyperFreshMsg());
+            //     }
+            // }
             update_request();
             Ok(0)
         }
