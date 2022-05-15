@@ -5,8 +5,11 @@ use tock_registers::interfaces::*;
 use crate::arch::{ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::arch::ContextFrame;
-use crate::kernel::{active_vm_id, current_cpu};
+use crate::kernel::{
+    active_vm, active_vm_id, current_cpu, FRESH_IRQ_LOGIC_LOCK, FRESH_LOGIC_LOCK, fresh_status, FreshStatus,
+};
 use crate::kernel::interrupt_handler;
+use crate::lib::time_current_us;
 
 // use crate::lib::time_current_us;
 
@@ -150,6 +153,16 @@ unsafe extern "C" fn current_el_spx_serror() {
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
+    let status = fresh_status();
+    if status != FreshStatus::None {
+        if status != FreshStatus::Finish {
+            println!("lower_aarch64_synchronous: illegal fresh status {:#?}", status);
+            let time0 = time_current_us();
+            FRESH_LOGIC_LOCK.lock();
+            let time1 = time_current_us();
+            println!("lower_aarch64_synchronous: wait live update {} us", time1 - time0);
+        }
+    }
     current_cpu().set_ctx(ctx);
     match exception_class() {
         0x24 => {
@@ -187,6 +200,26 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     // println!("Core[{}] lower_aarch64_irq", cpu_id());
     current_cpu().set_ctx(ctx);
     let (id, src) = gicc_get_current_irq();
+
+    match fresh_status() {
+        FreshStatus::FreshVM | FreshStatus::Start => {
+            // if active_vm().unwrap().has_interrupt(id) {
+            // println!("lower_aarch64_irq: wait for fresh vm and vcpu");
+            // let time0 = time_current_us();
+            FRESH_IRQ_LOGIC_LOCK.lock();
+            // let time1 = time_current_us();
+            // println!("lower_aarch64_irq: wait {} us", time1 - time0);
+            // } else {
+            //     FRESH_LOGIC_LOCK.lock();
+            // }
+        }
+        // FreshStatus::FreshVCPU => {
+        //     if !active_vm().unwrap().has_interrupt(id) {
+        //         FRESH_LOGIC_LOCK.lock();
+        //     }
+        // }
+        _ => {}
+    }
 
     if id >= 1022 {
         return;

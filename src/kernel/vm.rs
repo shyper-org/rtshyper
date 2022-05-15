@@ -369,7 +369,7 @@ impl Vm {
         let mut vm_inner = self.inner.lock();
         if idx < vm_inner.emu_devs.len() {
             if let EmuDevs::None = vm_inner.emu_devs[idx] {
-                println!("set_emu_devs: cover a None emu dev");
+                // println!("set_emu_devs: cover a None emu dev");
                 vm_inner.emu_devs[idx] = emu;
                 return;
             } else {
