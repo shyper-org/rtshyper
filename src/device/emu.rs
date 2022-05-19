@@ -11,7 +11,7 @@ use crate::device::{
 use crate::kernel::{current_cpu};
 use crate::lib::in_range;
 
-pub const EMU_DEV_NUM_MAX: usize = 32;
+pub const EMU_DEV_NUM_MAX: usize = 8;
 pub static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
 
 #[derive(Clone)]

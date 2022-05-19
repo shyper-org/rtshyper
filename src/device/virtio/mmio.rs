@@ -47,7 +47,7 @@ pub const VIRTIO_MMIO_REGS_END: usize = 0x200;
 pub const VIRTIO_MMIO_INT_VRING: usize = 1 << 0;
 
 #[repr(C)]
-struct VirtMmioRegs {
+pub struct VirtMmioRegs {
     magic: u32,
     version: u32,
     device_id: u32,

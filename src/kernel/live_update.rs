@@ -282,11 +282,11 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
         drop(lock0);
     } else {
         let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
-        // time0 = time_current_us();
+        // let time0 = time_current_us();
         // CPU: Must update after vcpu and vm alloc
         current_cpu_update(cpu);
-        // time1 = time_current_us();
-        // println!("Update CPU[{}]", cpu.id);
+        // let time1 = time_current_us();
+        // println!("Update CPU[{}], time {}us", cpu.id, time1 - time0);
     }
     // barrier();
     // if current_cpu().id != 0 {

@@ -321,7 +321,7 @@ impl Vgicd {
 }
 
 #[derive(Clone, Copy)]
-struct Sgis {
+pub struct Sgis {
     pend: u8,
     act: u8,
 }
