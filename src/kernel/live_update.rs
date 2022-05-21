@@ -29,7 +29,7 @@ use crate::kernel::{
     timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST,
     VM_NUM_MAX, VM_REGION, VmInterface, VmRegion,
 };
-use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap, time_current_us};
+use crate::lib::{BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
 use crate::vmm::vmm_ipi_handler;
 
@@ -465,7 +465,7 @@ pub fn arch_time_update(src_time_freq: &Mutex<usize>, src_time_slice: &Mutex<usi
 
 pub fn cpu_if_alloc(src_cpu_if: &Mutex<Vec<CpuIf>>) {
     let mut cpu_if_list = CPU_IF_LIST.lock();
-    for idx in 0..src_cpu_if.lock().len() {
+    for _ in 0..src_cpu_if.lock().len() {
         cpu_if_list.push(CpuIf::default());
     }
 }

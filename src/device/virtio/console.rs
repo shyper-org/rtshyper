@@ -6,7 +6,7 @@ use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, vm_ipa2pa};
+use crate::kernel::{active_vm, ConsoleDescData, vm_ipa2pa};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::trace;
@@ -86,10 +86,26 @@ impl ConsoleDesc {
         (inner.oppo_end_vmid, inner.oppo_end_ipa)
     }
 
-    pub fn migrate_save(&self, src_desc: ConsoleDesc) {
-        let mut dst_inner = self.inner.lock();
-        let src_inner = src_desc.inner.lock();
-        *dst_inner = *src_inner; // ConsoleDescInner have Copy trait
+    // use for migration restore
+    pub fn restore_console_data(&self, desc_data: &ConsoleDescData) {
+        let mut inner = self.inner.lock();
+        inner.oppo_end_vmid = desc_data.oppo_end_vmid;
+        inner.oppo_end_ipa = desc_data.oppo_end_ipa;
+        inner.cols = desc_data.cols;
+        inner.rows = desc_data.rows;
+        inner.max_nr_ports = desc_data.max_nr_ports;
+        inner.emerg_wr = desc_data.emerg_wr;
+    }
+
+    // use for migration save
+    pub fn save_console_data(&self, desc_data: &mut ConsoleDescData) {
+        let inner = self.inner.lock();
+        desc_data.oppo_end_vmid = inner.oppo_end_vmid;
+        desc_data.oppo_end_ipa = inner.oppo_end_ipa;
+        desc_data.cols = inner.cols;
+        desc_data.rows = inner.rows;
+        desc_data.max_nr_ports = inner.max_nr_ports;
+        desc_data.emerg_wr = inner.emerg_wr;
     }
 }
 

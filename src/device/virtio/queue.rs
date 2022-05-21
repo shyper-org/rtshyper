@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, current_cpu, Vm, vm_ipa2pa};
+use crate::kernel::{active_vm, current_cpu, VirtqData, Vm, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 use crate::lib::trace;
 
@@ -402,6 +402,46 @@ impl Virtq {
         used.idx
     }
 
+    // use for migration
+    pub fn restore_vq_data(&self, data: &VirtqData) {
+        let mut inner = self.inner.lock();
+        inner.ready = data.ready;
+        inner.vq_index = data.vq_index;
+        inner.num = data.num;
+        inner.last_avail_idx = data.last_avail_idx;
+        inner.last_used_idx = data.last_used_idx;
+        inner.used_flags = data.used_flags;
+        inner.desc_table_addr = data.desc_table_addr;
+        inner.avail_addr = data.avail_addr;
+        inner.used_addr = data.used_addr;
+        if data.desc_table_addr != 0 {
+            inner.desc_table = Some(unsafe {
+                slice::from_raw_parts_mut(data.desc_table_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE)
+            });
+        }
+        if data.avail_addr != 0 {
+            inner.avail = Some(unsafe { &mut *(data.avail_addr as *mut VringAvail) });
+        }
+        if data.used_addr != 0 {
+            inner.used = Some(unsafe { &mut *(data.used_addr as *mut VringUsed) });
+        }
+    }
+
+    // use for migration
+    pub fn save_vq_data(&self, data: &mut VirtqData) {
+        let inner = self.inner.lock();
+        data.ready = inner.ready;
+        data.vq_index = inner.vq_index;
+        data.num = inner.num;
+        data.last_avail_idx = inner.last_avail_idx;
+        data.last_used_idx = inner.last_used_idx;
+        data.used_flags = inner.used_flags;
+        data.desc_table_addr = inner.desc_table_addr;
+        data.avail_addr = inner.avail_addr;
+        data.used_addr = inner.used_addr;
+    }
+
+    // use for live update
     pub fn save_vq(&self, vq: Virtq, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
         let mut dst_inner = self.inner.lock();
         let src_inner = vq.inner.lock();

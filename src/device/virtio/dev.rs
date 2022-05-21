@@ -11,7 +11,7 @@ use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
 use crate::device::{BlkStat, NicStat};
 use crate::device::DevReq::BlkReq;
-use crate::kernel::mem_pages_alloc;
+use crate::kernel::{ConsoleDescData, DevDescData, mem_pages_alloc, NetDescData, VirtDevData};
 use crate::mm::PageFrame;
 
 #[derive(Copy, Clone)]
@@ -156,6 +156,66 @@ impl VirtDev {
         inner.mediated()
     }
 
+    // use for migration save
+    pub fn restore_virt_dev_data(&self, dev_data: &VirtDevData) {
+        let mut inner = self.inner.lock();
+        inner.dev_type = dev_data.dev_type;
+        inner.features = dev_data.features;
+        inner.generation = dev_data.generation;
+        inner.int_id = dev_data.int_id;
+        match &inner.desc {
+            DevDesc::BlkDesc(_) => {
+                todo!("restore_virt_dev_data: Migrate vm use nfs");
+            }
+            DevDesc::NetDesc(net_desc) => {
+                if let DevDescData::NetDesc(desc_data) = &dev_data.desc {
+                    net_desc.restore_net_data(desc_data);
+                }
+            }
+            DevDesc::ConsoleDesc(console_desvc) => {
+                if let DevDescData::ConsoleDesc(desc_data) = &dev_data.desc {
+                    console_desvc.restore_console_data(desc_data);
+                }
+            }
+            DevDesc::None => {}
+        }
+    }
+
+    // use for migration save
+    pub fn save_virt_dev_data(&self, dev_data: &mut VirtDevData) {
+        let inner = self.inner.lock();
+        dev_data.dev_type = inner.dev_type;
+        dev_data.features = inner.features;
+        dev_data.generation = inner.generation;
+        dev_data.int_id = inner.int_id;
+        match &inner.desc {
+            DevDesc::BlkDesc(_) => {
+                todo!("save_virt_dev_data: Migrate vm use nfs");
+            }
+            DevDesc::NetDesc(net_desc) => {
+                dev_data.desc = DevDescData::NetDesc(NetDescData { mac: [0; 6], status: 0 });
+                if let DevDescData::NetDesc(desc_data) = &mut dev_data.desc {
+                    net_desc.save_net_data(desc_data);
+                }
+            }
+            DevDesc::ConsoleDesc(console_desvc) => {
+                dev_data.desc = DevDescData::ConsoleDesc(ConsoleDescData {
+                    oppo_end_vmid: 0,
+                    oppo_end_ipa: 0,
+                    cols: 0,
+                    rows: 0,
+                    max_nr_ports: 0,
+                    emerg_wr: 0,
+                });
+                if let DevDescData::ConsoleDesc(desc_data) = &mut dev_data.desc {
+                    console_desvc.save_console_data(desc_data);
+                }
+            }
+            DevDesc::None => {}
+        }
+    }
+
+    // use for live update
     pub fn save_virt_dev(&self, src_dev: VirtDev) {
         let mut inner = self.inner.lock();
         let src_dev_inner = src_dev.inner.lock();

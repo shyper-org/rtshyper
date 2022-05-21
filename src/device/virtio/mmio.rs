@@ -14,7 +14,7 @@ use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEU
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::{current_cpu, vm_ipa2pa};
+use crate::kernel::{current_cpu, VirtioMmioData, vm_ipa2pa};
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
 
@@ -47,6 +47,7 @@ pub const VIRTIO_MMIO_REGS_END: usize = 0x200;
 pub const VIRTIO_MMIO_INT_VRING: usize = 1 << 0;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct VirtMmioRegs {
     magic: u32,
     version: u32,
@@ -320,6 +321,33 @@ impl VirtioMmio {
         return vq.call_notify_handler(self.clone());
     }
 
+    // use for migration restore
+    pub fn restore_mmio_data(&self, mmio_data: &VirtioMmioData) {
+        let mut inner = self.inner.lock();
+        inner.id = mmio_data.id;
+        inner.driver_features = mmio_data.driver_features;
+        inner.driver_status = mmio_data.driver_status;
+        inner.regs = mmio_data.regs;
+        inner.dev.restore_virt_dev_data(&mmio_data.dev);
+        for (idx, vq) in inner.vq.iter().enumerate() {
+            vq.restore_vq_data(&mmio_data.vq[idx]);
+        }
+    }
+
+    // use for migration save
+    pub fn save_mmio_data(&self, mmio_data: &mut VirtioMmioData) {
+        let inner = self.inner.lock();
+        mmio_data.id = inner.id;
+        mmio_data.driver_features = inner.driver_features;
+        mmio_data.driver_status = inner.driver_status;
+        mmio_data.regs = inner.regs;
+        inner.dev.save_virt_dev_data(&mut mmio_data.dev);
+        for (idx, vq) in inner.vq.iter().enumerate() {
+            vq.save_vq_data(&mut mmio_data.vq[idx]);
+        }
+    }
+
+    // use for live update
     pub fn save_mmio(&self, virtio_mmio: VirtioMmio, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
         let mut dst_dev = self.inner.lock();
         let src_dev = virtio_mmio.inner.lock();

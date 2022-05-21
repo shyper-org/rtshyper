@@ -8,7 +8,7 @@ use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_cmp_mac, vm_if_get_cpu_id, vm_ipa2pa};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_ipa2pa};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
@@ -76,6 +76,7 @@ impl NetDesc {
         }
     }
 
+    // use for live update
     pub fn back_up(&self) -> NetDesc {
         let current_inner = self.inner.lock();
         let inner = NetDescInner {
@@ -109,10 +110,18 @@ impl NetDesc {
         return value;
     }
 
-    pub fn migrate_save(&self, src_desc: NetDesc) {
+    // use for migration
+    pub fn restore_net_data(&self, desc_data: &NetDescData) {
         let mut inner = self.inner.lock();
-        let src_inner = src_desc.inner.lock();
-        *inner = *src_inner;
+        inner.mac = desc_data.mac;
+        inner.status = desc_data.status;
+    }
+
+    // use for migration
+    pub fn save_net_data(&self, desc_data: &mut NetDescData) {
+        let inner = self.inner.lock();
+        desc_data.mac = inner.mac;
+        desc_data.status = inner.status;
     }
 }
 

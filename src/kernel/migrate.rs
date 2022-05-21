@@ -1,6 +1,3 @@
-use core::mem::size_of;
-use spin::Mutex;
-
 use crate::arch::{
     Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, IrqState, PAGE_SIZE,
     PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
@@ -8,17 +5,15 @@ use crate::arch::{
 use crate::arch::tlb_invalidate_guest_all;
 use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs};
 use crate::kernel::{
-    active_vm, AllocError, current_cpu, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg,
+    active_vm, current_cpu, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg,
     HvcMigrateMsg, mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm,
     vm_if_copy_mem_map, vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
 };
-use crate::lib::round_up;
-use crate::mm::PageFrame;
 
 pub struct VMData {
-    vm_ctx: VmContext,
-    vcpu_ctx: Aarch64ContextFrame,
-    emu_devs: [EmuDevData; EMU_DEV_NUM_MAX],
+    pub vm_ctx: VmContext,
+    pub vcpu_ctx: Aarch64ContextFrame,
+    pub emu_devs: [EmuDevData; EMU_DEV_NUM_MAX],
 }
 
 pub enum EmuDevData {
@@ -31,66 +26,184 @@ pub enum EmuDevData {
 
 // virtio vgic migration data
 pub struct VgicMigData {
-    vgicd: VgicdData,
-    cpu_priv: VgicCpuPrivData,
+    pub vgicd: VgicdData,
+    pub cpu_priv_num: usize,
+    pub cpu_priv: [VgicCpuPrivData; 4],
+}
+
+impl VgicMigData {
+    pub fn default() -> VgicMigData {
+        VgicMigData {
+            vgicd: VgicdData::default(),
+            cpu_priv_num: 0,
+            cpu_priv: [VgicCpuPrivData::default(); 4], // TODO: 4 is hardcode for vm cpu num max
+        }
+    }
 }
 
 pub struct VgicdData {
-    ctlr: u32,
-    typer: u32,
-    iidr: u32,
-    interrupts: [VgicIntData; GIC_SPI_MAX],
+    pub ctlr: u32,
+    pub typer: u32,
+    pub iidr: u32,
+    pub interrupts: [VgicIntData; GIC_SPI_MAX],
 }
 
+impl VgicdData {
+    pub fn default() -> VgicdData {
+        VgicdData {
+            ctlr: 0,
+            typer: 0,
+            iidr: 0,
+            interrupts: [VgicIntData::default(); GIC_SPI_MAX],
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct VgicCpuPrivData {
-    curr_lrs: [u16; GIC_LIST_REGS_NUM],
-    sgis: [Sgis; GIC_SGIS_NUM],
-    interrupts: [VgicIntData; GIC_PRIVINT_NUM],
-    pend_list: [usize; 16],
+    pub curr_lrs: [u16; GIC_LIST_REGS_NUM],
+    pub sgis: [Sgis; GIC_SGIS_NUM],
+    pub interrupts: [VgicIntData; GIC_PRIVINT_NUM],
+    pub pend_num: usize,
+    pub pend_list: [usize; 16],
     // TODO: 16 is hard code
-    act_list: [usize; 16],
+    pub act_num: usize,
+    pub act_list: [usize; 16],
 }
 
-pub struct VgicIntData {
-    owner: usize,
-    // vcpu_id
-    id: u16,
-    hw: bool,
-    in_lr: bool,
-    lr: u16,
-    enabled: bool,
-    state: IrqState,
-    prio: u8,
-    targets: u8,
-    cfg: u8,
+impl VgicCpuPrivData {
+    pub fn default() -> VgicCpuPrivData {
+        VgicCpuPrivData {
+            curr_lrs: [0; GIC_LIST_REGS_NUM],
+            sgis: [Sgis { pend: 0, act: 0 }; GIC_SGIS_NUM],
+            interrupts: [VgicIntData::default(); GIC_PRIVINT_NUM],
+            pend_num: 0,
+            pend_list: [0; 16],
+            act_num: 0,
+            act_list: [0; 16],
+        }
+    }
+}
 
-    in_pend: bool,
-    in_act: bool,
+#[derive(Copy, Clone)]
+pub struct VgicIntData {
+    pub owner: Option<usize>,
+    // vcpu_id
+    pub id: u16,
+    pub hw: bool,
+    pub in_lr: bool,
+    pub lr: u16,
+    pub enabled: bool,
+    pub state: IrqState,
+    pub prio: u8,
+    pub targets: u8,
+    pub cfg: u8,
+
+    pub in_pend: bool,
+    pub in_act: bool,
+}
+
+impl VgicIntData {
+    pub fn default() -> VgicIntData {
+        VgicIntData {
+            owner: None,
+            id: 0,
+            hw: false,
+            in_lr: false,
+            lr: 0,
+            enabled: false,
+            state: IrqState::IrqSInactive,
+            prio: 0,
+            targets: 0,
+            cfg: 0,
+            in_pend: false,
+            in_act: false,
+        }
+    }
 }
 
 // virtio mmio migration data
 pub struct VirtioMmioData {
-    id: usize,
-    driver_features: usize,
-    driver_status: usize,
-    regs: VirtMmioRegs,
+    pub id: usize,
+    pub driver_features: usize,
+    pub driver_status: usize,
+    pub regs: VirtMmioRegs,
+    pub dev: VirtDevData,
+    pub vq: [VirtqData; 2], // TODO: 2 is hard code for vq max len
+}
+
+impl VirtioMmioData {
+    pub fn default() -> VirtioMmioData {
+        VirtioMmioData {
+            id: 0,
+            driver_features: 0,
+            driver_status: 0,
+            regs: VirtMmioRegs::default(),
+            dev: VirtDevData::default(),
+            vq: [VirtqData::default(); 2],
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct VirtqData {
+    pub ready: usize,
+    pub vq_index: usize,
+    pub num: usize,
+
+    pub last_avail_idx: u16,
+    pub last_used_idx: u16,
+    pub used_flags: u16,
+
+    pub desc_table_addr: usize,
+    pub avail_addr: usize,
+    pub used_addr: usize,
+}
+
+impl VirtqData {
+    pub fn default() -> VirtqData {
+        VirtqData {
+            ready: 0,
+            vq_index: 0,
+            num: 0,
+            last_avail_idx: 0,
+            last_used_idx: 0,
+            used_flags: 0,
+            desc_table_addr: 0,
+            avail_addr: 0,
+            used_addr: 0,
+        }
+    }
 }
 
 pub struct VirtDevData {
-    activated: bool,
-    dev_type: VirtioDeviceType,
-    features: usize,
-    generation: usize,
-    int_id: usize,
-    desc: DevDescData,
+    pub activated: bool,
+    pub dev_type: VirtioDeviceType,
+    pub features: usize,
+    pub generation: usize,
+    pub int_id: usize,
+    pub desc: DevDescData,
     // req: reserve; we used nfs, no need to mig blk req data
     // cache: reserve
     // stat: reserve
 }
 
+impl VirtDevData {
+    pub fn default() -> VirtDevData {
+        VirtDevData {
+            activated: false,
+            dev_type: VirtioDeviceType::None,
+            features: 0,
+            generation: 0,
+            int_id: 0,
+            desc: DevDescData::None,
+        }
+    }
+}
+
 pub enum DevDescData {
+    // reserve blk desc
     BlkDesc(BlkDescData),
-    // reserve
     NetDesc(NetDescData),
     ConsoleDesc(ConsoleDescData),
     None,
@@ -99,18 +212,18 @@ pub enum DevDescData {
 pub struct BlkDescData {}
 
 pub struct NetDescData {
-    mac: [u8; 6],
-    status: u16,
+    pub mac: [u8; 6],
+    pub status: u16,
 }
 
 pub struct ConsoleDescData {
-    oppo_end_vmid: u16,
-    oppo_end_ipa: u64,
+    pub oppo_end_vmid: u16,
+    pub oppo_end_ipa: u64,
     // vm access
-    cols: u16,
-    rows: u16,
-    max_nr_ports: u32,
-    emerg_wr: u32,
+    pub cols: u16,
+    pub rows: u16,
+    pub max_nr_ports: u32,
+    pub emerg_wr: u32,
 }
 
 pub fn migrate_ready(vmid: usize) {
@@ -162,16 +275,6 @@ pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
         //     vm.pa_length(i),
         //     vm.pa_start(i)
         // );
-    }
-}
-
-pub fn migrate_vm_context(vm: Vm) {
-    let size = size_of::<VMData>();
-    match mem_pages_alloc(round_up(size, PAGE_SIZE)) {
-        Ok(pf) => {
-            let vm_data = unsafe { pf.pa as *mut VMData };
-        }
-        Err(_) => {}
     }
 }
 

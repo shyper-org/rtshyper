@@ -10,7 +10,10 @@ use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
-use crate::kernel::{get_share_mem, mem_page_alloc, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND};
+use crate::kernel::{
+    EmuDevData, get_share_mem, mem_pages_alloc, VgicMigData, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND,
+    VMData,
+};
 use crate::lib::*;
 use crate::mm::PageFrame;
 
@@ -98,6 +101,7 @@ pub fn vm_if_ivc_arg_ptr(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg_ptr
 }
+
 // new if for vm migration
 pub fn vm_if_init_mem_map(vm_id: usize, len: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
@@ -679,9 +683,15 @@ impl Vm {
     pub fn context_vm_migrate_init(&self) {
         let mvm = vm(0).unwrap();
         // for i in 0..self.ncpu() {
-        match mem_page_alloc() {
+        let size = size_of::<VMData>();
+        match mem_pages_alloc(round_up(size, PAGE_SIZE)) {
             Ok(pf) => {
-                mvm.pt_map_range(get_share_mem(VM_CONTEXT_RECEIVE), PAGE_SIZE, pf.pa(), PTE_S2_NORMAL);
+                mvm.pt_map_range(
+                    get_share_mem(VM_CONTEXT_RECEIVE),
+                    round_up(size, PAGE_SIZE),
+                    pf.pa(),
+                    PTE_S2_NORMAL,
+                );
                 let mut inner = self.inner.lock();
                 inner.migrate_restore_pf.push(pf);
             }
@@ -696,33 +706,92 @@ impl Vm {
         // TODO: 仅支持单核VM，支持多核并不困难，遍历所有vcpu即可
         let vcpu = self.vcpu(0).unwrap();
         let mvm = vm(0).unwrap();
+        let size = size_of::<VMData>();
+        match mem_pages_alloc(round_up(size, PAGE_SIZE)) {
+            Ok(pf) => {
+                let mut vm_data = unsafe { &mut *(pf.pa as *mut VMData) };
+                let base = get_share_mem(VM_CONTEXT_SEND);
+                mvm.pt_map_range(base, round_up(size, PAGE_SIZE), pf.pa(), PTE_S2_RO);
+                let mut inner = self.inner.lock();
+
+                // vm context
+                vcpu.migrate_vm_ctx_save(&vm_data.vm_ctx as *const _ as usize);
+                // vcpu context
+                vcpu.migrate_vcpu_ctx_save(&vm_data.vcpu_ctx as *const _ as usize);
+                for (idx, emu) in inner.emu_devs.iter().enumerate() {
+                    match emu {
+                        EmuDevs::Vgic(vgic) => {
+                            vm_data.emu_devs[idx] = EmuDevData::Vgic(VgicMigData::default());
+                            if let EmuDevData::Vgic(vgic_data) = &mut vm_data.emu_devs[idx] {
+                                vgic.save_vgic_data(vgic_data);
+                            }
+                        }
+                        EmuDevs::VirtioBlk(mmio) => {
+                            vm_data.emu_devs[idx] = EmuDevData::VirtioBlk(VirtioMmioData::default());
+                            if let EmuDevData::VirtioBlk(mmio_data) = &mut vm_data.emu_devs[idx] {
+                                mmio.save_mmio_data(mmio_data);
+                            }
+                        }
+                        EmuDevs::VirtioNet(mmio) => {
+                            vm_data.emu_devs[idx] = EmuDevData::VirtioNet(VirtioMmioData::default());
+                            if let EmuDevData::VirtioNet(mmio_data) = &mut vm_data.emu_devs[idx] {
+                                mmio.save_mmio_data(mmio_data);
+                            }
+                        }
+                        EmuDevs::VirtioConsole(mmio) => {
+                            vm_data.emu_devs[idx] = EmuDevData::VirtioConsole(VirtioMmioData::default());
+                            if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
+                                mmio.save_mmio_data(mmio_data);
+                            }
+                        }
+                        EmuDevs::None => {}
+                    }
+                }
+                inner.migrate_save_pf.push(pf);
+            }
+            Err(_) => {}
+        }
         // println!(
         //     "size of vm ctx {:x}, size of vcpu ctx {:x}",
         //     size_of::<VmContext>(),
         //     size_of::<Aarch64ContextFrame>()
         // );
-        match mem_page_alloc() {
-            Ok(pf) => {
-                vcpu.migrate_vm_ctx_save(pf.pa());
-                vcpu.migrate_vcpu_ctx_save(pf.pa() + PAGE_SIZE / 2);
-                let base = get_share_mem(VM_CONTEXT_SEND);
-                mvm.pt_map_range(base, PAGE_SIZE, pf.pa(), PTE_S2_RO);
-                let mut inner = self.inner.lock();
-                inner.migrate_save_pf.push(pf);
-            }
-            Err(_) => {
-                panic!("context_vm_migrate_save: mem_pages_alloc for vm context failed");
-            }
-        }
     }
 
     pub fn context_vm_migrate_restore(&self) {
         let vcpu = self.vcpu(0).unwrap();
         let inner = self.inner.lock();
         let pa = inner.migrate_restore_pf[0].pa();
-        drop(inner);
-        vcpu.migrate_vm_ctx_restore(pa);
-        vcpu.migrate_vcpu_ctx_restore(pa + PAGE_SIZE / 2);
+        let vm_data = unsafe { &*(pa as *mut VMData) };
+        // migrate emu dev
+        for (idx, emu) in inner.emu_devs.iter().enumerate() {
+            match emu {
+                EmuDevs::Vgic(vgic) => {
+                    if let EmuDevData::Vgic(vgic_data) = &vm_data.emu_devs[idx] {
+                        vgic.restore_vgic_data(vgic_data, &inner.vcpu_list);
+                    }
+                }
+                EmuDevs::VirtioBlk(mmio) => {
+                    if let EmuDevData::VirtioBlk(mmio_data) = &vm_data.emu_devs[idx] {
+                        mmio.restore_mmio_data(mmio_data);
+                    }
+                }
+                EmuDevs::VirtioNet(mmio) => {
+                    if let EmuDevData::VirtioNet(mmio_data) = &vm_data.emu_devs[idx] {
+                        mmio.restore_mmio_data(mmio_data);
+                    }
+                }
+                EmuDevs::VirtioConsole(mmio) => {
+                    if let EmuDevData::VirtioConsole(mmio_data) = &vm_data.emu_devs[idx] {
+                        mmio.restore_mmio_data(mmio_data);
+                    }
+                }
+                EmuDevs::None => {}
+            }
+        }
+
+        vcpu.migrate_vm_ctx_restore(&vm_data.vm_ctx as *const _ as usize);
+        vcpu.migrate_vcpu_ctx_restore(&vm_data.vcpu_ctx as *const _ as usize);
     }
 
     pub fn share_mem_base(&self) -> usize {
