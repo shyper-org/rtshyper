@@ -5,13 +5,13 @@ use crate::arch::PAGE_SIZE;
 use crate::arch::PTE_S2_DEVICE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
-use crate::config::{vm_cfg_entry};
+use crate::config::vm_cfg_entry;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    active_vm_id, add_async_used_info, cpu_idle, current_cpu, shyper_init, VcpuState, vm_if_init_mem_map, VM_IF_LIST,
-    vm_if_set_cpu_id, VmPa, VmType,
+    active_vm, active_vm_id, add_async_used_info, cpu_idle, current_cpu, shyper_init, VcpuState, vm_if_init_mem_map,
+    VM_IF_LIST, vm_if_set_cpu_id, VmPa, VmType,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -90,6 +90,7 @@ pub fn vmm_load_image(vm: Vm, bin: &[u8]) {
 }
 
 pub fn vmm_init_image(vm: Vm) -> bool {
+    let vm_id = vm.id();
     let config = vm.config();
 
     if config.kernel_load_ipa() == 0 {
@@ -108,11 +109,11 @@ pub fn vmm_init_image(vm: Vm) -> bool {
 
     if config.device_tree_load_ipa() != 0 {
         // Init dtb for Linux.
-        if vm.id() == 0 {
+        if vm_id == 0 {
             // Init dtb for MVM.
             use crate::SYSTEM_FDT;
             let offset = config.device_tree_load_ipa() - config.memory_region()[0].ipa_start;
-            println!("MVM[{}] dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
+            println!("MVM[{}] dtb addr 0x{:x}", vm_id, vm.pa_start(0) + offset);
             vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
             unsafe {
                 let src = SYSTEM_FDT.get().unwrap();
@@ -137,7 +138,7 @@ pub fn vmm_init_image(vm: Vm) -> bool {
     } else {
         println!(
             "VM {} id {} device tree load ipa is not set",
-            vm.id(),
+            vm_id,
             vm.config().vm_name()
         );
     }
@@ -145,6 +146,14 @@ pub fn vmm_init_image(vm: Vm) -> bool {
     // ...
     // Todo: support loading ramdisk from MVM shyper-cli.
     // ...
+    if config.ramdisk_load_ipa() != 0 {
+        println!("VM {} use ramdisk CPIO_RAMDISK", vm_id);
+        let offset = config.ramdisk_load_ipa() - config.memory_region()[0].ipa_start;
+        let len = CPIO_RAMDISK.len();
+        let dst = unsafe { core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len) };
+        dst.clone_from_slice(CPIO_RAMDISK);
+    }
+
     true
 }
 
@@ -540,6 +549,7 @@ pub fn vmm_boot() {
                 vcpu.reset_context();
             }
         }
+        active_vm().unwrap().set_migration_state(false);
         println!("Core {} start running", current_cpu().id);
         vcpu_run();
 

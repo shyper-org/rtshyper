@@ -138,6 +138,8 @@ pub struct VmContext {
     pub cntkctl_el1: u32,
     cntp_ctl_el0: u32,
     cntv_ctl_el0: u32,
+    cntp_tval_el0: u32,
+    cntv_tval_el0: u32,
 
     // vpidr and vmpidr
     vpidr_el2: u32,
@@ -189,6 +191,8 @@ impl VmContext {
             cntkctl_el1: 0,
             cntp_ctl_el0: 0,
             cntv_ctl_el0: 0,
+            cntp_tval_el0: 0,
+            cntv_tval_el0: 0,
 
             // vpidr and vmpidr
             vpidr_el2: 0,
@@ -235,6 +239,8 @@ impl VmContext {
         self.cntvoff_el2 = 0;
         self.cntp_cval_el0 = 0;
         self.cntv_cval_el0 = 0;
+        self.cntp_tval_el0 = 0;
+        self.cntv_tval_el0 = 0;
         self.cntkctl_el1 = 0;
         self.cntp_ctl_el0 = 0;
         self.vpidr_el2 = 0;
@@ -275,8 +281,10 @@ impl VmContext {
             asm!("mrs {0:x}, CNTKCTL_EL1", out(reg) self.cntkctl_el1);
             asm!("mrs {0:x}, CNTP_CTL_EL0", out(reg) self.cntp_ctl_el0);
             asm!("mrs {0:x}, CNTV_CTL_EL0", out(reg) self.cntv_ctl_el0);
+            asm!("mrs {0:x}, CNTP_TVAL_EL0", out(reg) self.cntp_tval_el0);
+            asm!("mrs {0:x}, CNTV_TVAL_EL0", out(reg) self.cntv_tval_el0);
 
-            asm!("mrs {0:x}, VPIDR_EL2", out(reg) self.vpidr_el2);
+            // asm!("mrs {0:x}, VPIDR_EL2", out(reg) self.vpidr_el2);
             asm!("mrs {0}, VMPIDR_EL2", out(reg) self.vmpidr_el2);
 
             asm!("mrs {0}, SP_EL0", out(reg) self.sp_el0);
@@ -308,9 +316,11 @@ impl VmContext {
             // asm!("mrs {0}, HPFAR_EL2", out(reg) self.hpfar_el2);
             asm!("mrs {0}, ACTLR_EL1", out(reg) self.actlr_el1);
         }
+        println!("save sctlr {:x}", self.sctlr_el1);
     }
 
     pub fn ext_regs_restore(&self) {
+        println!("restore sctlr {:x}", self.sctlr_el1);
         unsafe {
             asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) self.cntvoff_el2);
             asm!("msr CNTP_CVAL_EL0, {0}", "isb", in(reg) self.cntp_cval_el0);
@@ -318,8 +328,10 @@ impl VmContext {
             asm!("msr CNTKCTL_EL1, {0:x}", "isb", in(reg) self.cntkctl_el1);
             asm!("msr CNTP_CTL_EL0, {0:x}", "isb", in(reg) self.cntp_ctl_el0);
             asm!("msr CNTV_CTL_EL0, {0:x}", "isb", in(reg) self.cntv_ctl_el0);
+            asm!("msr CNTP_TVAL_EL0, {0:x}", in(reg) self.cntp_tval_el0);
+            asm!("msr CNTV_TVAL_EL0, {0:x}", in(reg) self.cntv_tval_el0);
 
-            asm!("msr VPIDR_EL2, {0:x}", "isb", in(reg) self.vpidr_el2);
+            // asm!("msr VPIDR_EL2, {0:x}", "isb", in(reg) self.vpidr_el2);
             asm!("msr VMPIDR_EL2, {0}", "isb", in(reg) self.vmpidr_el2);
 
             asm!("msr SP_EL0, {0}", "isb", in(reg) self.sp_el0);

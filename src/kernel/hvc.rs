@@ -4,7 +4,7 @@ use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
-use crate::arch::tlb_invalidate_guest_all;
+use crate::arch::{gicc_clear_current_irq, tlb_invalidate_guest_all};
 use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
@@ -198,7 +198,7 @@ fn hvc_config_handler(
     x6: usize,
 ) -> Result<usize, ()> {
     match event {
-        HVC_CONFIG_ADD_VM => vm_cfg_add_vm(x0, x1, x2, x3, x4, x5, x6),
+        HVC_CONFIG_ADD_VM => vm_cfg_add_vm(x0),
         HVC_CONFIG_DELETE_VM => vm_cfg_del_vm(x0),
         HVC_CONFIG_CPU => vm_cfg_set_cpu(x0, x1, x2, x3),
         HVC_CONFIG_MEMORY_REGION => vm_cfg_add_mem_region(x0, x1, x2),
@@ -219,11 +219,6 @@ fn hvc_sys_handler(event: usize, x0: usize) -> Result<usize, ()> {
     match event {
         HVC_SYS_UPDATE => {
             mem_heap_region_reserve(UPDATE_IMG_BASE_ADDR, x0);
-            // for cpu_id in 0..PLAT_DESC.cpu_desc.num {
-            //     if cpu_id != current_cpu().id {
-            //         ipi_send_msg(cpu_id, IpiType::IpiTHyperFresh, IpiInnerMsg::HyperFreshMsg());
-            //     }
-            // }
             update_request();
             Ok(0)
         }
@@ -315,15 +310,17 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_VM_BOOT => {
-            println!("migrate boot vm {}", x0);
             let vm = vm(x0).unwrap();
-            vm.context_vm_migrate_restore();
-            vmm_boot_vm(x0);
+            vm.set_migration_state(true);
+            let cpu_trgt = vm.vcpu(0).unwrap().phys_id();
+            println!("migrate boot vm {}, cpu trgt {}", x0, cpu_trgt);
+            // send ipi to target vcpu, copy data and boot vm (in ipi copy gic data)
+            send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_VM_BOOT, cpu_trgt);
             Ok(HVC_FINISH)
         }
         HVC_VMM_VM_REMOVE => {
             println!("remove vm {}", x0);
-            vmm_remove_vm(x0);
+            // vmm_remove_vm(x0);
             Ok(HVC_FINISH)
         }
         _ => {
@@ -539,13 +536,27 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                             }
                             Some(vcpu) => vcpu,
                         };
+                        let vm = trgt_vcpu.vm().unwrap();
+                        println!("Core[{}] clear irq {}", current_cpu().id, current_cpu().current_irq);
+                        gicc_clear_current_irq(true);
                         // 当满足下序条件时需要拷贝cpu.ctx
                         // 否则意味着当前核心有多个虚拟机共享，且被迁移虚拟机所在的核心尚未被调度到，寄存器数值无需更新
-                        if active_vm().unwrap().id() == msg.trgt_vmid {
+                        if vm.id() == msg.trgt_vmid {
                             trgt_vcpu.context_vm_store();
+                            vm.context_vm_migrate_save();
                         }
+                        println!(
+                            "save elr 0x{:x}, gpr[0] 0x{:x}",
+                            current_cpu().get_elr(),
+                            current_cpu().get_gpr(0)
+                        );
                         send_hvc_ipi(msg.trgt_vmid, 0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, 0);
                         vcpu_idle(trgt_vcpu);
+                    }
+                    HVC_VMM_MIGRATE_VM_BOOT => {
+                        let vm = vm(msg.trgt_vmid).unwrap();
+                        vm.context_vm_migrate_restore();
+                        vmm_boot_vm(msg.trgt_vmid);
                     }
                     _ => {}
                 },

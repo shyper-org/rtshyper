@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
+use crate::kernel::{active_vm, current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
 
@@ -325,12 +325,14 @@ impl VcpuInner {
     }
 
     fn arch_ctx_reset(&mut self) {
-        self.vm_ctx.cntvoff_el2 = 0;
-        self.vm_ctx.sctlr_el1 = 0x30C50830;
-        self.vm_ctx.cntkctl_el1 = 0;
-        self.vm_ctx.pmcr_el0 = 0;
-        self.vm_ctx.vtcr_el2 = 0x8001355c;
-
+        let migrate = self.vm.as_ref().unwrap().migration_state();
+        if !migrate {
+            self.vm_ctx.cntvoff_el2 = 0;
+            self.vm_ctx.sctlr_el1 = 0x30C50830;
+            self.vm_ctx.cntkctl_el1 = 0;
+            self.vm_ctx.pmcr_el0 = 0;
+            self.vm_ctx.vtcr_el2 = 0x8001355c;
+        }
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
 
@@ -345,12 +347,15 @@ impl VcpuInner {
     }
 
     fn reset_context(&mut self) {
+        let migrate = self.vm.as_ref().unwrap().migration_state();
         self.arch_ctx_reset();
-        self.gic_ctx_reset();
-
+        if !migrate {
+            self.gic_ctx_reset();
+        }
         use crate::kernel::vm_if_get_type;
         match vm_if_get_type(self.vm_id()) {
             VmType::VmTBma => {
+                println!("vm {} bma ctx restore", self.vm_id());
                 self.reset_vm_ctx();
                 self.context_ext_regs_store();
             }
@@ -456,6 +461,12 @@ pub fn vcpu_run() {
     vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
     for i in 0..vm.mem_region_num() {
+        println!(
+            "vm[{}] cache invalidate pa {:x}, len {:x}",
+            active_vm_id(),
+            vm.pa_start(i),
+            vm.pa_length(i)
+        );
         unsafe {
             cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
         }

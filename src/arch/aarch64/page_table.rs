@@ -176,12 +176,12 @@ impl PageTable {
         self.directory.pa()
     }
 
-    pub fn access_permission(&self, start: usize, len: usize, ap: usize) -> (usize, usize) {
+    pub fn access_permission(&self, start_ipa: usize, len: usize, ap: usize) -> (usize, usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
-        let mut ipa = start;
+        let mut ipa = start_ipa;
         let mut size = 0;
         let mut pa = 0;
-        while ipa < (start + len) {
+        while ipa < (start_ipa + len) {
             let l1e = directory.entry(pt_lvl1_idx(ipa));
             if !l1e.valid() {
                 ipa += 512 * 512 * 4096; // 1GB: 9 + 9 + 12 bits

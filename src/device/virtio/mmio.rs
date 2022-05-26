@@ -14,8 +14,8 @@ use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEU
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::{current_cpu, VirtioMmioData, vm_ipa2pa};
-use crate::kernel::{active_vm, active_vm_id};
+use crate::kernel::{ConsoleDescData, current_cpu, DevDescData, VirtDevData, VirtioMmioData, vm_ipa2pa, VmPa};
+use crate::kernel::{active_vm, active_vm_id, vm};
 use crate::kernel::Vm;
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
@@ -322,20 +322,20 @@ impl VirtioMmio {
     }
 
     // use for migration restore
-    pub fn restore_mmio_data(&self, mmio_data: &VirtioMmioData) {
+    pub fn restore_mmio_data(&self, mmio_data: &VirtioMmioData, pa_region: &Vec<VmPa>) {
         let mut inner = self.inner.lock();
-        inner.id = mmio_data.id;
+        // inner.id = mmio_data.id;
         inner.driver_features = mmio_data.driver_features;
         inner.driver_status = mmio_data.driver_status;
         inner.regs = mmio_data.regs;
         inner.dev.restore_virt_dev_data(&mmio_data.dev);
         for (idx, vq) in inner.vq.iter().enumerate() {
-            vq.restore_vq_data(&mmio_data.vq[idx]);
+            vq.restore_vq_data(&mmio_data.vq[idx], pa_region);
         }
     }
 
     // use for migration save
-    pub fn save_mmio_data(&self, mmio_data: &mut VirtioMmioData) {
+    pub fn save_mmio_data(&self, mmio_data: &mut VirtioMmioData, pa_region: &Vec<VmPa>) {
         let inner = self.inner.lock();
         mmio_data.id = inner.id;
         mmio_data.driver_features = inner.driver_features;
@@ -343,8 +343,20 @@ impl VirtioMmio {
         mmio_data.regs = inner.regs;
         inner.dev.save_virt_dev_data(&mut mmio_data.dev);
         for (idx, vq) in inner.vq.iter().enumerate() {
-            vq.save_vq_data(&mut mmio_data.vq[idx]);
+            vq.save_vq_data(&mut mmio_data.vq[idx], pa_region);
         }
+
+        // if let DevDescData::ConsoleDesc(desc_data) = &mmio_data.dev.desc {
+        //     let oppo_vm_id = desc_data.oppo_end_vmid;
+        //     let oppo_vm_ipa = desc_data.oppo_end_ipa;
+        //     if oppo_vm_id != 0 {
+        //         return;
+        //     }
+        //     let vm = vm(oppo_vm_id as usize).unwrap();
+        //     if let EmuDevs::VirtioConsole(console_mmio) = vm.emu_console_dev(oppo_vm_ipa as usize) {
+        //         console_mmio.dev().save_virt_dev_data(&mut mmio_data.oppo_dev);
+        //     }
+        // }
     }
 
     // use for live update

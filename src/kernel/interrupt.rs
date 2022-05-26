@@ -4,7 +4,9 @@ use spin::Mutex;
 
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
-use crate::kernel::{current_cpu, hyper_fresh_ipi_handler, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
+use crate::kernel::{
+    active_vm_id, current_cpu, hyper_fresh_ipi_handler, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState,
+};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
@@ -165,13 +167,13 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     if int_id >= 16 && int_id < 32 {
         if let Some(vcpu) = &current_cpu().active_vcpu {
             if let Some(active_vm) = vcpu.vm() {
-                // if active_vm.id() == 1 {
-                //     println!("interrupt_handler, before inject {} to vm1", int_id);
-                // }
+                if current_cpu().id == 1 {
+                    println!("interrupt_handler, before inject {} to core1", int_id);
+                }
                 if active_vm.has_interrupt(int_id) {
-                    // if active_vm.id() == 1 {
-                    //     println!("interrupt_handler, inject {} to vm1", int_id);
-                    // }
+                    if current_cpu().id == 1 {
+                        println!("interrupt_handler, inject {} to core1", int_id);
+                    }
                     interrupt_vm_inject(active_vm.clone(), vcpu.clone(), int_id, src);
                     return false;
                 } else {
@@ -211,6 +213,9 @@ pub fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::IntInjectMsg(int_msg) => {
             let vm_id = int_msg.vm_id;
             let int_id = int_msg.int_id;
+            if vm_id == 2 {
+                println!("interrupt_inject_ipi_handler receive int {}", int_id);
+            }
             match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
                 None => {
                     panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);

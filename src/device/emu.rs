@@ -8,10 +8,10 @@ use crate::device::{
     virtio_blk_notify_handler, virtio_console_notify_handler, virtio_mediated_blk_notify_handler,
     virtio_net_notify_handler, VirtioMmio,
 };
-use crate::kernel::{current_cpu};
+use crate::kernel::current_cpu;
 use crate::lib::in_range;
 
-pub const EMU_DEV_NUM_MAX: usize = 8;
+pub const EMU_DEV_NUM_MAX: usize = 32;
 pub static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
 
 #[derive(Clone)]

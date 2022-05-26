@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
-use crate::vmm::vmm_init_gvm;
+use crate::vmm::{CPIO_RAMDISK, vmm_init_gvm, vmm_load_image};
 
 pub const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;
@@ -146,7 +146,7 @@ impl VmImageConfig {
             mediated_block_index: None,
         }
     }
-    pub fn new(kernel_load_ipa: usize, device_tree_load_ipa: usize) -> VmImageConfig {
+    pub fn new(kernel_load_ipa: usize, device_tree_load_ipa: usize, ramdisk_load_ipa: usize) -> VmImageConfig {
         VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa,
@@ -155,7 +155,7 @@ impl VmImageConfig {
             // device_tree_filename: None,
             device_tree_load_ipa,
             // ramdisk_filename: None,
-            ramdisk_load_ipa: 0,
+            ramdisk_load_ipa,
             mediated_block_index: None,
         }
     }
@@ -246,13 +246,18 @@ impl VmConfigEntry {
         vm_type: usize,
         kernel_load_ipa: usize,
         device_tree_load_ipa: usize,
+        ramdisk_load_ipa: usize,
     ) -> VmConfigEntry {
         VmConfigEntry {
             id: 0,
             name: Some(name),
             os_type: VmType::from_usize(vm_type),
             cmdline,
-            image: Arc::new(Mutex::new(VmImageConfig::new(kernel_load_ipa, device_tree_load_ipa))),
+            image: Arc::new(Mutex::new(VmImageConfig::new(
+                kernel_load_ipa,
+                device_tree_load_ipa,
+                ramdisk_load_ipa,
+            ))),
             memory: Arc::new(Mutex::new(VmMemoryConfig::default())),
             cpu: Arc::new(Mutex::new(VmCpuConfig::default())),
             vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList::default())),
@@ -562,15 +567,16 @@ pub fn vm_cfg_remove_vm_entry(vm_id: usize) {
 }
 
 /* Generate a new VM Config Entry, set basic value */
-pub fn vm_cfg_add_vm(
-    vm_name_ipa: usize,
-    vm_name_length: usize,
-    vm_type: usize,
-    cmdline_ipa: usize,
-    cmdline_length: usize,
-    kernel_load_ipa: usize,
-    device_tree_load_ipa: usize,
-) -> Result<usize, ()> {
+pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
+    let config_pa = vm_ipa2pa(active_vm().unwrap(), config_ipa);
+    let vm_name_ipa = unsafe { *((config_pa + 8 * 0) as *const usize) };
+    let vm_name_length = unsafe { *((config_pa + 8 * 1) as *const usize) };
+    let vm_type = unsafe { *((config_pa + 8 * 2) as *const usize) };
+    let cmdline_ipa = unsafe { *((config_pa + 8 * 3) as *const usize) };
+    let cmdline_length = unsafe { *((config_pa + 8 * 4) as *const usize) };
+    let kernel_load_ipa = unsafe { *((config_pa + 8 * 5) as *const usize) };
+    let device_tree_load_ipa = unsafe { *((config_pa + 8 * 6) as *const usize) };
+    let ramdisk_load_ipa = unsafe { *((config_pa + 8 * 7) as *const usize) };
     println!("\n\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.
@@ -619,10 +625,18 @@ pub fn vm_cfg_add_vm(
     };
 
     // Generate a new VM config entry.
-    let new_vm_cfg = VmConfigEntry::new(vm_name_str, cmdline_str, vm_type, kernel_load_ipa, device_tree_load_ipa);
+    let new_vm_cfg = VmConfigEntry::new(
+        vm_name_str,
+        cmdline_str,
+        vm_type,
+        kernel_load_ipa,
+        device_tree_load_ipa,
+        ramdisk_load_ipa,
+    );
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
     println!("      cmdline is [{:?}]", new_vm_cfg.cmdline.clone());
+    println!("      ramdisk is [0x{:x}]", new_vm_cfg.ramdisk_load_ipa());
     vm_cfg_add_vm_entry(new_vm_cfg)
 }
 

@@ -129,7 +129,8 @@ pub struct VirtioMmioData {
     pub driver_status: usize,
     pub regs: VirtMmioRegs,
     pub dev: VirtDevData,
-    pub vq: [VirtqData; 2], // TODO: 2 is hard code for vq max len
+    pub oppo_dev: VirtDevData,
+    pub vq: [VirtqData; 4], // TODO: 4 is hard code for vq max len
 }
 
 impl VirtioMmioData {
@@ -140,7 +141,8 @@ impl VirtioMmioData {
             driver_status: 0,
             regs: VirtMmioRegs::default(),
             dev: VirtDevData::default(),
-            vq: [VirtqData::default(); 2],
+            oppo_dev: VirtDevData::default(),
+            vq: [VirtqData::default(); 4],
         }
     }
 }
@@ -155,9 +157,9 @@ pub struct VirtqData {
     pub last_used_idx: u16,
     pub used_flags: u16,
 
-    pub desc_table_addr: usize,
-    pub avail_addr: usize,
-    pub used_addr: usize,
+    pub desc_table_ipa: usize,
+    pub avail_ipa: usize,
+    pub used_ipa: usize,
 }
 
 impl VirtqData {
@@ -169,9 +171,9 @@ impl VirtqData {
             last_avail_idx: 0,
             last_used_idx: 0,
             used_flags: 0,
-            desc_table_addr: 0,
-            avail_addr: 0,
-            used_addr: 0,
+            desc_table_ipa: 0,
+            avail_ipa: 0,
+            used_ipa: 0,
         }
     }
 }
@@ -280,13 +282,9 @@ pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
 
 pub fn migrate_finish_ipi_handler(vm_id: usize) {
     println!("Core 0 handle VM[{}] finish ipi", vm_id);
-    // TODO: hard code for dst_vm;
-    let dst_vm = vm(2).unwrap();
-
     // copy trgt_vm dirty mem map to kernel module
     let vm = vm(vm_id).unwrap();
     vm_if_copy_mem_map(vm_id);
-    vm.context_vm_migrate_save();
     // TODO: migrate vm dev
     // dst_vm.migrate_emu_devs(vm.clone());
 
@@ -306,22 +304,26 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
     if emu_ctx.write {
         // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
         let vm = active_vm().unwrap();
+        let vm_id = vm.id();
         let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
+        println!(
+            "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
+            emu_ctx.address, pa, len
+        );
         let mut bit = 0;
         for i in 0..vm.region_num() {
             let start = vm.pa_start(i);
             let end = start + vm.pa_length(i);
             if emu_ctx.address >= start && emu_ctx.address < end {
                 bit += (pa - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
-                vm_if_set_mem_map(current_cpu().id, bit, len / PAGE_SIZE);
+                vm_if_set_mem_map(vm_id, bit, len / PAGE_SIZE);
                 break;
             }
             bit += vm.pa_length(i) / PAGE_SIZE;
             if i + 1 == vm.region_num() {
                 panic!(
                     "migrate_data_abort_handler: can not found addr 0x{:x} in vm{} pa region",
-                    emu_ctx.address,
-                    vm.id()
+                    emu_ctx.address, vm_id
                 );
             }
         }

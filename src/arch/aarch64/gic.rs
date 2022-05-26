@@ -45,7 +45,7 @@ pub static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
 
 static GICD_LOCK: Mutex<()> = Mutex::new(());
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum IrqState {
     IrqSInactive,
     IrqSPend,
@@ -139,6 +139,22 @@ impl GicDistributor {
         self.ISENABLER[idx].get()
     }
 
+    pub fn is_activer(&self, idx: usize) -> u32 {
+        self.ISACTIVER[idx].get()
+    }
+
+    pub fn ipriorityr(&self, idx: usize) -> u32 {
+        self.IPRIORITYR[idx].get()
+    }
+
+    pub fn itargetsr(&self, idx: usize) -> u32 {
+        self.ITARGETSR[idx].get()
+    }
+
+    pub fn icfgr(&self, idx: usize) -> u32 {
+        self.ICFGR[idx].get()
+    }
+
     pub fn ic_enabler(&self, idx: usize) -> u32 {
         self.ICENABLER[idx].get()
     }
@@ -152,7 +168,7 @@ impl GicDistributor {
             self.ICACTIVER[i].set(u32::MAX);
         }
 
-        for i in GIC_PRIVINT_NUM..int_num * 8 / 32 {
+        for i in GIC_PRIVINT_NUM / 4..int_num * 8 / 32 {
             self.IPRIORITYR[i].set(u32::MAX);
             self.ITARGETSR[i].set(0);
         }

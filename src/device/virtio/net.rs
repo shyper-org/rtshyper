@@ -8,7 +8,10 @@ use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_ipa2pa};
+use crate::kernel::{
+    active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit,
+    vm_ipa2pa,
+};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
@@ -197,6 +200,9 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             vms_to_notify |= trgt_vmid_map;
         }
 
+        if vm.id() != 0 {
+            vm_if_set_mem_map_bit(vm.clone(), vq.used_addr());
+        }
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
             next_desc_idx_opt.unwrap() as u32,
@@ -442,10 +448,21 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     loop {
         let dst = vm_ipa2pa(vm.clone(), rx_vq.desc_addr(desc_idx));
         if dst == 0 {
-            println!("ethernet_send_to: failed to get dst");
+            println!(
+                "rx_vq desc base table addr 0x{:x}, idx {}, avail table addr 0x{:x}, avail last idx {}",
+                rx_vq.desc_table_addr(),
+                desc_idx,
+                rx_vq.avail_addr(),
+                rx_vq.avail_idx()
+            );
+            println!("ethernet_send_to: failed to get dst {}", vmid);
             return false;
         }
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
+
+        if vmid != 0 {
+            vm_if_set_mem_map_bit(vm.clone(), dst);
+        }
         rx_iov.push_data(dst, desc_len);
         rx_len += desc_len;
         if rx_len >= len {
@@ -481,6 +498,9 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         return false;
     }
 
+    if vmid != 0 {
+        vm_if_set_mem_map_bit(vm.clone(), rx_vq.used_addr());
+    }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
         return false;
     }

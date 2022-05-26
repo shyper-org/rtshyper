@@ -2,19 +2,19 @@ use alloc::sync::Arc;
 
 use spin::Mutex;
 
-// use crate::arch::PAGE_SIZE;
+use crate::arch::GICD;
 use crate::config::VmEmulatedDeviceConfig;
 // use crate::device::add_mediated_dev;
-use crate::device::{net_features, NetDesc};
+use crate::device::{EmuDevs, net_features, NetDesc};
 use crate::device::{console_features, ConsoleDesc};
 use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
 use crate::device::{BlkStat, NicStat};
 use crate::device::DevReq::BlkReq;
-use crate::kernel::{ConsoleDescData, DevDescData, mem_pages_alloc, NetDescData, VirtDevData};
+use crate::kernel::{ConsoleDescData, DevDescData, mem_pages_alloc, NetDescData, VirtDevData, vm};
 use crate::mm::PageFrame;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum VirtioDeviceType {
     None = 0,
     Net = 1,
@@ -159,6 +159,11 @@ impl VirtDev {
     // use for migration save
     pub fn restore_virt_dev_data(&self, dev_data: &VirtDevData) {
         let mut inner = self.inner.lock();
+        println!(
+            "activated {}, type {:#?}, features {}, generation {}, int id {}",
+            dev_data.activated, dev_data.dev_type, dev_data.features, dev_data.generation, dev_data.int_id
+        );
+        inner.activated = dev_data.activated;
         inner.dev_type = dev_data.dev_type;
         inner.features = dev_data.features;
         inner.generation = dev_data.generation;
@@ -184,6 +189,7 @@ impl VirtDev {
     // use for migration save
     pub fn save_virt_dev_data(&self, dev_data: &mut VirtDevData) {
         let inner = self.inner.lock();
+        dev_data.activated = inner.activated;
         dev_data.dev_type = inner.dev_type;
         dev_data.features = inner.features;
         dev_data.generation = inner.generation;

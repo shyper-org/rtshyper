@@ -12,3 +12,7 @@ pub fn cpu_interrupt_mask() {
 pub fn cpu_interrupt_unmask() {
     DAIF.write(DAIF::I::Unmasked)
 }
+
+pub fn cpu_daif() -> u64 {
+    DAIF.read(DAIF::I)
+}
