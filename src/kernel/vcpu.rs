@@ -461,12 +461,6 @@ pub fn vcpu_run() {
     vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
     for i in 0..vm.mem_region_num() {
-        println!(
-            "vm[{}] cache invalidate pa {:x}, len {:x}",
-            active_vm_id(),
-            vm.pa_start(i),
-            vm.pa_length(i)
-        );
         unsafe {
             cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
         }

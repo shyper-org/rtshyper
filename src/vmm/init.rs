@@ -552,12 +552,6 @@ pub fn vmm_boot() {
         active_vm().unwrap().set_migration_state(false);
         println!("Core {} start running", current_cpu().id);
         vcpu_run();
-
-        // // test
-        // for i in 0..0x1000 {}
-        // println!("send ipi");
-        // crate::kernel::interrupt_cpu_ipi_send(4, 1);
-        // // end test
     } else {
         // If there is no available vm(vcpu), just go idle
         println!("Core {} idle", current_cpu().id);

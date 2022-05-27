@@ -45,45 +45,33 @@ impl VgicInt {
         inner.enabled = int_data.enabled;
         inner.state = int_data.state;
         inner.prio = int_data.prio;
-        inner.targets = int_data.targets;
+        inner.targets = int_data.targets << current_cpu().id;
         inner.cfg = int_data.cfg;
         inner.in_pend = int_data.in_pend;
         inner.in_act = int_data.in_act;
         if inner.enabled {
             let int_id = inner.id as usize;
-            if int_id > 16 {
-                println!(
-                    "restore_migrate_data before: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                    int_id,
-                    GICD.is_enabler(int_id / 32),
-                    GICD.is_activer(int_id / 32),
-                    GICD.ipriorityr(int_id / 4),
-                    GICD.itargetsr(int_id / 4),
-                    GICD.icfgr(int_id / 2)
-                );
-            }
-
             GICD.set_enable(int_id, true);
             GICD.set_prio(int_id, inner.prio);
-            // GICD.set_icfgr(int_id, inner.cfg);
-            println!(
-                "cpuid {} cpuif {:x}",
-                current_cpu().id,
-                platform_cpuid_to_cpuif(current_cpu().id)
-            );
             GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(current_cpu().id));
+            // GICD.set_icfgr(int_id, inner.cfg);
+            // println!(
+            //     "cpuid {} cpuif {:x}",
+            //     current_cpu().id,
+            //     platform_cpuid_to_cpuif(current_cpu().id)
+            // );
 
-            if int_id > 16 {
-                println!(
-                    "restore_migrate_data after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                    int_id,
-                    GICD.is_enabler(int_id / 32),
-                    GICD.is_activer(int_id / 32),
-                    GICD.ipriorityr(int_id / 4),
-                    GICD.itargetsr(int_id / 4),
-                    GICD.icfgr(int_id / 2)
-                );
-            }
+            // if int_id > 16 {
+            //     println!(
+            //         "restore_migrate_data after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+            //         int_id,
+            //         GICD.is_enabler(int_id / 32),
+            //         GICD.is_activer(int_id / 32),
+            //         GICD.ipriorityr(int_id / 4),
+            //         GICD.itargetsr(int_id / 4),
+            //         GICD.icfgr(int_id / 2)
+            //     );
+            // }
         }
     }
 
@@ -100,29 +88,34 @@ impl VgicInt {
         int_data.enabled = inner.enabled;
         int_data.state = inner.state;
         int_data.prio = inner.prio;
-        int_data.targets = inner.targets;
+        // TODO: only support one core
+        int_data.targets = if (1 << current_cpu().id) & inner.targets != 0 {
+            1
+        } else {
+            0
+        };
         int_data.cfg = inner.cfg;
         int_data.in_pend = inner.in_pend;
         int_data.in_act = inner.in_act;
-        if inner.enabled {
-            println!(
-                "int {} is enable, state {:#?}, prio {:x}, targets {:x}, in pend {}, int act {}, int cfg {}",
-                inner.id, inner.state, inner.prio, inner.targets, inner.in_pend, inner.in_act, inner.cfg
-            );
-
-            let int_id = inner.id as usize;
-            if int_id > 16 {
-                println!(
-                    "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                    int_id,
-                    GICD.is_enabler(int_id / 32),
-                    GICD.is_activer(int_id / 32),
-                    GICD.ipriorityr(int_id / 4),
-                    GICD.itargetsr(int_id / 4),
-                    GICD.icfgr(int_id / 2)
-                );
-            }
-        }
+        // if inner.enabled {
+        //     println!(
+        //         "int {} is enable, state {:#?}, prio {:x}, targets {:x}, in pend {}, int act {}, int cfg {}",
+        //         inner.id, inner.state, inner.prio, inner.targets, inner.in_pend, inner.in_act, inner.cfg
+        //     );
+        //
+        //     let int_id = inner.id as usize;
+        //     if int_id > 16 {
+        //         println!(
+        //             "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+        //             int_id,
+        //             GICD.is_enabler(int_id / 32),
+        //             GICD.is_activer(int_id / 32),
+        //             GICD.ipriorityr(int_id / 4),
+        //             GICD.itargetsr(int_id / 4),
+        //             GICD.icfgr(int_id / 2)
+        //         );
+        //     }
+        // }
     }
 
     // back up for hyper fresh

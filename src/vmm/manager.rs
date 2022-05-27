@@ -190,17 +190,11 @@ pub fn vmm_boot_vm(vm_id: usize) {
     //     phys_id
     // );
     if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
-        println!(
-            "vmm_boot_vm0: Core[{}] clear irq {}",
-            current_cpu().id,
-            current_cpu().current_irq
-        );
         gicc_clear_current_irq(true);
         vmm_boot();
     } else {
         match current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(vm_id) {
             None => {
-                println!("vmm_boot_vm0: Core[{}] send ipi to {}", current_cpu().id, phys_id);
                 let m = IpiVmmMsg {
                     vmid: vm_id,
                     event: VmmEvent::VmmBoot,
@@ -210,21 +204,8 @@ pub fn vmm_boot_vm(vm_id: usize) {
                 }
             }
             Some(vcpu_idx) => {
-                println!(
-                    "vmm_boot_vm1: Core[{}] clear irq {}",
-                    current_cpu().id,
-                    current_cpu().current_irq
-                );
-                // println!("daif i before {:x}", cpu_daif());
-                // cpu_interrupt_unmask();
-                // println!("daif i after {:x}", cpu_daif());
                 gicc_clear_current_irq(true);
                 current_cpu().vcpu_pool().yield_vcpu(vcpu_idx);
-                println!(
-                    "vmm_boot_vm1 after: Core[{}] clear irq {}",
-                    current_cpu().id,
-                    current_cpu().current_irq
-                );
                 vmm_boot();
             }
         };
