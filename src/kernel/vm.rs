@@ -5,15 +5,15 @@ use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO};
-use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT, GICH};
+use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::board::PLATFORM_GICV_BASE;
 use crate::config::VmConfigEntry;
-use crate::device::{DevDesc, EmuDevs};
+use crate::device::EmuDevs;
 use crate::kernel::{
-    DevDescData, EmuDevData, get_share_mem, mem_pages_alloc, VgicMigData, VirtioMmioData, VM_CONTEXT_RECEIVE,
-    VM_CONTEXT_SEND, VMData,
+    EmuDevData, get_share_mem, mem_pages_alloc, VgicMigData, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND,
+    VMData,
 };
 use crate::lib::*;
 use crate::mm::PageFrame;
@@ -126,10 +126,10 @@ pub fn vm_if_dirty_mem_map(vm_id: usize) {
 
 pub fn vm_if_set_mem_map_bit(vm: Vm, pa: usize) {
     let mut vm_if = VM_IF_LIST[vm.id()].lock();
+    let mut bit = 0;
     for i in 0..vm.region_num() {
         let start = vm.pa_start(i);
         let len = vm.pa_length(i);
-        let mut bit = 0;
         if pa >= start && pa < start + len {
             bit += (pa - start) / PAGE_SIZE;
             // if vm_if.mem_map.as_mut().unwrap().get(bit) == 0 {

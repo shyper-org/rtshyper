@@ -2,16 +2,15 @@ use alloc::sync::Arc;
 
 use spin::Mutex;
 
-use crate::arch::GICD;
 use crate::config::VmEmulatedDeviceConfig;
 // use crate::device::add_mediated_dev;
-use crate::device::{EmuDevs, net_features, NetDesc};
+use crate::device::{net_features, NetDesc};
 use crate::device::{console_features, ConsoleDesc};
 use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
 use crate::device::{BlkStat, NicStat};
 use crate::device::DevReq::BlkReq;
-use crate::kernel::{ConsoleDescData, DevDescData, mem_pages_alloc, NetDescData, VirtDevData, vm};
+use crate::kernel::{ConsoleDescData, DevDescData, mem_pages_alloc, NetDescData, VirtDevData};
 use crate::mm::PageFrame;
 
 #[derive(Copy, Clone, Debug)]

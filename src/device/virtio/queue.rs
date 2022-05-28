@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, current_cpu, ipa2pa, pa2ipa, VirtqData, Vm, vm_ipa2pa, VmPa};
+use crate::kernel::{active_vm, current_cpu, ipa2pa, VirtqData, Vm, vm_ipa2pa, VmPa};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 use crate::lib::trace;
 
@@ -412,25 +412,30 @@ impl Virtq {
         inner.last_avail_idx = data.last_avail_idx;
         inner.last_used_idx = data.last_used_idx;
         inner.used_flags = data.used_flags;
-        inner.desc_table_addr = ipa2pa(pa_region, data.desc_table_ipa);
-        inner.avail_addr = ipa2pa(pa_region, data.avail_ipa);
-        inner.used_addr = ipa2pa(pa_region, data.used_ipa);
+        inner.desc_table_addr = data.desc_table_ipa;
+        inner.avail_addr = data.avail_ipa;
+        inner.used_addr = data.used_ipa;
+        let desc_table_addr = ipa2pa(pa_region, data.desc_table_ipa);
+        let avail_addr = ipa2pa(pa_region, data.avail_ipa);
+        let used_addr = ipa2pa(pa_region, data.used_ipa);
         println!("restore_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}, desc_table_pa {:x}, avail_pa {:x}, used_pa {:x}",
-                 data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa, inner.desc_table_addr, inner.avail_addr, inner.used_addr);
-        if data.desc_table_ipa != 0 {
+                 data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa, desc_table_addr, avail_addr, used_addr);
+        if desc_table_addr != 0 {
             inner.desc_table =
-                Some(unsafe { slice::from_raw_parts_mut(data.desc_table_ipa as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
+                Some(unsafe { slice::from_raw_parts_mut(desc_table_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
         }
-        if data.avail_ipa != 0 {
-            inner.avail = Some(unsafe { &mut *(data.avail_ipa as *mut VringAvail) });
+        if avail_addr != 0 {
+            inner.avail = Some(unsafe { &mut *(avail_addr as *mut VringAvail) });
+            println!("restore_vq_data: avail idx {}", inner.avail.as_ref().unwrap().idx);
         }
-        if data.used_ipa != 0 {
-            inner.used = Some(unsafe { &mut *(data.used_ipa as *mut VringUsed) });
+        if used_addr != 0 {
+            inner.used = Some(unsafe { &mut *(used_addr as *mut VringUsed) });
+            println!("restore_vq_data: used idx {}", inner.used.as_ref().unwrap().idx);
         }
     }
 
     // use for migration
-    pub fn save_vq_data(&self, data: &mut VirtqData, pa_region: &Vec<VmPa>) {
+    pub fn save_vq_data(&self, data: &mut VirtqData, _pa_region: &Vec<VmPa>) {
         let inner = self.inner.lock();
         data.ready = inner.ready;
         data.vq_index = inner.vq_index;
@@ -438,11 +443,18 @@ impl Virtq {
         data.last_avail_idx = inner.last_avail_idx;
         data.last_used_idx = inner.last_used_idx;
         data.used_flags = inner.used_flags;
-        data.desc_table_ipa = pa2ipa(pa_region, inner.desc_table_addr);
-        data.avail_ipa = pa2ipa(pa_region, inner.avail_addr);
-        data.used_ipa = pa2ipa(pa_region, inner.used_addr);
-        println!("save_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}, desc_table_pa {:x}, avail_pa {:x}, used_pa {:x}",
-                 data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa,inner.desc_table_addr, inner.avail_addr, inner.used_addr);
+        data.desc_table_ipa = inner.desc_table_addr;
+        data.avail_ipa = inner.avail_addr;
+        data.used_ipa = inner.used_addr;
+
+        println!("save_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}",
+                 data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa);
+        if inner.avail.is_some() {
+            println!("save_vq_data: avail idx {}", inner.avail.as_ref().unwrap().idx);
+        }
+        if inner.used.is_some() {
+            println!("save_vq_data: used idx {}", inner.used.as_ref().unwrap().idx);
+        }
     }
 
     // use for live update

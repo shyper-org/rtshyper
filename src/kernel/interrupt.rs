@@ -2,11 +2,9 @@ use alloc::collections::BTreeMap;
 
 use spin::Mutex;
 
-use crate::arch::{GICH, interrupt_arch_ipi_send, interrupt_arch_vm_inject};
+use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
-use crate::kernel::{
-    active_vm_id, current_cpu, hyper_fresh_ipi_handler, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState,
-};
+use crate::kernel::{current_cpu, hyper_fresh_ipi_handler, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
@@ -118,7 +116,7 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
     true
 }
 
-pub fn interrupt_vm_remove(vm: Vm, id: usize) {
+pub fn interrupt_vm_remove(_vm: Vm, id: usize) {
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     // vgic and vm will be removed with struct vm
     glb_bitmap_lock.clear(id);

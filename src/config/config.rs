@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
-use crate::vmm::{CPIO_RAMDISK, vmm_init_gvm, vmm_load_image};
+use crate::vmm::vmm_init_gvm;
 
 pub const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;

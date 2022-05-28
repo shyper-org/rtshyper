@@ -6,7 +6,7 @@ use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map, vm_if_set_mem_map_bit, vm_ipa2pa};
+use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map_bit, vm_ipa2pa};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::trace;
@@ -189,7 +189,8 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
             // return false;
         }
         if vm.id() != 0 {
-            vm_if_set_mem_map_bit(vm.clone(), vq.used_addr());
+            let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            vm_if_set_mem_map_bit(vm.clone(), used_addr);
         }
         if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32, vq_size) {
             return false;
@@ -209,9 +210,6 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
 }
 
 fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv trgt 2");
-    }
     let trgt_vm = match vm(trgt_vmid as usize) {
         None => {
             println!("target vm [{}] is not ready or not exist", trgt_vmid);
@@ -219,9 +217,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         }
         Some(vm) => vm,
     };
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv0 trgt 2");
-    }
+
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa as usize) {
         EmuDevs::VirtioConsole(x) => x,
         _ => {
@@ -233,9 +229,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         }
     };
 
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv1 trgt 2");
-    }
     if !console.dev().activated() {
         println!(
             "virtio_console_recv: trgt_vm[{}] virtio console dev is not ready",
@@ -244,9 +237,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv2 trgt 2");
-    }
     let rx_vq = match console.vq(0) {
         Ok(x) => x,
         Err(_) => {
@@ -258,9 +248,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         }
     };
 
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv3 trgt 2 avail idx {}", rx_vq.avail_idx());
-    }
     let desc_header_idx_opt = rx_vq.pop_avail_desc_idx(rx_vq.avail_idx());
     if !rx_vq.avail_is_avail() {
         println!("virtio_console_recv: receive invalid avail desc idx");
@@ -270,16 +257,10 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return true;
     }
 
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv4 trgt 2");
-    }
     let desc_idx_header = desc_header_idx_opt.unwrap();
     let mut desc_idx = desc_header_idx_opt.unwrap() as usize;
     let rx_iov = VirtioIov::default();
     let mut rx_len = 0;
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv before loop");
-    }
     loop {
         let dst = vm_ipa2pa(trgt_vm.clone(), rx_vq.desc_addr(desc_idx));
         if dst == 0 {
@@ -304,9 +285,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         }
         desc_idx = rx_vq.desc_next(desc_idx) as usize;
     }
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv after loop");
-    }
+
     if rx_len < len {
         rx_vq.put_back_avail_desc_idx();
         println!("virtio_console_recv: rx_len smaller than tx_len");
@@ -325,7 +304,8 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     }
 
     if trgt_vmid != 0 {
-        vm_if_set_mem_map_bit(trgt_vm.clone(), rx_vq.used_addr());
+        let used_addr = vm_ipa2pa(trgt_vm.clone(), rx_vq.used_addr());
+        vm_if_set_mem_map_bit(trgt_vm.clone(), used_addr);
     }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
         println!(
@@ -336,9 +316,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    if trgt_vmid == 2 {
-        println!("virtio_console_recv notify trgt 2");
-    }
     rx_vq.notify(console.dev().int_id(), trgt_vm.clone());
     true
 }

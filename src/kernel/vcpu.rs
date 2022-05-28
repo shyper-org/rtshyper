@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
-use crate::kernel::{active_vm, current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
+use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
 

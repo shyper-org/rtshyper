@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::arch::{cpu_daif, cpu_interrupt_unmask, gicc_clear_current_irq};
+use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::config::{vm_id_list, vm_num};

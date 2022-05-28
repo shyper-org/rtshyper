@@ -5,9 +5,9 @@ use crate::arch::{
 use crate::arch::tlb_invalidate_guest_all;
 use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs};
 use crate::kernel::{
-    active_vm, current_cpu, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg,
-    HvcMigrateMsg, mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm,
-    vm_if_copy_mem_map, vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
+    active_vm, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg, HvcMigrateMsg,
+    mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_copy_mem_map,
+    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
 };
 
 pub struct VMData {
@@ -282,11 +282,9 @@ pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
 
 pub fn migrate_finish_ipi_handler(vm_id: usize) {
     println!("Core 0 handle VM[{}] finish ipi", vm_id);
+    // let vm = vm(vm_id).unwrap();
     // copy trgt_vm dirty mem map to kernel module
-    let vm = vm(vm_id).unwrap();
     vm_if_copy_mem_map(vm_id);
-    // TODO: migrate vm dev
-    // dst_vm.migrate_emu_devs(vm.clone());
 
     hvc_send_msg_to_vm(
         0,

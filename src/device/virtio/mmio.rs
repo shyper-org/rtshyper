@@ -14,8 +14,8 @@ use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEU
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::{ConsoleDescData, current_cpu, DevDescData, VirtDevData, VirtioMmioData, vm_ipa2pa, VmPa};
-use crate::kernel::{active_vm, active_vm_id, vm};
+use crate::kernel::{current_cpu, VirtioMmioData, vm_ipa2pa, VmPa};
+use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
