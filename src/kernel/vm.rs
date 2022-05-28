@@ -1114,7 +1114,7 @@ pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
 
 pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
     if ipa == 0 {
-        println!("ipa2pa: access invalid ipa {:x}", ipa);
+        // println!("ipa2pa: access invalid ipa {:x}", ipa);
         return 0;
     }
 
@@ -1128,6 +1128,6 @@ pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
         }
     }
 
-    println!("ipa2pa: access invalid ipa {:x}", ipa);
+    // println!("ipa2pa: access invalid ipa {:x}", ipa);
     return 0;
 }

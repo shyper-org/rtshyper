@@ -10,7 +10,7 @@ use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit,
-    vm_ipa2pa,
+    vm_ipa2pa, VM_LIST,
 };
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -201,7 +201,8 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
 
         if vm.id() != 0 {
-            vm_if_set_mem_map_bit(vm.clone(), vq.used_addr());
+            let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            vm_if_set_mem_map_bit(vm.clone(), used_addr);
         }
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
@@ -499,7 +500,8 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     }
 
     if vmid != 0 {
-        vm_if_set_mem_map_bit(vm.clone(), rx_vq.used_addr());
+        let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
+        vm_if_set_mem_map_bit(vm.clone(), used_addr);
     }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
         return false;
@@ -513,7 +515,8 @@ fn ethernet_is_arp(frame: &[u8]) -> bool {
 }
 
 fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
-    for vm_id in 0..vm_num() {
+    for vm in VM_LIST.lock().iter() {
+        let vm_id = vm.id();
         if vm_if_cmp_mac(vm_id, frame) {
             return Ok(vm_id);
         }

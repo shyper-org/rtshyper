@@ -15,7 +15,7 @@ use crate::kernel::{
     vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
 use crate::lib::{memcpy_safe, trace};
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm};
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
 
 pub static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
@@ -320,7 +320,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_VM_REMOVE => {
             println!("remove vm {}", x0);
-            // vmm_remove_vm(x0);
+            vmm_remove_vm(x0);
             Ok(HVC_FINISH)
         }
         _ => {

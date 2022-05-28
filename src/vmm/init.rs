@@ -20,7 +20,7 @@ use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
 use crate::lib::{barrier, trace};
 
-pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/rootfs.cpio");
+pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.cpio");
 
 fn vmm_init_memory(vm: Vm) -> bool {
     let result = mem_page_alloc();

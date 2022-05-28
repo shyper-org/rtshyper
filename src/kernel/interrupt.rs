@@ -165,9 +165,6 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     if int_id >= 16 && int_id < 32 {
         if let Some(vcpu) = &current_cpu().active_vcpu {
             if let Some(active_vm) = vcpu.vm() {
-                if current_cpu().id == 1 {
-                    println!("interrupt_handler, before inject {} to core1", int_id);
-                }
                 if active_vm.has_interrupt(int_id) {
                     interrupt_vm_inject(active_vm.clone(), vcpu.clone(), int_id, src);
                     // if current_cpu().id == 1 {
@@ -216,9 +213,6 @@ pub fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::IntInjectMsg(int_msg) => {
             let vm_id = int_msg.vm_id;
             let int_id = int_msg.int_id;
-            if vm_id == 2 {
-                println!("interrupt_inject_ipi_handler receive int {}", int_id);
-            }
             match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
                 None => {
                     panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);

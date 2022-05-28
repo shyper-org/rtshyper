@@ -1270,9 +1270,6 @@ impl Vgic {
     }
 
     fn set_trgt(&self, vcpu: Vcpu, int_id: usize, trgt: u8) {
-        if int_id == 27 || int_id == 50 {
-            println!("set int {} trgt {:x}", int_id, trgt);
-        }
         let interrupt_option = self.get_int(vcpu.clone(), int_id);
         if let Some(interrupt) = interrupt_option {
             let interrupt_lock = interrupt.lock.lock();
