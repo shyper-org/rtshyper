@@ -159,7 +159,7 @@ impl VirtDev {
     pub fn restore_virt_dev_data(&self, dev_data: &VirtDevData) {
         let mut inner = self.inner.lock();
         println!(
-            "activated {}, type {:#?}, features {}, generation {}, int id {}",
+            "activated {}, type {:#?}, features 0x{:x}, generation {}, int id {}",
             dev_data.activated, dev_data.dev_type, dev_data.features, dev_data.generation, dev_data.int_id
         );
         inner.activated = dev_data.activated;
@@ -187,7 +187,7 @@ impl VirtDev {
 
     // use for migration save
     pub fn save_virt_dev_data(&self, dev_data: &mut VirtDevData) {
-        let inner = self.inner.lock();
+        let mut inner = self.inner.lock();
         dev_data.activated = inner.activated;
         dev_data.dev_type = inner.dev_type;
         dev_data.features = inner.features;
@@ -218,6 +218,8 @@ impl VirtDev {
             }
             DevDesc::None => {}
         }
+        // set activated to false
+        inner.activated = false;
     }
 
     // use for live update

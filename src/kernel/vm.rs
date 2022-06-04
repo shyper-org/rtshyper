@@ -1,6 +1,7 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem::size_of;
+use core::ptr::slice_from_raw_parts;
 
 use spin::Mutex;
 
@@ -159,9 +160,14 @@ pub fn vm_if_copy_mem_map(vm_id: usize) {
     let mem_map_cache = vm_if.mem_map_cache.clone();
     let map = vm_if.mem_map.as_mut().unwrap();
     map.set(0x15, true); // TODO: hard code for offset 0x15000
-    println!("vm_if_copy_mem_map: dirty mem page num {}", map.sum());
+    println!(
+        "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",
+        map.sum(),
+        map.first(),
+        size_of::<u64>() * map.vec_len()
+    );
     memcpy_safe(
-        mem_map_cache.unwrap().pa() as *const u8,
+        mem_map_cache.as_ref().unwrap().pa() as *const u8,
         map.slice() as *const _ as *const u8,
         size_of::<u64>() * map.vec_len(),
     );
@@ -430,10 +436,10 @@ impl Vm {
         vm_inner.intc_dev_id
     }
 
-    pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
+    pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize, map_block: bool) {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
-            Some(pt) => pt.pt_map_range(ipa, len, pa, pte),
+            Some(pt) => pt.pt_map_range(ipa, len, pa, pte, map_block),
             None => {
                 panic!("Vm::pt_map_range: vm{} pt is empty", vm_inner.id);
             }
@@ -715,6 +721,7 @@ impl Vm {
                     round_up(size, PAGE_SIZE),
                     pf.pa(),
                     PTE_S2_NORMAL,
+                    true,
                 );
                 let mut inner = self.inner.lock();
                 inner.migrate_restore_pf.push(pf);
@@ -736,7 +743,7 @@ impl Vm {
             Ok(pf) => {
                 let mut vm_data = unsafe { &mut *(pf.pa as *mut VMData) };
                 let base = get_share_mem(VM_CONTEXT_SEND);
-                mvm.pt_map_range(base, round_up(size, PAGE_SIZE), pf.pa(), PTE_S2_RO);
+                mvm.pt_map_range(base, round_up(size, PAGE_SIZE), pf.pa(), PTE_S2_RO, true);
                 let mut inner = self.inner.lock();
 
                 // vm context
@@ -828,6 +835,9 @@ impl Vm {
                     val0,
                     val1
                 );
+                offset &= !0xfff;
+                offset += PAGE_SIZE;
+                continue;
             }
             offset += 8;
         }

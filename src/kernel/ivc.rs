@@ -50,7 +50,7 @@ pub fn shyper_init(vm: Vm, base_ipa: usize, len: usize) -> bool {
 
     match &*shared_mem {
         Some(page_frame) => {
-            vm.pt_map_range(base_ipa, len, page_frame.pa(), PTE_S2_NORMAL);
+            vm.pt_map_range(base_ipa, len, page_frame.pa(), PTE_S2_NORMAL, true);
             true
         }
         None => {

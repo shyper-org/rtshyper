@@ -314,9 +314,9 @@ impl PageTable {
         }
     }
 
-    pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
+    pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize, map_block: bool) {
         let size_2mb = 1 << LVL2_SHIFT;
-        if ipa % size_2mb == 0 && len % size_2mb == 0 && pa % size_2mb == 0 {
+        if ipa % size_2mb == 0 && len % size_2mb == 0 && pa % size_2mb == 0 && map_block {
             self.map_range_2mb(ipa, len, pa, pte);
         } else {
             self.map_range(ipa, len, pa, pte);

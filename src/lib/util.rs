@@ -60,7 +60,7 @@ pub fn bit_set(bits: usize, off: usize) -> usize {
 pub fn bit_num(bits: usize, size: usize) -> usize {
     let mut num = 0;
     for i in 0..size {
-        if bits & 1 << i != 0 {
+        if (bits & (1 << i)) != 0 {
             num += 1;
         }
     }

@@ -198,6 +198,24 @@ impl FlexBitmap {
         }
         sum
     }
+
+    pub fn first(&self) -> usize {
+        let mut first = 0;
+        for val in &self.map {
+            if *val == 0 {
+                first += 64;
+            } else {
+                let mut tmp = *val;
+                while (tmp & 1) == 0 {
+                    tmp = tmp >> 1;
+                    first += 1;
+                }
+                return first;
+            }
+        }
+        println!("all is 0");
+        first
+    }
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ use crate::kernel::{
     mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_copy_mem_map,
     vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
 };
+use crate::lib::cache_invalidate_d;
 
 pub struct VMData {
     pub vm_ctx: VmContext,
@@ -241,6 +242,7 @@ pub fn migrate_ready(vmid: usize) {
                     PAGE_SIZE * vm_if_mem_map_page_num(vmid),
                     pf.pa(),
                     PTE_S2_RO,
+                    true,
                 );
                 vm_if_set_mem_map_cache(vmid, pf);
             }
@@ -253,7 +255,7 @@ pub fn migrate_ready(vmid: usize) {
 
 pub fn migrate_memcpy(vmid: usize) {
     // copy trgt_vm dirty mem map to kernel module
-    println!("migrate_memcpy, vm_id {}", vmid);
+    // println!("migrate_memcpy, vm_id {}", vmid);
     hvc_send_msg_to_vm(
         0,
         &HvcGuestMsg::Migrate(HvcMigrateMsg {
@@ -270,7 +272,7 @@ pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
     for i in 0..vm.region_num() {
         active_vm()
             .unwrap()
-            .pt_map_range(ipa_start, vm.pa_length(i), vm.pa_start(i), PTE_S2_NORMAL);
+            .pt_map_range(ipa_start, vm.pa_length(i), vm.pa_start(i), PTE_S2_NORMAL, true);
         // println!(
         //     "ipa {:x}, length {:x}, pa start {:x}",
         //     ipa_start,
@@ -284,6 +286,13 @@ pub fn migrate_finish_ipi_handler(vm_id: usize) {
     println!("Core 0 handle VM[{}] finish ipi", vm_id);
     // let vm = vm(vm_id).unwrap();
     // copy trgt_vm dirty mem map to kernel module
+    // let vm = vm(vm_id).unwrap();
+    // for i in 0..vm.mem_region_num() {
+    //     unsafe {
+    //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
+    //     }
+    // }
+    // tlb_invalidate_guest_all();
     vm_if_copy_mem_map(vm_id);
 
     hvc_send_msg_to_vm(
@@ -304,10 +313,10 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
         let vm = active_vm().unwrap();
         let vm_id = vm.id();
         let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
-        println!(
-            "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
-            emu_ctx.address, pa, len
-        );
+        // println!(
+        //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
+        //     emu_ctx.address, pa, len
+        // );
         let mut bit = 0;
         for i in 0..vm.region_num() {
             let start = vm.pa_start(i);

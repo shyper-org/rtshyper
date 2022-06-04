@@ -49,7 +49,7 @@ fn vmm_init_memory(vm: Vm) -> bool {
             "VM {} memory region: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>",
             vm_id, vm_region.ipa_start, pa, vm_region.length
         );
-        vm.pt_map_range(vm_region.ipa_start, vm_region.length, pa, PTE_S2_NORMAL);
+        vm.pt_map_range(vm_region.ipa_start, vm_region.length, pa, PTE_S2_NORMAL, vm_id == 0);
 
         vm.add_region(VmPa {
             pa_start: pa,
@@ -261,7 +261,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
 
 fn vmm_init_passthrough_device(vm: Vm) -> bool {
     for region in vm.config().passthrough_device_regions() {
-        vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE);
+        vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE, true);
 
         println!(
             "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>",
