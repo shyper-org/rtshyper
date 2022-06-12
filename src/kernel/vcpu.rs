@@ -5,7 +5,7 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, VmContext};
+use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, GICD, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
@@ -95,6 +95,33 @@ impl Vcpu {
         inner.vm_ctx.ext_regs_store();
         inner.vm_ctx.fpsimd_save_context();
         inner.vm_ctx.gic_save_state();
+    }
+
+    pub fn context_gic_store(&self) {
+        let mut inner = self.inner.lock();
+        inner.gic_ctx;
+        println!("Core[{}] GIC", current_cpu().id);
+        for int_id in 0..16 {
+            println!(
+                "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                int_id,
+                GICD.is_enabler(int_id / 32),
+                GICD.is_activer(int_id / 32),
+                GICD.ipriorityr(int_id / 4),
+                GICD.itargetsr(int_id / 4),
+                GICD.icfgr(int_id / 2)
+            );
+        }
+        let int_id = 27;
+        println!(
+            "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+            int_id,
+            GICD.is_enabler(int_id / 32),
+            GICD.is_activer(int_id / 32),
+            GICD.ipriorityr(int_id / 4),
+            GICD.itargetsr(int_id / 4),
+            GICD.icfgr(int_id / 2)
+        );
     }
 
     pub fn context_vm_restore(&self) {
@@ -233,6 +260,11 @@ impl Vcpu {
         inner.reset_context();
     }
 
+    pub fn reset_vmpidr(&self) {
+        let mut inner = self.inner.lock();
+        inner.reset_vmpidr();
+    }
+
     pub fn context_ext_regs_store(&self) {
         let mut inner = self.inner.lock();
         inner.context_ext_regs_store();
@@ -300,6 +332,7 @@ pub struct VcpuInner {
     pub int_list: Vec<usize>,
     pub vcpu_ctx: Aarch64ContextFrame,
     pub vm_ctx: VmContext,
+    pub gic_ctx: GicContext,
 }
 
 impl VcpuInner {
@@ -312,6 +345,7 @@ impl VcpuInner {
             int_list: vec![],
             vcpu_ctx: Aarch64ContextFrame::default(),
             vm_ctx: VmContext::default(),
+            gic_ctx: GicContext::default(),
         }
     }
 
@@ -325,14 +359,28 @@ impl VcpuInner {
     }
 
     fn arch_ctx_reset(&mut self) {
-        let migrate = self.vm.as_ref().unwrap().migration_state();
-        if !migrate {
-            self.vm_ctx.cntvoff_el2 = 0;
-            self.vm_ctx.sctlr_el1 = 0x30C50830;
-            self.vm_ctx.cntkctl_el1 = 0;
-            self.vm_ctx.pmcr_el0 = 0;
-            self.vm_ctx.vtcr_el2 = 0x8001355c;
+        // let migrate = self.vm.as_ref().unwrap().migration_state();
+        // if !migrate {
+        self.vm_ctx.cntvoff_el2 = 0;
+        self.vm_ctx.sctlr_el1 = 0x30C50830;
+        self.vm_ctx.cntkctl_el1 = 0;
+        self.vm_ctx.pmcr_el0 = 0;
+        self.vm_ctx.vtcr_el2 = 0x8001355c;
+        // }
+        let mut vmpidr = 0;
+        vmpidr |= 1 << 31;
+
+        #[cfg(feature = "tx2")]
+        if self.vm_id() == 0 {
+            // A57 is cluster #1 for L4T
+            vmpidr |= 0x100;
         }
+
+        vmpidr |= self.id;
+        self.vm_ctx.vmpidr_el2 = vmpidr as u64;
+    }
+
+    fn reset_vmpidr(&mut self) {
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
 
@@ -347,11 +395,11 @@ impl VcpuInner {
     }
 
     fn reset_context(&mut self) {
-        let migrate = self.vm.as_ref().unwrap().migration_state();
+        // let migrate = self.vm.as_ref().unwrap().migration_state();
         self.arch_ctx_reset();
-        if !migrate {
-            self.gic_ctx_reset();
-        }
+        // if !migrate {
+        self.gic_ctx_reset();
+        // }
         use crate::kernel::vm_if_get_type;
         match vm_if_get_type(self.vm_id()) {
             VmType::VmTBma => {
@@ -425,6 +473,7 @@ pub fn vcpu_remove(vcpu: Vcpu) {
 }
 
 pub fn vcpu_idle(_vcpu: Vcpu) {
+    cpu_interrupt_unmask();
     loop {
         unsafe {
             asm!("wfi");

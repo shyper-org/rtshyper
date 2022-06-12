@@ -4,6 +4,7 @@ use core::fmt::Formatter;
 use cortex_a::registers::*;
 
 use crate::arch::GicState;
+use crate::kernel::INTERRUPT_NUM_MAX;
 
 global_asm!(include_str!("fpsimd.S"));
 
@@ -125,6 +126,27 @@ impl VmCtxFpsimd {
         self.fpcr = 0;
         self.fpsimd.iter_mut().for_each(|x| *x = 0);
     }
+}
+
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct GicIrqState {
+    id: u64,
+    enable: u8,
+    pend: u8,
+    active: u8,
+    priority: u8,
+    target: u8,
+}
+
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct GicContext {
+    irq_state: [GicIrqState; 10], // hard code for vm irq num max
+    gicv_ctlr: u32,
+    gicv_pmr: u32,
 }
 
 #[repr(C)]
@@ -320,7 +342,8 @@ impl VmContext {
     }
 
     pub fn ext_regs_restore(&self) {
-        // println!("restore sctlr {:x}", self.sctlr_el1);
+        // println!("restore CNTV_CTL_EL0 {:x}", self.cntv_ctl_el0);
+        // println!("restore CNTV_TVAL_EL0 {:x}", self.cntv_tval_el0);
         unsafe {
             asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) self.cntvoff_el2);
             asm!("msr CNTP_CVAL_EL0, {0}", "isb", in(reg) self.cntp_cval_el0);
