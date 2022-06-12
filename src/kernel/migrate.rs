@@ -3,17 +3,17 @@ use crate::arch::{
     PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
 };
 use crate::arch::tlb_invalidate_guest_all;
+use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs};
 use crate::kernel::{
     active_vm, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg, HvcMigrateMsg,
     mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_copy_mem_map,
     vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
 };
-use crate::lib::cache_invalidate_d;
 
 pub struct VMData {
-    pub vm_ctx: VmContext,
-    pub vcpu_ctx: Aarch64ContextFrame,
+    pub vm_ctx: [VmContext; PLATFORM_VCPU_NUM_MAX],
+    pub vcpu_ctx: [Aarch64ContextFrame; PLATFORM_VCPU_NUM_MAX],
     pub emu_devs: [EmuDevData; EMU_DEV_NUM_MAX],
 }
 

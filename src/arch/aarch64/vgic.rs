@@ -1,11 +1,11 @@
-use alloc::collections::VecDeque;
+use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use spin::Mutex;
 
 use crate::{arch::GICH, kernel::IpiInitcMessage};
-use crate::board::platform_cpuid_to_cpuif;
+use crate::board::{PLATFORM_CPU_NUM_MAX, platform_cpuid_to_cpuif};
 use crate::board::PLATFORM_GICD_BASE;
 use crate::device::EmuContext;
 use crate::device::EmuDevs;
@@ -33,7 +33,12 @@ impl VgicInt {
         }
     }
 
-    pub fn restore_migrate_data(&self, int_data: &VgicIntData, vcpu_list: &Vec<Vcpu>) {
+    pub fn restore_migrate_data(
+        &self,
+        int_data: &VgicIntData,
+        vcpu_list: &Vec<Vcpu>,
+        vcpuid_map: &BTreeMap<usize, usize>,
+    ) {
         let mut inner = self.inner.lock();
         inner.owner = match int_data.owner {
             None => None,
@@ -45,10 +50,24 @@ impl VgicInt {
         inner.enabled = int_data.enabled;
         inner.state = int_data.state;
         inner.prio = int_data.prio;
-        inner.targets = int_data.targets << current_cpu().id;
+        inner.targets = {
+            let mut pcpu_targets = 0;
+            println!(
+                "restore vgic int {} migrate target data {:x}",
+                int_data.id, int_data.targets
+            );
+            for vcpuid in 0..PLATFORM_CPU_NUM_MAX {
+                if (1 << vcpuid) & int_data.targets != 0 {
+                    pcpu_targets |= (1 << vcpuid_map[&vcpuid]) as u8;
+                }
+            }
+            pcpu_targets
+        };
         inner.cfg = int_data.cfg;
         inner.in_pend = int_data.in_pend;
         inner.in_act = int_data.in_act;
+
+        // TODO: rude
         if inner.enabled {
             let int_id = inner.id as usize;
             GICD.set_enable(int_id, true);
@@ -61,21 +80,21 @@ impl VgicInt {
             //     platform_cpuid_to_cpuif(current_cpu().id)
             // );
 
-            // if int_id > 16 {
-            //     println!(
-            //         "restore_migrate_data after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-            //         int_id,
-            //         GICD.is_enabler(int_id / 32),
-            //         GICD.is_activer(int_id / 32),
-            //         GICD.ipriorityr(int_id / 4),
-            //         GICD.itargetsr(int_id / 4),
-            //         GICD.icfgr(int_id / 2)
-            //     );
-            // }
+            if int_id > 16 {
+                println!(
+                    "restore_migrate_data after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                    int_id,
+                    GICD.is_enabler(int_id / 32),
+                    GICD.is_activer(int_id / 32),
+                    GICD.ipriorityr(int_id / 4),
+                    GICD.itargetsr(int_id / 4),
+                    GICD.icfgr(int_id / 2)
+                );
+            }
         }
     }
 
-    pub fn save_migrate_data(&self, int_data: &mut VgicIntData) {
+    pub fn save_migrate_data(&self, int_data: &mut VgicIntData, cpuid_map: &BTreeMap<usize, usize>) {
         let inner = self.inner.lock();
         int_data.owner = match &inner.owner {
             None => None,
@@ -88,34 +107,37 @@ impl VgicInt {
         int_data.enabled = inner.enabled;
         int_data.state = inner.state;
         int_data.prio = inner.prio;
-        // TODO: only support one core
-        int_data.targets = if (1 << current_cpu().id) & inner.targets != 0 {
-            1
-        } else {
-            0
+        int_data.targets = {
+            let mut vcpu_targets = 0;
+            for pcpuid in 0..PLATFORM_CPU_NUM_MAX {
+                if (1 << pcpuid) & inner.targets != 0 {
+                    vcpu_targets |= (1 << cpuid_map[&pcpuid]) as u8;
+                }
+            }
+            vcpu_targets
         };
         int_data.cfg = inner.cfg;
         int_data.in_pend = inner.in_pend;
         int_data.in_act = inner.in_act;
-        // if inner.enabled {
-        //     println!(
-        //         "int {} is enable, state {:#?}, prio {:x}, targets {:x}, in pend {}, int act {}, int cfg {}",
-        //         inner.id, inner.state, inner.prio, inner.targets, inner.in_pend, inner.in_act, inner.cfg
-        //     );
-        //
-        //     let int_id = inner.id as usize;
-        //     if int_id > 16 {
-        //         println!(
-        //             "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-        //             int_id,
-        //             GICD.is_enabler(int_id / 32),
-        //             GICD.is_activer(int_id / 32),
-        //             GICD.ipriorityr(int_id / 4),
-        //             GICD.itargetsr(int_id / 4),
-        //             GICD.icfgr(int_id / 2)
-        //         );
-        //     }
-        // }
+        if inner.enabled {
+            // println!(
+            //     "int {} is enable, state {:#?}, prio {:x}, targets {:x}, in pend {}, int act {}, int cfg {}",
+            //     inner.id, inner.state, inner.prio, inner.targets, inner.in_pend, inner.in_act, inner.cfg
+            // );
+
+            let int_id = inner.id as usize;
+            if int_id > 16 {
+                println!(
+                    "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                    int_id,
+                    GICD.is_enabler(int_id / 32),
+                    GICD.is_activer(int_id / 32),
+                    GICD.ipriorityr(int_id / 4),
+                    GICD.itargetsr(int_id / 4),
+                    GICD.icfgr(int_id / 2)
+                );
+            }
+        }
     }
 
     // back up for hyper fresh
@@ -441,21 +463,26 @@ impl VgicCpuPriv {
     }
 
     // use for migration
-    pub fn restore_migrate_data(&mut self, cpu_priv_data: &VgicCpuPrivData, vcpu_list: &Vec<Vcpu>) {
+    pub fn restore_migrate_data(
+        &mut self,
+        cpu_priv_data: &VgicCpuPrivData,
+        vcpu_list: &Vec<Vcpu>,
+        vcpuid_map: &BTreeMap<usize, usize>,
+    ) {
         self.sgis = cpu_priv_data.sgis;
         self.curr_lrs = cpu_priv_data.curr_lrs;
         for (idx, int) in self.interrupts.iter_mut().enumerate() {
-            int.restore_migrate_data(&cpu_priv_data.interrupts[idx], vcpu_list);
+            int.restore_migrate_data(&cpu_priv_data.interrupts[idx], vcpu_list, vcpuid_map);
         }
         assert_eq!(self.interrupts.len(), cpu_priv_data.interrupts.len());
     }
 
     // use for migration
-    pub fn save_migrate_data(&self, cpu_priv_data: &mut VgicCpuPrivData) {
+    pub fn save_migrate_data(&self, cpu_priv_data: &mut VgicCpuPrivData, cpuid_map: &BTreeMap<usize, usize>) {
         cpu_priv_data.sgis = self.sgis;
         cpu_priv_data.curr_lrs = self.curr_lrs;
         for (idx, int) in self.interrupts.iter().enumerate() {
-            int.save_migrate_data(&mut cpu_priv_data.interrupts[idx]);
+            int.save_migrate_data(&mut cpu_priv_data.interrupts[idx], cpuid_map);
         }
         cpu_priv_data.act_num = self.act_list.len();
         for (idx, int) in self.act_list.iter().enumerate() {
@@ -481,17 +508,22 @@ impl Vgic {
         }
     }
 
-    pub fn restore_vgic_data(&self, vgic_data: &VgicMigData, vcpu_list: &Vec<Vcpu>) {
+    pub fn restore_vgic_data(
+        &self,
+        vgic_data: &VgicMigData,
+        vcpu_list: &Vec<Vcpu>,
+        vcpuid_map: &BTreeMap<usize, usize>,
+    ) {
         let mut vgicd = self.vgicd.lock();
         vgicd.ctlr = vgic_data.vgicd.ctlr;
         vgicd.typer = vgic_data.vgicd.typer;
         vgicd.iidr = vgic_data.vgicd.iidr;
         for (idx, int) in vgicd.interrupts.iter().enumerate() {
-            int.restore_migrate_data(&vgic_data.vgicd.interrupts[idx], vcpu_list);
+            int.restore_migrate_data(&vgic_data.vgicd.interrupts[idx], vcpu_list, vcpuid_map);
         }
         let mut cpu_priv_list = self.cpu_priv.lock();
         for idx in 0..vgic_data.cpu_priv_num {
-            cpu_priv_list[idx].restore_migrate_data(&vgic_data.cpu_priv[idx], vcpu_list);
+            cpu_priv_list[idx].restore_migrate_data(&vgic_data.cpu_priv[idx], vcpu_list, vcpuid_map);
             assert_eq!(cpu_priv_list[idx].act_list.len(), 0);
             assert_eq!(cpu_priv_list[idx].pend_list.len(), 0);
             // act list
@@ -517,19 +549,19 @@ impl Vgic {
         }
     }
 
-    pub fn save_vgic_data(&self, vgic_data: &mut VgicMigData) {
+    pub fn save_vgic_data(&self, vgic_data: &mut VgicMigData, cpuid_map: &BTreeMap<usize, usize>) {
         let vgicd = self.vgicd.lock();
         vgic_data.vgicd.iidr = vgicd.iidr;
         vgic_data.vgicd.typer = vgicd.typer;
         vgic_data.vgicd.ctlr = vgicd.ctlr;
         for (idx, int) in vgicd.interrupts.iter().enumerate() {
-            int.save_migrate_data(&mut vgic_data.vgicd.interrupts[idx]);
+            int.save_migrate_data(&mut vgic_data.vgicd.interrupts[idx], cpuid_map);
         }
 
         let cpu_priv_list = self.cpu_priv.lock();
         vgic_data.cpu_priv_num = cpu_priv_list.len();
         for (idx, cpu_priv) in cpu_priv_list.iter().enumerate() {
-            cpu_priv.save_migrate_data(&mut vgic_data.cpu_priv[idx]);
+            cpu_priv.save_migrate_data(&mut vgic_data.cpu_priv[idx], cpuid_map);
         }
     }
 

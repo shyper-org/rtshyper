@@ -1,7 +1,7 @@
+use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem::size_of;
-use core::ptr::slice_from_raw_parts;
 
 use spin::Mutex;
 
@@ -735,7 +735,6 @@ impl Vm {
 
     pub fn context_vm_migrate_save(&self) {
         // TODO: 仅支持单核VM，支持多核并不困难，遍历所有vcpu即可
-        let vcpu = self.vcpu(0).unwrap();
         let mvm = vm(0).unwrap();
         let size = size_of::<VMData>();
         println!("context_vm_migrate_save: VM Data size 0x{:x}", size);
@@ -744,19 +743,26 @@ impl Vm {
                 let mut vm_data = unsafe { &mut *(pf.pa as *mut VMData) };
                 let base = get_share_mem(VM_CONTEXT_SEND);
                 mvm.pt_map_range(base, round_up(size, PAGE_SIZE), pf.pa(), PTE_S2_RO, true);
-                let mut inner = self.inner.lock();
 
-                // vm context
-                vcpu.migrate_vm_ctx_save(&vm_data.vm_ctx as *const _ as usize);
-                // vcpu context
-                vcpu.migrate_vcpu_ctx_save(&vm_data.vcpu_ctx as *const _ as usize);
+                // key: pcpuid, val: vcpuid
+                let mut cpuid_map: BTreeMap<usize, usize> = BTreeMap::new();
+                for vcpu_id in 0..self.cpu_num() {
+                    let vcpu = self.vcpu(vcpu_id).unwrap();
+                    // vm context
+                    vcpu.migrate_vm_ctx_save(&(vm_data.vm_ctx[vcpu_id]) as *const _ as usize);
+                    // vcpu context
+                    vcpu.migrate_vcpu_ctx_save(&(vm_data.vcpu_ctx[vcpu_id]) as *const _ as usize);
+                    cpuid_map.insert(self.vcpuid_to_pcpuid(vcpu_id).unwrap(), vcpu_id);
+                }
+
+                let mut inner = self.inner.lock();
                 for (idx, emu) in inner.emu_devs.iter().enumerate() {
                     match emu {
                         EmuDevs::Vgic(vgic) => {
                             vm_data.emu_devs[idx] = EmuDevData::Vgic(VgicMigData::default());
                             if let EmuDevData::Vgic(vgic_data) = &mut vm_data.emu_devs[idx] {
                                 println!("vm[{}] save vgic", inner.id);
-                                vgic.save_vgic_data(vgic_data);
+                                vgic.save_vgic_data(vgic_data, &cpuid_map);
                                 // println!("GICH_MISR {:x}", GICH.misr());
                                 // println!("GICV_CTLR {:x}", unsafe {
                                 //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
@@ -842,7 +848,12 @@ impl Vm {
             offset += 8;
         }
         println!("context_vm_migrate_restore: pass mem assert eq");
-        let vcpu = self.vcpu(0).unwrap();
+
+        // key: vcpuid, val: pcpuid
+        let mut vcpuid_map: BTreeMap<usize, usize> = BTreeMap::new();
+        for vcpu_id in 0..self.cpu_num() {
+            vcpuid_map.insert(vcpu_id, self.vcpuid_to_pcpuid(vcpu_id).unwrap());
+        }
         let inner = self.inner.lock();
         let pa = inner.migrate_restore_pf[0].pa();
         let vm_data = unsafe { &mut *(pa as *mut VMData) };
@@ -878,7 +889,7 @@ impl Vm {
                     //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
                     // );
                     if let EmuDevData::Vgic(vgic_data) = &vm_data.emu_devs[idx] {
-                        vgic.restore_vgic_data(vgic_data, &inner.vcpu_list);
+                        vgic.restore_vgic_data(vgic_data, &inner.vcpu_list, &vcpuid_map);
                     }
                 }
                 EmuDevs::VirtioBlk(mmio) => {
@@ -916,9 +927,12 @@ impl Vm {
                 EmuDevs::None => {}
             }
         }
-
-        vcpu.migrate_vm_ctx_restore(&vm_data.vm_ctx as *const _ as usize);
-        vcpu.migrate_vcpu_ctx_restore(&vm_data.vcpu_ctx as *const _ as usize);
+        drop(inner);
+        for vcpu_id in 0..self.cpu_num() {
+            let vcpu = self.vcpu(vcpu_id).unwrap();
+            vcpu.migrate_vm_ctx_restore(&vm_data.vm_ctx[vcpu_id] as *const _ as usize);
+            vcpu.migrate_vcpu_ctx_restore(&vm_data.vcpu_ctx[vcpu_id] as *const _ as usize);
+        }
     }
 
     pub fn share_mem_base(&self) -> usize {
@@ -931,15 +945,15 @@ impl Vm {
         inner.share_mem_base += len;
     }
 
-    pub fn migration_state(&self) -> bool {
-        let inner = self.inner.lock();
-        inner.migration_state
-    }
-
-    pub fn set_migration_state(&self, state: bool) {
-        let mut inner = self.inner.lock();
-        inner.migration_state = state;
-    }
+    // pub fn migration_state(&self) -> bool {
+    //     let inner = self.inner.lock();
+    //     inner.migration_state
+    // }
+    //
+    // pub fn set_migration_state(&self, state: bool) {
+    //     let mut inner = self.inner.lock();
+    //     inner.migration_state = state;
+    // }
 }
 
 #[repr(align(4096))]
@@ -967,7 +981,7 @@ pub struct VmInner {
     pub int_bitmap: Option<BitMap<BitAlloc256>>,
 
     // migration
-    pub migration_state: bool,
+    // pub migration_state: bool,
     pub share_mem_base: usize,
     pub migrate_save_pf: Vec<PageFrame>,
     pub migrate_restore_pf: Vec<PageFrame>,
@@ -996,7 +1010,7 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
-            migration_state: false,
+            // migration_state: false,
             share_mem_base: 0xd00000000, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
@@ -1023,7 +1037,7 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
-            migration_state: false,
+            // migration_state: false,
             share_mem_base: 0xd00000000, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],

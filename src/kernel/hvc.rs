@@ -14,8 +14,8 @@ use crate::kernel::{
     vm_if_copy_mem_map, vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr,
     vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
 };
-use crate::lib::{memcpy_safe, trace};
-use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
+use crate::lib::{func_barrier, memcpy_safe, set_barrier_num, trace};
+use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_migrate_boot, vmm_reboot_vm, vmm_remove_vm};
 
 pub static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
@@ -295,7 +295,12 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
 
             if dirty_mem_num < DIRTY_MEM_THRESHOLD {
                 // Idle live vm, copy dirty mem and vm register struct
-                send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, cpu_trgt);
+                let trgt_vm = vm(x0).unwrap();
+                set_barrier_num(trgt_vm.cpu_num());
+                for vcpu_id in 0..trgt_vm.cpu_num() {
+                    let pcpu_id = trgt_vm.vcpuid_to_pcpuid(vcpu_id).unwrap();
+                    send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, pcpu_id);
+                }
             } else {
                 send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_MEMCPY, cpu_trgt);
             }
@@ -311,11 +316,13 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_MIGRATE_VM_BOOT => {
             let vm = vm(x0).unwrap();
-            vm.set_migration_state(true);
-            let cpu_trgt = vm.vcpu(0).unwrap().phys_id();
-            println!("migrate boot vm {}, cpu trgt {}", x0, cpu_trgt);
-            // send ipi to target vcpu, copy data and boot vm (in ipi copy gic data)
-            send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_VM_BOOT, cpu_trgt);
+            // vm.set_migration_state(true);
+            for vcpu_id in 0..vm.cpu_num() {
+                let cpu_trgt = vm.vcpuid_to_pcpuid(vcpu_id).unwrap();
+                println!("migrate boot vm {}, cpu trgt {}", x0, cpu_trgt);
+                // send ipi to target vcpu, copy data and boot vm (in ipi copy gic data)
+                send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_VM_BOOT, cpu_trgt);
+            }
             Ok(HVC_FINISH)
         }
         HVC_VMM_VM_REMOVE => {
@@ -543,20 +550,38 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         // 否则意味着当前核心有多个虚拟机共享，且被迁移虚拟机所在的核心尚未被调度到，寄存器数值无需更新
                         if vm.id() == msg.trgt_vmid {
                             trgt_vcpu.context_vm_store();
+                            trgt_vcpu.context_gic_store();
+                        }
+                        func_barrier();
+                        if trgt_vcpu.id() == 0 {
                             vm.context_vm_migrate_save();
+                            println!("send finish ipi to core0");
+                            send_hvc_ipi(msg.trgt_vmid, 0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, 0);
                         }
                         println!(
-                            "save elr 0x{:x}, gpr[0] 0x{:x}",
+                            "Core[{}] save elr 0x{:x}, gpr[0] 0x{:x}",
+                            current_cpu().id,
                             current_cpu().get_elr(),
                             current_cpu().get_gpr(0)
                         );
-                        send_hvc_ipi(msg.trgt_vmid, 0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, 0);
                         vcpu_idle(trgt_vcpu);
                     }
                     HVC_VMM_MIGRATE_VM_BOOT => {
                         let vm = vm(msg.trgt_vmid).unwrap();
+                        // vm.set_migration_state(true);
+                        // only can do this on vm cpu because of gic reg state (not cpu[0])
                         vm.context_vm_migrate_restore();
-                        vmm_boot_vm(msg.trgt_vmid);
+
+                        gicc_clear_current_irq(true);
+                        match current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(msg.trgt_vmid) {
+                            None => {
+                                panic!("Core[{}] does not have VM[{}] vcpu", current_cpu().id, msg.trgt_vmid);
+                            }
+                            Some(vcpu_idx) => {
+                                current_cpu().vcpu_pool().yield_vcpu(vcpu_idx);
+                            }
+                        }
+                        vmm_migrate_boot();
                     }
                     _ => {}
                 },

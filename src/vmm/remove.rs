@@ -1,3 +1,4 @@
+use crate::arch::GIC_SGIS_NUM;
 use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
 use crate::device::EmuDeviceType::*;
@@ -109,7 +110,9 @@ pub fn vmm_remove_emulated_device(vm: Vm) {
 
 pub fn vmm_remove_passthrough_device(vm: Vm) {
     for irq in vm.config().passthrough_device_irqs() {
-        interrupt_vm_remove(vm.clone(), irq);
-        println!("VM[{}] remove irq {}", vm.id(), irq);
+        if irq > GIC_SGIS_NUM {
+            interrupt_vm_remove(vm.clone(), irq);
+            println!("VM[{}] remove irq {}", vm.id(), irq);
+        }
     }
 }
