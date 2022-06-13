@@ -7,7 +7,7 @@ use spin::Mutex;
 
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, GICD, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
-use crate::board::PLATFORM_VCPU_NUM_MAX;
+use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
 use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
@@ -70,6 +70,15 @@ impl Vcpu {
         );
     }
 
+    pub fn migrate_gic_ctx_save(&self, cache_pa: usize) {
+        let inner = self.inner.lock();
+        memcpy_safe(
+            cache_pa as *const u8,
+            &(inner.gic_ctx) as *const _ as *const u8,
+            size_of::<GicContext>(),
+        );
+    }
+
     pub fn migrate_vm_ctx_restore(&self, cache_pa: usize) {
         let inner = self.inner.lock();
         memcpy_safe(
@@ -88,6 +97,15 @@ impl Vcpu {
         );
     }
 
+    pub fn migrate_gic_ctx_restore(&self, cache_pa: usize) {
+        let inner = self.inner.lock();
+        memcpy_safe(
+            &(inner.gic_ctx) as *const _ as *const u8,
+            cache_pa as *const u8,
+            size_of::<GicContext>(),
+        );
+    }
+
     pub fn context_vm_store(&self) {
         self.save_cpu_ctx();
 
@@ -99,11 +117,12 @@ impl Vcpu {
 
     pub fn context_gic_store(&self) {
         let mut inner = self.inner.lock();
+        let vm = inner.vm.clone().unwrap();
         inner.gic_ctx;
-        println!("Core[{}] GIC", current_cpu().id);
         for int_id in 0..16 {
             println!(
-                "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                "Core[{}] int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                current_cpu().id,
                 int_id,
                 GICD.is_enabler(int_id / 32),
                 GICD.is_activer(int_id / 32),
@@ -122,6 +141,42 @@ impl Vcpu {
             GICD.itargetsr(int_id / 4),
             GICD.icfgr(int_id / 2)
         );
+        for irq in vm.config().passthrough_device_irqs() {
+            inner.gic_ctx.add_irq(irq as u64);
+        }
+        let gicv_ctlr = unsafe { &*((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32) };
+        inner.gic_ctx.set_gicv_ctlr(*gicv_ctlr);
+        let gicv_pmr = unsafe { &*((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32) };
+        inner.gic_ctx.set_gicv_pmr(*gicv_pmr);
+    }
+
+    pub fn context_gic_restore(&self) {
+        let inner = self.inner.lock();
+
+        let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
+        *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
+        for irq_state in inner.gic_ctx.irq_state.iter() {
+            if irq_state.id != 0 {
+                println!("Core {} set irq {} GICD", current_cpu().id, irq_state.id);
+                GICD.set_enable(irq_state.id as usize, irq_state.enable != 0);
+                GICD.set_prio(irq_state.id as usize, irq_state.priority);
+                GICD.set_trgt(irq_state.id as usize, 1 << platform_cpuid_to_cpuif(current_cpu().id));
+                // let int_id = irq_state.id as usize;
+                // println!(
+                //     "Core[{}] context_gic_restore after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                //     current_cpu().id,
+                //     int_id,
+                //     GICD.is_enabler(int_id / 32),
+                //     GICD.is_activer(int_id / 32),
+                //     GICD.ipriorityr(int_id / 4),
+                //     GICD.itargetsr(int_id / 4),
+                //     GICD.icfgr(int_id / 2)
+                // );
+            }
+        }
+        println!("Core[{}] save gic context", current_cpu().id);
+        let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
+        *gicv_pmr = inner.gic_ctx.gicv_pmr();
     }
 
     pub fn context_vm_restore(&self) {

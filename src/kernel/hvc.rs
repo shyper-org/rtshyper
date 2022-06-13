@@ -316,7 +316,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_MIGRATE_VM_BOOT => {
             let vm = vm(x0).unwrap();
-            // vm.set_migration_state(true);
+            vm.context_vm_migrate_restore();
             for vcpu_id in 0..vm.cpu_num() {
                 let cpu_trgt = vm.vcpuid_to_pcpuid(vcpu_id).unwrap();
                 println!("migrate boot vm {}, cpu trgt {}", x0, cpu_trgt);
@@ -550,8 +550,9 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         // 否则意味着当前核心有多个虚拟机共享，且被迁移虚拟机所在的核心尚未被调度到，寄存器数值无需更新
                         if vm.id() == msg.trgt_vmid {
                             trgt_vcpu.context_vm_store();
-                            trgt_vcpu.context_gic_store();
                         }
+                        // save gic register for each vcpu
+                        trgt_vcpu.context_gic_store();
                         func_barrier();
                         if trgt_vcpu.id() == 0 {
                             vm.context_vm_migrate_save();
@@ -567,10 +568,8 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         vcpu_idle(trgt_vcpu);
                     }
                     HVC_VMM_MIGRATE_VM_BOOT => {
-                        let vm = vm(msg.trgt_vmid).unwrap();
+                        // let vm = vm(msg.trgt_vmid).unwrap();
                         // vm.set_migration_state(true);
-                        // only can do this on vm cpu because of gic reg state (not cpu[0])
-                        vm.context_vm_migrate_restore();
 
                         gicc_clear_current_irq(true);
                         match current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(msg.trgt_vmid) {
@@ -578,7 +577,10 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                                 panic!("Core[{}] does not have VM[{}] vcpu", current_cpu().id, msg.trgt_vmid);
                             }
                             Some(vcpu_idx) => {
+                                let vcpu = current_cpu().vcpu_pool().vcpu(vcpu_idx);
                                 current_cpu().vcpu_pool().yield_vcpu(vcpu_idx);
+                                // restore gic register for each vcpu
+                                vcpu.context_gic_restore();
                             }
                         }
                         vmm_migrate_boot();

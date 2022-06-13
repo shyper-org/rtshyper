@@ -1,6 +1,6 @@
 use crate::arch::{
-    Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, IrqState, PAGE_SIZE,
-    PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
+    Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, GicContext, IrqState,
+    PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
 };
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
@@ -14,6 +14,7 @@ use crate::kernel::{
 pub struct VMData {
     pub vm_ctx: [VmContext; PLATFORM_VCPU_NUM_MAX],
     pub vcpu_ctx: [Aarch64ContextFrame; PLATFORM_VCPU_NUM_MAX],
+    pub gic_ctx: [GicContext; PLATFORM_VCPU_NUM_MAX],
     pub emu_devs: [EmuDevData; EMU_DEV_NUM_MAX],
 }
 

@@ -752,6 +752,8 @@ impl Vm {
                     vcpu.migrate_vm_ctx_save(&(vm_data.vm_ctx[vcpu_id]) as *const _ as usize);
                     // vcpu context
                     vcpu.migrate_vcpu_ctx_save(&(vm_data.vcpu_ctx[vcpu_id]) as *const _ as usize);
+                    // cpu gic context
+                    vcpu.migrate_gic_ctx_save(&(vm_data.gic_ctx[vcpu_id]) as *const _ as usize);
                     cpuid_map.insert(self.vcpuid_to_pcpuid(vcpu_id).unwrap(), vcpu_id);
                 }
 
@@ -862,13 +864,13 @@ impl Vm {
             match emu {
                 EmuDevs::Vgic(vgic) => {
                     // println!("context_vm_migrate_restore: vgic");
-                    let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
-                    *gicv_ctlr = 1;
-                    println!("GICV_CTLR {:x}", unsafe {
-                        *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
-                    });
-                    let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
-                    *gicv_pmr = 0xf0;
+                    // let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
+                    // *gicv_ctlr = 1;
+                    // println!("GICV_CTLR {:x}", unsafe {
+                    //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
+                    // });
+                    // let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
+                    // *gicv_pmr = 0xf0;
                     // println!("GICV_PMR {:x}", unsafe {
                     //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
                     // });
@@ -932,6 +934,8 @@ impl Vm {
             let vcpu = self.vcpu(vcpu_id).unwrap();
             vcpu.migrate_vm_ctx_restore(&vm_data.vm_ctx[vcpu_id] as *const _ as usize);
             vcpu.migrate_vcpu_ctx_restore(&vm_data.vcpu_ctx[vcpu_id] as *const _ as usize);
+            // cpu gic context
+            vcpu.migrate_gic_ctx_restore(&(vm_data.gic_ctx[vcpu_id]) as *const _ as usize);
         }
     }
 
