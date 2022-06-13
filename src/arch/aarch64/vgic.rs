@@ -52,10 +52,10 @@ impl VgicInt {
         inner.prio = int_data.prio;
         inner.targets = {
             let mut pcpu_targets = 0;
-            println!(
-                "restore vgic int {} migrate target data {:x}",
-                int_data.id, int_data.targets
-            );
+            // println!(
+            //     "restore vgic int {} migrate target data {:x}",
+            //     int_data.id, int_data.targets
+            // );
             for vcpuid in 0..PLATFORM_CPU_NUM_MAX {
                 if (1 << vcpuid) & int_data.targets != 0 {
                     pcpu_targets |= (1 << vcpuid_map[&vcpuid]) as u8;
@@ -68,30 +68,30 @@ impl VgicInt {
         inner.in_act = int_data.in_act;
 
         // TODO: rude
-        if inner.enabled {
-            let int_id = inner.id as usize;
-            GICD.set_enable(int_id, true);
-            GICD.set_prio(int_id, inner.prio);
-            GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(current_cpu().id));
-            // GICD.set_icfgr(int_id, inner.cfg);
-            // println!(
-            //     "cpuid {} cpuif {:x}",
-            //     current_cpu().id,
-            //     platform_cpuid_to_cpuif(current_cpu().id)
-            // );
+        // if inner.enabled {
+        //     let int_id = inner.id as usize;
+        //     GICD.set_enable(int_id, true);
+        //     GICD.set_prio(int_id, inner.prio);
+        //     GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(current_cpu().id));
+        // GICD.set_icfgr(int_id, inner.cfg);
+        // println!(
+        //     "cpuid {} cpuif {:x}",
+        //     current_cpu().id,
+        //     platform_cpuid_to_cpuif(current_cpu().id)
+        // );
 
-            if int_id > 16 {
-                println!(
-                    "restore_migrate_data after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                    int_id,
-                    GICD.is_enabler(int_id / 32),
-                    GICD.is_activer(int_id / 32),
-                    GICD.ipriorityr(int_id / 4),
-                    GICD.itargetsr(int_id / 4),
-                    GICD.icfgr(int_id / 2)
-                );
-            }
-        }
+        // if int_id > 16 {
+        //     println!(
+        //         "restore_migrate_data after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+        //         int_id,
+        //         GICD.is_enabler(int_id / 32),
+        //         GICD.is_activer(int_id / 32),
+        //         GICD.ipriorityr(int_id / 4),
+        //         GICD.itargetsr(int_id / 4),
+        //         GICD.icfgr(int_id / 2)
+        //     );
+        // }
+        // }
     }
 
     pub fn save_migrate_data(&self, int_data: &mut VgicIntData, cpuid_map: &BTreeMap<usize, usize>) {

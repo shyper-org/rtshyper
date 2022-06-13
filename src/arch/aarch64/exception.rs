@@ -229,8 +229,11 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
 
     gicc_clear_current_irq(handled_by_hypervisor);
     current_cpu().clear_ctx();
-    // if current_cpu().id == 1 && id != 27 && id != 25 {
-    //     println!("end lower_aarch64_irq irq {}", id);
+    // if current_cpu().active_vcpu.is_some()
+    //     && current_cpu().active_vcpu.as_ref().unwrap().vm().is_some()
+    //     && active_vm_id() == 2
+    // {
+    //     println!("Core{} VM2 end lower_aarch64_irq irq {}", current_cpu().id, id);
     // }
 }
 

@@ -3,7 +3,7 @@ use core::fmt::Formatter;
 
 use cortex_a::registers::*;
 
-use crate::arch::GicState;
+use crate::arch::{GICD, GicState};
 use crate::kernel::INTERRUPT_NUM_MAX;
 
 global_asm!(include_str!("fpsimd.S"));
@@ -132,21 +132,51 @@ impl VmCtxFpsimd {
 #[repr(align(16))]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GicIrqState {
-    id: u64,
-    enable: u8,
-    pend: u8,
-    active: u8,
-    priority: u8,
-    target: u8,
+    pub id: u64,
+    pub enable: u8,
+    pub pend: u8,
+    pub active: u8,
+    pub priority: u8,
+    pub target: u8,
 }
 
 #[repr(C)]
 #[repr(align(16))]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GicContext {
-    irq_state: [GicIrqState; 10], // hard code for vm irq num max
+    irq_num: usize,
+    pub irq_state: [GicIrqState; 10], // hard code for vm irq num max
     gicv_ctlr: u32,
     gicv_pmr: u32,
+}
+
+impl GicContext {
+    pub fn add_irq(&mut self, id: u64) {
+        let idx = self.irq_num;
+        self.irq_state[idx].id = id;
+        self.irq_state[idx].enable = ((GICD.is_enabler(id as usize / 32) >> (id & 32)) & 1) as u8;
+        // self.irq_state[idx].pend = id;
+        // self.irq_state[idx].active = id;
+        self.irq_state[idx].priority = GICD.prio(id as usize) as u8;
+        self.irq_state[idx].target = GICD.trgt(id as usize) as u8;
+        self.irq_num += 1;
+    }
+
+    pub fn set_gicv_ctlr(&mut self, ctlr: u32) {
+        self.gicv_ctlr = ctlr;
+    }
+
+    pub fn set_gicv_pmr(&mut self, pmr: u32) {
+        self.gicv_pmr = pmr;
+    }
+
+    pub fn gicv_ctlr(&self) -> u32 {
+        self.gicv_ctlr
+    }
+
+    pub fn gicv_pmr(&self) -> u32 {
+        self.gicv_pmr
+    }
 }
 
 #[repr(C)]
