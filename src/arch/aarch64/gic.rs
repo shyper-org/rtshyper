@@ -1,3 +1,6 @@
+use alloc::collections::BTreeSet;
+
+use cortex_a::asm::ret;
 use spin::Mutex;
 use tock_registers::*;
 use tock_registers::interfaces::*;
@@ -44,6 +47,25 @@ pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
 pub static GIC_LRS_NUM: Mutex<usize> = Mutex::new(0);
 
 static GICD_LOCK: Mutex<()> = Mutex::new(());
+
+pub static INTERRUPT_EN_SET: Mutex<BTreeSet<usize>> = Mutex::new(BTreeSet::new());
+
+pub fn add_en_interrupt(id: usize) {
+    if id < GIC_PRIVINT_NUM {
+        return;
+    }
+    let mut set = INTERRUPT_EN_SET.lock();
+    set.insert(id);
+}
+
+pub fn show_en_interrupt() {
+    let set = INTERRUPT_EN_SET.lock();
+    print!("en irq set: ");
+    for irq in set.iter() {
+        print!("{} ", irq);
+    }
+    print!("\n");
+}
 
 #[derive(Copy, Clone, Debug)]
 pub enum IrqState {
@@ -248,6 +270,7 @@ impl GicDistributor {
 
         let lock = GICD_LOCK.lock();
         if en {
+            add_en_interrupt(int_id);
             self.ISENABLER[idx].set(bit);
         } else {
             self.ICENABLER[idx].set(bit);

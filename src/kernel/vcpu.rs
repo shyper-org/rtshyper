@@ -153,8 +153,6 @@ impl Vcpu {
     pub fn context_gic_restore(&self) {
         let inner = self.inner.lock();
 
-        let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
-        *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
         for irq_state in inner.gic_ctx.irq_state.iter() {
             if irq_state.id != 0 {
                 println!("Core {} set irq {} GICD", current_cpu().id, irq_state.id);
@@ -174,9 +172,12 @@ impl Vcpu {
                 // );
             }
         }
-        println!("Core[{}] save gic context", current_cpu().id);
+
         let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
         *gicv_pmr = inner.gic_ctx.gicv_pmr();
+        println!("Core[{}] save gic context", current_cpu().id);
+        let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
+        *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
     }
 
     pub fn context_vm_restore(&self) {
