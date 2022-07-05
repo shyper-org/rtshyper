@@ -15,7 +15,7 @@ use crate::kernel::{
 use crate::kernel::{active_vm, active_vm_id, active_vm_ncpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType};
 use crate::kernel::{InitcEvent, Vcpu, Vm, vm};
-use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
+use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write, time_current_us};
 
 use super::gic::*;
 
@@ -567,25 +567,52 @@ impl Vgic {
 
     // reset vcpu in save vgic, use for hypervisor fresh
     pub fn save_vgic(&self, src_vgic: Arc<Vgic>) {
-        let src_vgicd = src_vgic.vgicd.lock();
+        // let time0 = time_current_us();
+        let mut src_vgicd = src_vgic.vgicd.lock();
         let mut cur_vgicd = self.vgicd.lock();
         cur_vgicd.ctlr = src_vgicd.ctlr;
         cur_vgicd.iidr = src_vgicd.iidr;
         cur_vgicd.typer = src_vgicd.typer;
-        for interrupt in src_vgicd.interrupts.iter() {
-            cur_vgicd.interrupts.push(interrupt.fresh_back_up());
+        cur_vgicd.interrupts.append(&mut src_vgicd.interrupts);
+        let time1 = time_current_us();
+        let mut num = 0;
+        for irq in INTERRUPT_EN_SET.lock().iter() {
+            let interrupt = cur_vgicd.interrupts[*irq - 32].clone();
+            match interrupt.owner() {
+                None => {}
+                Some(vcpu) => {
+                    let vm_id = vcpu.vm_id();
+                    let vm = vm(vm_id).unwrap();
+                    interrupt.set_owner(vm.vcpu(vcpu.id()).unwrap());
+                    num += 1;
+                }
+            }
         }
 
-        let src_cpu_priv = src_vgic.cpu_priv.lock();
+        // cur_vgicd.interrupts.push(interrupt.fresh_back_up());
+        // let time2 = time_current_us();
+
+        let mut src_cpu_priv = src_vgic.cpu_priv.lock();
         let mut cur_cpu_priv = self.cpu_priv.lock();
-        for cpu_priv in src_cpu_priv.iter() {
+        let mut num1 = 0;
+        for cpu_priv in src_cpu_priv.iter_mut() {
             let vgic_cpu_priv = VgicCpuPriv {
                 curr_lrs: cpu_priv.curr_lrs,
                 sgis: cpu_priv.sgis,
                 interrupts: {
                     let mut interrupts = vec![];
-                    for interrupt in cpu_priv.interrupts.iter() {
-                        interrupts.push(interrupt.fresh_back_up());
+                    interrupts.append(&mut cpu_priv.interrupts);
+                    for interrupt in interrupts.iter_mut() {
+                        match interrupt.owner() {
+                            None => {}
+                            Some(vcpu) => {
+                                let vm_id = vcpu.vm_id();
+                                let vm = vm(vm_id).unwrap();
+                                interrupt.set_owner(vm.vcpu(vcpu.id()).unwrap());
+                                num1 += 1;
+                            }
+                        }
+                        // interrupts.push(interrupt.fresh_back_up());
                     }
                     interrupts
                 },
@@ -606,6 +633,18 @@ impl Vgic {
             };
             cur_cpu_priv.push(vgic_cpu_priv);
         }
+        // let time3 = time_current_us();
+        // println!(
+        //     "save vgic: vgicd len {} append {} us, EN_SET size {}, set owner {} {} us, cpu_priv {} change owner {} {} us",
+        //     cur_vgicd.interrupts.len(),
+        //     time1 - time0,
+        //     INTERRUPT_EN_SET.lock().len(),
+        //     num,
+        //     time2 - time1,
+        //     cur_cpu_priv.len(),
+        //     num1,
+        //     time3 - time2
+        // );
     }
 
     fn remove_int_list(&self, vcpu: Vcpu, interrupt: VgicInt, is_pend: bool) {

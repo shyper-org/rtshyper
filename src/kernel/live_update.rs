@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use spin::{Mutex, RwLock};
 
 use crate::arch::{
-    emu_intc_handler, GIC_LRS_NUM, gic_maintenance_handler, gicc_clear_current_irq, PageTable,
+    emu_intc_handler, GIC_LRS_NUM, gic_maintenance_handler, gicc_clear_current_irq, INTERRUPT_EN_SET, PageTable,
     partial_passthrough_intc_handler, psci_ipi_handler, TIMER_FREQ, TIMER_SLICE, Vgic, vgic_ipi_handler,
 };
 use crate::board::PLAT_DESC;
@@ -74,6 +74,7 @@ pub struct HypervisorAddr {
     emu_dev_list: usize,
     interrupt_hyper_bitmap: usize,
     interrupt_glb_bitmap: usize,
+    interrupt_en_set: usize,
     interrupt_handlers: usize,
     vm_region: usize,
     heap_region: usize,
@@ -108,6 +109,7 @@ pub fn update_request() {
     let emu_dev_list = &EMU_DEVS_LIST as *const _ as usize;
     let interrupt_hyper_bitmap = &INTERRUPT_HYPER_BITMAP as *const _ as usize;
     let interrupt_glb_bitmap = &INTERRUPT_GLB_BITMAP as *const _ as usize;
+    let interrupt_en_set = &INTERRUPT_EN_SET as *const _ as usize;
     let interrupt_handlers = &INTERRUPT_HANDLERS as *const _ as usize;
     let vm_region = &VM_REGION as *const _ as usize;
     let heap_region = &HEAP_REGION as *const _ as usize;
@@ -132,6 +134,7 @@ pub fn update_request() {
         emu_dev_list,
         interrupt_hyper_bitmap,
         interrupt_glb_bitmap,
+        interrupt_en_set,
         interrupt_handlers,
         vm_region,
         heap_region,
@@ -204,9 +207,15 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
             // INTERRUPT_HYPER_BITMAP, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS
             let interrupt_hyper_bitmap = &*(address_list.interrupt_hyper_bitmap as *const Mutex<BitMap<BitAlloc256>>);
             let interrupt_glb_bitmap = &*(address_list.interrupt_glb_bitmap as *const Mutex<BitMap<BitAlloc256>>);
+            let interrutp_en_set = &*(address_list.interrupt_en_set as *const Mutex<BTreeSet<usize>>);
             let interrupt_handlers =
                 &*(address_list.interrupt_handlers as *const Mutex<BTreeMap<usize, InterruptHandler>>);
-            interrupt_update(interrupt_hyper_bitmap, interrupt_glb_bitmap, interrupt_handlers);
+            interrupt_update(
+                interrupt_hyper_bitmap,
+                interrupt_glb_bitmap,
+                interrutp_en_set,
+                interrupt_handlers,
+            );
 
             // EMU_DEVS_LIST
             let emu_dev_list = &*(address_list.emu_dev_list as *const Mutex<Vec<EmuDevEntry>>);
@@ -235,16 +244,14 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
             // VCPU_LIST (add vgic)
             let vcpu_list = &*(address_list.vcpu_list as *const Mutex<Vec<Vcpu>>);
             vcpu_update(vcpu_list, vm_list);
+            let time2 = time_current_us();
             drop(lock1);
             set_fresh_status(FreshStatus::FreshVCPU);
-            let time2 = time_current_us();
-            println!("handle VM {} us, handle VCPU {} us", time1 - time0, time2 - time1);
-            println!("Finish Update VM and VCPU_LIST");
+            let time3 = time_current_us();
 
             // CPU: Must update after vcpu and vm
             let cpu = &*(address_list.cpu as *const Cpu);
             current_cpu_update(cpu);
-            println!("Update CPU[{}]", cpu.id);
 
             // VM_REGION
             let vm_region = &*(address_list.vm_region as *const Mutex<VmRegion>);
@@ -278,8 +285,22 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
             async_task_update(async_ipi_task_list, async_io_task_list, async_used_info_list);
 
             set_fresh_status(FreshStatus::Finish);
+            drop(lock0);
+            println!(
+                "handle VM {} us, handle VCPU {} us, free lock {} us",
+                time1 - time0,
+                time2 - time1,
+                time3 - time2
+            );
+            println!("Finish Update VM and VCPU_LIST");
+            println!("Update CPU[{}]", cpu.id);
+            println!("Update {} region for VM_REGION", VM_REGION.lock().region.len());
+            println!("Update HEAP_REGION");
+            println!("Update VM_IF_LIST");
+            println!("Update {} Mediated BLK", MEDIATED_BLK_LIST.lock().len());
+            println!("Update {} SHARE_MEM_LIST", SHARE_MEM_LIST.lock().len());
+            println!("Update CPU_IF_LIST");
         }
-        drop(lock0);
     } else {
         let cpu = unsafe { &*(address_list.cpu as *const Cpu) };
         // let time0 = time_current_us();
@@ -342,7 +363,6 @@ pub fn shared_mem_list_update(src_shared_mem_list: &Mutex<BTreeMap<usize, usize>
     for (key, val) in src_shared_mem_list.lock().iter() {
         shared_mem_list.insert(*key, *val);
     }
-    println!("Update {} SHARE_MEM_LIST", shared_mem_list.len());
 }
 
 pub fn async_task_update(
@@ -437,12 +457,12 @@ pub fn async_task_update(
         }
         async_used_info_list.insert(*key, new_used_info);
     }
-    println!("Update {} ipi task for ASYNC_IPI_TASK_LIST", async_ipi_task_list.len());
-    println!("Update {} io task for ASYNC_IO_TASK_LIST", async_io_task_list.len());
-    println!(
-        "Update {} used info for ASYNC_USED_INFO_LIST",
-        async_used_info_list.len()
-    );
+    // println!("Update {} ipi task for ASYNC_IPI_TASK_LIST", async_ipi_task_list.len());
+    // println!("Update {} io task for ASYNC_IO_TASK_LIST", async_io_task_list.len());
+    // println!(
+    //     "Update {} used info for ASYNC_USED_INFO_LIST",
+    //     async_used_info_list.len()
+    // );
 }
 
 pub fn mediated_blk_list_update(src_mediated_blk_list: &Mutex<Vec<MediatedBlk>>) {
@@ -455,7 +475,6 @@ pub fn mediated_blk_list_update(src_mediated_blk_list: &Mutex<Vec<MediatedBlk>>)
             avail: blk.avail,
         });
     }
-    println!("Update {} Mediated BLK", mediated_blk_list.len());
 }
 
 pub fn arch_time_update(src_time_freq: &Mutex<usize>, src_time_slice: &Mutex<usize>) {
@@ -515,14 +534,13 @@ pub fn cpu_if_update(src_cpu_if: &Mutex<Vec<CpuIf>>) {
                 },
             );
         }
-        println!(
-            "Update {} ipi msg for CpuIf[{}], after update len is {}",
-            cpu_if.msg_queue.len(),
-            idx,
-            cpu_if_list[idx].msg_queue.len()
-        );
+        // println!(
+        //     "Update {} ipi msg for CpuIf[{}], after update len is {}",
+        //     cpu_if.msg_queue.len(),
+        //     idx,
+        //     cpu_if_list[idx].msg_queue.len()
+        // );
     }
-    println!("Update CPU_IF_LIST");
 }
 
 pub fn ipi_handler_list_update(src_ipi_handler_list: &Mutex<Vec<IpiHandler>>) {
@@ -571,7 +589,6 @@ pub fn vm_if_list_update(src_vm_if_list: &[Mutex<VmInterface>; VM_NUM_MAX]) {
             Some(cache) => Some(PageFrame::new(cache.pa)),
         };
     }
-    println!("Update VM_IF_LIST")
 }
 
 pub fn current_cpu_update(src_cpu: &Cpu) {
@@ -776,7 +793,6 @@ pub fn heap_region_update(src_heap_region: &Mutex<HeapRegion>) {
     heap_region.map = src_region.map;
     heap_region.region = src_region.region;
     assert_eq!(heap_region.region, src_region.region);
-    println!("Update HEAP_REGION");
 }
 
 pub fn vm_region_update(src_vm_region: &Mutex<VmRegion>) {
@@ -787,12 +803,12 @@ pub fn vm_region_update(src_vm_region: &Mutex<VmRegion>) {
         vm_region.region.push(*mem_region);
     }
     assert_eq!(vm_region.region, src_vm_region.lock().region);
-    println!("Update {} region for VM_REGION", vm_region.region.len());
 }
 
 pub fn interrupt_update(
     src_hyper_bitmap: &Mutex<BitMap<BitAlloc256>>,
     src_glb_bitmap: &Mutex<BitMap<BitAlloc256>>,
+    src_en_set: &Mutex<BTreeSet<usize>>,
     src_handlers: &Mutex<BTreeMap<usize, InterruptHandler>>,
 ) {
     let mut hyper_bitmap = INTERRUPT_HYPER_BITMAP.lock();
@@ -819,7 +835,9 @@ pub fn interrupt_update(
             }
         }
     }
-    println!("Update INTERRUPT_GLB_BITMAP / INTERRUPT_HYPER_BITMAP / INTERRUPT_HANDLERS");
+    let mut en_set = INTERRUPT_EN_SET.lock();
+    (*en_set).extend(&*src_en_set.lock());
+    println!("Update INTERRUPT_GLB_BITMAP / INTERRUPT_HYPER_BITMAP / INTERRUPT_EN_SET / INTERRUPT_HANDLERS");
 }
 
 pub fn emu_dev_list_update(src_emu_dev_list: &Mutex<Vec<EmuDevEntry>>) {
