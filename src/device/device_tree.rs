@@ -10,7 +10,10 @@ use crate::lib::bit_num;
 use crate::SYSTEM_FDT;
 use crate::vmm::CPIO_RAMDISK;
 
+const PI4_DTB_ADDR: usize = 0xf0000000;
+
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
+    #[cfg(feature = "tx2")]
     unsafe {
         use fdt::*;
         println!("fdt orignal size {}", fdt_size(dtb));
@@ -54,6 +57,15 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         println!("fdt after patched size {}", len);
         let slice = core::slice::from_raw_parts(dtb as *const u8, len as usize);
 
+        SYSTEM_FDT.call_once(|| slice.to_vec());
+    }
+    #[cfg(feature = "pi4")]
+    unsafe {
+        use fdt::*;
+        let pi_fdt = PI4_DTB_ADDR as *mut fdt::myctypes::c_void;
+        let len = fdt_size(pi_fdt);
+        println!("fdt orignal size {}", len);
+        let slice = core::slice::from_raw_parts(pi_fdt as *const u8, len as usize);
         SYSTEM_FDT.call_once(|| slice.to_vec());
     }
 }

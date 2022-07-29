@@ -103,8 +103,11 @@ pub fn vmm_init_image(vm: Vm) -> bool {
     // Only load MVM kernel image "L4T" from binding.
     // Load GVM kernel image from shyper-cli, you may check it for more information.
     if vm.id() == 0 && config.os_type == VmType::VmTOs {
-        println!("MVM loading L4T");
+        println!("MVM loading Image");
+        #[cfg(feature = "tx2")]
         vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
+        #[cfg(feature = "pi4")]
+        vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
     }
 
     if config.device_tree_load_ipa() != 0 {

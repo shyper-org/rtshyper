@@ -38,11 +38,11 @@
    MAYBE_VIRT.  This will cause the code to cache the system register
    values rather than re-reading them each call.  */
 
-.macro def_fn f p2align=0
-.text
-.p2align \p2align
-.global \f
-//	.type \f, %function
+	.macro def_fn f p2align=0
+	.text
+	.p2align \p2align
+	.global \f
+	.type \f, %function
 \f:
 	.endm
 def_fn memset p2align=6
@@ -121,3 +121,92 @@ def_fn memset p2align=6
 	add	x8, x8, #16
 	b.ne	.Ltail63
 	ret
+#ifndef DONT_USE_DC
+	/* For zeroing memory, check to see if we can use the ZVA feature to
+	 * zero entire 'cache' lines.  */
+.Lzero_mem:
+	mov	x7, #0
+	cmp	x2, #63
+	b.le	.Ltail_maybe_tiny
+	neg	x4, x8
+	ands	x4, x4, #15
+	b.eq	1f
+	sub	x2, x2, x4
+	stp	x7, x7, [x8]
+	add	x8, x8, x4
+	cmp	x2, #63
+	b.le	.Ltail63
+1:
+	/* For zeroing small amounts of memory, it's not worth setting up
+	 * the line-clear code.  */
+	cmp	x2, #128
+	b.lt	.Lnot_short
+#ifdef MAYBE_VIRT
+	/* For efficiency when virtualized, we cache the ZVA capability.  */
+	adrp	x4, .Lcache_clear
+	ldr	w5, [x4, #:lo12:.Lcache_clear]
+	tbnz	w5, #31, .Lnot_short
+	cbnz	w5, .Lzero_by_line
+	mrs	x3, dczid_el0
+	tbz	x3, #4, 1f
+	/* ZVA not available.  Remember this for next time.  */
+	mov	w5, #~0
+	str	w5, [x4, #:lo12:.Lcache_clear]
+	b	.Lnot_short
+1:
+	mov	w9, #4
+	and	w5, w3, #15	/* Safety: other bits reserved.  */
+	lsl	w5, w9, w5
+	str	w5, [x4, #:lo12:.Lcache_clear]
+#else
+	mrs	x3, dczid_el0
+	tbnz	x3, #4, .Lnot_short
+	mov	w9, #4
+	and	w5, w3, #15	/* Safety: other bits reserved.  */
+	lsl	w5, w9, w5
+#endif
+.Lzero_by_line:
+	/* Compute how far we need to go to become suitably aligned.  We're
+	 * already at quad-word alignment.  */
+	cmp	x2, x5
+	b.lt	.Lnot_short		/* Not enough to reach alignment.  */
+	sub	x6, x5, #1
+	neg	x4, x8
+	ands	x4, x4, x6
+	b.eq	1f			/* Already aligned.  */
+	/* Not aligned, check that there's enough to copy after alignment.  */
+	sub	x3, x2, x4
+	cmp	x3, #64
+	ccmp	x3, x5, #8, ge	/* NZCV=0b1000 */
+	b.lt	.Lnot_short
+	/* We know that there's at least 64 bytes to zero and that it's safe
+	 * to overrun by 64 bytes.  */
+	mov	x2, x3
+2:
+	stp	x7, x7, [x8]
+	stp	x7, x7, [x8, #16]
+	stp	x7, x7, [x8, #32]
+	subs	x4, x4, #64
+	stp	x7, x7, [x8, #48]
+	add	x8, x8, #64
+	b.ge	2b
+	/* We've overrun a bit, so adjust x8 downwards.  */
+	add	x8, x8, x4
+1:
+	sub	x2, x2, x5
+3:
+	dc	zva, x8
+	add	x8, x8, x5
+	subs	x2, x2, x5
+	b.ge	3b
+	ands	x2, x2, x6
+	b.ne	.Ltail_maybe_long
+	ret
+	.size	memset, .-memset
+#ifdef MAYBE_VIRT
+	.bss
+	.p2align 2
+.Lcache_clear:
+	.space 4
+#endif
+#endif /* DONT_USE_DC */

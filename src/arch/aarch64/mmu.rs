@@ -1,18 +1,26 @@
-use core::arch::global_asm;
+use core::arch::{asm, global_asm};
 
+use spin::{Mutex, MutexGuard};
 use tock_registers::*;
 use tock_registers::interfaces::*;
 
-use crate::arch::pt_lvl2_idx;
+use crate::arch::{LVL2_SHIFT, pt_lvl2_idx, PTE_S1_NORMAL};
 use crate::board::PLAT_DESC;
-use crate::lib::memset_safe;
+use crate::lib::{cache_invalidate_d, memset_safe};
 
 use super::interface::*;
 
+#[cfg(feature = "tx2")]
 #[cfg(not(feature = "update"))]
 global_asm!(include_str!("start.S"));
+
 #[cfg(feature = "update")]
+#[cfg(feature = "tx2")]
 global_asm!(include_str!("start_update.S"));
+
+#[cfg(feature = "pi4")]
+#[cfg(not(feature = "update"))]
+global_asm!(include_str!("start_pi4.S"));
 
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 // const PAGE_SIZE: usize = 4096;
@@ -125,33 +133,66 @@ pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
     memset_safe(lvl1_base as *mut u8, 0, PAGE_SIZE);
     memset_safe(lvl2_base as *mut u8, 0, PAGE_SIZE);
 
-    for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
-        let output_addr = i << LVL1_SHIFT;
-        lvl1_pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
-            BlockDescriptor::new(output_addr, false)
-        } else {
-            BlockDescriptor::invalid()
+    #[cfg(feature = "tx2")]
+    {
+        for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
+            let output_addr = i << LVL1_SHIFT;
+            lvl1_pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
+                BlockDescriptor::new(output_addr, false)
+            } else {
+                BlockDescriptor::invalid()
+            }
         }
-    }
-    // for i in PLATFORM_PHYSICAL_LIMIT_GB..ENTRY_PER_PAGE {
-    //     pt.lvl1[i] = BlockDescriptor::invalid();
-    // }
+        // for i in PLATFORM_PHYSICAL_LIMIT_GB..ENTRY_PER_PAGE {
+        //     pt.lvl1[i] = BlockDescriptor::invalid();
+        // }
 
-    lvl1_pt.lvl1[32] = BlockDescriptor::table(lvl2_base);
-    // 0x200000 ~ 2MB
-    // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
-    // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
-    // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
-    // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
-    // SMMU ~ 0x12000000 - 0x13000000
-    lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
-    lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
-    // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
-    lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
-    // for i in 0..8 {
-    //     let addr = 0x12000000 + i * 0x200000;
-    //     lvl2_pt.lvl1[pt_lvl2_idx(addr) + 32] = BlockDescriptor::new(addr, true);
-    // }
+        lvl1_pt.lvl1[32] = BlockDescriptor::table(lvl2_base);
+        // 0x200000 ~ 2MB
+        // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
+        // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
+        // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
+        // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
+        // SMMU ~ 0x12000000 - 0x13000000
+        lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
+        lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
+        // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
+        lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
+        // for i in 0..8 {
+        //     let addr = 0x12000000 + i * 0x200000;
+        //     lvl2_pt.lvl1[pt_lvl2_idx(addr) + 32] = BlockDescriptor::new(addr, true);
+        // }
+    }
+    #[cfg(feature = "pi4")]
+    {
+        // crate::driver::putc('o' as u8);
+        // crate::driver::putc('r' as u8);
+        // crate::driver::putc('e' as u8);
+        // println!("pt");
+        // 0x0_0000_0000 ~ 0x0_c000_0000 --> normal memory (3GB)
+        lvl1_pt.lvl1[0] = BlockDescriptor::new(0, false);
+        lvl1_pt.lvl1[1] = BlockDescriptor::new(0x40000000, false);
+        lvl1_pt.lvl1[2] = BlockDescriptor::new(0x80000000, false);
+        lvl1_pt.lvl1[3] = BlockDescriptor::table(lvl2_base);
+        // 0x0_c000_0000 ~ 0x0_fc00_0000 --> normal memory (960MB)
+        for i in 0..480 {
+            lvl2_pt.lvl1[i] = BlockDescriptor::new(0x0c0000000 + (i << LVL2_SHIFT), false);
+        }
+        // 0x0_fc00_0000 ~ 0x1_0000_0000 --> device memory (64MB)
+        for i in 480..512 {
+            lvl2_pt.lvl1[i] = BlockDescriptor::new(0x0c0000000 + (i << LVL2_SHIFT), true);
+        }
+        // 0x1_0000_0000 ~ 0x2_0000_0000 --> normal memory (4GB)
+        lvl1_pt.lvl1[4] = BlockDescriptor::new(0x100000000, false);
+        lvl1_pt.lvl1[5] = BlockDescriptor::new(0x140000000, false);
+        lvl1_pt.lvl1[6] = BlockDescriptor::new(0x180000000, false);
+        lvl1_pt.lvl1[7] = BlockDescriptor::new(0x1c0000000, false);
+        for i in 8..512 {
+            lvl1_pt.lvl1[i] = BlockDescriptor::invalid();
+        }
+        // 0x8_0000_0000 + 0x0_c000_0000
+        lvl1_pt.lvl1[32 + 3] = BlockDescriptor::table(lvl2_base);
+    }
 }
 
 #[no_mangle]
