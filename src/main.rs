@@ -66,7 +66,11 @@ pub static SYSTEM_FDT: spin::Once<alloc::vec::Vec<u8>> = spin::Once::new();
 
 #[no_mangle]
 pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
-    // println!("core id {}", cpu_id);
+    #[cfg(feature = "pi4")]
+    {
+        crate::driver::gpio_select_function(0, 4);
+        crate::driver::gpio_select_function(1, 4);
+    }
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {
@@ -78,6 +82,9 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         println!("Welcome to TX2 Sybilla Hypervisor!");
         #[cfg(feature = "qemu")]
         println!("Welcome to Qemu Sybilla Hypervisor!");
+        #[cfg(feature = "pi4")]
+        println!("Welcome to PI4 Sybilla Hypervisor!");
+
         heap_init();
         mem_init();
         // kernel::logger_init();

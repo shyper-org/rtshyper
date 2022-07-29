@@ -37,6 +37,11 @@ tx2_update:
 	bash upload_update
 	${OBJDUMP} -d target/aarch64-tx2-update/release/rust_hypervisor > target/aarch64-tx2-update/release/update.txt
 
+pi4_release:
+	cargo build -Z build-std=${BUILD_STD} --target aarch64-pi4.json --features pi4 --release
+	bash pi4_upload_release
+	${OBJDUMP} -d target/aarch64-pi4/release/rust_hypervisor > target/aarch64-pi4/release/t.txt
+
 run:
 	${QEMU} \
 		-machine virt,virtualization=on,gic-version=2\

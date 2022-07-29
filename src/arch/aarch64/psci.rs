@@ -48,9 +48,9 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
 }
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
-    println!("power_arch_cpu_on, {:x}, {:x}, {:x}", PSCI_CPU_ON_AARCH64, mpidr, entry);
+    // println!("power_arch_cpu_on, {:x}, {:x}, {:x}", PSCI_CPU_ON_AARCH64, mpidr, entry);
     let r = smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0;
-    println!("smc return val is {}", r);
+    // println!("smc return val is {}", r);
     r
 }
 

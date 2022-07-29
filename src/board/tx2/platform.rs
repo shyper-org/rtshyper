@@ -44,11 +44,11 @@ pub const DISK_PARTITION_2_SIZE: usize = 8388608;
 
 //end tx2 platform const
 
-extern "C" {
-    fn tegra_emmc_init();
-    fn tegra_emmc_blk_read(sector: usize, count: usize, buf: *mut u8);
-    fn tegra_emmc_blk_write(sector: usize, count: usize, buf: *const u8);
-}
+// extern "C" {
+//     fn tegra_emmc_init();
+//     fn tegra_emmc_blk_read(sector: usize, count: usize, buf: *mut u8);
+//     fn tegra_emmc_blk_write(sector: usize, count: usize, buf: *const u8);
+// }
 
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
@@ -139,24 +139,24 @@ pub fn platform_sys_shutdown() {
 }
 
 // TODO
-pub fn platform_blk_init() {
-    unsafe {
-        tegra_emmc_init();
-    }
-    println!("Platform block driver init ok");
-}
-
-pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
-    unsafe {
-        tegra_emmc_blk_read(sector, count, buf as *mut u8);
-    }
-}
-
-pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
-    unsafe {
-        tegra_emmc_blk_write(sector, count, buf as *const u8);
-    }
-}
+// pub fn platform_blk_init() {
+//     unsafe {
+//         tegra_emmc_init();
+//     }
+//     println!("Platform block driver init ok");
+// }
+//
+// pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
+//     unsafe {
+//         tegra_emmc_blk_read(sector, count, buf as *mut u8);
+//     }
+// }
+//
+// pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
+//     unsafe {
+//         tegra_emmc_blk_write(sector, count, buf as *const u8);
+//     }
+// }
 
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
     cpuid + PLAT_DESC.cpu_desc.num

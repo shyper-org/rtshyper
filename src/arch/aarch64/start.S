@@ -146,7 +146,7 @@ update_request:
     adr x2, .   // read pc to x2
     mov x3, #0x88000000
     cmp x2, x3
-    bgt 1b
+    bgt 1f
     bl  live_update
 1:
     ldr x30, [sp, #32]
