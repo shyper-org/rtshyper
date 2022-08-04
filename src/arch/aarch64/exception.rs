@@ -151,6 +151,7 @@ unsafe extern "C" fn current_el_spx_serror() {
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
+    // println!("lower_aarch64_synchronous");
     let status = fresh_status();
     if status != FreshStatus::None {
         if status != FreshStatus::Finish {
@@ -195,10 +196,19 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
 
 #[no_mangle]
 unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
-    // println!("Core[{}] lower_aarch64_irq", cpu_id());
     current_cpu().set_ctx(ctx);
     let (id, src) = gicc_get_current_irq();
-
+    // if current_cpu().id == 0 {
+    //     println!(
+    //         "Core[{}] lower_aarch64_irq {} 0x{:x}  x30 {:x} x19 {:x} x0 {:x}",
+    //         current_cpu().id,
+    //         id,
+    //         current_cpu().get_elr(),
+    //         current_cpu().get_gpr(30),
+    //         current_cpu().get_gpr(19),
+    //         current_cpu().get_gpr(0)
+    //     );
+    // }
     match fresh_status() {
         FreshStatus::FreshVM | FreshStatus::Start => {
             // if active_vm().unwrap().has_interrupt(id) {

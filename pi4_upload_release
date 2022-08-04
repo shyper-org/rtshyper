@@ -9,4 +9,4 @@ mkimage -n shyper -A arm64 -O linux -T kernel -C none -a 0xF0080000 -e 0xF008000
 echo "*** Upload Image Rust_Image_pi ***"
 
 scp ${bin}/shyperImage ${tftp}/Rust_Image_pi
-scp ./image/pi4.dtb ${tftp}/pi4_dtb
+scp ./image/pi4_fin.dtb ${tftp}/pi4_dtb

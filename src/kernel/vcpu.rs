@@ -194,7 +194,7 @@ impl Vcpu {
 
         // restore vm's Stage2 MMU context
         let vttbr = (self.vm_id() << 48) | self.vm_pt_dir();
-        // println!("vttbr {:x}", vttbr);
+        println!("vttbr {:x}", vttbr);
         unsafe {
             asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
         }
@@ -560,7 +560,7 @@ pub fn vcpu_run() {
 
     vcpu.context_vm_restore();
     tlb_invalidate_guest_all();
-    // vcpu.show_ctx();
+    vcpu.show_ctx();
 
     current_cpu().cpu_state = CpuState::CpuRun;
     vm_if_set_state(active_vm_id(), super::VmState::VmActive);
@@ -572,9 +572,10 @@ pub fn vcpu_run() {
     }
 
     println!(
-        "vcpu run elr {:x} x0 {:016x}",
+        "vcpu run elr {:x} x0 {:016x} sp 0x{:x}",
         current_cpu().active_vcpu.clone().unwrap().elr(),
-        current_cpu().get_gpr(0)
+        current_cpu().get_gpr(0),
+        sp
     );
     // TODO: vcpu_run
     extern "C" {

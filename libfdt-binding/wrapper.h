@@ -38,8 +38,8 @@ void fdt_set_memory(void *fdt, uint64_t region_num,
 
 void fdt_clear_initrd(void *fdt);
 
-void fdt_setup_gic(void *fdt, uint64_t gicd_addr, uint64_t gicc_addr,
-                   const char *node_name);
+int fdt_setup_gic(void *fdt, uint64_t gicd_addr, uint64_t gicc_addr,
+                  const char *node_name);
 
 void fdt_setup_serial(void *fdt, const char *compatible, uint64_t addr,
                       uint32_t spi_irq);
