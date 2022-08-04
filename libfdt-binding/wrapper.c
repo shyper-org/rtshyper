@@ -174,15 +174,15 @@ void fdt_clear_initrd(void *fdt) {
   fdt_delprop(fdt, node, "linux,initrd-end");
 }
 
-void fdt_setup_gic(void *fdt, uint64_t gicd_addr, uint64_t gicc_addr,
-                   const char *node_name) {
+int fdt_setup_gic(void *fdt, uint64_t gicd_addr, uint64_t gicc_addr,
+                  const char *node_name) {
   int r;
   int node;
   node = fdt_node_offset_by_compatible(fdt, 0, "arm,cortex-a15-gic");
   if (node < 0) {
     node = fdt_node_offset_by_compatible(fdt, 0, "arm,gic-400");
     if (node < 0) {
-      return;
+      return 0;
     }
   }
   fdt64_t addr[4] = {
@@ -194,9 +194,10 @@ void fdt_setup_gic(void *fdt, uint64_t gicd_addr, uint64_t gicc_addr,
   r = fdt_setprop(fdt, node, "reg", addr, sizeof(addr));
   fdt_nop_property(fdt, node, "interrupts");
   if (r < 0) {
-    return;
+    return 0;
   }
   r = fdt_set_name(fdt, node, node_name);
+  return 1;
 }
 
 void fdt_setup_serial(void *fdt, const char *compatible, uint64_t addr,

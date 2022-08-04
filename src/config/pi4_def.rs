@@ -23,32 +23,32 @@ pub fn mvm_config_init() {
     // vm0 emu
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("interrupt-controller@3881000")),
-        base_ipa: PLATFORM_GICD_BASE,
+        name: Some(String::from("interrupt-controller@fff841000")),
+        base_ipa: 0xFFF841000,
         length: 0x1000,
         irq_id: 0,
         cfg_list: Vec::new(),
         emu_type: EmuDeviceType::EmuDeviceTGicd,
         mediated: false,
     });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some(String::from("virtio_net@a001000")),
-    //     base_ipa: 0xa001000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x11,
-    //     cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-    //     mediated: false,
-    // });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some(String::from("virtio_console@a002000")),
-    //     base_ipa: 0xa002000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x12,
-    //     cfg_list: vec![1, 0xa002000],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
-    //     mediated: false,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_net@fa000800")),
+        base_ipa: 0xfa000800,
+        length: 0x400,
+        irq_id: 32 + 0x17,
+        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_console@fa000c00")),
+        base_ipa: 0xfa000c00,
+        length: 0x1000,
+        irq_id: 32 + 0x20,
+        cfg_list: vec![1, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+        mediated: false,
+    });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
     //     name: Some(String::from("virtio_console@a003000")),
     //     base_ipa: 0xa003000,
@@ -72,13 +72,13 @@ pub fn mvm_config_init() {
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
         // all
-        PassthroughRegion { ipa: 0xFC000000, pa: 0xFC000000, length: 0x04000000 },
+        PassthroughRegion { ipa: 0xFC000000, pa: 0xFC000000, length: 0x04000000, dev_property: true },
         // pcie@7d500000
-        PassthroughRegion { ipa: 0x600000000, pa: 0x600000000, length: 0x4000000 },
+        PassthroughRegion { ipa: 0x600000000, pa: 0x600000000, length: 0x4000000, dev_property: true },
         // fb
-        PassthroughRegion { ipa: 0x3e000000, pa: 0x3e000000, length: 0x40000000 - 0x3e000000 },
+        PassthroughRegion { ipa: 0x3e000000, pa: 0x3e000000, length: 0x40000000 - 0x3e000000, dev_property: false },
         // gicv
-        PassthroughRegion { ipa: PLATFORM_GICC_BASE, pa: PLATFORM_GICV_BASE, length: 0x2000 },
+        PassthroughRegion { ipa: PLATFORM_GICC_BASE + 0xF_0000_0000, pa: PLATFORM_GICV_BASE, length: 0x2000, dev_property: true },
     ];
     // 146 is UART_INT
     pt_dev_config.irqs = vec![
@@ -163,7 +163,7 @@ pub fn mvm_config_init() {
         os_type: VmType::VmTOs,
         cmdline:
         // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        String::from("coherent_pool=1M snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1 console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        String::from("console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait\0"),
         
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,

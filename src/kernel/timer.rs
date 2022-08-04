@@ -20,7 +20,7 @@ use crate::kernel::{current_cpu, InterruptHandler, SchedType, SchedulerTrait};
 
 pub fn timer_init() {
     crate::arch::timer_arch_init();
-    timer_enable(false);
+    timer_enable(true);
 
     crate::lib::barrier();
     if current_cpu().id == 0 {
@@ -56,18 +56,19 @@ pub fn timer_irq_handler(_arg: usize) {
     use crate::arch::timer_arch_disable_irq;
 
     timer_arch_disable_irq();
-    let vcpu_pool = current_cpu().vcpu_pool();
-
-    if vcpu_pool.running() > 1 {
-        match &current_cpu().sched {
-            SchedType::SchedRR(rr) => {
-                rr.schedule();
-                // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
-                timer_notify_after(vcpu_pool.slice());
-            }
-            SchedType::None => {
-                panic!("cpu{} sched should not be None", current_cpu().id);
-            }
-        }
-    }
+    timer_notify_after(1000);
+    // let vcpu_pool = current_cpu().vcpu_pool();
+    //
+    // if vcpu_pool.running() > 1 {
+    //     match &current_cpu().sched {
+    //         SchedType::SchedRR(rr) => {
+    //             rr.schedule();
+    //             // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
+    //             timer_notify_after(vcpu_pool.slice());
+    //         }
+    //         SchedType::None => {
+    //             panic!("cpu{} sched should not be None", current_cpu().id);
+    //         }
+    //     }
+    // }
 }

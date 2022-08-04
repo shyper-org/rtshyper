@@ -167,6 +167,19 @@ impl Cpu {
         }
     }
 
+    pub fn get_spsr(&self) -> usize {
+        match self.ctx {
+            Some(ctx_addr) => {
+                if trace() && ctx_addr < 0x1000 {
+                    panic!("illegal ctx addr {:x}", ctx_addr);
+                }
+                let ctx = ctx_addr as *mut ContextFrame;
+                unsafe { (*ctx).spsr as usize }
+            }
+            None => 0,
+        }
+    }
+
     pub fn set_elr(&self, val: usize) {
         match self.ctx {
             Some(ctx_addr) => {

@@ -62,6 +62,7 @@ pub struct PassthroughRegion {
     pub ipa: usize,
     pub pa: usize,
     pub length: usize,
+    pub dev_property: bool,
 }
 
 impl PartialEq for PassthroughRegion {
@@ -386,6 +387,7 @@ impl VmConfigEntry {
             ipa: base_ipa,
             pa: base_pa,
             length,
+            dev_property: true,
         };
         pt_dev_cfg.regions.push(pt_region_cfg)
     }

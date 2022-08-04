@@ -107,6 +107,7 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         #[cfg(feature = "tx2")]
         vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
         #[cfg(feature = "pi4")]
+        // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_4.9.140"));
         vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
     }
 
@@ -264,13 +265,19 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
 
 fn vmm_init_passthrough_device(vm: Vm) -> bool {
     for region in vm.config().passthrough_device_regions() {
-        vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE, true);
+        if region.dev_property {
+            vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE, true);
+        } else {
+            vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_NORMAL, true);
+        }
 
         println!(
-            "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>",
+            "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>, {}",
             vm.id(),
             region.ipa,
             region.pa,
+            region.length,
+            if region.dev_property { "device" } else { "normal" }
         );
     }
     for irq in vm.config().passthrough_device_irqs() {
@@ -293,23 +300,51 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                     length: r.length as u64,
                 });
             }
+            #[cfg(feature = "tx2")]
             fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
+            #[cfg(feature = "pi4")]
+            fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@200000\0".as_ptr());
+            // FDT+TIMER
             fdt_add_timer(dtb, 0x8);
+            // FDT+BOOTCMD
             fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
+            #[cfg(feature = "tx2")]
             fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
+            // #[cfg(feature = "pi4")]
+            // fdt_set_stdout_path(dtb, "/serial@fe340000\0".as_ptr());
 
             if config.emulated_device_list().len() > 0 {
                 for emu_cfg in config.emulated_device_list() {
                     match emu_cfg.emu_type {
                         EmuDeviceTGicd => {
+                            #[cfg(feature = "tx2")]
                             fdt_setup_gic(
                                 dtb,
                                 PLATFORM_GICD_BASE as u64,
                                 PLATFORM_GICC_BASE as u64,
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
+                            println!(
+                                "{:x} {:x} {}",
+                                PLATFORM_GICD_BASE | 0xF_0000_0000,
+                                PLATFORM_GICC_BASE | 0xF_0000_0000,
+                                emu_cfg.name.as_ref().unwrap()
+                            );
+                            #[cfg(feature = "pi4")]
+                            let r = fdt_setup_gic(
+                                dtb,
+                                (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
+                                (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
+                                emu_cfg.name.unwrap().as_ptr(),
+                            );
                         }
                         EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
+                            println!(
+                                "irq {:x} ipa {:x} {}",
+                                emu_cfg.irq_id,
+                                emu_cfg.base_ipa,
+                                emu_cfg.name.as_ref().unwrap()
+                            );
                             fdt_add_virtio(
                                 dtb,
                                 emu_cfg.name.unwrap().as_ptr(),
@@ -331,8 +366,11 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                     }
                 }
             }
+            println!("after dtb size {}", fdt_size(dtb));
         }
-        None => {}
+        None => {
+            println!("None dtb");
+        }
     }
 }
 
