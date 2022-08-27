@@ -1,3 +1,5 @@
+use alloc::string::ToString;
+
 use crate::arch::GIC_SGIS_NUM;
 use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
@@ -43,7 +45,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vmm_remove_vm_list(vm_id);
     // remove vm cfg
     vm_cfg_remove_vm_entry(vm_id);
-    println!("remove vm[{}] successfully", vm_id);
+    // println!("remove vm[{}] successfully", vm_id);
 }
 
 pub fn vmm_remove_vm_list(vm_id: usize) {
@@ -74,37 +76,19 @@ pub fn vmm_remove_vcpu(vm: Vm) {
 pub fn vmm_remove_emulated_device(vm: Vm) {
     let config = vm.config().emulated_device_list();
     for (idx, emu_dev) in config.iter().enumerate() {
-        let dev_name;
         // mmio / vgic will be removed with struct vm
-        match emu_dev.emu_type {
-            EmuDeviceTGicd => {
-                dev_name = "interrupt controller";
-            }
-            EmuDeviceTGPPT => {
-                dev_name = "partial passthrough interrupt controller";
-            }
-            EmuDeviceTVirtioBlk => {
-                dev_name = "virtio block";
-            }
-            EmuDeviceTVirtioNet => {
-                dev_name = "virtio net";
-            }
-            EmuDeviceTVirtioConsole => {
-                dev_name = "virtio console";
-            }
-            _ => {
-                println!("vmm_remove_emulated_device: unknown emulated device");
-                return;
-            }
+        if !emu_dev.emu_type.removable() {
+            println!("vmm_remove_emulated_device: cannot remove device {}", emu_dev.emu_type);
+            return;
         }
         emu_remove_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length);
-        println!(
-            "VM[{}] removes emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
-            vm.id(),
-            idx,
-            dev_name,
-            emu_dev.base_ipa
-        );
+        // println!(
+        //     "VM[{}] removes emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
+        //     vm.id(),
+        //     idx,
+        //     emu_dev.emu_type,
+        //     emu_dev.base_ipa
+        // );
     }
 }
 
@@ -112,7 +96,7 @@ pub fn vmm_remove_passthrough_device(vm: Vm) {
     for irq in vm.config().passthrough_device_irqs() {
         if irq > GIC_SGIS_NUM {
             interrupt_vm_remove(vm.clone(), irq);
-            println!("VM[{}] remove irq {}", vm.id(), irq);
+            // println!("VM[{}] remove irq {}", vm.id(), irq);
         }
     }
 }

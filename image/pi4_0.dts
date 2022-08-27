@@ -41,7 +41,10 @@
 
 	chosen {
 		// stdout-path = "serial0:115200n8";
-		bootargs = "console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait";
+		bootargs = "coherent_pool=1M snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1 console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4";
+		// bootargs = "console=ttyAMA0,115200n8 rdinit=/sbin/init audit=0";
+		// linux,initrd-start = <0x18000000>;
+        // linux,initrd-end = <0x1810dab1>;
 	};
 
 	reserved-memory {
@@ -1982,5 +1985,17 @@
         compatible = "virtio,mmio";
         interrupts = <0x00 0x20 0x01>;
         reg = <0x00 0xfa000c00 0x00 0x1000>;
+    };
+
+    virtio_console@fa002000 {
+        dma-coherent;
+        compatible = "virtio,mmio";
+        interrupts = <0x00 0x21 0x01>;
+        reg = <0x00 0xfa002000 0x00 0x1000>;
+    };
+
+    vm_service {
+        compatible = "shyper";
+        interrupts = <0x00 0x10 0x01>;
     };
 };

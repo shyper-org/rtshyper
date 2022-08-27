@@ -15,7 +15,7 @@ use crate::kernel::{
 use crate::kernel::{active_vm, active_vm_id, active_vm_ncpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType};
 use crate::kernel::{InitcEvent, Vcpu, Vm, vm};
-use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write, time_current_us};
+use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
 
 use super::gic::*;
 
@@ -119,25 +119,25 @@ impl VgicInt {
         int_data.cfg = inner.cfg;
         int_data.in_pend = inner.in_pend;
         int_data.in_act = inner.in_act;
-        if inner.enabled {
-            // println!(
-            //     "int {} is enable, state {:#?}, prio {:x}, targets {:x}, in pend {}, int act {}, int cfg {}",
-            //     inner.id, inner.state, inner.prio, inner.targets, inner.in_pend, inner.in_act, inner.cfg
-            // );
+        // if inner.enabled {
+        // println!(
+        //     "int {} is enable, state {:#?}, prio {:x}, targets {:x}, in pend {}, int act {}, int cfg {}",
+        //     inner.id, inner.state, inner.prio, inner.targets, inner.in_pend, inner.in_act, inner.cfg
+        // );
 
-            let int_id = inner.id as usize;
-            if int_id > 16 {
-                println!(
-                    "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                    int_id,
-                    GICD.is_enabler(int_id / 32),
-                    GICD.is_activer(int_id / 32),
-                    GICD.ipriorityr(int_id / 4),
-                    GICD.itargetsr(int_id / 4),
-                    GICD.icfgr(int_id / 2)
-                );
-            }
-        }
+        // let int_id = inner.id as usize;
+        // if int_id > 16 {
+        //     println!(
+        //         "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+        //         int_id,
+        //         GICD.is_enabler(int_id / 32),
+        //         GICD.is_activer(int_id / 32),
+        //         GICD.ipriorityr(int_id / 4),
+        //         GICD.itargetsr(int_id / 4),
+        //         GICD.icfgr(int_id / 2)
+        //     );
+        // }
+        // }
     }
 
     // back up for hyper fresh
@@ -574,8 +574,8 @@ impl Vgic {
         cur_vgicd.iidr = src_vgicd.iidr;
         cur_vgicd.typer = src_vgicd.typer;
         cur_vgicd.interrupts.append(&mut src_vgicd.interrupts);
-        let time1 = time_current_us();
-        let mut num = 0;
+        // let time1 = time_current_us();
+        // let mut num = 0;
         for irq in INTERRUPT_EN_SET.lock().iter() {
             let interrupt = cur_vgicd.interrupts[*irq - 32].clone();
             match interrupt.owner() {
@@ -584,7 +584,7 @@ impl Vgic {
                     let vm_id = vcpu.vm_id();
                     let vm = vm(vm_id).unwrap();
                     interrupt.set_owner(vm.vcpu(vcpu.id()).unwrap());
-                    num += 1;
+                    // num += 1;
                 }
             }
         }
@@ -594,7 +594,7 @@ impl Vgic {
 
         let mut src_cpu_priv = src_vgic.cpu_priv.lock();
         let mut cur_cpu_priv = self.cpu_priv.lock();
-        let mut num1 = 0;
+        // let mut num1 = 0;
         for cpu_priv in src_cpu_priv.iter_mut() {
             let vgic_cpu_priv = VgicCpuPriv {
                 curr_lrs: cpu_priv.curr_lrs,
@@ -609,7 +609,7 @@ impl Vgic {
                                 let vm_id = vcpu.vm_id();
                                 let vm = vm(vm_id).unwrap();
                                 interrupt.set_owner(vm.vcpu(vcpu.id()).unwrap());
-                                num1 += 1;
+                                // num1 += 1;
                             }
                         }
                         // interrupts.push(interrupt.fresh_back_up());
@@ -1006,6 +1006,9 @@ impl Vgic {
         interrupt.set_lr(lr_ind as u16);
         self.set_cpu_priv_curr_lrs(vcpu_id, lr_ind, int_id as u16);
 
+        // if current_cpu().id == 1 {
+        //     println!("Core1 write lr[{}] 0x{:x}", lr_ind, lr);
+        // }
         GICH.set_lr(lr_ind, lr as u32);
 
         self.update_int_list(vcpu.clone(), interrupt.clone());

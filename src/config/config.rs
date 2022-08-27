@@ -561,7 +561,7 @@ pub fn vm_cfg_remove_vm_entry(vm_id: usize) {
                 }
             }
             vm_config.entries.remove(idx);
-            println!("remove VM[{}] config from vm-config-table", vm_id);
+            // println!("remove VM[{}] config from vm-config-table", vm_id);
             return;
         }
     }

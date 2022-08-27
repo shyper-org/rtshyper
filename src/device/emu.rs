@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::fmt::{Display, Formatter};
 
 use spin::Mutex;
 
@@ -84,7 +85,7 @@ pub struct EmuDevEntry {
     pub handler: EmuDevHandler,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum EmuDeviceType {
     EmuDeviceTConsole = 0,
     EmuDeviceTGicd = 1,
@@ -94,6 +95,34 @@ pub enum EmuDeviceType {
     EmuDeviceTVirtioConsole = 5,
     EmuDeviceTShyper = 6,
     EmuDeviceTVirtioBlkMediated = 7,
+}
+
+impl Display for EmuDeviceType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            EmuDeviceType::EmuDeviceTConsole => write!(f, "console"),
+            EmuDeviceType::EmuDeviceTGicd => write!(f, "interrupt controller"),
+            EmuDeviceType::EmuDeviceTGPPT => write!(f, "partial passthrough interrupt controller"),
+            EmuDeviceType::EmuDeviceTVirtioBlk => write!(f, "virtio block"),
+            EmuDeviceType::EmuDeviceTVirtioNet => write!(f, "virtio net"),
+            EmuDeviceType::EmuDeviceTVirtioConsole => write!(f, "virtio console"),
+            EmuDeviceType::EmuDeviceTShyper => write!(f, "device shyper"),
+            EmuDeviceType::EmuDeviceTVirtioBlkMediated => write!(f, "medaited virtio block"),
+        }
+    }
+}
+
+impl EmuDeviceType {
+    pub fn removable(&self) -> bool {
+        match *self {
+            EmuDeviceType::EmuDeviceTGicd
+            | EmuDeviceType::EmuDeviceTGPPT
+            | EmuDeviceType::EmuDeviceTVirtioBlk
+            | EmuDeviceType::EmuDeviceTVirtioNet
+            | EmuDeviceType::EmuDeviceTVirtioConsole => true,
+            _ => false,
+        }
+    }
 }
 
 impl EmuDeviceType {

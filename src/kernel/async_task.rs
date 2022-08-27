@@ -69,6 +69,13 @@ pub struct IoAsyncMsg {
     pub iov_list: Arc<Vec<BlkIov>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AsyncExeStatus {
+    Pending,
+    Scheduling,
+}
+
+pub static ASYNC_EXE_STATUS: Mutex<AsyncExeStatus> = Mutex::new(AsyncExeStatus::Pending);
 pub static ASYNC_IPI_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
 pub static ASYNC_IO_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
 pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::new(BTreeMap::new());
@@ -77,6 +84,14 @@ pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::
 pub enum AsyncTaskData {
     AsyncIpiTask(IpiMediatedMsg),
     AsyncIoTask(IoAsyncMsg),
+}
+
+fn async_exe_status() -> AsyncExeStatus {
+    *ASYNC_EXE_STATUS.lock()
+}
+
+fn set_async_exe_status(status: AsyncExeStatus) {
+    *ASYNC_EXE_STATUS.lock() = status;
 }
 
 #[derive(Clone)]
@@ -212,11 +227,11 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     } else {
         io_list.push(task);
     }
-    if current_cpu().id != 0 && io_list.is_empty() && ipi_list.len() == 1 {
-        drop(ipi_list);
-        drop(io_list);
-        async_task_exe();
-    } else if current_cpu().id == 0 {
+    if current_cpu().id != 0
+        && io_list.is_empty()
+        && ipi_list.len() == 1
+        && async_exe_status() == AsyncExeStatus::Pending
+    {
         drop(ipi_list);
         drop(io_list);
         async_task_exe();
@@ -225,41 +240,59 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
 
 // async task executor
 pub fn async_task_exe() {
-    let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    let io_list = ASYNC_IO_TASK_LIST.lock();
-
-    if !ipi_list.is_empty() {
-        let state = ipi_list[0].state.lock();
-        if let AsyncTaskState::Finish = *state {
-            drop(state);
-            ipi_list.remove(0);
+    if current_cpu().id == 0 {
+        match async_exe_status() {
+            AsyncExeStatus::Pending => {
+                set_async_exe_status(AsyncExeStatus::Scheduling);
+            }
+            AsyncExeStatus::Scheduling => {
+                return;
+            }
         }
     }
+    loop {
+        let ipi_list = ASYNC_IPI_TASK_LIST.lock();
+        let io_list = ASYNC_IO_TASK_LIST.lock();
 
-    let mut task;
-    let ipi;
-    if io_list.is_empty() {
-        if !ipi_list.is_empty() {
-            task = ipi_list[0].clone();
-            ipi = true;
+        // if !ipi_list.is_empty() {
+        //     let state = ipi_list[0].state.lock();
+        //     if let AsyncTaskState::Finish = *state {
+        //         drop(state);
+        //         ipi_list.remove(0);
+        //     }
+        // }
+
+        let mut task;
+        let ipi;
+        if io_list.is_empty() {
+            if !ipi_list.is_empty() {
+                task = ipi_list[0].clone();
+                ipi = true;
+            } else {
+                set_async_exe_status(AsyncExeStatus::Pending);
+                return;
+            }
         } else {
+            ipi = false;
+            task = io_list[0].clone();
+        }
+        drop(ipi_list);
+        drop(io_list);
+        if task.handle() || (ipi && current_cpu().id == 0) {
+            // task finish
+            finish_async_task(ipi);
+        } else {
+            // wait for notify
+            set_async_exe_status(AsyncExeStatus::Pending);
             return;
         }
-    } else {
-        ipi = false;
-        task = io_list[0].clone();
-    }
-    drop(ipi_list);
-    drop(io_list);
-    if task.handle() {
-        // task finish
-        // println!("task finish, ipi len {}, io len {}", ipi_list.len(), io_list.len());
-        finish_async_task(ipi);
+        if current_cpu().id != 0 {
+            return;
+        }
     }
 }
 
 pub fn finish_async_task(ipi: bool) {
-    // println!("finish {} task", if ipi { "ipi" } else { "blk io" });
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
     let task = if ipi { ipi_list.remove(0) } else { io_list.remove(0) };
@@ -309,9 +342,6 @@ pub fn finish_async_task(ipi: bool) {
             }
         }
         AsyncTaskData::AsyncIpiTask(_) => {}
-    }
-    if current_cpu().id == 0 {
-        async_task_exe();
     }
 }
 
@@ -364,7 +394,7 @@ pub fn add_async_used_info(vm_id: usize) {
 pub fn remove_async_used_info(vm_id: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     used_info_list.remove(&vm_id);
-    println!("VM[{}] remove async used info", vm_id);
+    // println!("VM[{}] remove async used info", vm_id);
 }
 
 pub fn remove_vm_async_task(vm_id: usize) {

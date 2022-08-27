@@ -42,6 +42,8 @@ pub const DISK_PARTITION_2_SIZE: usize = 8388608;
 // pub const DISK_PARTITION_3_INT: usize = 32 + 0x12;
 // pub const DISK_PARTITION_4_INT: usize = 32 + 0x13;
 
+pub const SHARE_MEM_BASE: usize = 0xd_0000_0000;
+
 //end tx2 platform const
 
 // extern "C" {

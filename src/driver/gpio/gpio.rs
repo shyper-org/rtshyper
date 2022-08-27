@@ -16,8 +16,8 @@ fn alt2bits(alt: u8) -> u8 {
 #[no_mangle]
 #[inline(never)]
 pub fn gpio_select_function(gpio: u8, alt: u8) {
-    let mut gpfsel = 0;
-    let mut field_offset = 0;
+    let mut gpfsel;
+    let field_offset;
     match gpio {
         0..=9 => {
             gpfsel = unsafe { *(GPFSEL0 as *const u32) };

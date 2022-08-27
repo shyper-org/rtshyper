@@ -852,7 +852,7 @@ pub fn emu_dev_list_update(src_emu_dev_list: &Mutex<Vec<EmuDevEntry>>) {
             EmuDeviceType::EmuDeviceTVirtioNet => emu_virtio_mmio_handler,
             EmuDeviceType::EmuDeviceTVirtioConsole => emu_virtio_mmio_handler,
             _ => {
-                panic!("not support emu dev entry type {:#?}", emu_dev_entry.emu_type);
+                panic!("not support emu dev entry type {}", emu_dev_entry.emu_type);
             }
         };
         emu_dev_list.push(EmuDevEntry {

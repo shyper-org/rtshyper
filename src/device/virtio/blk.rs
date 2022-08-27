@@ -6,8 +6,8 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
 use crate::kernel::{
-    active_vm_id, add_async_task, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData, finish_async_task,
-    IoAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2pa,
+    active_vm_id, add_async_task, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData, IoAsyncMsg,
+    IpiMediatedMsg, push_used_info, Vm, vm_ipa2pa,
 };
 use crate::lib::{memcpy_safe, trace};
 
@@ -634,10 +634,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
         vq.notify(dev.int_id(), vm.clone());
     }
 
-    if req.mediated() {
-        // finish_task(true);
-        finish_async_task(true);
-    }
+    // if req.mediated() {
+    // finish_task(true);
+    //     finish_async_task(true);
+    //     async_task_exe();
+    // }
 
     // let end = time_current_us();
     // println!("init time {}us, while handle desc ring time {}us, finish task {}us", time0 - begin, time1 - time0, end - time1);

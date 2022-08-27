@@ -246,12 +246,12 @@ impl VcpuPool {
                         self.yield_vcpu(idx);
                     }
                 }
-                println!(
-                    "Core[{}] remove VM[{}] vcpu, running vcpu num is {}",
-                    current_cpu().id,
-                    vm_id,
-                    vcpu_num
-                );
+                // println!(
+                //     "Core[{}] remove VM[{}] vcpu, running vcpu num is {}",
+                //     current_cpu().id,
+                //     vm_id,
+                //     vcpu_num
+                // );
                 return;
             }
         }

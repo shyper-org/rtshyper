@@ -4,7 +4,6 @@ use core::fmt::Formatter;
 use cortex_a::registers::*;
 
 use crate::arch::{GICD, GicState};
-use crate::kernel::INTERRUPT_NUM_MAX;
 
 global_asm!(include_str!("fpsimd.S"));
 

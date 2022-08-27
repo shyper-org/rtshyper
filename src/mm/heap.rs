@@ -3,12 +3,12 @@ use buddy_system_allocator::LockedHeap;
 // rCore buddy system allocator
 use crate::arch::PAGE_SIZE;
 
-const HEAP_SIZE: usize = 1024 * PAGE_SIZE;
+const HEAP_SIZE: usize = 1024 * 10 * PAGE_SIZE;
 
 #[repr(align(4096))]
 struct HeapRegion([u8; HEAP_SIZE]);
 
-static HEAP_REGION: HeapRegion = HeapRegion([0; HEAP_SIZE]);
+static mut HEAP_REGION: HeapRegion = HeapRegion([0; HEAP_SIZE]);
 
 #[global_allocator]
 pub static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::empty();

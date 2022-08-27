@@ -119,28 +119,28 @@ impl Vcpu {
         let mut inner = self.inner.lock();
         let vm = inner.vm.clone().unwrap();
         inner.gic_ctx;
-        for int_id in 0..16 {
-            println!(
-                "Core[{}] int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                current_cpu().id,
-                int_id,
-                GICD.is_enabler(int_id / 32),
-                GICD.is_activer(int_id / 32),
-                GICD.ipriorityr(int_id / 4),
-                GICD.itargetsr(int_id / 4),
-                GICD.icfgr(int_id / 2)
-            );
-        }
-        let int_id = 27;
-        println!(
-            "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-            int_id,
-            GICD.is_enabler(int_id / 32),
-            GICD.is_activer(int_id / 32),
-            GICD.ipriorityr(int_id / 4),
-            GICD.itargetsr(int_id / 4),
-            GICD.icfgr(int_id / 2)
-        );
+        // for int_id in 0..16 {
+        //     println!(
+        //         "Core[{}] int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+        //         current_cpu().id,
+        //         int_id,
+        //         GICD.is_enabler(int_id / 32),
+        //         GICD.is_activer(int_id / 32),
+        //         GICD.ipriorityr(int_id / 4),
+        //         GICD.itargetsr(int_id / 4),
+        //         GICD.icfgr(int_id / 2)
+        //     );
+        // }
+        // let int_id = 27;
+        // println!(
+        //     "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+        //     int_id,
+        //     GICD.is_enabler(int_id / 32),
+        //     GICD.is_activer(int_id / 32),
+        //     GICD.ipriorityr(int_id / 4),
+        //     GICD.itargetsr(int_id / 4),
+        //     GICD.icfgr(int_id / 2)
+        // );
         for irq in vm.config().passthrough_device_irqs() {
             inner.gic_ctx.add_irq(irq as u64);
         }
@@ -155,7 +155,7 @@ impl Vcpu {
 
         for irq_state in inner.gic_ctx.irq_state.iter() {
             if irq_state.id != 0 {
-                println!("Core {} set irq {} GICD", current_cpu().id, irq_state.id);
+                // println!("Core {} set irq {} GICD", current_cpu().id, irq_state.id);
                 GICD.set_enable(irq_state.id as usize, irq_state.enable != 0);
                 GICD.set_prio(irq_state.id as usize, irq_state.priority);
                 GICD.set_trgt(irq_state.id as usize, 1 << platform_cpuid_to_cpuif(current_cpu().id));
@@ -175,7 +175,7 @@ impl Vcpu {
 
         let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
         *gicv_pmr = inner.gic_ctx.gicv_pmr();
-        println!("Core[{}] save gic context", current_cpu().id);
+        // println!("Core[{}] save gic context", current_cpu().id);
         let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
         *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
     }
@@ -194,7 +194,7 @@ impl Vcpu {
 
         // restore vm's Stage2 MMU context
         let vttbr = (self.vm_id() << 48) | self.vm_pt_dir();
-        println!("vttbr {:x}", vttbr);
+        // println!("vttbr {:x}", vttbr);
         unsafe {
             asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
         }
@@ -538,12 +538,12 @@ pub fn vcpu_idle(_vcpu: Vcpu) {
 }
 
 pub fn vcpu_run() {
-    println!(
-        "Core {} (vm {}, vcpu {}) start running",
-        current_cpu().id,
-        active_vm_id(),
-        active_vcpu_id()
-    );
+    // println!(
+    //     "Core {} (vm {}, vcpu {}) start running",
+    //     current_cpu().id,
+    //     active_vm_id(),
+    //     active_vcpu_id()
+    // );
 
     if current_cpu().vcpu_pool().running() > 1 {
         timer_enable(true);
@@ -560,7 +560,7 @@ pub fn vcpu_run() {
 
     vcpu.context_vm_restore();
     tlb_invalidate_guest_all();
-    vcpu.show_ctx();
+    // vcpu.show_ctx();
 
     current_cpu().cpu_state = CpuState::CpuRun;
     vm_if_set_state(active_vm_id(), super::VmState::VmActive);
@@ -571,12 +571,12 @@ pub fn vcpu_run() {
         }
     }
 
-    println!(
-        "vcpu run elr {:x} x0 {:016x} sp 0x{:x}",
-        current_cpu().active_vcpu.clone().unwrap().elr(),
-        current_cpu().get_gpr(0),
-        sp
-    );
+    // println!(
+    //     "vcpu run elr {:x} x0 {:016x} sp 0x{:x}",
+    //     current_cpu().active_vcpu.clone().unwrap().elr(),
+    //     current_cpu().get_gpr(0),
+    //     sp
+    // );
     // TODO: vcpu_run
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;
