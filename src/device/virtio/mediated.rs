@@ -4,8 +4,8 @@ use spin::Mutex;
 
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
-    active_vm, async_task_exe, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg, interrupt_vm_inject,
-    IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa,
+    active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
+    interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::trace;
@@ -201,12 +201,14 @@ fn check_sum(addr: usize, len: usize) -> usize {
 }
 
 pub fn mediated_ipi_handler(msg: &IpiMessage) {
-    // println!("vm {} mediated_ipi_handler", active_vm_id());
+    // println!("core {} mediated_ipi_handler", current_cpu().id);
     match &msg.ipi_message {
         IpiInnerMsg::MediatedMsg(mediated_msg) => {
             let src_id = mediated_msg.src_id;
             let vm = vm(src_id).unwrap();
             virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm);
+            finish_async_task(true);
+            async_task_exe();
         }
         _ => {}
     }

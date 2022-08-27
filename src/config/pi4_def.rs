@@ -49,24 +49,24 @@ pub fn mvm_config_init() {
         emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
         mediated: false,
     });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some(String::from("virtio_console@a003000")),
-    //     base_ipa: 0xa003000,
-    //     length: 0x1000,
-    //     irq_id: 32 + 0x13,
-    //     cfg_list: vec![2, 0xa002000],
-    //     emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
-    //     mediated: false,
-    // });
-    // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some(String::from("vm_service")),
-    //     base_ipa: 0,
-    //     length: 0,
-    //     irq_id: HVC_IRQ,
-    //     cfg_list: Vec::new(),
-    //     emu_type: EmuDeviceType::EmuDeviceTShyper,
-    //     mediated: false,
-    // });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("virtio_console@fa002000")),
+        base_ipa: 0xfa002000,
+        length: 0x1000,
+        irq_id: 32 + 0x21,
+        cfg_list: vec![2, 0xa002000],
+        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("vm_service")),
+        base_ipa: 0,
+        length: 0,
+        irq_id: 32 + 0x10,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTShyper,
+        mediated: false,
+    });
 
     // vm0 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -163,7 +163,7 @@ pub fn mvm_config_init() {
         os_type: VmType::VmTOs,
         cmdline:
         // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        String::from("console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait\0"),
+        String::from("coherent_pool=1M snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1 console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,

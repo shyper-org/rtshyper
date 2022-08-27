@@ -1,12 +1,11 @@
-use core::arch::{asm, global_asm};
+use core::arch::global_asm;
 
-use spin::{Mutex, MutexGuard};
 use tock_registers::*;
 use tock_registers::interfaces::*;
 
-use crate::arch::{LVL2_SHIFT, pt_lvl2_idx, PTE_S1_NORMAL};
+use crate::arch::pt_lvl2_idx;
 use crate::board::PLAT_DESC;
-use crate::lib::{cache_invalidate_d, memset_safe};
+use crate::lib::memset_safe;
 
 use super::interface::*;
 

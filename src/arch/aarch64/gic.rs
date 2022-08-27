@@ -1,6 +1,5 @@
 use alloc::collections::BTreeSet;
 
-use cortex_a::asm::ret;
 use spin::Mutex;
 use tock_registers::*;
 use tock_registers::interfaces::*;

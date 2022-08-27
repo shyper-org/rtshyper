@@ -284,7 +284,7 @@ pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
 }
 
 pub fn migrate_finish_ipi_handler(vm_id: usize) {
-    println!("Core 0 handle VM[{}] finish ipi", vm_id);
+    // println!("Core 0 handle VM[{}] finish ipi", vm_id);
     // let vm = vm(vm_id).unwrap();
     // copy trgt_vm dirty mem map to kernel module
     // let vm = vm(vm_id).unwrap();

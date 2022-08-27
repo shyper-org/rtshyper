@@ -211,5 +211,5 @@ pub fn mem_vm_region_free(start: usize, size: usize) {
             }
         }
     }
-    println!("Free mem from pa 0x{:x} to 0x{:x}", start, start + size);
+    // println!("Free mem from pa 0x{:x} to 0x{:x}", start, start + size);
 }

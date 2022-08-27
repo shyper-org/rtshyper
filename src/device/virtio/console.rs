@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 
 use spin::Mutex;
 
+use crate::arch::PAGE_SIZE;
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
@@ -9,7 +10,7 @@ use crate::device::VirtioIov;
 use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map_bit, vm_ipa2pa};
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::lib::trace;
+use crate::lib::{round_down, trace};
 
 pub const VIRTQUEUE_CONSOLE_MAX_SIZE: usize = 64;
 
@@ -273,7 +274,11 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         }
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
         if trgt_vmid != 0 {
-            vm_if_set_mem_map_bit(trgt_vm.clone(), dst);
+            let mut addr = round_down(dst, PAGE_SIZE);
+            while addr <= round_down(dst + desc_len, PAGE_SIZE) {
+                vm_if_set_mem_map_bit(trgt_vm.clone(), addr);
+                addr += PAGE_SIZE;
+            }
         }
         rx_iov.push_data(dst, desc_len);
         rx_len += desc_len;

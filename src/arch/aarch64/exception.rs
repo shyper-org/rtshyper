@@ -130,7 +130,8 @@ unsafe extern "C" fn current_el_sp0_serror() {
 #[inline(never)]
 unsafe extern "C" fn current_el_spx_synchronous() {
     panic!(
-        "current_elx_synchronous {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
+        "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
+        current_cpu().id,
         cortex_a::registers::ELR_EL2.get(),
         cortex_a::registers::SP_EL0.get(),
         cortex_a::registers::SP_EL1.get(),
@@ -239,13 +240,13 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
 
     gicc_clear_current_irq(handled_by_hypervisor);
     current_cpu().clear_ctx();
-    if current_cpu().active_vcpu.is_some()
-        && current_cpu().active_vcpu.as_ref().unwrap().vm().is_some()
-        && active_vm_id() == 2
-        && current_cpu().id == 2
-    {
-        println!("Core{} VM2 end lower_aarch64_irq irq {}", current_cpu().id, id);
-    }
+    // if current_cpu().active_vcpu.is_some()
+    //     && current_cpu().active_vcpu.as_ref().unwrap().vm().is_some()
+    //     && active_vm_id() == 2
+    //     && current_cpu().id == 2
+    // {
+    //     println!("Core{} VM2 end lower_aarch64_irq irq {}", current_cpu().id, id);
+    // }
 }
 
 #[no_mangle]

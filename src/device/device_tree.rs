@@ -2,13 +2,11 @@ use alloc::vec::Vec;
 
 use vm_fdt::{Error, FdtWriter, FdtWriterResult};
 
-use crate::arch::PAGE_SIZE;
 use crate::board::PLAT_DESC;
 use crate::config::{DtbDevType, VmDtbDevConfig};
 use crate::config::VmConfigEntry;
 use crate::device::EmuDeviceType;
 use crate::lib::bit_num;
-use crate::lib::round_up;
 use crate::SYSTEM_FDT;
 use crate::vmm::CPIO_RAMDISK;
 

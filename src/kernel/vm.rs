@@ -9,7 +9,7 @@ use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
-use crate::board::PLATFORM_GICV_BASE;
+use crate::board::SHARE_MEM_BASE;
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::kernel::{
@@ -21,7 +21,7 @@ use crate::mm::PageFrame;
 
 use super::vcpu::Vcpu;
 
-pub const DIRTY_MEM_THRESHOLD: usize = 0x8000000;
+pub const DIRTY_MEM_THRESHOLD: usize = 0x8000;
 pub const VM_NUM_MAX: usize = 8;
 pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
@@ -160,12 +160,12 @@ pub fn vm_if_copy_mem_map(vm_id: usize) {
     let mem_map_cache = vm_if.mem_map_cache.clone();
     let map = vm_if.mem_map.as_mut().unwrap();
     map.set(0x15, true); // TODO: hard code for offset 0x15000
-    println!(
-        "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",
-        map.sum(),
-        map.first(),
-        size_of::<u64>() * map.vec_len()
-    );
+                         // println!(
+                         //     "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",
+                         //     map.sum(),
+                         //     map.first(),
+                         //     size_of::<u64>() * map.vec_len()
+                         // );
     memcpy_safe(
         mem_map_cache.as_ref().unwrap().pa() as *const u8,
         map.slice() as *const _ as *const u8,
@@ -713,7 +713,7 @@ impl Vm {
         let mvm = vm(0).unwrap();
         // for i in 0..self.ncpu() {
         let size = size_of::<VMData>();
-        println!("context_vm_migrate_init: VM Data size 0x{:x}", size);
+        // println!("context_vm_migrate_init: VM Data size 0x{:x}", size);
         match mem_pages_alloc(round_up(size, PAGE_SIZE) / PAGE_SIZE) {
             Ok(pf) => {
                 mvm.pt_map_range(
@@ -737,7 +737,6 @@ impl Vm {
         // TODO: 仅支持单核VM，支持多核并不困难，遍历所有vcpu即可
         let mvm = vm(0).unwrap();
         let size = size_of::<VMData>();
-        println!("context_vm_migrate_save: VM Data size 0x{:x}", size);
         match mem_pages_alloc(round_up(size, PAGE_SIZE) / PAGE_SIZE) {
             Ok(pf) => {
                 let mut vm_data = unsafe { &mut *(pf.pa as *mut VMData) };
@@ -763,7 +762,7 @@ impl Vm {
                         EmuDevs::Vgic(vgic) => {
                             vm_data.emu_devs[idx] = EmuDevData::Vgic(VgicMigData::default());
                             if let EmuDevData::Vgic(vgic_data) = &mut vm_data.emu_devs[idx] {
-                                println!("vm[{}] save vgic", inner.id);
+                                // println!("vm[{}] save vgic", inner.id);
                                 vgic.save_vgic_data(vgic_data, &cpuid_map);
                                 // println!("GICH_MISR {:x}", GICH.misr());
                                 // println!("GICV_CTLR {:x}", unsafe {
@@ -793,21 +792,21 @@ impl Vm {
                         EmuDevs::VirtioBlk(mmio) => {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioBlk(VirtioMmioData::default());
                             if let EmuDevData::VirtioBlk(mmio_data) = &mut vm_data.emu_devs[idx] {
-                                println!("vm[{}] save virtio blk", inner.id);
+                                // println!("vm[{}] save virtio blk", inner.id);
                                 mmio.save_mmio_data(mmio_data, &inner.pa_region);
                             }
                         }
                         EmuDevs::VirtioNet(mmio) => {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioNet(VirtioMmioData::default());
                             if let EmuDevData::VirtioNet(mmio_data) = &mut vm_data.emu_devs[idx] {
-                                println!("vm[{}] save virtio net", inner.id);
+                                // println!("vm[{}] save virtio net", inner.id);
                                 mmio.save_mmio_data(mmio_data, &inner.pa_region);
                             }
                         }
                         EmuDevs::VirtioConsole(mmio) => {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioConsole(VirtioMmioData::default());
                             if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
-                                println!("vm[{}] save virtio console", inner.id);
+                                // println!("vm[{}] save virtio console", inner.id);
                                 mmio.save_mmio_data(mmio_data, &inner.pa_region);
                             }
                         }
@@ -826,30 +825,30 @@ impl Vm {
     }
 
     pub fn context_vm_migrate_restore(&self) {
-        let addr_0: usize = 0xf0200000;
-        let addr_1: usize = 0x170200000;
-        let mut offset = 0;
-        loop {
-            if offset >= 0x80000000 {
-                break;
-            }
-            let val0 = unsafe { *((addr_0 + offset) as *const u64) };
-            let val1 = unsafe { *((addr_1 + offset) as *const u64) };
-            if val0 != val1 {
-                println!(
-                    "addr 0 0x{:x}, addr 1 0x{:x} val is 0x{:x} and {:x}",
-                    addr_0 + offset,
-                    addr_1 + offset,
-                    val0,
-                    val1
-                );
-                offset &= !0xfff;
-                offset += PAGE_SIZE;
-                continue;
-            }
-            offset += 8;
-        }
-        println!("context_vm_migrate_restore: pass mem assert eq");
+        // let addr_0: usize = 0xf0200000;
+        // let addr_1: usize = 0x170200000;
+        // let mut offset = 0;
+        // loop {
+        //     if offset >= 0x80000000 {
+        //         break;
+        //     }
+        //     let val0 = unsafe { *((addr_0 + offset) as *const u64) };
+        //     let val1 = unsafe { *((addr_1 + offset) as *const u64) };
+        //     if val0 != val1 {
+        //         println!(
+        //             "addr 0 0x{:x}, addr 1 0x{:x} val is 0x{:x} and {:x}",
+        //             addr_0 + offset,
+        //             addr_1 + offset,
+        //             val0,
+        //             val1
+        //         );
+        //         offset &= !0xfff;
+        //         offset += PAGE_SIZE;
+        //         continue;
+        //     }
+        //     offset += 8;
+        // }
+        // println!("context_vm_migrate_restore: pass mem assert eq");
 
         // key: vcpuid, val: pcpuid
         let mut vcpuid_map: BTreeMap<usize, usize> = BTreeMap::new();
@@ -900,13 +899,13 @@ impl Vm {
                     }
                 }
                 EmuDevs::VirtioNet(mmio) => {
-                    println!("context_vm_migrate_restore: net");
+                    // println!("context_vm_migrate_restore: net");
                     if let EmuDevData::VirtioNet(mmio_data) = &vm_data.emu_devs[idx] {
                         mmio.restore_mmio_data(mmio_data, &inner.pa_region);
                     }
                 }
                 EmuDevs::VirtioConsole(mmio) => {
-                    println!("context_vm_migrate_restore: console");
+                    // println!("context_vm_migrate_restore: console");
                     if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
                         mmio.restore_mmio_data(mmio_data, &inner.pa_region);
 
@@ -1015,7 +1014,7 @@ impl VmInner {
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
             // migration_state: false,
-            share_mem_base: 0xd00000000, // hard code
+            share_mem_base: SHARE_MEM_BASE, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
             emu_devs: Vec::new(),
@@ -1042,7 +1041,7 @@ impl VmInner {
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
             // migration_state: false,
-            share_mem_base: 0xd00000000, // hard code
+            share_mem_base: SHARE_MEM_BASE, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
             emu_devs: Vec::new(),

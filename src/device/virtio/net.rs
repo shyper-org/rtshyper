@@ -4,6 +4,7 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
+use crate::arch::PAGE_SIZE;
 use crate::config::{vm_num, vm_type};
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::EmuDevs;
@@ -16,7 +17,7 @@ use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::lib::trace;
+use crate::lib::{round_down, trace};
 
 const VIRTIO_F_VERSION_1: usize = 1 << 32;
 const VIRTIO_NET_F_CSUM: usize = 1 << 0;
@@ -462,7 +463,11 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
 
         if vmid != 0 {
-            vm_if_set_mem_map_bit(vm.clone(), dst);
+            let mut addr = round_down(dst, PAGE_SIZE);
+            while addr <= round_down(dst + desc_len, PAGE_SIZE) {
+                vm_if_set_mem_map_bit(vm.clone(), addr);
+                addr += PAGE_SIZE;
+            }
         }
         rx_iov.push_data(dst, desc_len);
         rx_len += desc_len;

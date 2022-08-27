@@ -1,3 +1,4 @@
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use crate::arch::{emu_intc_handler, emu_intc_init, partial_passthrough_intc_handler, partial_passthrough_intc_init};
@@ -107,8 +108,9 @@ pub fn vmm_init_image(vm: Vm) -> bool {
         #[cfg(feature = "tx2")]
         vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
         #[cfg(feature = "pi4")]
-        // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_4.9.140"));
-        vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
+        vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
+        // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.78"));
+        // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
     }
 
     if config.device_tree_load_ipa() != 0 {
@@ -165,10 +167,8 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
     let config = vm.config().emulated_device_list();
 
     for (idx, emu_dev) in config.iter().enumerate() {
-        let dev_name;
         match emu_dev.emu_type {
             EmuDeviceTGicd => {
-                dev_name = "interrupt controller";
                 vm.set_intc_dev_id(idx);
                 emu_register_dev(
                     EmuDeviceTGicd,
@@ -181,7 +181,6 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                 emu_intc_init(vm.clone(), idx);
             }
             EmuDeviceTGPPT => {
-                dev_name = "partial passthrough interrupt controller";
                 vm.set_intc_dev_id(idx);
                 emu_register_dev(
                     EmuDeviceTGPPT,
@@ -194,7 +193,6 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                 partial_passthrough_intc_init(vm.clone());
             }
             EmuDeviceTVirtioBlk => {
-                dev_name = "virtio block";
                 emu_register_dev(
                     EmuDeviceTVirtioBlk,
                     vm.id(),
@@ -208,7 +206,6 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                 }
             }
             EmuDeviceTVirtioNet => {
-                dev_name = "virtio net";
                 emu_register_dev(
                     EmuDeviceTVirtioNet,
                     vm.id(),
@@ -227,7 +224,6 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                 drop(vm_if_list);
             }
             EmuDeviceTVirtioConsole => {
-                dev_name = "virtio console";
                 emu_register_dev(
                     EmuDeviceTVirtioConsole,
                     vm.id(),
@@ -241,7 +237,6 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                 }
             }
             EmuDeviceTShyper => {
-                dev_name = "shyper";
                 if !shyper_init(vm.clone(), emu_dev.base_ipa, emu_dev.length) {
                     return false;
                 }
@@ -255,7 +250,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
             "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
             vm.id(),
             idx,
-            dev_name,
+            emu_dev.emu_type,
             emu_dev.base_ipa
         );
     }
@@ -324,12 +319,6 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                                 PLATFORM_GICC_BASE as u64,
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
-                            println!(
-                                "{:x} {:x} {}",
-                                PLATFORM_GICD_BASE | 0xF_0000_0000,
-                                PLATFORM_GICC_BASE | 0xF_0000_0000,
-                                emu_cfg.name.as_ref().unwrap()
-                            );
                             #[cfg(feature = "pi4")]
                             let r = fdt_setup_gic(
                                 dtb,
@@ -339,12 +328,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                             );
                         }
                         EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
-                            println!(
-                                "irq {:x} ipa {:x} {}",
-                                emu_cfg.irq_id,
-                                emu_cfg.base_ipa,
-                                emu_cfg.name.as_ref().unwrap()
-                            );
+                            #[cfg(feature = "tx2")]
                             fdt_add_virtio(
                                 dtb,
                                 emu_cfg.name.unwrap().as_ptr(),
@@ -353,6 +337,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                             );
                         }
                         EmuDeviceTShyper => {
+                            #[cfg(feature = "tx2")]
                             fdt_add_vm_service(
                                 dtb,
                                 emu_cfg.irq_id as u32 - 0x20,
@@ -609,6 +594,6 @@ pub fn vmm_migrate_boot() {
         }
     }
 
-    println!("Core[{}] start running", current_cpu().id);
+    // println!("Core[{}] start running", current_cpu().id);
     vcpu_run();
 }

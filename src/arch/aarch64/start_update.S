@@ -47,6 +47,7 @@ _start:
     adrp x1, boot_stack
     mov x2, (4096 * 2)
     mul x3, x0, x2
+    add x1, x1, x2
     add x1, x1, x3
 
     mov sp, x1
