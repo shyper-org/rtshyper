@@ -1,9 +1,6 @@
-use alloc::string::ToString;
-
 use crate::arch::GIC_SGIS_NUM;
 use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
-use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, mem_vm_region_free,
     remove_async_used_info, remove_vm, remove_vm_async_task, vcpu_remove, vm, Vm,

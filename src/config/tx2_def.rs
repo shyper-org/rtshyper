@@ -239,5 +239,5 @@ pub fn mvm_config_init() {
         vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
         vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
     };
-    vm_cfg_add_vm_entry(mvm_config_entry);
+    let _ = vm_cfg_add_vm_entry(mvm_config_entry);
 }

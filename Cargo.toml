@@ -19,10 +19,10 @@ vm-fdt = { git = "https://github.com/OhmR/vm-fdt" }
 #nostd_async = "0.6.0"
 woke = "0.0.2"
 fdt = { path = "libfdt-binding" }
-log = "0.4.5"
+log = {version = "0.4", features = ["max_level_trace", "release_max_level_trace"]}
 volatile = "0.4.4"
 spin = "0.9.0"
-cortex-a = "7.0.0"
+cortex-a = "7.4.0"
 buddy_system_allocator = "0.8.0"
 
 [dependencies.lazy_static]

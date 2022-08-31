@@ -88,7 +88,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
 
         heap_init();
         mem_init();
-        // kernel::logger_init();
+        let _ = kernel::logger_init();
         init_vm0_dtb(dtb);
         hvc_init();
     }
