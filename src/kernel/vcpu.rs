@@ -404,10 +404,17 @@ impl VcpuInner {
         #[cfg(feature = "tx2")]
         if self.vm_id() == 0 {
             // A57 is cluster #1 for L4T
+            match self.phys_id {
+                0 | 1 | 2 | 3 => vmpidr |= 0x100 | self.id,
+                _ => vmpidr |= self.id - 4,
+            }
             vmpidr |= 0x100;
         }
 
-        vmpidr |= self.id;
+        #[cfg(not(feature = "tx2"))]
+        {
+            vmpidr |= self.id;
+        }
         self.vm_ctx.vmpidr_el2 = vmpidr as u64;
     }
 

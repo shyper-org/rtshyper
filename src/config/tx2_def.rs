@@ -223,8 +223,8 @@ pub fn mvm_config_init() {
         name: Some(String::from("privileged")),
         os_type: VmType::VmTOs,
         cmdline:
-        // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=5\0"),
+        String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
+        // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=5\0"),
 
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
@@ -239,8 +239,8 @@ pub fn mvm_config_init() {
             region: vm_region,
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
-            num: 1,
-            allocate_bitmap: 0b0001,
+            num: 3,
+            allocate_bitmap: 0b110001,
             master: 0,
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList { emu_dev_list: emu_dev_config })),

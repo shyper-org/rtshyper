@@ -55,16 +55,18 @@ pub const SHARE_MEM_BASE: usize = 0xd_0000_0000;
 
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
-        num: 4,
-        mpidr_list: [0x80000100, 0x80000101, 0x80000102, 0x80000103, 0, 0, 0, 0],
+        num: 6,
+        mpidr_list: [
+            0x80000100, 0x80000101, 0x80000102, 0x80000103, 0x80000000, 0x80000001, 0, 0,
+        ],
         name: [ARM_CORTEX_A57; 8],
         sched_list: [
             RoundRobin,
             RoundRobin,
             RoundRobin,
             RoundRobin,
-            SchedRule::None,
-            SchedRule::None,
+            RoundRobin,
+            RoundRobin,
             SchedRule::None,
             SchedRule::None,
         ],
@@ -167,9 +169,17 @@ pub fn platform_sys_shutdown() {
 // }
 
 pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
-    cpuid + PLAT_DESC.cpu_desc.num
+    if cpuid < 4 {
+        cpuid + 4
+    } else {
+        cpuid - 4
+    }
 }
 
 pub fn platform_cpuif_to_cpuid(cpuif: usize) -> usize {
-    cpuif - PLAT_DESC.cpu_desc.num
+    if cpuif >= 4 {
+        cpuif - 4
+    } else {
+        cpuif + 4
+    }
 }

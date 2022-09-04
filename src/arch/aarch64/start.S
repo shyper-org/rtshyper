@@ -9,8 +9,8 @@ _start:
     cbz x1, 1f
     and x0, x0, #3
     b   2f
-1:  wfe
-    b   1b
+1:  and x0, x0, #0xff
+    add x0, x0, #4
 
 // #endif
 // #ifdef PLATFORM_QEMU
@@ -35,7 +35,12 @@ _start:
     bl  cache_invalidate
 
     // if (core_id == 0) cache_invalidate(2): clear l2$
-    cbnz x19, 3f
+    // cbnz x19, 3f
+    cbz x19, clean_l2
+    cmp x19, #4
+    beq clean_l2
+    b 3f
+clean_l2:
     mov x0, #2
     bl  cache_invalidate
 
