@@ -259,3 +259,40 @@ void fdt_enlarge(void *fdt) {
 }
 
 uint64_t fdt_size(void *fdt) { return fdt_totalsize(fdt); }
+
+int fdt_setup_pmu(void *fdt, const char *compatible, const uint32_t *spi_irq,
+                  uint32_t spi_irq_len, const uint32_t *irq_affi,
+                  uint32_t irq_affi_len) {
+  const int MAX_LEN = 8;
+  int r = 0;
+  if (spi_irq_len != irq_affi_len || spi_irq_len >= MAX_LEN) {
+    return -1;
+  }
+  size_t len = spi_irq_len;
+  int node = fdt_node_offset_by_compatible(fdt, 0, compatible);
+  if (node < 0) {
+    return -1;
+  }
+  fdt_delprop(fdt, node, "interrupts");
+  fdt_delprop(fdt, node, "interrupt-affinity");
+
+  fdt32_t irq[3 * MAX_LEN];
+  for (size_t i = 0; i < len; i++) {
+    irq[3 * i] = cpu_to_fdt32(0);
+    irq[3 * i + 1] = cpu_to_fdt32(spi_irq[i]);
+    irq[3 * i + 2] = cpu_to_fdt32(0x4);
+  }
+  r = fdt_setprop(fdt, node, "interrupts", irq, sizeof(irq[0]) * 3 * len);
+  if (r < 0) {
+    return r;
+  }
+  fdt32_t affi[MAX_LEN];
+  for (size_t i = 0; i < len; i++) {
+    affi[i] = cpu_to_fdt32(irq_affi[i]);
+  }
+  r = fdt_setprop(fdt, node, "interrupt-affinity", affi, sizeof(affi[0]) * len);
+  if (r < 0) {
+    return r;
+  }
+  return r;
+}

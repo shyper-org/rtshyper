@@ -55,3 +55,7 @@ uint64_t fdt_size(void *fdt);
 int fdt_pack(void *fdt);
 
 int fdt_del_mem_rsv(void *fdt, int n);
+
+int fdt_setup_pmu(void *fdt, const char *compatible, const uint32_t *spi_irq,
+                  uint32_t spi_irq_len, const uint32_t *irq_affi,
+                  uint32_t irq_affi_len);

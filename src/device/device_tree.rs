@@ -53,6 +53,22 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         assert_eq!(r, 0);
         let r = fdt_disable_node(dtb, "/watchdog@30c0000\0".as_ptr());
         assert_eq!(r, 0);
+        // disable denver pmu
+        let r = fdt_disable_node(dtb, "/denver-pmu\0".as_ptr());
+        assert_eq!(r, 0);
+        // modify arm pmu
+        // Hardcode: here, irq and affi are associated with clurster 1, cpu 0
+        let irq: [u32; 1] = [0x128];
+        let affi: [u32; 1] = [0x4];
+        let r = fdt_setup_pmu(
+            dtb,
+            "arm,armv8-pmuv3\0".as_ptr(),
+            irq.as_ptr(),
+            irq.len() as u32,
+            affi.as_ptr(),
+            affi.len() as u32,
+        );
+        assert_eq!(r, 0);
         let len = fdt_size(dtb);
         println!("fdt after patched size {}", len);
         let slice = core::slice::from_raw_parts(dtb as *const u8, len as usize);
