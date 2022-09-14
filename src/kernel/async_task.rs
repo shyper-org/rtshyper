@@ -136,7 +136,6 @@ impl AsyncTask {
 
     pub fn handle(&mut self) -> bool {
         let mut state = self.state.lock();
-        // println!("task state {:#?}", state);
         match *state {
             AsyncTaskState::Pending => {
                 *state = AsyncTaskState::Running;
@@ -195,11 +194,9 @@ pub async fn async_blk_io_req() {
     match task.task_data {
         AsyncTaskData::AsyncIoTask(msg) => match msg.io_type {
             VIRTIO_BLK_T_IN => {
-                // println!("mediated_blk_read sector 0x{:x} count 0x{:x}", msg.sector, msg.count);
                 mediated_blk_read(msg.blk_id, msg.sector, msg.count);
             }
             VIRTIO_BLK_T_OUT => {
-                // println!("mediated_blk_write sector 0x{:x} count 0x{:x}", msg.sector, msg.count);
                 let mut cache_ptr = msg.cache;
                 for idx in 0..msg.iov_list.len() {
                     let data_bg = msg.iov_list[idx].data_bg;
@@ -248,14 +245,15 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     drop(ipi_list);
     drop(io_list);
     loop {
-        let len = ASYNC_IPI_TASK_LIST.lock().len();
-        if current_cpu().id == 0 || len < 1024 {
+        if current_cpu().id == 0 || ASYNC_IPI_TASK_LIST.lock().len() < 1024 {
             break;
         } else {
-            // println!("len is {}", len);
             // sleep(100);
-            for _ in 0..100 * 1000 {}
-            // break;
+            for _ in 0..100 * 1000 {
+                unsafe {
+                    asm!("wfi");
+                }
+            }
         }
     }
 
@@ -379,7 +377,6 @@ pub fn finish_async_task(ipi: bool) {
         }
         AsyncTaskData::AsyncIpiTask(_) => {}
         AsyncTaskData::AsyncNoneTask(args) => {
-            println!("AsyncNoneTask");
             let target_id = vm_if_get_cpu_id(task.src_vmid);
             update_used_info(args.vq.clone(), task.src_vmid);
             if target_id != current_cpu().id {
@@ -417,12 +414,6 @@ pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) 
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     match used_info_list.get_mut(&src_vmid) {
         Some(info_list) => {
-            // if desc_chain_head_idx > 200 {
-            // println!(
-            //     "push_used_info: desc chain head idx {}, len 0x{:x}",
-            //     desc_chain_head_idx, used_len
-            // );
-            // }
             info_list.push_back(UsedInfo {
                 desc_chain_head_idx,
                 used_len,
@@ -440,13 +431,6 @@ pub fn update_used_info(vq: Virtq, src_vmid: usize) {
         Some(info_list) => {
             let vq_size = vq.num();
             // for info in info_list.iter() {
-            // println!(
-            //     "update_used_info: used idx {}, desc chain head idx {}, len 0x{:x} vq size {}",
-            //     vq.used_idx(),
-            //     info_list[0].desc_chain_head_idx,
-            //     info_list[0].used_len,
-            //     vq_size
-            // );
             // vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
             let info = info_list.pop_front().unwrap();
             vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
@@ -473,9 +457,10 @@ pub fn remove_async_used_info(vm_id: usize) {
 pub fn remove_vm_async_task(vm_id: usize) {
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    todo!();
     // io_list.retain(|x| x.src_vmid != vm_id);
     // ipi_list.retain(|x| x.src_vmid != vm_id);
-    // *io_list = io_list.drain_filter(|x| x.src_vmid != vm_id).collect();
-    // *ipi_list = ipi_list.drain_filter(|x| x.src_vmid != vm_id).collect();
+    *io_list = io_list.drain_filter(|x| x.src_vmid == vm_id).collect::<LinkedList<_>>();
+    *ipi_list = ipi_list
+        .drain_filter(|x| x.src_vmid == vm_id)
+        .collect::<LinkedList<_>>();
 }

@@ -6,6 +6,7 @@
 #![feature(const_fn_trait_bound)]
 #![feature(into_future)]
 #![feature(const_btree_new)]
+#![feature(drain_filter)]
 
 #[macro_use]
 extern crate alloc;

@@ -397,11 +397,6 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                         vm.id(),
                         async_blk_io_req(),
                     );
-                    // println!(
-                    //     "add io read task sector 0x{:x}, count 0x{:x}",
-                    //     sector + region_start,
-                    //     req_node.iov_sum_up / SECTOR_BSIZE
-                    // );
                     add_async_task(task, false);
                 } else {
                     todo!();
@@ -455,11 +450,6 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                         vm.id(),
                         async_blk_io_req(),
                     );
-                    // println!(
-                    //     "add io write task sector 0x{:x}, count 0x{:x}",
-                    //     sector + region_start,
-                    //     req_node.iov_sum_up / SECTOR_BSIZE
-                    // );
                     add_async_task(task, false);
                 } else {
                     todo!();
@@ -571,11 +561,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
         //     vq.avail_flags()
         // );
 
-        // println!("desc chain head idx {}", req_node.desc_chain_head_idx);
         loop {
-            // if req_node.desc_chain_head_idx == 0 {
-            //     println!("desc idx {}, flag 0x{:x}", next_desc_idx, vq.desc_flags(next_desc_idx));
-            // }
             if vq.desc_has_next(next_desc_idx) {
                 if head {
                     if vq.desc_is_writable(next_desc_idx) {

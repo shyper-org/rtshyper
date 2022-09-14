@@ -11,6 +11,7 @@ build = "build.rs"
 panic = "abort"
 
 [profile.release]
+opt-level = 2
 panic = "abort"
 debug = true
 
@@ -22,7 +23,7 @@ fdt = { path = "libfdt-binding" }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_trace"] }
 volatile = "0.4.4"
 spin = "0.9.4"
-cortex-a = "7.4.0"
+cortex-a = "7.5.0"
 buddy_system_allocator = "0.8.0"
 
 [dependencies.lazy_static]
