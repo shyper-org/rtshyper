@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::{BTreeMap, BTreeSet, LinkedList, VecDeque};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -397,8 +397,9 @@ pub fn async_task_update(
                 }
             }
             AsyncTaskData::AsyncIoTask(_) => panic!("Find an IO Task in IPI task list"),
+            AsyncTaskData::AsyncNoneTask(_) => panic!("Find an IO None Task in IPI task list"),
         };
-        async_ipi_task_list.push(AsyncTask {
+        async_ipi_task_list.push_back(AsyncTask {
             task_data,
             src_vmid: vm_id,
             state: Arc::new(Mutex::new(*ipi_task.state.lock())),
@@ -439,8 +440,11 @@ pub fn async_task_update(
                     _ => panic!("illegal mmio dev type in async_task_update"),
                 }
             }
+            _ => {
+                todo!()
+            }
         };
-        async_io_task_list.push(AsyncTask {
+        async_io_task_list.push_back(AsyncTask {
             task_data,
             src_vmid: vm_id,
             state: Arc::new(Mutex::new(*io_task.state.lock())),
@@ -448,9 +452,9 @@ pub fn async_task_update(
         })
     }
     for (key, used_info) in src_async_used_info_list.lock().iter() {
-        let mut new_used_info = vec![];
+        let mut new_used_info = LinkedList::new();
         for info in used_info.iter() {
-            new_used_info.push(UsedInfo {
+            new_used_info.push_back(UsedInfo {
                 desc_chain_head_idx: info.desc_chain_head_idx,
                 used_len: info.used_len,
             })

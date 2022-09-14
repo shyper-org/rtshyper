@@ -18,7 +18,9 @@
     mrs x1, spsr_el2
     stp x30, x1, [sp, #(15 * 16)]
     mrs x0, elr_el2
-    str x0,      [sp, #(16 * 16)]
+    mov x1, sp
+    add x1, x1, #(0x110)
+    stp x0, x1, [sp, #(16 * 16)]
     mov x0, sp
     bl  \handler
     b   context_pop
