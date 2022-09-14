@@ -96,10 +96,6 @@ impl Aarch64ContextFrame {
             sp: 0,
         }
     }
-
-    pub fn elr(&self) -> usize {
-        self.elr as usize
-    }
 }
 
 #[repr(C)]
@@ -144,7 +140,8 @@ pub struct GicIrqState {
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GicContext {
     irq_num: usize,
-    pub irq_state: [GicIrqState; 10], // hard code for vm irq num max
+    pub irq_state: [GicIrqState; 10],
+    // hard code for vm irq num max
     gicv_ctlr: u32,
     gicv_pmr: u32,
 }

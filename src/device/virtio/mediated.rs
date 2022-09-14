@@ -5,7 +5,7 @@ use spin::Mutex;
 use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
     active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
-    interrupt_vm_inject, IpiInnerMsg, set_io_task_state, vm, vm_ipa2pa,
+    interrupt_vm_inject, IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2pa,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::trace;
@@ -173,7 +173,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
         }
     };
     if mediated_blk.avail == false {
-        set_io_task_state(0, AsyncTaskState::Finish);
+        set_front_io_task_state(AsyncTaskState::Finish);
     } else {
         println!("Mediated blk not belong to any VM");
     }

@@ -16,7 +16,7 @@ pub const VIRTQ_DESC_F_WRITE: usize = 2;
 
 pub const VRING_USED_F_NO_NOTIFY: usize = 1;
 
-pub const DESC_QUEUE_SIZE: usize = 32768;
+pub const DESC_QUEUE_SIZE: usize = 512;
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone)]
@@ -104,7 +104,11 @@ impl Virtq {
                 // }
                 let idx = inner.last_avail_idx as usize % inner.num;
                 let avail_desc_idx = avail.ring[idx];
-                inner.last_avail_idx += 1;
+                if inner.last_avail_idx == u16::MAX {
+                    inner.last_avail_idx = 0;
+                } else {
+                    inner.last_avail_idx += 1;
+                }
                 return Some(avail_desc_idx);
             }
             None => {
@@ -175,7 +179,11 @@ impl Virtq {
                 // unsafe {
                 //     llvm_asm!("dsb ish");
                 // }
-                used.idx += 1;
+                if used.idx == u16::MAX {
+                    used.idx = 0;
+                } else {
+                    used.idx += 1;
+                }
                 return true;
             }
             None => {
@@ -395,6 +403,11 @@ impl Virtq {
         let inner = self.inner.lock();
         let avail = inner.avail.as_ref().unwrap();
         avail.idx
+    }
+
+    pub fn last_avail_idx(&self) -> u16 {
+        let inner = self.inner.lock();
+        inner.last_avail_idx
     }
 
     pub fn used_idx(&self) -> u16 {

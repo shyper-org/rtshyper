@@ -6,8 +6,8 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
 use crate::kernel::{
-    active_vm_id, add_async_task, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData, IoAsyncMsg,
-    IpiMediatedMsg, push_used_info, Vm, vm_ipa2pa,
+    active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData,
+    AsyncTaskState, IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2pa,
 };
 use crate::lib::{memcpy_safe, trace};
 
@@ -28,7 +28,7 @@ pub const BLOCKIF_IOV_MAX: usize = 512;
 /* BLOCK REQUEST TYPE*/
 pub const VIRTIO_BLK_T_IN: usize = 0;
 pub const VIRTIO_BLK_T_OUT: usize = 1;
-// pub const VIRTIO_BLK_T_FLUSH: usize = 4;
+pub const VIRTIO_BLK_T_FLUSH: usize = 4;
 pub const VIRTIO_BLK_T_GET_ID: usize = 8;
 
 /* BLOCK REQUEST STATUS*/
@@ -241,24 +241,25 @@ impl VirtioBlkReq {
     pub fn add_req_node(&self, mut node: VirtioBlkReqNode, vm: Vm) {
         let mut list = self.req_list.lock();
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
+        // push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());
+        list.push(node);
 
-        match list.last_mut() {
-            None => {
-                list.push(node);
-            }
-            Some(prev) => {
-                if prev.req_type == node.req_type
-                    && (prev.sector + prev.iov_sum_up / SECTOR_BSIZE) == node.sector
-                    && (prev.iov_sum_up + node.iov_sum_up) / SECTOR_BSIZE < mediated_blk.dma_block_max()
-                {
-                    prev.iov_sum_up += node.iov_sum_up;
-                    prev.iov.append(&mut node.iov);
-                    push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());
-                } else {
-                    list.push(node);
-                }
-            }
-        }
+        // match list.last_mut() {
+        //     None => {
+        //         list.push(node);
+        //     }
+        //     Some(prev) => {
+        //         if prev.req_type == node.req_type
+        //             && (prev.sector + prev.iov_sum_up / SECTOR_BSIZE) == node.sector
+        //             && (prev.iov_sum_up + node.iov_sum_up) / SECTOR_BSIZE < mediated_blk.dma_block_max()
+        //         {
+        //             prev.iov_sum_up += node.iov_sum_up;
+        //             prev.iov.append(&mut node.iov);
+        //         } else {
+        //             list.push(node);
+        //         }
+        //     }
+        // }
     }
 
     pub fn req_num(&self) -> usize {
@@ -396,6 +397,11 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                         vm.id(),
                         async_blk_io_req(),
                     );
+                    // println!(
+                    //     "add io read task sector 0x{:x}, count 0x{:x}",
+                    //     sector + region_start,
+                    //     req_node.iov_sum_up / SECTOR_BSIZE
+                    // );
                     add_async_task(task, false);
                 } else {
                     todo!();
@@ -449,10 +455,18 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                         vm.id(),
                         async_blk_io_req(),
                     );
+                    // println!(
+                    //     "add io write task sector 0x{:x}, count 0x{:x}",
+                    //     sector + region_start,
+                    //     req_node.iov_sum_up / SECTOR_BSIZE
+                    // );
                     add_async_task(task, false);
                 } else {
                     todo!();
                 }
+            }
+            VIRTIO_BLK_T_FLUSH => {
+                todo!();
             }
             VIRTIO_BLK_T_GET_ID => {
                 let data_bg = req_node.iov[0].data_bg;
@@ -461,6 +475,13 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                     panic!("illegal des addr {:x}", cache_ptr);
                 }
                 memcpy_safe(data_bg as *mut u8, name, 20);
+                let task = AsyncTask::new(
+                    AsyncTaskData::AsyncNoneTask(IoIdAsyncMsg { vq: vq.clone() }),
+                    vm.id(),
+                    async_blk_id_req(),
+                );
+                task.set_state(AsyncTaskState::Finish);
+                add_async_task(task, false);
             }
             _ => {
                 println!("Wrong block request type {} ", req_node.req_type);
@@ -471,7 +492,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
         // update used ring
         if !req.mediated() {
             todo!("reset num to vq size");
-            if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32, 0) {
+            if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32, vq.num()) {
                 println!("blk_req_handler: fail to update used ring");
             }
         } else {
@@ -539,12 +560,22 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
         let mut head = true;
         // desc_chain_head_idx = next_desc_idx;
 
-        // println!("desc_chain_head {}", desc_chain_head_idx);
         // vq.show_desc_info(4, vm.clone());
 
         let mut req_node = VirtioBlkReqNode::default();
         req_node.desc_chain_head_idx = next_desc_idx as u32;
+        // println!(
+        //     "avail idx {} desc_chain_head {} avail flag {}",
+        //     vq.last_avail_idx() - 1,
+        //     req_node.desc_chain_head_idx,
+        //     vq.avail_flags()
+        // );
+
+        // println!("desc chain head idx {}", req_node.desc_chain_head_idx);
         loop {
+            // if req_node.desc_chain_head_idx == 0 {
+            //     println!("desc idx {}, flag 0x{:x}", next_desc_idx, vq.desc_flags(next_desc_idx));
+            // }
             if vq.desc_has_next(next_desc_idx) {
                 if head {
                     if vq.desc_is_writable(next_desc_idx) {

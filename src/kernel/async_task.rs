@@ -1,11 +1,13 @@
 use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, LinkedList};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::arch::asm;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::Context;
 
+use cortex_a::asm::wfi;
 use spin::mutex::Mutex;
 use woke::{waker_ref, Woke};
 
@@ -17,7 +19,7 @@ use crate::kernel::{
     current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
     vm_if_get_cpu_id,
 };
-use crate::lib::{memcpy_safe, trace};
+use crate::lib::{memcpy_safe, sleep, trace};
 
 pub static TASK_IPI_COUNT: Mutex<usize> = Mutex::new(0);
 pub static TASK_COUNT: Mutex<usize> = Mutex::new(0);
@@ -69,6 +71,11 @@ pub struct IoAsyncMsg {
     pub iov_list: Arc<Vec<BlkIov>>,
 }
 
+#[derive(Clone)]
+pub struct IoIdAsyncMsg {
+    pub vq: Virtq,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AsyncExeStatus {
     Pending,
@@ -76,14 +83,15 @@ pub enum AsyncExeStatus {
 }
 
 pub static ASYNC_EXE_STATUS: Mutex<AsyncExeStatus> = Mutex::new(AsyncExeStatus::Pending);
-pub static ASYNC_IPI_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
-pub static ASYNC_IO_TASK_LIST: Mutex<Vec<AsyncTask>> = Mutex::new(Vec::new());
-pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, Vec<UsedInfo>>> = Mutex::new(BTreeMap::new());
+pub static ASYNC_IPI_TASK_LIST: Mutex<LinkedList<AsyncTask>> = Mutex::new(LinkedList::new());
+pub static ASYNC_IO_TASK_LIST: Mutex<LinkedList<AsyncTask>> = Mutex::new(LinkedList::new());
+pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, LinkedList<UsedInfo>>> = Mutex::new(BTreeMap::new());
 
 #[derive(Clone)]
 pub enum AsyncTaskData {
     AsyncIpiTask(IpiMediatedMsg),
     AsyncIoTask(IoAsyncMsg),
+    AsyncNoneTask(IoIdAsyncMsg),
 }
 
 fn async_exe_status() -> AsyncExeStatus {
@@ -147,6 +155,11 @@ impl AsyncTask {
         self.task.lock().as_mut().poll(&mut context);
         return false;
     }
+
+    pub fn set_state(&self, state: AsyncTaskState) {
+        let mut cur_state = self.state.lock();
+        *cur_state = state;
+    }
 }
 
 // async req function
@@ -155,7 +168,7 @@ pub async fn async_ipi_req() {
     if ipi_list.is_empty() {
         panic!("ipi_list should not be empty");
     }
-    let task = ipi_list[0].clone();
+    let task = ipi_list.front().unwrap().clone();
     drop(ipi_list);
     match task.task_data {
         AsyncTaskData::AsyncIpiTask(msg) => {
@@ -170,51 +183,55 @@ pub async fn async_ipi_req() {
     }
 }
 
+pub async fn async_blk_id_req() {}
+
 pub async fn async_blk_io_req() {
     let io_list = ASYNC_IO_TASK_LIST.lock();
     if io_list.is_empty() {
         panic!("io_list should not be empty");
     }
-    let task = io_list[0].clone();
+    let task = io_list.front().unwrap().clone();
     drop(io_list);
     match task.task_data {
-        AsyncTaskData::AsyncIoTask(msg) => {
-            match msg.io_type {
-                VIRTIO_BLK_T_IN => {
-                    // println!("mediated_blk_read");
-                    mediated_blk_read(msg.blk_id, msg.sector, msg.count);
-                }
-                VIRTIO_BLK_T_OUT => {
-                    // println!("mediated_blk_write");
-                    let mut cache_ptr = msg.cache;
-                    for idx in 0..msg.iov_list.len() {
-                        let data_bg = msg.iov_list[idx].data_bg;
-                        let len = msg.iov_list[idx].len as usize;
-
-                        if cache_ptr < 0x1000 || data_bg < 0x1000 {
-                            panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
-                        }
-                        memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
-                        cache_ptr += len;
-                    }
-                    mediated_blk_write(msg.blk_id, msg.sector, msg.count);
-                }
-                _ => {
-                    panic!("illegal mediated blk req type {}", msg.io_type);
-                }
+        AsyncTaskData::AsyncIoTask(msg) => match msg.io_type {
+            VIRTIO_BLK_T_IN => {
+                // println!("mediated_blk_read sector 0x{:x} count 0x{:x}", msg.sector, msg.count);
+                mediated_blk_read(msg.blk_id, msg.sector, msg.count);
             }
-        }
+            VIRTIO_BLK_T_OUT => {
+                // println!("mediated_blk_write sector 0x{:x} count 0x{:x}", msg.sector, msg.count);
+                let mut cache_ptr = msg.cache;
+                for idx in 0..msg.iov_list.len() {
+                    let data_bg = msg.iov_list[idx].data_bg;
+                    let len = msg.iov_list[idx].len as usize;
+
+                    if cache_ptr < 0x1000 || data_bg < 0x1000 {
+                        panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
+                    }
+                    memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
+                    cache_ptr += len;
+                }
+                mediated_blk_write(msg.blk_id, msg.sector, msg.count);
+            }
+            _ => {
+                panic!("illegal mediated blk req type {}", msg.io_type);
+            }
+        },
         _ => {}
     }
 }
 // end async req function
 
-pub fn set_io_task_state(idx: usize, state: AsyncTaskState) {
+pub fn set_front_io_task_state(state: AsyncTaskState) {
     let io_list = ASYNC_IO_TASK_LIST.lock();
-    if io_list.len() <= idx {
-        panic!("async_io_task_head io_list should not be empty");
+    match io_list.front() {
+        None => {
+            panic!("front io task is none");
+        }
+        Some(task) => {
+            *(task.state.lock()) = state;
+        }
     }
-    *(io_list[idx].state.lock()) = state;
 }
 
 pub fn add_async_task(task: AsyncTask, ipi: bool) {
@@ -223,17 +240,30 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
 
     if ipi {
-        ipi_list.push(task);
+        ipi_list.push_back(task);
     } else {
-        io_list.push(task);
+        io_list.push_back(task);
     }
+    // println!("add_async_task: ipi len {} io len {}", ipi_list.len(), io_list.len());
+    drop(ipi_list);
+    drop(io_list);
+    loop {
+        let len = ASYNC_IPI_TASK_LIST.lock().len();
+        if current_cpu().id == 0 || len < 1024 {
+            break;
+        } else {
+            // println!("len is {}", len);
+            // sleep(100);
+            for _ in 0..100 * 1000 {}
+            // break;
+        }
+    }
+
     if current_cpu().id != 0
-        && io_list.is_empty()
-        && ipi_list.len() == 1
+        && ASYNC_IO_TASK_LIST.lock().is_empty()
+        && ASYNC_IPI_TASK_LIST.lock().len() == 1
         && async_exe_status() == AsyncExeStatus::Pending
     {
-        drop(ipi_list);
-        drop(io_list);
         async_task_exe();
     }
 }
@@ -266,7 +296,7 @@ pub fn async_task_exe() {
         let ipi;
         if io_list.is_empty() {
             if !ipi_list.is_empty() {
-                task = ipi_list[0].clone();
+                task = ipi_list.front().unwrap().clone();
                 ipi = true;
             } else {
                 set_async_exe_status(AsyncExeStatus::Pending);
@@ -274,7 +304,7 @@ pub fn async_task_exe() {
             }
         } else {
             ipi = false;
-            task = io_list[0].clone();
+            task = io_list.front().unwrap().clone();
         }
         drop(ipi_list);
         drop(io_list);
@@ -295,7 +325,13 @@ pub fn async_task_exe() {
 pub fn finish_async_task(ipi: bool) {
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
-    let task = if ipi { ipi_list.remove(0) } else { io_list.remove(0) };
+    let task = match if ipi { ipi_list.pop_front() } else { io_list.pop_front() } {
+        None => {
+            panic!("there is no {} task", if ipi { "ipi" } else { "io" })
+        }
+        Some(t) => t,
+    };
+    // println!("finish_async_task: ipi len {} io len {}", ipi_list.len(), io_list.len());
     drop(io_list);
     drop(ipi_list);
     match task.task_data {
@@ -319,29 +355,51 @@ pub fn finish_async_task(ipi: bool) {
                 _ => {}
             }
 
-            if last_vm_async_io_task(task.src_vmid) {
-                let target_id = vm_if_get_cpu_id(task.src_vmid);
-                update_used_info(args.vq.clone(), task.src_vmid);
-                if target_id != current_cpu().id {
-                    let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };
-                    ipi_send_msg(
-                        target_id,
-                        IpiType::IpiTMediatedNotify,
-                        IpiInnerMsg::MediatedNotifyMsg(msg),
-                    );
-                } else {
-                    match vm(task.src_vmid) {
-                        None => {
-                            println!("finish_async_task: vm[{}] no exist", task.src_vmid);
-                        }
-                        Some(vm) => {
-                            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
-                        }
+            // if last_vm_async_io_task(task.src_vmid) {
+            let target_id = vm_if_get_cpu_id(task.src_vmid);
+            update_used_info(args.vq.clone(), task.src_vmid);
+            if target_id != current_cpu().id {
+                let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };
+                ipi_send_msg(
+                    target_id,
+                    IpiType::IpiTMediatedNotify,
+                    IpiInnerMsg::MediatedNotifyMsg(msg),
+                );
+            } else {
+                match vm(task.src_vmid) {
+                    None => {
+                        println!("finish_async_task: vm[{}] no exist", task.src_vmid);
+                    }
+                    Some(vm) => {
+                        interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
+                    }
+                }
+            }
+            // }
+        }
+        AsyncTaskData::AsyncIpiTask(_) => {}
+        AsyncTaskData::AsyncNoneTask(args) => {
+            println!("AsyncNoneTask");
+            let target_id = vm_if_get_cpu_id(task.src_vmid);
+            update_used_info(args.vq.clone(), task.src_vmid);
+            if target_id != current_cpu().id {
+                let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };
+                ipi_send_msg(
+                    target_id,
+                    IpiType::IpiTMediatedNotify,
+                    IpiInnerMsg::MediatedNotifyMsg(msg),
+                );
+            } else {
+                match vm(task.src_vmid) {
+                    None => {
+                        println!("finish_async_task: vm[{}] no exist", task.src_vmid);
+                    }
+                    Some(vm) => {
+                        interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
                     }
                 }
             }
         }
-        AsyncTaskData::AsyncIpiTask(_) => {}
     }
 }
 
@@ -359,7 +417,13 @@ pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) 
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     match used_info_list.get_mut(&src_vmid) {
         Some(info_list) => {
-            info_list.push(UsedInfo {
+            // if desc_chain_head_idx > 200 {
+            // println!(
+            //     "push_used_info: desc chain head idx {}, len 0x{:x}",
+            //     desc_chain_head_idx, used_len
+            // );
+            // }
+            info_list.push_back(UsedInfo {
                 desc_chain_head_idx,
                 used_len,
             });
@@ -375,10 +439,19 @@ pub fn update_used_info(vq: Virtq, src_vmid: usize) {
     match used_info_list.get_mut(&src_vmid) {
         Some(info_list) => {
             let vq_size = vq.num();
-            for info in info_list.iter() {
-                vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
-            }
-            info_list.clear();
+            // for info in info_list.iter() {
+            // println!(
+            //     "update_used_info: used idx {}, desc chain head idx {}, len 0x{:x} vq size {}",
+            //     vq.used_idx(),
+            //     info_list[0].desc_chain_head_idx,
+            //     info_list[0].used_len,
+            //     vq_size
+            // );
+            // vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
+            let info = info_list.pop_front().unwrap();
+            vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
+            // }
+            // info_list.clear();
         }
         None => {
             println!("async_push_used_info: src_vmid {} not existed", src_vmid);
@@ -388,7 +461,7 @@ pub fn update_used_info(vq: Virtq, src_vmid: usize) {
 
 pub fn add_async_used_info(vm_id: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    used_info_list.insert(vm_id, Vec::new());
+    used_info_list.insert(vm_id, LinkedList::new());
 }
 
 pub fn remove_async_used_info(vm_id: usize) {
@@ -400,6 +473,9 @@ pub fn remove_async_used_info(vm_id: usize) {
 pub fn remove_vm_async_task(vm_id: usize) {
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    io_list.retain(|x| x.src_vmid != vm_id);
-    ipi_list.retain(|x| x.src_vmid != vm_id);
+    todo!();
+    // io_list.retain(|x| x.src_vmid != vm_id);
+    // ipi_list.retain(|x| x.src_vmid != vm_id);
+    // *io_list = io_list.drain_filter(|x| x.src_vmid != vm_id).collect();
+    // *ipi_list = ipi_list.drain_filter(|x| x.src_vmid != vm_id).collect();
 }

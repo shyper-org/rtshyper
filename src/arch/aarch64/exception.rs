@@ -128,14 +128,17 @@ unsafe extern "C" fn current_el_sp0_serror() {
 
 #[no_mangle]
 #[inline(never)]
-unsafe extern "C" fn current_el_spx_synchronous() {
+unsafe extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     panic!(
-        "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
+        "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x} x8 0x{:x} x9 0x{:x} sp 0x{:x}\n",
         current_cpu().id,
         cortex_a::registers::ELR_EL2.get(),
         cortex_a::registers::SP_EL0.get(),
         cortex_a::registers::SP_EL1.get(),
         cortex_a::registers::SPSel.get(),
+        (*ctx).gpr(8),
+        (*ctx).gpr(9),
+        (*ctx).stack_pointer(),
     );
 }
 
@@ -188,7 +191,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
                 active_vm_id(),
                 exception_class(),
                 exception_fault_addr(),
-                (*ctx).elr()
+                (*ctx).exception_pc()
             );
         }
     }
