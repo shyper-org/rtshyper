@@ -6,13 +6,10 @@ ARCH ?= aarch64
 BUILD_STD = core,alloc
 
 # Toolchain
+TOOLCHAIN=aarch64-linux-gnu
 QEMU = /usr/share/qemu/bin/qemu-system-aarch64
-GDB = aarch64-linux-gnu-gdb
-OBJDUMP = aarch64-linux-gnu-objdump
-
-
-RUSTFLAGS := -C llvm-args=-global-isel=false
-export RUSTFLAGS := ${RUSTFLAGS}
+GDB = ${TOOLCHAIN}-gdb
+OBJDUMP = ${TOOLCHAIN}-objdump
 
 qemu_debug:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu
@@ -87,7 +84,7 @@ debug:
 
 
 gdb:
-	aarch64-linux-gnu-gdb -x gdb/aarch64.gdb
+	${GDB} -x gdb/aarch64.gdb
 
 clean:
-	rm -rf target
+	cargo clean

@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet, LinkedList, VecDeque};
+use alloc::collections::{BTreeMap, BTreeSet, LinkedList};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;

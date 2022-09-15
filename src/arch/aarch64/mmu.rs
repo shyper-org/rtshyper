@@ -1,11 +1,12 @@
 use core::arch::global_asm;
-
 use tock_registers::*;
 use tock_registers::interfaces::*;
 
 use crate::arch::pt_lvl2_idx;
 use crate::board::PLAT_DESC;
 use crate::lib::memset_safe;
+#[cfg(feature = "pi4")]
+use crate::arch::LVL2_SHIFT;
 
 use super::interface::*;
 

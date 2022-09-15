@@ -10,6 +10,8 @@ use crate::lib::{bit_num, round_up};
 use crate::SYSTEM_FDT;
 use crate::vmm::CPIO_RAMDISK;
 
+#[cfg(feature = "pi4")]
+use crate::arch::PAGE_SIZE;
 const PI4_DTB_ADDR: usize = 0xf0000000;
 
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {

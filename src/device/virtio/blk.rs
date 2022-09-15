@@ -238,7 +238,7 @@ impl VirtioBlkReq {
         }
     }
 
-    pub fn add_req_node(&self, mut node: VirtioBlkReqNode, vm: Vm) {
+    pub fn add_req_node(&self, node: VirtioBlkReqNode, vm: Vm) {
         let mut list = self.req_list.lock();
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         // push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());

@@ -7,7 +7,6 @@ use core::future::Future;
 use core::pin::Pin;
 use core::task::Context;
 
-use cortex_a::asm::wfi;
 use spin::mutex::Mutex;
 use woke::{waker_ref, Woke};
 
@@ -19,7 +18,7 @@ use crate::kernel::{
     current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
     vm_if_get_cpu_id,
 };
-use crate::lib::{memcpy_safe, sleep, trace};
+use crate::lib::{memcpy_safe, trace};
 
 pub static TASK_IPI_COUNT: Mutex<usize> = Mutex::new(0);
 pub static TASK_COUNT: Mutex<usize> = Mutex::new(0);

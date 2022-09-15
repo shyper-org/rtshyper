@@ -11,7 +11,7 @@ build = "build.rs"
 panic = "abort"
 
 [profile.release]
-opt-level = 2
+# opt-level = 2
 panic = "abort"
 debug = true
 
@@ -26,9 +26,8 @@ spin = "0.9.4"
 cortex-a = "7.4.0"
 buddy_system_allocator = "0.8.0"
 
-[dependencies.lazy_static]
-version = "1.0"
-features = ["spin_no_std"]
+[profile.release.package.spin]
+opt-level = 0
 
 [dependencies.tock-registers]
 version = "0.7.0"

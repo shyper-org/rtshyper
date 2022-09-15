@@ -1,2 +1,3 @@
 [build]
 target = "aarch64-tx2.json"
+rustflags = ["-C", "llvm-args=-global-isel=false"]
