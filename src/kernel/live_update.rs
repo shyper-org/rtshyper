@@ -1,4 +1,4 @@
-use alloc::boxed::Box;
+// use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet, LinkedList};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -403,7 +403,8 @@ pub fn async_task_update(
             task_data,
             src_vmid: vm_id,
             state: Arc::new(Mutex::new(*ipi_task.state.lock())),
-            task: Arc::new(Mutex::new(Box::pin(async_ipi_req()))),
+            // task: Arc::new(Mutex::new(Box::pin(async_ipi_req()))),
+            task: async_ipi_req,
         })
     }
     for io_task in src_async_io_task_list.lock().iter() {
@@ -448,7 +449,8 @@ pub fn async_task_update(
             task_data,
             src_vmid: vm_id,
             state: Arc::new(Mutex::new(*io_task.state.lock())),
-            task: Arc::new(Mutex::new(Box::pin(async_blk_io_req()))),
+            // task: Arc::new(Mutex::new(Box::pin(async_blk_io_req()))),
+            task: async_blk_io_req,
         })
     }
     for (key, used_info) in src_async_used_info_list.lock().iter() {

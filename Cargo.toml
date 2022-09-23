@@ -18,16 +18,13 @@ debug = true
 [dependencies]
 vm-fdt = { git = "https://github.com/OhmR/vm-fdt" }
 #nostd_async = "0.6.0"
-woke = "0.0.2"
+#woke = "0.0.2"
 fdt = { path = "libfdt-binding" }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_trace"] }
 volatile = "0.4.4"
 spin = "0.9.4"
 cortex-a = "7.4.0"
 buddy_system_allocator = "0.8.0"
-
-[profile.release.package.spin]
-opt-level = 0
 
 [dependencies.tock-registers]
 version = "0.7.0"

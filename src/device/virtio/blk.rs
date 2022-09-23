@@ -395,7 +395,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                             iov_list: Arc::new(req_node.iov.clone()),
                         }),
                         vm.id(),
-                        async_blk_io_req(),
+                        async_blk_io_req,
                     );
                     add_async_task(task, false);
                 } else {
@@ -448,7 +448,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                             iov_list: Arc::new(req_node.iov.clone()),
                         }),
                         vm.id(),
-                        async_blk_io_req(),
+                        async_blk_io_req,
                     );
                     add_async_task(task, false);
                 } else {
@@ -468,7 +468,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                 let task = AsyncTask::new(
                     AsyncTaskData::AsyncNoneTask(IoIdAsyncMsg { vq: vq.clone() }),
                     vm.id(),
-                    async_blk_id_req(),
+                    async_blk_id_req,
                 );
                 task.set_state(AsyncTaskState::Finish);
                 add_async_task(task, false);
@@ -493,7 +493,6 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
     req.clear_node();
 }
 
-#[no_mangle]
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     // if current_cpu().id == 1 {
     //     add_task_count();
@@ -505,7 +504,7 @@ pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) ->
             blk: blk.clone(),
         }),
         vm.id(),
-        async_ipi_req(),
+        async_ipi_req,
     );
     add_async_task(task, true);
     true

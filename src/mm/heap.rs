@@ -18,7 +18,7 @@ pub fn heap_init() {
     unsafe {
         HEAP_ALLOCATOR
             .lock()
-            .init(&HEAP_REGION.0 as *const _ as usize, HEAP_SIZE);
+            .init(HEAP_REGION.0.as_mut_ptr() as usize, HEAP_SIZE);
     }
 }
 

@@ -1,14 +1,14 @@
-use alloc::boxed::Box;
+// use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, LinkedList};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
-use core::future::Future;
-use core::pin::Pin;
-use core::task::Context;
+// use core::future::Future;
+// use core::pin::Pin;
+// use core::task::Context;
 
 use spin::mutex::Mutex;
-use woke::{waker_ref, Woke};
+// use woke::{waker_ref, Woke};
 
 use crate::device::{
     BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN,
@@ -106,30 +106,27 @@ pub struct AsyncTask {
     pub task_data: AsyncTaskData,
     pub src_vmid: usize,
     pub state: Arc<Mutex<AsyncTaskState>>,
-    pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
+    // pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
+    pub task: fn(),
 }
 
-impl Woke for AsyncTask {
-    fn wake(self: Arc<Self>) {
-        todo!()
-    }
+// impl Woke for AsyncTask {
+//     fn wake(self: Arc<Self>) {
+//         todo!()
+//     }
 
-    fn wake_by_ref(_arc_self: &Arc<Self>) {
-        todo!()
-    }
-}
+//     fn wake_by_ref(_arc_self: &Arc<Self>) {
+//         todo!()
+//     }
+// }
 
 impl AsyncTask {
-    pub fn new(
-        task_data: AsyncTaskData,
-        src_vmid: usize,
-        future: impl Future<Output = ()> + 'static + Send + Sync,
-    ) -> AsyncTask {
+    pub fn new(task_data: AsyncTaskData, src_vmid: usize, future: fn()) -> AsyncTask {
         AsyncTask {
             task_data,
             src_vmid,
             state: Arc::new(Mutex::new(AsyncTaskState::Pending)),
-            task: Arc::new(Mutex::new(Box::pin(future))),
+            task: future,
         }
     }
 
@@ -147,10 +144,11 @@ impl AsyncTask {
             }
         }
         drop(state);
-        let wake: Arc<AsyncTask> = unsafe { Arc::from_raw(self as *mut _) };
-        let waker = waker_ref(&wake);
-        let mut context = Context::from_waker(&*waker);
-        self.task.lock().as_mut().poll(&mut context);
+        // let wake: Arc<AsyncTask> = unsafe { Arc::from_raw(self as *mut _) };
+        // let waker = waker_ref(&wake);
+        // let mut context = Context::from_waker(&*waker);
+        // self.task.lock().as_mut().poll(&mut context);
+        (self.task)();
         return false;
     }
 
@@ -161,7 +159,7 @@ impl AsyncTask {
 }
 
 // async req function
-pub async fn async_ipi_req() {
+pub fn async_ipi_req() {
     let ipi_list = ASYNC_IPI_TASK_LIST.lock();
     if ipi_list.is_empty() {
         panic!("ipi_list should not be empty");
@@ -174,6 +172,7 @@ pub async fn async_ipi_req() {
                 virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
             } else {
                 // add_task_ipi_count();
+                // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
                 ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
             }
         }
@@ -181,9 +180,10 @@ pub async fn async_ipi_req() {
     }
 }
 
-pub async fn async_blk_id_req() {}
+pub fn async_blk_id_req() {}
 
-pub async fn async_blk_io_req() {
+// inject an interrupt to service VM
+pub fn async_blk_io_req() {
     let io_list = ASYNC_IO_TASK_LIST.lock();
     if io_list.is_empty() {
         panic!("io_list should not be empty");
@@ -225,7 +225,7 @@ pub fn set_front_io_task_state(state: AsyncTaskState) {
             panic!("front io task is none");
         }
         Some(task) => {
-            *(task.state.lock()) = state;
+            task.set_state(state);
         }
     }
 }
@@ -256,6 +256,9 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
         }
     }
 
+    // if this is a normal VM and this is the first IO request
+    // (which generate a ipi async task in `virtio_mediated_blk_notify_handler`)
+    // invoke the executor to handle it
     if current_cpu().id != 0
         && ASYNC_IO_TASK_LIST.lock().is_empty()
         && ASYNC_IPI_TASK_LIST.lock().len() == 1
@@ -293,6 +296,7 @@ pub fn async_task_exe() {
         let ipi;
         if io_list.is_empty() {
             if !ipi_list.is_empty() {
+                // other VM start an IO which need to be handled by service VM
                 task = ipi_list.front().unwrap().clone();
                 ipi = true;
             } else {
@@ -300,6 +304,7 @@ pub fn async_task_exe() {
                 return;
             }
         } else {
+            // if io_list is not empty, prioritize IO requests
             ipi = false;
             task = io_list.front().unwrap().clone();
         }
@@ -313,6 +318,7 @@ pub fn async_task_exe() {
             set_async_exe_status(AsyncExeStatus::Pending);
             return;
         }
+        // not a service VM, end loop
         if current_cpu().id != 0 {
             return;
         }
@@ -399,7 +405,7 @@ pub fn finish_async_task(ipi: bool) {
     }
 }
 
-pub fn last_vm_async_io_task(vm_id: usize) -> bool {
+fn last_vm_async_io_task(vm_id: usize) -> bool {
     let io_list = ASYNC_IO_TASK_LIST.lock();
     for io_task in &*io_list {
         if io_task.src_vmid == vm_id {
@@ -424,7 +430,7 @@ pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) 
     }
 }
 
-pub fn update_used_info(vq: Virtq, src_vmid: usize) {
+fn update_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     match used_info_list.get_mut(&src_vmid) {
         Some(info_list) => {

@@ -7,7 +7,10 @@ use spin::Mutex;
 // pub const VIRTIO_MMIO_DEVICE_ID: usize = 0x008;
 // pub const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
 use crate::config::VmEmulatedDeviceConfig;
-use crate::device::{EmuContext, virtio_mediated_blk_notify_handler};
+use crate::device::{
+    EmuContext, virtio_mediated_blk_notify_handler, virtio_blk_notify_handler, virtio_net_notify_handler,
+    virtio_console_notify_handler,
+};
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
@@ -121,34 +124,34 @@ impl VirtioQueue for VirtioMmio {
             VirtioDeviceType::Block => {
                 self.set_q_num_max(VIRTQUEUE_BLK_MAX_SIZE as u32);
                 let mut inner = self.inner.lock();
-                inner.vq.push(Virtq::default());
-                inner.vq[0].reset(0);
-                use crate::device::virtio_blk_notify_handler;
+                let queue = Virtq::default();
+                queue.reset(0);
                 if inner.dev.mediated() {
-                    inner.vq[0].set_notify_handler(virtio_mediated_blk_notify_handler);
+                    queue.set_notify_handler(virtio_mediated_blk_notify_handler);
                 } else {
-                    inner.vq[0].set_notify_handler(virtio_blk_notify_handler);
+                    queue.set_notify_handler(virtio_blk_notify_handler);
                 }
+                inner.vq.push(queue);
             }
             VirtioDeviceType::Net => {
                 self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
                 let mut inner = self.inner.lock();
                 // Not support feature VIRTIO_NET_F_CTRL_VQ (no control queue)
                 for i in 0..2 {
-                    inner.vq.push(Virtq::default());
-                    inner.vq[i].reset(i);
-                    use crate::device::virtio_net_notify_handler;
-                    inner.vq[i].set_notify_handler(virtio_net_notify_handler);
+                    let queue = Virtq::default();
+                    queue.reset(i);
+                    queue.set_notify_handler(virtio_net_notify_handler);
+                    inner.vq.push(queue);
                 }
             }
             VirtioDeviceType::Console => {
                 self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
                 let mut inner = self.inner.lock();
                 for i in 0..4 {
-                    inner.vq.push(Virtq::default());
-                    inner.vq[i].reset(i);
-                    use crate::device::virtio_console_notify_handler;
-                    inner.vq[i].set_notify_handler(virtio_console_notify_handler);
+                    let queue = Virtq::default();
+                    queue.reset(i);
+                    queue.set_notify_handler(virtio_console_notify_handler);
+                    inner.vq.push(queue);
                 }
             }
             VirtioDeviceType::None => {

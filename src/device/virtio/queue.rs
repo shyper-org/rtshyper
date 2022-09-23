@@ -104,11 +104,7 @@ impl Virtq {
                 // }
                 let idx = inner.last_avail_idx as usize % inner.num;
                 let avail_desc_idx = avail.ring[idx];
-                if inner.last_avail_idx == u16::MAX {
-                    inner.last_avail_idx = 0;
-                } else {
-                    inner.last_avail_idx += 1;
-                }
+                inner.last_avail_idx = inner.last_avail_idx.wrapping_add(1);
                 return Some(avail_desc_idx);
             }
             None => {
@@ -176,14 +172,7 @@ impl Virtq {
                 used.flags = flag;
                 used.ring[used.idx as usize % num].id = desc_chain_head_idx;
                 used.ring[used.idx as usize % num].len = len;
-                // unsafe {
-                //     llvm_asm!("dsb ish");
-                // }
-                if used.idx == u16::MAX {
-                    used.idx = 0;
-                } else {
-                    used.idx += 1;
-                }
+                used.idx = used.idx.wrapping_add(1);
                 return true;
             }
             None => {

@@ -97,7 +97,7 @@ impl BlockDescriptor {
                 + if device {
                     PageDescriptorS1::AttrIndx::Attr0 + PageDescriptorS1::SH::OuterShareable
                 } else {
-                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::OuterShareable
+                    PageDescriptorS1::AttrIndx::Attr1 + PageDescriptorS1::SH::InnerShareable
                 })
             .value,
         )
