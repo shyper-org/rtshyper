@@ -162,7 +162,6 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
     };
 
     // let buf = dev.cache();
-    let vq_size = vq.num();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
 
     while next_desc_idx_opt.is_some() {
@@ -193,7 +192,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
             let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
             vm_if_set_mem_map_bit(vm.clone(), used_addr);
         }
-        if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32, vq_size) {
+        if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
             return false;
         }
 
@@ -312,7 +311,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         let used_addr = vm_ipa2pa(trgt_vm.clone(), rx_vq.used_addr());
         vm_if_set_mem_map_bit(trgt_vm.clone(), used_addr);
     }
-    if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
+    if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         println!(
             "virtio_console_recv: update used ring failed len {} rx_vq num {}",
             len,

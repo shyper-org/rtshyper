@@ -13,31 +13,31 @@ OBJDUMP = ${TOOLCHAIN}-objdump
 
 qemu_debug:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu
-	${OBJDUMP} -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
+	${OBJDUMP} --demangle -d target/aarch64/debug/rust_hypervisor > target/aarch64/debug/t.txt
 
 qemu_release:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu --release
-	${OBJDUMP} -d target/aarch64/release/rust_hypervisor > target/aarch64/release/t.txt
+	${OBJDUMP} --demangle -d target/aarch64/release/rust_hypervisor > target/aarch64/release/t.txt
 
 tx2:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features tx2
 	bash upload
-	${OBJDUMP} -d target/aarch64-tx2/debug/rust_hypervisor > target/aarch64-tx2/debug/t.txt
+	${OBJDUMP} --demangle -d target/aarch64-tx2/debug/rust_hypervisor > target/aarch64-tx2/debug/t.txt
 
 tx2_release:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features tx2 --release
 	bash upload_release
-	${OBJDUMP} -d target/aarch64-tx2/release/rust_hypervisor > target/aarch64-tx2/release/t.txt
+	${OBJDUMP} --demangle -d target/aarch64-tx2/release/rust_hypervisor > target/aarch64-tx2/release/t.txt
 
 tx2_update:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2-update.json --features "tx2 update" --release
 	bash upload_update
-	${OBJDUMP} -d target/aarch64-tx2-update/release/rust_hypervisor > target/aarch64-tx2-update/release/update.txt
+	${OBJDUMP} --demangle -d target/aarch64-tx2-update/release/rust_hypervisor > target/aarch64-tx2-update/release/update.txt
 
 pi4_release:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-pi4.json --features pi4 --release
 	bash pi4_upload_release
-	${OBJDUMP} -d target/aarch64-pi4/release/rust_hypervisor > target/aarch64-pi4/release/t.txt
+	${OBJDUMP} --demangle -d target/aarch64-pi4/release/rust_hypervisor > target/aarch64-pi4/release/t.txt
 
 run:
 	${QEMU} \

@@ -12,7 +12,7 @@
   "disable-redzone": true,
   "env": "",
   "executables": true,
-  "features": "+strict-align",
+  "features": "+v8a,+strict-align",
   "is-builtin": true,
   "linker": "rust-lld",
   "linker-flavor": "ld.lld",

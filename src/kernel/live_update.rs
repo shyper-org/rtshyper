@@ -27,7 +27,7 @@ use crate::kernel::{
     InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, ipi_send_msg, IpiHandler,
     IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, SHARE_MEM_LIST,
     timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST,
-    VM_NUM_MAX, VM_REGION, VmInterface, VmRegion,
+    VM_NUM_MAX, VM_REGION, VmInterface, VmRegion, FairQueue,
 };
 use crate::lib::{BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
@@ -278,10 +278,10 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
             cpu_if_update(cpu_if);
 
             // ASYNC_IPI_TASK_LIST、ASYNC_IO_TASK_LIST、ASYNC_USED_INFO_LIST
-            let async_ipi_task_list = &*(address_list.async_ipi_task_list as *const Mutex<Vec<AsyncTask>>);
-            let async_io_task_list = &*(address_list.async_io_task_list as *const Mutex<Vec<AsyncTask>>);
+            let async_ipi_task_list = &*(address_list.async_ipi_task_list as *const Mutex<LinkedList<AsyncTask>>);
+            let async_io_task_list = &*(address_list.async_io_task_list as *const Mutex<FairQueue<AsyncTask>>);
             let async_used_info_list =
-                &*(address_list.async_used_info_list as *const Mutex<BTreeMap<usize, Vec<UsedInfo>>>);
+                &*(address_list.async_used_info_list as *const Mutex<BTreeMap<usize, LinkedList<UsedInfo>>>);
             async_task_update(async_ipi_task_list, async_io_task_list, async_used_info_list);
 
             set_fresh_status(FreshStatus::Finish);
@@ -366,9 +366,9 @@ pub fn shared_mem_list_update(src_shared_mem_list: &Mutex<BTreeMap<usize, usize>
 }
 
 pub fn async_task_update(
-    src_async_ipi_task_list: &Mutex<Vec<AsyncTask>>,
-    src_async_io_task_list: &Mutex<Vec<AsyncTask>>,
-    src_async_used_info_list: &Mutex<BTreeMap<usize, Vec<UsedInfo>>>,
+    src_async_ipi_task_list: &Mutex<LinkedList<AsyncTask>>,
+    src_async_io_task_list: &Mutex<FairQueue<AsyncTask>>,
+    src_async_used_info_list: &Mutex<BTreeMap<usize, LinkedList<UsedInfo>>>,
 ) {
     let mut async_ipi_task_list = ASYNC_IPI_TASK_LIST.lock();
     let mut async_io_task_list = ASYNC_IO_TASK_LIST.lock();
@@ -407,7 +407,9 @@ pub fn async_task_update(
             task: async_ipi_req,
         })
     }
-    for io_task in src_async_io_task_list.lock().iter() {
+    // for io_task in src_async_io_task_list.lock().iter() {
+    while !src_async_io_task_list.lock().is_empty() {
+        let io_task = src_async_io_task_list.lock().pop_front().unwrap();
         let vm_id = io_task.src_vmid;
         let vm = vm(vm_id).unwrap();
         let task_data = match &io_task.task_data {
@@ -451,7 +453,7 @@ pub fn async_task_update(
             state: Arc::new(Mutex::new(*io_task.state.lock())),
             // task: Arc::new(Mutex::new(Box::pin(async_blk_io_req()))),
             task: async_blk_io_req,
-        })
+        });
     }
     for (key, used_info) in src_async_used_info_list.lock().iter() {
         let mut new_used_info = LinkedList::new();
@@ -459,7 +461,7 @@ pub fn async_task_update(
             new_used_info.push_back(UsedInfo {
                 desc_chain_head_idx: info.desc_chain_head_idx,
                 used_len: info.used_len,
-            })
+            });
         }
         async_used_info_list.insert(*key, new_used_info);
     }

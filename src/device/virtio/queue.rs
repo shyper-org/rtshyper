@@ -164,8 +164,9 @@ impl Virtq {
         desc_table[idx].flags & VIRTQ_DESC_F_NEXT as u16 != 0
     }
 
-    pub fn update_used_ring(&self, len: u32, desc_chain_head_idx: u32, num: usize) -> bool {
+    pub fn update_used_ring(&self, len: u32, desc_chain_head_idx: u32) -> bool {
         let mut inner = self.inner.lock();
+        let num = inner.num;
         let flag = inner.used_flags;
         match &mut inner.used {
             Some(used) => {

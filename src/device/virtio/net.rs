@@ -173,7 +173,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
     let dev = nic.dev();
     // let buf = dev.cache();
-    let vq_size = vq.num();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
 
     while next_desc_idx_opt.is_some() {
@@ -208,7 +207,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
             next_desc_idx_opt.unwrap() as u32,
-            vq_size,
         ) {
             return false;
         }
@@ -508,7 +506,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
         vm_if_set_mem_map_bit(vm.clone(), used_addr);
     }
-    if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32, rx_vq.num()) {
+    if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         return false;
     }
 

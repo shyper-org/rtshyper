@@ -2,7 +2,6 @@
 use alloc::collections::{BTreeMap, LinkedList};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::arch::asm;
 // use core::future::Future;
 // use core::pin::Pin;
 // use core::task::Context;
@@ -18,7 +17,7 @@ use crate::kernel::{
     current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
     vm_if_get_cpu_id,
 };
-use crate::lib::{memcpy_safe, trace};
+use crate::lib::{memcpy_safe, trace, sleep};
 
 pub static TASK_IPI_COUNT: Mutex<usize> = Mutex::new(0);
 pub static TASK_COUNT: Mutex<usize> = Mutex::new(0);
@@ -83,8 +82,102 @@ pub enum AsyncExeStatus {
 
 pub static ASYNC_EXE_STATUS: Mutex<AsyncExeStatus> = Mutex::new(AsyncExeStatus::Pending);
 pub static ASYNC_IPI_TASK_LIST: Mutex<LinkedList<AsyncTask>> = Mutex::new(LinkedList::new());
-pub static ASYNC_IO_TASK_LIST: Mutex<LinkedList<AsyncTask>> = Mutex::new(LinkedList::new());
+pub static ASYNC_IO_TASK_LIST: Mutex<FairQueue<AsyncTask>> = Mutex::new(FairQueue::new());
 pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, LinkedList<UsedInfo>>> = Mutex::new(BTreeMap::new());
+
+pub trait TaskOwner {
+    fn owner(&self) -> usize;
+}
+
+// pub struct FairQueue<T: TaskOwner> {
+//     map: BTreeMap<usize, Arc<RefCell<LinkedList<T>>>>,
+//     // reverse_map: BTreeMap<Arc<RefCell<LinkedList<T>>>, usize>,
+//     queue: LinkedList<Arc<RefCell<LinkedList<T>>>>,
+// }
+
+pub struct FairQueue<T: TaskOwner> {
+    len: usize,
+    map: BTreeMap<usize, LinkedList<T>>,
+    queue: LinkedList<usize>,
+}
+
+impl<T: TaskOwner> FairQueue<T> {
+    pub const fn new() -> Self {
+        Self {
+            len: 0,
+            map: BTreeMap::new(),
+            queue: LinkedList::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn push_back(&mut self, task: T) {
+        let key = task.owner();
+        match self.map.get_mut(&key) {
+            Some(sub_queue) => sub_queue.push_back(task),
+            None => {
+                let mut sub_queue = LinkedList::new();
+                sub_queue.push_back(task);
+                self.map.insert(key, sub_queue);
+                self.queue.push_back(key);
+            }
+        }
+        self.len += 1;
+    }
+
+    pub fn pop_front(&mut self) -> Option<T> {
+        match self.queue.pop_front() {
+            Some(owner) => match self.map.get_mut(&owner) {
+                Some(sub_queue) => {
+                    let res = sub_queue.pop_front();
+                    if !sub_queue.is_empty() {
+                        self.queue.push_back(owner);
+                    } else {
+                        self.map.remove(&owner);
+                    }
+                    self.len -= 1;
+                    res
+                }
+                None => panic!(""),
+            },
+            None => panic!("front: queue empty"),
+        }
+    }
+
+    pub fn front(&self) -> Option<&T> {
+        match self.queue.front() {
+            Some(owner) => match self.map.get(owner) {
+                Some(sub_queue) => sub_queue.front(),
+                None => panic!(""),
+            },
+            None => panic!("front: queue empty"),
+        }
+    }
+
+    pub fn remove(&mut self, owner: usize) {
+        match self.map.remove(&owner) {
+            Some(sub_queue) => {
+                self.len -= sub_queue.len();
+                self.queue = self.queue.drain_filter(|x| *x == owner).collect();
+            }
+            None => {}
+        }
+    }
+}
+
+impl<T: TaskOwner> Iterator for FairQueue<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        todo!()
+    }
+}
 
 #[derive(Clone)]
 pub enum AsyncTaskData {
@@ -108,6 +201,12 @@ pub struct AsyncTask {
     pub state: Arc<Mutex<AsyncTaskState>>,
     // pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
     pub task: fn(),
+}
+
+impl TaskOwner for AsyncTask {
+    fn owner(&self) -> usize {
+        self.src_vmid
+    }
 }
 
 // impl Woke for AsyncTask {
@@ -247,12 +346,7 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
         if current_cpu().id == 0 || ASYNC_IPI_TASK_LIST.lock().len() < 1024 {
             break;
         } else {
-            // sleep(100);
-            for _ in 0..100 * 1000 {
-                unsafe {
-                    asm!("wfi");
-                }
-            }
+            sleep(100);
         }
     }
 
@@ -358,7 +452,6 @@ pub fn finish_async_task(ipi: bool) {
                 _ => {}
             }
 
-            // if last_vm_async_io_task(task.src_vmid) {
             let target_id = vm_if_get_cpu_id(task.src_vmid);
             update_used_info(args.vq.clone(), task.src_vmid);
             if target_id != current_cpu().id {
@@ -378,7 +471,6 @@ pub fn finish_async_task(ipi: bool) {
                     }
                 }
             }
-            // }
         }
         AsyncTaskData::AsyncIpiTask(_) => {}
         AsyncTaskData::AsyncNoneTask(args) => {
@@ -405,16 +497,6 @@ pub fn finish_async_task(ipi: bool) {
     }
 }
 
-fn last_vm_async_io_task(vm_id: usize) -> bool {
-    let io_list = ASYNC_IO_TASK_LIST.lock();
-    for io_task in &*io_list {
-        if io_task.src_vmid == vm_id {
-            return false;
-        }
-    }
-    true
-}
-
 pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     match used_info_list.get_mut(&src_vmid) {
@@ -434,11 +516,10 @@ fn update_used_info(vq: Virtq, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     match used_info_list.get_mut(&src_vmid) {
         Some(info_list) => {
-            let vq_size = vq.num();
             // for info in info_list.iter() {
             // vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
             let info = info_list.pop_front().unwrap();
-            vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
+            vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
             // }
             // info_list.clear();
         }
@@ -464,7 +545,8 @@ pub fn remove_vm_async_task(vm_id: usize) {
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
     // io_list.retain(|x| x.src_vmid != vm_id);
     // ipi_list.retain(|x| x.src_vmid != vm_id);
-    *io_list = io_list.drain_filter(|x| x.src_vmid == vm_id).collect::<LinkedList<_>>();
+    // *io_list = io_list.drain_filter(|x| x.src_vmid == vm_id).collect::<LinkedList<_>>();
+    io_list.remove(vm_id);
     *ipi_list = ipi_list
         .drain_filter(|x| x.src_vmid == vm_id)
         .collect::<LinkedList<_>>();

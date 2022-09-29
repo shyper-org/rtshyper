@@ -13,13 +13,11 @@ pub fn time_current_ms() -> usize {
 }
 
 pub fn sleep(us: usize) {
-    // use core::arch::asm;
-    // let end = time_current_us() + us;
-    // while time_current_us() < end {
-    //     unsafe {
-    //         // asm!("wfi");
-    //         asm!("nop");
-    //     }
-    // }
-    for _ in 0..us * 1000 {}
+    use core::arch::asm;
+    let end = time_current_us() + us;
+    while time_current_us() < end {
+        unsafe {
+            asm!("nop");
+        }
+    }
 }
