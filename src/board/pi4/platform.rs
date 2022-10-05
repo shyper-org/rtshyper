@@ -26,7 +26,7 @@ pub const PLATFORM_GICV_BASE: usize = 0xFF846000;
 // pub const DISK_PARTITION_3_ADDR: usize = 0xa000800;
 // pub const DISK_PARTITION_4_ADDR: usize = 0xa000c00;
 
-pub const SHARE_MEM_BASE: usize = 0x10_0000_0000;
+pub const SHARE_MEM_BASE: usize = 0x7_0000_0000;
 
 // start sector number (LBA)
 pub const DISK_PARTITION_0_START: usize = 2048;

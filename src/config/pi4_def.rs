@@ -53,7 +53,7 @@ pub fn mvm_config_init() {
         name: Some(String::from("virtio_console@fa002000")),
         base_ipa: 0xfa002000,
         length: 0x1000,
-        irq_id: 32 + 0x21,
+        irq_id: 32 + 0x18,
         cfg_list: vec![2, 0xa002000],
         emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
         mediated: false,
@@ -83,13 +83,14 @@ pub fn mvm_config_init() {
     // 146 is UART_INT
     pt_dev_config.irqs = vec![
         27,        // timer
+        32 + 0x21, // mailbox@7e00b880
+        32 + 0x28, // usb@7e980000
         32 + 0x40, // timer@7e003000
         32 + 0x41, // timer@7e003000
         32 + 0x42, // timer@7e003000
         32 + 0x43, // timer@7e003000
         32 + 0x4b, // txp@7e004000
         32 + 0x7d, // rng@7e104000
-        32 + 0x21, // mailbox@7e00b880
         32 + 0x71, // gpio@7e200000
         32 + 0x72, // gpio@7e200000
         32 + 0x79, // serial@7e201000
@@ -101,7 +102,6 @@ pub fn mvm_config_init() {
         32 + 0x6c, // dsi@7e700000
         32 + 0x7b, // vec@7e806000
         32 + 0x49, // usb@7e980000
-        32 + 0x28, // usb@7e980000
         32 + 0x50, // dma@7e007000
         32 + 0x51, // dma@7e007000
         32 + 0x52, // dma@7e007000

@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::arch::asm;
 use core::mem::size_of;
 
 use spin::Mutex;
@@ -13,15 +14,15 @@ use crate::board::SHARE_MEM_BASE;
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::kernel::{
-    EmuDevData, get_share_mem, mem_pages_alloc, VgicMigData, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND,
-    VMData,
+    EmuDevData, get_share_mem, interrupt_vm_inject, mem_pages_alloc, VgicMigData, VirtioMmioData, VM_CONTEXT_RECEIVE,
+    VM_CONTEXT_SEND, VMData,
 };
 use crate::lib::*;
 use crate::mm::PageFrame;
 
 use super::vcpu::Vcpu;
 
-pub const DIRTY_MEM_THRESHOLD: usize = 0x8000;
+pub const DIRTY_MEM_THRESHOLD: usize = 0x2000;
 pub const VM_NUM_MAX: usize = 8;
 pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
     Mutex::new(VmInterface::default()),
@@ -455,11 +456,11 @@ impl Vm {
                     let start = vm_inner.pa_region[i].pa_start;
                     let end = start + vm_inner.pa_region[i].pa_length;
                     if pa >= start && pa < end {
-                        let ipa_start = pa + vm_inner.pa_region[i].offset as usize;
+                        let ipa_start = (pa as isize + vm_inner.pa_region[i].offset) as usize;
                         return pt.access_permission(ipa_start, PAGE_SIZE, ap);
                     }
                 }
-                (0, 0)
+                panic!("pt_set_access_permission illegal pa 0x{:x}", pa);
             }
             None => {
                 panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
@@ -474,6 +475,17 @@ impl Vm {
                 for i in 0..vm_inner.mem_region_num {
                     let ipa_start = vm_inner.pa_region[i].pa_start + vm_inner.pa_region[i].offset as usize;
                     let len = vm_inner.pa_region[i].pa_length;
+                    // println!(
+                    //     "vm[1] set read only ipa start 0x{:x}, len {:x}, offset {:x}",
+                    //     ipa_start, len, vm_inner.pa_region[i].offset
+                    // );
+                    // let mut ttbr0_el1: usize = 0;
+                    // let mut ttbr1_el1: usize = 0;
+                    // unsafe {
+                    //     asm!("mrs {0:x}, TTBR0_EL1", out(reg) ttbr0_el1);
+                    //     asm!("mrs {0:x}, TTBR1_EL1", out(reg) ttbr1_el1);
+                    // }
+                    // println!("ttbr0_el1 {:x}, ttbr1_el1 {:x}", ttbr0_el1, ttbr1_el1);
                     pt.access_permission(ipa_start, len, PTE_S2_FIELD_AP_RO);
                 }
             }

@@ -1,17 +1,19 @@
 use crate::arch::{
     exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write, exception_data_abort_access_reg,
     exception_data_abort_access_reg_width, exception_data_abort_access_width, exception_data_abort_handleable,
-    exception_data_abort_is_permission_fault, exception_data_abort_is_translate_fault,
+    exception_data_abort_is_permission_fault, exception_data_abort_is_translate_fault, exception_iss,
 };
 use crate::arch::{exception_esr, exception_fault_addr};
 use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, EmuContext};
-use crate::kernel::{current_cpu, hvc_guest_handler, migrate_data_abort_handler};
+use crate::kernel::{active_vm, current_cpu, hvc_guest_handler, migrate_data_abort_handler};
+use crate::lib::time_current_us;
 
 pub const HVC_RETURN_REG: usize = 0;
 
 pub fn data_abort_handler() {
+    // let time0 = time_current_us();
     let emu_ctx = EmuContext {
         address: exception_fault_addr(),
         width: exception_data_abort_access_width(),
@@ -34,17 +36,21 @@ pub fn data_abort_handler() {
     if !exception_data_abort_is_translate_fault() {
         if exception_data_abort_is_permission_fault() {
             // println!(
-            //     "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}",
+            //     "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}, esr 0x{:x}",
             //     exception_data_abort_access_is_write(),
             //     emu_ctx.width,
             //     emu_ctx.reg_width,
             //     emu_ctx.address,
             //     exception_iss(),
             //     emu_ctx.reg,
-            //     current_cpu().get_gpr(emu_ctx.reg)
+            //     current_cpu().get_gpr(emu_ctx.reg),
+            //     exception_esr()
             // );
             migrate_data_abort_handler(&emu_ctx);
             // no need to rewrite elr
+
+            // let time1 = time_current_us();
+            // println!("migrate_data_abort_handler: {}us", time1 - time0);
             return;
         } else {
             panic!(
@@ -55,6 +61,18 @@ pub fn data_abort_handler() {
         }
     }
     if !emu_handler(&emu_ctx) {
+        active_vm().unwrap().show_pagetable(emu_ctx.address);
+        println!(
+            "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}, esr 0x{:x}",
+            exception_data_abort_access_is_write(),
+            emu_ctx.width,
+            emu_ctx.reg_width,
+            emu_ctx.address,
+            exception_iss(),
+            emu_ctx.reg,
+            current_cpu().get_gpr(emu_ctx.reg),
+            exception_esr()
+        );
         panic!(
             "data_abort_handler: Failed to handler emul device request, ipa 0x{:x} elr 0x{:x}",
             emu_ctx.address, elr

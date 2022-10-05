@@ -193,6 +193,7 @@ impl PageTable {
                 continue;
             } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
                 let pte = l2e.to_pte() & !(0b11 << 6) | ap;
+                println!("access_permission set 512 page ipa {:x}", ipa);
                 l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
                 ipa += 512 * 4096; // 2MB: 9 + 12 bits
                 pa = l2e.to_pa();
@@ -201,10 +202,23 @@ impl PageTable {
             }
             let l3e = l2e.entry(pt_lvl3_idx(ipa));
             if l3e.valid() {
+                // if ipa < 0x8400_0000 {
                 let pte = l3e.to_pte() & !(0b11 << 6) | ap;
                 l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
                 pa = l3e.to_pa();
                 size += 4096;
+                // } else if ipa < 0x8000_0000 {
+                //     panic!("illegal ipa {:x}", start_ipa);
+                // } else {
+                //     // println!(
+                //     //     "access_permission ipa {:x} l2e pte {:x} l3e pte {:x}",
+                //     //     ipa,
+                //     //     l2e.to_pte(),
+                //     //     l3e.to_pte()
+                //     // );
+                //     pa = l3e.to_pa();
+                //     size += 4096;
+                // }
             }
             ipa += 4096; // 4KB: 12 bits
         }
@@ -236,8 +250,14 @@ impl PageTable {
     }
 
     pub fn map(&self, ipa: usize, pa: usize, pte: usize) {
+        // if ipa >= 0x4_0000_0000 {
+        //     println!("map ipa 0x{:x} to pa 0x{:x}", ipa, pa);
+        // }
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));
+        // if ipa >= 0x4_0000_0000 {
+        //     println!("l1e {:x}", l1e.0);
+        // }
         if !l1e.valid() {
             let result = crate::kernel::mem_page_alloc();
             if let Ok(frame) = result {
@@ -263,13 +283,21 @@ impl PageTable {
                 println!("map lv2 page failed");
                 return;
             }
+        } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
+            println!("map lvl 2 already mapped with 2mb 0x{:x}", l2e.to_pte());
         }
+        // if ipa >= 0x4_0000_0000 {
+        //     println!("l2e {:x}", l2e.0);
+        // }
         let l3e = l2e.entry(pt_lvl3_idx(ipa));
         if l3e.valid() {
             println!("map lvl 3 already mapped with 0x{:x}", l3e.to_pte());
         } else {
             l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pa | PTE_TABLE | pte));
         }
+        // if ipa >= 0x4_0000_0000 {
+        //     println!("l3e {:x}", l3e.0);
+        // }
     }
 
     pub fn map_range_2mb(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
@@ -301,16 +329,18 @@ impl PageTable {
     pub fn show_pt(&self, ipa: usize) {
         // println!("show_pt");
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
-        println!("1 {:x}", directory.to_pa());
+        println!("1 {:x}", directory.to_pte());
         let l1e = directory.entry(pt_lvl1_idx(ipa));
-        println!("2 {:x}", l1e.to_pa());
+        println!("2 {:x}", l1e.to_pte());
         let l2e = l1e.entry(pt_lvl2_idx(ipa));
-        println!("3 {:x}", l2e.to_pa());
-        if l2e.to_pte() & 0b11 == PTE_BLOCK {
-            println!("ipa {:x} to pa {:x}", ipa, l2e.to_pa());
+        println!("3 {:x}", l2e.to_pte());
+        if !l2e.valid() {
+            println!("invalid ipa {:x} to l2 pte {:x}", ipa, l2e.to_pte());
+        } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
+            println!("l2 ipa {:x} to pa {:x}", ipa, l2e.to_pte());
         } else {
             let l3e = l2e.entry(pt_lvl3_idx(ipa));
-            println!("ipa {:x} to pa {:x}", ipa, l3e.to_pa());
+            println!("l3 ipa {:x} to pa {:x}", ipa, l3e.to_pte());
         }
     }
 
