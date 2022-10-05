@@ -1,9 +1,10 @@
 use alloc::sync::Arc;
+use core::mem::size_of;
 
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{VirtioMmio, Virtq};
+use crate::device::{VirtioMmio, Virtq, VringUsed};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
@@ -190,7 +191,13 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         }
         if vm.id() != 0 {
             let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            // println!(
+            //     "virtio_console_notify_handler: used addr {:x}, size {}",
+            //     used_addr,
+            //     size_of::<VringUsed>()
+            // );
             vm_if_set_mem_map_bit(vm.clone(), used_addr);
+            vm_if_set_mem_map_bit(vm.clone(), used_addr + PAGE_SIZE);
         }
         if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
             return false;
@@ -272,6 +279,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
             return false;
         }
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
+        // dirty pages
         if trgt_vmid != 0 {
             let mut addr = round_down(dst, PAGE_SIZE);
             while addr <= round_down(dst + desc_len, PAGE_SIZE) {
@@ -310,6 +318,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     if trgt_vmid != 0 {
         let used_addr = vm_ipa2pa(trgt_vm.clone(), rx_vq.used_addr());
         vm_if_set_mem_map_bit(trgt_vm.clone(), used_addr);
+        vm_if_set_mem_map_bit(trgt_vm.clone(), used_addr + PAGE_SIZE);
     }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         println!(

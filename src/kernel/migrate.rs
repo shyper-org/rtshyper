@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use crate::arch::{
     Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, GicContext, IrqState,
     PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
@@ -8,8 +10,9 @@ use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs}
 use crate::kernel::{
     active_vm, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg, HvcMigrateMsg,
     mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_copy_mem_map,
-    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
+    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache, vm_ipa2pa,
 };
+use crate::lib::cache_invalidate_d;
 
 pub struct VMData {
     pub vm_ctx: [VmContext; PLATFORM_VCPU_NUM_MAX],
@@ -233,11 +236,20 @@ pub struct ConsoleDescData {
 pub fn migrate_ready(vmid: usize) {
     if vm_if_mem_map_cache(vmid).is_none() {
         let trgt_vm = vm(vmid).unwrap();
-        map_migrate_vm_mem(trgt_vm, get_share_mem(MIGRATE_SEND));
+        map_migrate_vm_mem(trgt_vm.clone(), get_share_mem(MIGRATE_SEND));
         match mem_pages_alloc(vm_if_mem_map_page_num(vmid)) {
             Ok(pf) => {
-                // println!("bitmap size to page num {}", vm_if_mem_map_page_num(vmid));
+                // println!(
+                //     "bitmap size to page num {}, start pa 0x{:x}",
+                //     vm_if_mem_map_page_num(vmid),
+                //     pf.pa()
+                // );
+                // println!("before");
+                // active_vm().unwrap().show_pagetable(0x2200000000);
                 // map dirty bitmap
+                // unsafe {
+                //     asm!("dsb ish", "isb");
+                // }
                 active_vm().unwrap().pt_map_range(
                     get_share_mem(MIGRATE_BITMAP),
                     PAGE_SIZE * vm_if_mem_map_page_num(vmid),
@@ -245,6 +257,17 @@ pub fn migrate_ready(vmid: usize) {
                     PTE_S2_RO,
                     true,
                 );
+                // let va: usize = 0x2200000000 >> 12;
+                // unsafe {
+                //     asm!("ic iallu", "dsb ish");
+                //     asm!("dsb ish", "tlbi vae2is, {0:x}", "dsb ish", "isb", in(reg) va);
+                // }
+                // tlb_invalidate_guest_all();
+                // println!("after");
+                // active_vm().unwrap().show_pagetable(0x2200000000);
+                // unsafe {
+                //     cache_invalidate_d(pf.pa(), PAGE_SIZE * vm_if_mem_map_page_num(vmid));
+                // }
                 vm_if_set_mem_map_cache(vmid, pf);
             }
             Err(_) => {
@@ -312,7 +335,10 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
     if emu_ctx.write {
         // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
         let vm = active_vm().unwrap();
+        // vm.show_pagetable(emu_ctx.address);
         let vm_id = vm.id();
+
+        // emu_ctx.address here is pa, not ipa
         let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
         // println!(
         //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
@@ -322,7 +348,7 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
         for i in 0..vm.region_num() {
             let start = vm.pa_start(i);
             let end = start + vm.pa_length(i);
-            if emu_ctx.address >= start && emu_ctx.address < end {
+            if pa >= start && pa < end {
                 bit += (pa - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
                 vm_if_set_mem_map(vm_id, bit, len / PAGE_SIZE);
                 break;
@@ -331,7 +357,7 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
             if i + 1 == vm.region_num() {
                 panic!(
                     "migrate_data_abort_handler: can not found addr 0x{:x} in vm{} pa region",
-                    emu_ctx.address, vm_id
+                    pa, vm_id
                 );
             }
         }

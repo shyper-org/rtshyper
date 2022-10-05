@@ -462,10 +462,10 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
                 mmio.set_dev_stat(value);
                 if mmio.dev_stat() == 0 {
                     mmio.dev_reset();
-                    println!("VM {} virtio devive {} is reset", active_vm_id(), mmio.id());
+                    println!("VM {} virtio device {} is reset", active_vm_id(), mmio.id());
                 } else if mmio.dev_stat() == 0xf {
                     mmio.dev().set_activated(true);
-                    println!("VM {} virtio devive {} init ok", active_vm_id(), mmio.id());
+                    println!("VM {} virtio device {} init ok", active_vm_id(), mmio.id());
                 }
             }
             _ => {

@@ -6,12 +6,12 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::config::{vm_num, vm_type};
-use crate::device::{VirtioMmio, Virtq};
+use crate::device::{VirtioMmio, Virtq, VringUsed};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit,
-    vm_ipa2pa, VM_LIST,
+    vm_ipa2pa, VM_LIST, VM_STATE_FLAG,
 };
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -202,7 +202,16 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
         if vm.id() != 0 {
             let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            // println!(
+            //     "virtio_net_notify_handler: used addr {:x}, size {}",
+            //     used_addr,
+            //     size_of::<VringUsed>()
+            // );
+            if *VM_STATE_FLAG.lock() == 1 {
+                println!("vm1 virtio net write memory in 0x{:x}", used_addr);
+            }
             vm_if_set_mem_map_bit(vm.clone(), used_addr);
+            vm_if_set_mem_map_bit(vm.clone(), used_addr + PAGE_SIZE);
         }
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
@@ -462,6 +471,9 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
 
         if vmid != 0 {
             let mut addr = round_down(dst, PAGE_SIZE);
+            if *VM_STATE_FLAG.lock() == 1 {
+                println!("A: vm0 virtio net write vm1 memory in 0x{:x}", addr);
+            }
             while addr <= round_down(dst + desc_len, PAGE_SIZE) {
                 vm_if_set_mem_map_bit(vm.clone(), addr);
                 addr += PAGE_SIZE;
@@ -504,7 +516,16 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
 
     if vmid != 0 {
         let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
+        // println!(
+        //     "ethernet_send_to: rx_vq used addr pa {:x}, size {}",
+        //     used_addr,
+        //     size_of::<VringUsed>()
+        // );
+        if *VM_STATE_FLAG.lock() == 1 {
+            println!("B: vm0 virtio net write vm1 memory in 0x{:x}", used_addr);
+        }
         vm_if_set_mem_map_bit(vm.clone(), used_addr);
+        vm_if_set_mem_map_bit(vm.clone(), used_addr + PAGE_SIZE);
     }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         return false;

@@ -2,6 +2,8 @@ use alloc::vec::Vec;
 
 use vm_fdt::{Error, FdtWriter, FdtWriterResult};
 
+#[cfg(feature = "pi4")]
+use crate::arch::PAGE_SIZE;
 use crate::board::PLAT_DESC;
 use crate::config::{DtbDevType, VmDtbDevConfig};
 use crate::config::VmConfigEntry;
@@ -10,8 +12,6 @@ use crate::lib::bit_num;
 use crate::SYSTEM_FDT;
 use crate::vmm::CPIO_RAMDISK;
 
-#[cfg(feature = "pi4")]
-use crate::arch::PAGE_SIZE;
 const PI4_DTB_ADDR: usize = 0xf0000000;
 
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
@@ -81,6 +81,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
     unsafe {
         use fdt::*;
         use crate::lib::round_up;
+        use crate::arch::PAGE_SIZE;
         let pi_fdt = PI4_DTB_ADDR as *mut fdt::myctypes::c_void;
         let len = round_up(fdt_size(pi_fdt) as usize, PAGE_SIZE) + PAGE_SIZE;
         println!("fdt orignal size {}", len);

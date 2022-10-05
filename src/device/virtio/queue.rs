@@ -48,7 +48,7 @@ struct VringUsedElem {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct VringUsed {
+pub struct VringUsed {
     flags: u16,
     idx: u16,
     ring: [VringUsedElem; 512],

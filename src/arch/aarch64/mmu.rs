@@ -166,6 +166,7 @@ pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
     }
     #[cfg(feature = "pi4")]
     {
+        use crate::arch::LVL2_SHIFT;
         // crate::driver::putc('o' as u8);
         // crate::driver::putc('r' as u8);
         // crate::driver::putc('e' as u8);
