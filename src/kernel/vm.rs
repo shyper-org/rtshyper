@@ -786,29 +786,6 @@ impl Vm {
                             if let EmuDevData::Vgic(vgic_data) = &mut vm_data.emu_devs[idx] {
                                 // println!("vm[{}] save vgic", inner.id);
                                 vgic.save_vgic_data(vgic_data, &cpuid_map);
-                                // println!("GICH_MISR {:x}", GICH.misr());
-                                // println!("GICV_CTLR {:x}", unsafe {
-                                //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
-                                // });
-                                // println!("GICV_PMR {:x}", unsafe {
-                                //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
-                                // });
-                                // println!("GICV_BPR {:x}", unsafe {
-                                //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
-                                // });
-                                // println!("GICV_ABPR {:x}", unsafe {
-                                //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
-                                // });
-                                // println!("GICV_STATUSR {:x}", unsafe {
-                                //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
-                                // });
-                                // println!(
-                                //     "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-                                //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
-                                //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
-                                //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
-                                //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
-                                // );
                             }
                         }
                         EmuDevs::VirtioBlk(mmio) => {
@@ -885,32 +862,6 @@ impl Vm {
             match emu {
                 EmuDevs::Vgic(vgic) => {
                     // println!("context_vm_migrate_restore: vgic");
-                    // let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
-                    // *gicv_ctlr = 1;
-                    // println!("GICV_CTLR {:x}", unsafe {
-                    //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
-                    // });
-                    // let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
-                    // *gicv_pmr = 0xf0;
-                    // println!("GICV_PMR {:x}", unsafe {
-                    //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
-                    // });
-                    // println!("GICV_BPR {:x}", unsafe {
-                    //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
-                    // });
-                    // println!("GICV_ABPR {:x}", unsafe {
-                    //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
-                    // });
-                    // println!("GICV_STATUSR {:x}", unsafe {
-                    //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
-                    // });
-                    // println!(
-                    //     "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-                    //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
-                    //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
-                    //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
-                    //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
-                    // );
                     if let EmuDevData::Vgic(vgic_data) = &vm_data.emu_devs[idx] {
                         vgic.restore_vgic_data(vgic_data, &inner.vcpu_list, &vcpuid_map);
                     }

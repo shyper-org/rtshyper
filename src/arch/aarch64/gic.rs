@@ -172,6 +172,10 @@ impl GicDistributor {
         self.ITARGETSR[idx].get()
     }
 
+    pub fn ctlr(&self) -> u32 {
+        self.CTLR.get()
+    }
+
     pub fn icfgr(&self, idx: usize) -> u32 {
         self.ICFGR[idx].get()
     }
@@ -430,6 +434,30 @@ impl GicCpuInterface {
     pub fn set_dir(&self, dir: u32) {
         self.DIR.set(dir);
     }
+
+    pub fn hppir(&self) -> u32 {
+        self.HPPIR.get()
+    }
+
+    pub fn rpr(&self) -> u32 {
+        self.RPR.get()
+    }
+
+    pub fn bpr(&self) -> u32 {
+        self.BPR.get()
+    }
+
+    pub fn abpr(&self) -> u32 {
+        self.ABPR.get()
+    }
+
+    pub fn apr(&self, idx: usize) -> u32 {
+        self.APR[idx].get()
+    }
+
+    pub fn nsapr(&self, idx: usize) -> u32 {
+        self.NSAPR[idx].get()
+    }
 }
 
 register_structs! {
@@ -535,25 +563,42 @@ impl GicState {
             self.eisr[i] = GICH.eisr(i);
             self.elrsr[i] = GICH.elrsr(i);
         }
-
+        // println!("save state");
+        // println!("GICH hcr {:x}", self.hcr);
+        // println!("GICH apr {:x}", self.apr);
+        // println!("GICH eisr {:x}", self.eisr[0]);
+        // println!("GICH elrsr {:x}", self.elrsr[0]);
         for i in 0..gich_lrs_num() {
             if self.elrsr[0] & 1 << i == 0 {
                 self.lr[i] = GICH.lr(i);
             } else {
                 self.lr[i] = 0;
             }
+            // println!("GICH_LR[{}] {:x}", i, GICH.lr(i));
         }
         self.ctlr = GICC.CTLR.get();
     }
 
     pub fn restore_state(&self) {
+        // println!("before restore");
+        // println!("GICH hcr {:x}", GICH.hcr());
+        // println!("GICC ctlr {:x}", GICC.CTLR.get());
+        // for i in 0..gich_lrs_num() {
+        //     println!("lr[{}] {:x}", i, GICH.lr(i));
+        // }
+
+        // println!("after restore state");
         GICH.set_hcr(self.hcr);
         GICH.APR.set(self.apr);
+        // println!("GICH hcr {:x}", self.hcr);
+        // println!("GICH apr {:x}", self.apr);
 
         for i in 0..gich_lrs_num() {
+            // println!("lr[{}] {:x}", i, self.lr[i]);
             GICH.set_lr(i, self.lr[i]);
         }
         GICC.CTLR.set(self.ctlr);
+        // println!("GICC ctlr {:x}", self.ctlr);
     }
 }
 

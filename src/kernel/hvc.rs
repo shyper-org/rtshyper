@@ -6,7 +6,7 @@ use spin::Mutex;
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::arch::{gicc_clear_current_irq, tlb_invalidate_guest_all};
 use crate::config::*;
-use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
+use crate::device::{EmuDevs, mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register, ipi_send_msg,
     IpiHvcMsg, IpiInnerMsg, IpiIntInjectMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem,
@@ -46,6 +46,7 @@ pub const HVC_UNILIB: usize = 0x12;
 pub const HVC_SYS_REBOOT: usize = 0;
 pub const HVC_SYS_SHUTDOWN: usize = 1;
 pub const HVC_SYS_UPDATE: usize = 3;
+pub const HVC_SYS_TEST: usize = 4;
 
 // hvc_vmm_event
 pub const HVC_VMM_LIST_VM: usize = 0;
@@ -235,6 +236,11 @@ fn hvc_sys_handler(event: usize, x0: usize) -> Result<usize, ()> {
             update_request();
             Ok(0)
         }
+        HVC_SYS_TEST => {
+            let vm = active_vm().unwrap();
+            crate::device::virtio_net_announce(vm);
+            Ok(0)
+        }
         _ => Err(()),
     }
 }
@@ -338,6 +344,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
                 // send ipi to target vcpu, copy data and boot vm (in ipi copy gic data)
                 send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_VM_BOOT, cpu_trgt);
             }
+            // crate::device::virtio_net_announce(vm.clone());
             // hard code for virtio dev interrupt
             // let m = IpiIntInjectMsg {
             //     vm_id: vm.id(),
@@ -367,6 +374,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             // println!("remove vm {}", x0);
             // let time0 = time_current_us();
             vmm_remove_vm(x0);
+            *VM_STATE_FLAG.lock() = 0;
             // let time1 = time_current_us();
             // println!("VMM REMOVE VM {}us", time1 - time0);
             Ok(HVC_FINISH)

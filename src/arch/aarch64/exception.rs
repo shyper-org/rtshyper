@@ -199,7 +199,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
 unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     current_cpu().set_ctx(ctx);
     let (id, src) = gicc_get_current_irq();
-    // if current_cpu().id == 0 {
+    // if current_cpu().id == 2 {
     //     println!(
     //         "Core[{}] lower_aarch64_irq {} 0x{:x}  x30 {:x} x19 {:x} x0 {:x}",
     //         current_cpu().id,

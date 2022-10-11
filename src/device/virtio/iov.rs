@@ -33,6 +33,38 @@ impl VirtioIov {
         inner.vector[idx].buf
     }
 
+    pub fn to_buf(&self, addr: usize, len: usize) {
+        let mut size = len;
+        let inner = self.inner.lock();
+        for iov_data in &inner.vector {
+            let offset = len - size;
+            let dst = addr + offset;
+            if iov_data.len >= size {
+                memcpy_safe(dst as *const u8, iov_data.buf as *const u8, size);
+                break;
+            } else {
+                memcpy_safe(dst as *const u8, iov_data.buf as *const u8, iov_data.len);
+                size -= iov_data.len;
+            }
+        }
+    }
+
+    pub fn from_buf(&self, addr: usize, len: usize) {
+        let mut size = len;
+        let inner = self.inner.lock();
+        for iov_data in &inner.vector {
+            let offset = len - size;
+            let src = addr + offset;
+            if iov_data.len >= size {
+                memcpy_safe(iov_data.buf as *const u8, src as *const u8, size);
+                break;
+            } else {
+                memcpy_safe(iov_data.buf as *const u8, src as *const u8, iov_data.len);
+                size -= iov_data.len;
+            }
+        }
+    }
+
     pub fn num(&self) -> usize {
         let inner = self.inner.lock();
         inner.vector.len()

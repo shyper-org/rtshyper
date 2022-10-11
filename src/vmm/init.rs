@@ -599,7 +599,7 @@ pub fn vmm_boot() {
         }
         // active_vm().unwrap().set_migration_state(false);
         println!("Core {} start running", current_cpu().id);
-        vcpu_run();
+        vcpu_run(false);
     } else {
         // If there is no available vm(vcpu), just go idle
         println!("Core {} idle", current_cpu().id);
@@ -614,5 +614,5 @@ pub fn vmm_migrate_boot() {
     }
 
     // println!("Core[{}] start running", current_cpu().id);
-    vcpu_run();
+    vcpu_run(true);
 }
