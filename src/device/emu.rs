@@ -85,7 +85,7 @@ pub struct EmuDevEntry {
     pub handler: EmuDevHandler,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EmuDeviceType {
     EmuDeviceTConsole = 0,
     EmuDeviceTGicd = 1,
@@ -151,6 +151,9 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     for emu_dev in &*emu_devs_list {
         let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
         if active_vcpu.vm_id() == emu_dev.vm_id && in_range(ipa, emu_dev.ipa, emu_dev.size - 1) {
+            // if current_cpu().id == 2 {
+            //     println!("emu dev {:#?} handler", emu_dev.emu_type);
+            // }
             let handler = emu_dev.handler;
             let id = emu_dev.id;
             drop(emu_devs_list);

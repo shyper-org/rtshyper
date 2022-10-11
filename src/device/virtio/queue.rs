@@ -11,8 +11,8 @@ use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
-pub const VIRTQ_DESC_F_NEXT: usize = 1;
-pub const VIRTQ_DESC_F_WRITE: usize = 2;
+pub const VIRTQ_DESC_F_NEXT: u16 = 1;
+pub const VIRTQ_DESC_F_WRITE: u16 = 2;
 
 pub const VRING_USED_F_NO_NOTIFY: usize = 1;
 
@@ -68,22 +68,6 @@ impl Virtq {
     pub fn default() -> Virtq {
         Virtq {
             inner: Arc::new(Mutex::new(VirtqInner::default())),
-        }
-    }
-
-    pub fn notify(&self, int_id: usize, vm: Vm) {
-        // Undo: mmio->regs->irt_stat = VIRTIO_MMIO_INT_VRING; Is it necessery?
-        let inner = self.inner.lock();
-        let trgt_id = vm.vcpu(0).unwrap().phys_id();
-        use crate::kernel::interrupt_vm_inject;
-        if trgt_id == current_cpu().id {
-            drop(inner);
-            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
-        } else {
-            let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
-            if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
-                println!("notify: failed to send ipi to Core {}", trgt_id);
-            }
         }
     }
 
@@ -161,7 +145,7 @@ impl Virtq {
     pub fn desc_has_next(&self, idx: usize) -> bool {
         let inner = self.inner.lock();
         let desc_table = inner.desc_table.as_ref().unwrap();
-        desc_table[idx].flags & VIRTQ_DESC_F_NEXT as u16 != 0
+        desc_table[idx].flags & VIRTQ_DESC_F_NEXT != 0
     }
 
     pub fn update_used_ring(&self, len: u32, desc_chain_head_idx: u32) -> bool {

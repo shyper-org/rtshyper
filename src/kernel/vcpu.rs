@@ -5,10 +5,13 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, GICD, VmContext};
+use crate::arch::{
+    Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GICC, GicContext, GICD, GICH, VmContext,
+};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
-use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
+use crate::device::EmuDevs;
+use crate::kernel::{current_cpu, EmuDevData, interrupt_vm_inject, timer_enable, VirtioMmioData, vm_if_set_state, VMData};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
 
@@ -119,31 +122,83 @@ impl Vcpu {
         let mut inner = self.inner.lock();
         let vm = inner.vm.clone().unwrap();
         inner.gic_ctx;
-        // for int_id in 0..16 {
-        //     println!(
-        //         "Core[{}] int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-        //         current_cpu().id,
-        //         int_id,
-        //         GICD.is_enabler(int_id / 32),
-        //         GICD.is_activer(int_id / 32),
-        //         GICD.ipriorityr(int_id / 4),
-        //         GICD.itargetsr(int_id / 4),
-        //         GICD.icfgr(int_id / 2)
-        //     );
+        // println!("GICD_CTLR {:x}", GICD.ctlr());
+        // print!("#### GICD ITARGETSR ####");
+        // for i in 0..GIC_INTS_MAX * 8 / 32 {
+        //     if i % 16 == 0 {
+        //         println!("");
+        //     }
+        //     print!("{:x} ", GICD.itargetsr(i));
         // }
-        // let int_id = 27;
+        // println!("");
+        //
+        // print!("#### GICD IPRIORITYR ####");
+        // for i in 0..GIC_INTS_MAX * 8 / 32 {
+        //     if i % 16 == 0 {
+        //         println!("");
+        //     }
+        //     print!("{:x} ", GICD.ipriorityr(i));
+        // }
+        // println!("");
+        //
+        // println!("GICC_RPR {:x}", GICC.rpr());
+        // println!("GICC_HPPIR {:x}", GICC.hppir());
+        // println!("GICC_BPR {:x}", GICC.bpr());
+        // println!("GICC_ABPR {:x}", GICC.abpr());
+        // println!("#### GICC APR ####");
+        // for i in 0..4 {
+        //     print!("{:x} ", GICC.apr(i));
+        // }
+        // println!("");
+        //
+        // println!("#### GICC NSAPR ####");
+        // for i in 0..4 {
+        //     print!("{:x} ", GICC.nsapr(i));
+        // }
+        // println!("");
+        //
+        // println!("GICC_HPPIR {:x}", GICC.hppir());
+        // println!("GICC_BPR {:x}", GICC.bpr());
+        // println!("GICC_ABPR {:x}", GICC.abpr());
+        // println!("#### GICC APR ####");
+        // for i in 0..4 {
+        //     print!("{:x} ", GICC.apr(i));
+        // }
+        // println!("");
+        //
+        // println!("#### GICC NSAPR ####");
+        // for i in 0..4 {
+        //     print!("{:x} ", GICC.nsapr(i));
+        // }
+        // println!("");
+        //
+        // println!("GICH_MISR {:x}", GICH.misr());
+        // println!("GICV_CTLR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
+        // });
+        // println!("GICV_PMR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
+        // });
+        // println!("GICV_BPR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
+        // });
+        // println!("GICV_ABPR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
+        // });
+        // println!("GICV_STATUSR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
+        // });
         // println!(
-        //     "int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-        //     int_id,
-        //     GICD.is_enabler(int_id / 32),
-        //     GICD.is_activer(int_id / 32),
-        //     GICD.ipriorityr(int_id / 4),
-        //     GICD.itargetsr(int_id / 4),
-        //     GICD.icfgr(int_id / 2)
+        //     "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
         // );
         for irq in vm.config().passthrough_device_irqs() {
             inner.gic_ctx.add_irq(irq as u64);
         }
+        inner.gic_ctx.add_irq(25);
         let gicv_ctlr = unsafe { &*((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32) };
         inner.gic_ctx.set_gicv_ctlr(*gicv_ctlr);
         let gicv_pmr = unsafe { &*((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32) };
@@ -159,17 +214,17 @@ impl Vcpu {
                 GICD.set_enable(irq_state.id as usize, irq_state.enable != 0);
                 GICD.set_prio(irq_state.id as usize, irq_state.priority);
                 GICD.set_trgt(irq_state.id as usize, 1 << platform_cpuid_to_cpuif(current_cpu().id));
-                // let int_id = irq_state.id as usize;
-                // println!(
-                //     "Core[{}] context_gic_restore after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                //     current_cpu().id,
-                //     int_id,
-                //     GICD.is_enabler(int_id / 32),
-                //     GICD.is_activer(int_id / 32),
-                //     GICD.ipriorityr(int_id / 4),
-                //     GICD.itargetsr(int_id / 4),
-                //     GICD.icfgr(int_id / 2)
-                // );
+                let int_id = irq_state.id as usize;
+                println!(
+                    "Core[{}] context_gic_restore after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
+                    current_cpu().id,
+                    int_id,
+                    GICD.is_enabler(int_id / 32),
+                    GICD.is_activer(int_id / 32),
+                    GICD.ipriorityr(int_id / 4),
+                    GICD.itargetsr(int_id / 4),
+                    GICD.icfgr(int_id / 2)
+                );
             }
         }
 
@@ -178,6 +233,63 @@ impl Vcpu {
         // println!("Core[{}] save gic context", current_cpu().id);
         let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
         *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
+
+        // println!("GICD_CTLR {:x}", GICD.ctlr());
+        // print!("#### GICD ITARGETSR ####");
+        // for i in 0..GIC_INTS_MAX * 8 / 32 {
+        //     if i % 8 == 0 {
+        //         println!("");
+        //     }
+        //     print!("{:x} ", GICD.itargetsr(i));
+        // }
+        // println!("");
+        //
+        // print!("#### GICD IPRIORITYR ####");
+        // for i in 0..GIC_INTS_MAX * 8 / 32 {
+        //     if i % 16 == 0 {
+        //         println!("");
+        //     }
+        //     print!("{:x} ", GICD.ipriorityr(i));
+        // }
+        // println!("");
+        //
+        // println!("GICC_RPR {:x}", GICC.rpr());
+        // println!("GICC_HPPIR {:x}", GICC.hppir());
+        // println!("GICC_BPR {:x}", GICC.bpr());
+        // println!("GICC_ABPR {:x}", GICC.abpr());
+        // println!("#### GICC APR ####");
+        // for i in 0..4 {
+        //     print!("{:x} ", GICC.apr(i));
+        // }
+        // println!("");
+        // println!("#### GICC NSAPR ####");
+        // for i in 0..4 {
+        //     print!("{:x} ", GICC.nsapr(i));
+        // }
+        //
+        // println!("GICH_MISR {:x}", GICH.misr());
+        // println!("GICV_CTLR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
+        // });
+        // println!("GICV_PMR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
+        // });
+        // println!("GICV_BPR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
+        // });
+        // println!("GICV_ABPR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
+        // });
+        // println!("GICV_STATUSR {:x}", unsafe {
+        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
+        // });
+        // println!(
+        //     "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
+        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
+        // );
     }
 
     pub fn context_vm_restore(&self) {
@@ -537,13 +649,19 @@ pub fn vcpu_idle(_vcpu: Vcpu) {
     }
 }
 
-pub fn vcpu_run() {
+pub fn vcpu_run(announce: bool) {
     // println!(
     //     "Core {} (vm {}, vcpu {}) start running",
     //     current_cpu().id,
     //     active_vm_id(),
     //     active_vcpu_id()
     // );
+    println!(
+        "VMData size is {:x}, EmuDevData size is {:x}, VirtioMmioData size is {:x}",
+        size_of::<VMData>(),
+        size_of::<EmuDevData>(),
+        size_of::<VirtioMmioData>(),
+    );
 
     if current_cpu().vcpu_pool().running() > 1 {
         timer_enable(true);
@@ -559,6 +677,21 @@ pub fn vcpu_run() {
     current_cpu().set_ctx((sp - size) as *mut _);
 
     vcpu.context_vm_restore();
+    if announce {
+        // match vm.emu_console_dev(0) {
+        //     EmuDevs::VirtioConsole(console) => {
+        //         interrupt_vm_inject(vm.clone(), vcpu.clone(), console.dev().int_id(), 0);
+        //     }
+        //     _ => {}
+        // }
+        // match vm.emu_net_dev(0) {
+        //     EmuDevs::VirtioNet(net) => {
+        //         interrupt_vm_inject(vm.clone(), vcpu.clone(), net.dev().int_id(), 0);
+        //     }
+        //     _ => {}
+        // }
+        crate::device::virtio_net_announce(vm.clone());
+    }
     tlb_invalidate_guest_all();
     // vcpu.show_ctx();
 
@@ -571,12 +704,14 @@ pub fn vcpu_run() {
         }
     }
 
-    // println!(
-    //     "vcpu run elr {:x} x0 {:016x} sp 0x{:x}",
-    //     current_cpu().active_vcpu.clone().unwrap().elr(),
-    //     current_cpu().get_gpr(0),
-    //     sp
-    // );
+    // if current_cpu().id == 2 {
+    //     println!(
+    //         "vcpu run elr {:x} x0 {:016x} sp 0x{:x}",
+    //         current_cpu().active_vcpu.clone().unwrap().elr(),
+    //         current_cpu().get_gpr(0),
+    //         sp
+    //     );
+    // }
     // TODO: vcpu_run
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;

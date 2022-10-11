@@ -1855,6 +1855,14 @@ impl Vgic {
     }
 
     fn handle_trapped_eoir(&self, vcpu: Vcpu) {
+        // if current_cpu().id == 2 {
+        //     for i in 0..4 {
+        //         println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+        //     }
+        //     println!("elrsr[0] {:x}", GICH.elrsr(0));
+        //     println!("eisr[0] {:x}", GICH.eisr(0));
+        //     println!("hcr 0x{:x}", GICH.hcr());
+        // }
         let gic_lrs = gic_lrs();
         let mut lr_idx_opt = bitmap_find_nth(
             GICH.eisr(0) as usize | ((GICH.eisr(1) as usize) << 32),
@@ -1872,14 +1880,11 @@ impl Vgic {
             match self.get_int(vcpu.clone(), bit_extract(lr_val, 0, 10)) {
                 Some(interrupt) => {
                     let interrupt_lock = interrupt.lock.lock();
-                    // if vcpu.vm_id() == 1 {
-                    // for i in 0..4 {
-                    //     println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+                    // if current_cpu().id == 2 {
+                    //     println!("handle_trapped_eoir interrupt {}", interrupt.id());
                     // }
-                    // println!("elsr[0] {:x}", GICH.elsr(0));
-                    // println!("eisr[0] {:x}", GICH.eisr(0));
-                    // println!("hcr 0x{:x}", GICH.hcr());
-                    // println!("handle_trapped_eoir interrupt {}", interrupt.id());
+                    // if current_cpu().id == 1 && interrupt.id() == 49 {
+                    //     println!("handle_trapped_eoir interrupt 49");
                     // }
                     interrupt.set_in_lr(false);
                     if (interrupt.id() as usize) < GIC_SGIS_NUM {
@@ -1905,6 +1910,9 @@ impl Vgic {
     }
 
     fn refill_lrs(&self, vcpu: Vcpu) {
+        // if current_cpu().id == 1 {
+        //     println!("refill lrs");
+        // }
         let gic_lrs = gic_lrs();
         let mut has_pending = false;
 
@@ -2151,7 +2159,7 @@ pub fn gic_maintenance_handler(_arg: usize) {
             panic!("gic_maintenance_handler: current vcpu.vm is None");
         }
     };
-    // if vm.id() == 1 {
+    // if current_cpu().id == 2 {
     //     println!("gic_maintenance_handler, misr {:x}", misr);
     // }
     let vgic = vm.vgic();
@@ -2202,10 +2210,12 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     };
     let vgic = vm.vgic();
     let vgicd_offset_prefix = (offset & 0xf80) >> 7;
-    // println!(
-    //     "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
-    //     vgicd_offset_prefix, offset
-    // );
+    // if current_cpu().id == 2 {
+    //     println!(
+    //         "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
+    //         vgicd_offset_prefix, offset
+    //     );
+    // }
     if !vgicd_emu_access_is_vaild(emu_ctx) {
         return false;
     }

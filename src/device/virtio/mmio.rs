@@ -8,8 +8,8 @@ use spin::Mutex;
 // pub const VIRTIO_MMIO_VENDOR_ID: usize = 0x00c;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{
-    EmuContext, virtio_mediated_blk_notify_handler, virtio_blk_notify_handler, virtio_net_notify_handler,
-    virtio_console_notify_handler,
+    EmuContext, virtio_blk_notify_handler, virtio_console_notify_handler, virtio_mediated_blk_notify_handler,
+    virtio_net_handle_ctrl, virtio_net_notify_handler,
 };
 use crate::device::{EmuDevs, VirtioDeviceType};
 use crate::device::{VirtioQueue, Virtq};
@@ -17,7 +17,7 @@ use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEU
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
 use crate::driver::VIRTIO_MMIO_MAGIC_VALUE;
-use crate::kernel::{current_cpu, VirtioMmioData, vm_ipa2pa, VmPa};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, VirtioMmioData, vm_ipa2pa, VmPa};
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
 
@@ -47,7 +47,7 @@ pub const VIRTIO_MMIO_CONFIG_GENERATION: usize = 0x0fc;
 pub const VIRTIO_MMIO_CONFIG: usize = 0x100;
 pub const VIRTIO_MMIO_REGS_END: usize = 0x200;
 
-pub const VIRTIO_MMIO_INT_VRING: usize = 1 << 0;
+pub const VIRTIO_MMIO_INT_VRING: u32 = 1 << 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -143,6 +143,9 @@ impl VirtioQueue for VirtioMmio {
                     queue.set_notify_handler(virtio_net_notify_handler);
                     inner.vq.push(queue);
                 }
+                inner.vq.push(Virtq::default());
+                inner.vq[2].reset(2);
+                inner.vq[2].set_notify_handler(virtio_net_handle_ctrl);
             }
             VirtioDeviceType::Console => {
                 self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
@@ -170,6 +173,40 @@ impl VirtioMmio {
     pub fn new(id: usize) -> VirtioMmio {
         VirtioMmio {
             inner: Arc::new(Mutex::new(VirtioMmioInner::new(id))),
+        }
+    }
+
+    pub fn notify_config(&self, vm: Vm) {
+        let mut inner = self.inner.lock();
+        inner.regs.irt_stat = 3;
+        let int_id = inner.dev.int_id();
+        let trgt_id = vm.vcpu(0).unwrap().phys_id();
+        drop(inner);
+        use crate::kernel::interrupt_vm_inject;
+        if trgt_id == current_cpu().id {
+            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
+        } else {
+            let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
+            if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
+                println!("notify_config: failed to send ipi to Core {}", trgt_id);
+            }
+        }
+    }
+
+    pub fn notify(&self, vm: Vm) {
+        let mut inner = self.inner.lock();
+        inner.regs.irt_stat = VIRTIO_MMIO_INT_VRING;
+        let int_id = inner.dev.int_id();
+        let trgt_id = vm.vcpu(0).unwrap().phys_id();
+        drop(inner);
+        use crate::kernel::interrupt_vm_inject;
+        if trgt_id == current_cpu().id {
+            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
+        } else {
+            let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
+            if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
+                println!("notify_config: failed to send ipi to Core {}", trgt_id);
+            }
         }
     }
 
@@ -732,10 +769,13 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     // }
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
-        let q_sel = mmio.q_sel();
+        // let q_sel = mmio.q_sel();
+        // if q_sel as usize != current_cpu().get_gpr(emu_ctx.reg) {
+        // println!("{} {}", q_sel as usize, current_cpu().get_gpr(emu_ctx.reg));
+        // }
         // println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
 
-        if !mmio.notify_handler(q_sel as usize) {
+        if !mmio.notify_handler(current_cpu().get_gpr(emu_ctx.reg)) {
             println!("Failed to handle virtio mmio request!");
         }
     } else if offset == VIRTIO_MMIO_INTERRUPT_STATUS && !write {
@@ -744,8 +784,9 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
         let val = mmio.irt_stat() as usize;
         current_cpu().set_gpr(idx, val);
     } else if offset == VIRTIO_MMIO_INTERRUPT_ACK && write {
-        // println!("in VIRTIO_MMIO_INTERRUPT_ACK");
         let idx = emu_ctx.reg;
+        let val = mmio.irt_stat();
+        mmio.set_irt_stat(val & !(current_cpu().get_gpr(idx) as u32));
         mmio.set_irt_ack(current_cpu().get_gpr(idx) as u32);
     } else if (VIRTIO_MMIO_MAGIC_VALUE <= offset && offset <= VIRTIO_MMIO_GUEST_FEATURES_SEL)
         || offset == VIRTIO_MMIO_STATUS

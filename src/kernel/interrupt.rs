@@ -127,6 +127,15 @@ pub fn interrupt_vm_remove(_vm: Vm, id: usize) {
 }
 
 pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
+    // if vm.id() == 1 {
+    //     println!("inject int {} to vm1", int_id);
+    // }
+    // if current_cpu().id == 2 {
+    //     println!("inject int {} to core 2", int_id);
+    // }
+    // if current_cpu().id == 1 && int_id == 49 {
+    //     println!("inject int {} to core 1", int_id);
+    // }
     if vcpu.phys_id() != current_cpu().id {
         println!(
             "interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})",

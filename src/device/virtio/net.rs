@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::config::{vm_num, vm_type};
-use crate::device::{VirtioMmio, Virtq, VringUsed};
+use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE, VringUsed};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
@@ -18,6 +18,9 @@ use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::{round_down, trace};
+
+const VIRTIO_NET_OK: u8 = 0;
+const VIRTIO_NET_ERR: u8 = 1;
 
 const VIRTIO_F_VERSION_1: usize = 1 << 32;
 const VIRTIO_NET_F_CSUM: usize = 1 << 0;
@@ -51,7 +54,7 @@ const VIRTIO_NET_F_CTRL_RX: usize = 1 << 18;
 // control channel RX mode support
 const VIRTIO_NET_F_CTRL_VLAN: usize = 1 << 19;
 // control channel VLAN filtering
-const VIRTIO_NET_F_GUEST_ANNOUN: usize = 1 << 21; // guest can send gratuitous pkts
+const VIRTIO_NET_F_GUEST_ANNOUNCE: usize = 1 << 21; // guest can send gratuitous pkts
 
 const VIRTIO_NET_HDR_F_DATA_VALID: usize = 2;
 
@@ -92,6 +95,16 @@ impl NetDesc {
         }
     }
 
+    pub fn set_status(&self, status: u16) {
+        let mut inner = self.inner.lock();
+        inner.status = status;
+    }
+
+    pub fn status(&self) -> u16 {
+        let mut inner = self.inner.lock();
+        inner.status
+    }
+
     pub fn cfg_init(&self, mac: &Vec<usize>) {
         let mut inner = self.inner.lock();
         inner.mac[0] = mac[0] as u8;
@@ -129,6 +142,9 @@ impl NetDesc {
     }
 }
 
+pub const VIRTIO_NET_S_LINK_UP: u16 = 1;
+pub const VIRTIO_NET_S_ANNOUNCE: u16 = 2;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct NetDescInner {
@@ -138,8 +154,18 @@ pub struct NetDescInner {
 
 impl NetDescInner {
     pub fn default() -> NetDescInner {
-        NetDescInner { mac: [0; 6], status: 0 }
+        NetDescInner {
+            mac: [0; 6],
+            status: VIRTIO_NET_S_LINK_UP,
+        }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct VirtioNetCtrlHdr {
+    class: u8,
+    command: u8,
 }
 
 pub fn net_features() -> usize {
@@ -154,6 +180,107 @@ pub fn net_features() -> usize {
         | VIRTIO_NET_F_HOST_TSO6
         | VIRTIO_NET_F_HOST_UFO
         | VIRTIO_NET_F_HOST_ECN
+        | VIRTIO_NET_F_CTRL_VQ
+        | VIRTIO_NET_F_GUEST_ANNOUNCE
+        | VIRTIO_NET_F_STATUS
+}
+
+const VIRTIO_NET_CTRL_ANNOUNCE: u8 = 3;
+const VIRTIO_NET_CTRL_ANNOUNCE_ACK: u8 = 0;
+
+pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
+    println!("virtio_net_handle_ctrl");
+    if vq.ready() == 0 {
+        println!("virtio net control queue is not ready!");
+        return false;
+    }
+
+    let out_iov = VirtioIov::default();
+    let in_iov = VirtioIov::default();
+    // let dev = nic.dev();
+    // let buf = dev.cache();
+    // let vq_size = vq.num();
+    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
+    // vq.show_addr_info();
+    // vq.show_avail_info(4);
+    vq.show_desc_info(4, vm.clone());
+    // println!(
+    //     "vq.idx {} last_avail_idx {} next_desc_idx_opt {:#?}",
+    //     vq.vq_indx(),
+    //     vq.last_avail_idx(),
+    //     next_desc_idx_opt
+    // );
+    while next_desc_idx_opt.is_some() {
+        let mut idx = next_desc_idx_opt.unwrap() as usize;
+        let mut len = 0;
+        out_iov.clear();
+        in_iov.clear();
+
+        loop {
+            // println!("vq.desc_addr({}) {:x}", idx, vq.desc_addr(idx));
+            let addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(idx));
+            // println!("pa addr {:x}", addr);
+            if addr == 0 {
+                println!("virtio_net_handle_ctrl: failed to desc addr");
+                return false;
+            }
+            if vq.desc_flags(idx) & VIRTQ_DESC_F_WRITE != 0 {
+                in_iov.push_data(addr, vq.desc_len(idx) as usize);
+            } else {
+                out_iov.push_data(addr, vq.desc_len(idx) as usize);
+            }
+            len += vq.desc_len(idx) as usize;
+            if vq.desc_flags(idx) != VIRTQ_DESC_F_NEXT {
+                break;
+            }
+            idx = vq.desc_next(idx) as usize;
+        }
+        let ctrl = VirtioNetCtrlHdr::default();
+        out_iov.to_buf(&ctrl as *const _ as usize, size_of::<VirtioNetCtrlHdr>());
+        println!("ctrl class {}", ctrl.class);
+        println!("ctrl command {}", ctrl.command);
+        match ctrl.class {
+            VIRTIO_NET_CTRL_ANNOUNCE => {
+                let status: u8 = if ctrl.command == VIRTIO_NET_CTRL_ANNOUNCE_ACK {
+                    match nic.dev().desc() {
+                        DevDesc::NetDesc(desc) => {
+                            println!("set status to VIRTIO_NET_S_LINK_UP");
+                            desc.set_status(VIRTIO_NET_S_LINK_UP);
+                            VIRTIO_NET_OK
+                        }
+                        _ => {
+                            panic!("illegal dev type for nic");
+                        }
+                    }
+                } else {
+                    VIRTIO_NET_ERR
+                };
+                in_iov.from_buf(&status as *const _ as usize, size_of::<u8>());
+            }
+            _ => {
+                println!("Control queue header class can't match {}", ctrl.class);
+            }
+        }
+
+        // update ctrl queue used ring
+        if vm.id() != 0 {
+            let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            if *VM_STATE_FLAG.lock() == 1 {
+                println!("vm1 virtio net ctrl write memory in 0x{:x}", used_addr);
+            }
+            vm_if_set_mem_map_bit(vm.clone(), used_addr);
+
+            for idx in 0..in_iov.num() {
+                vm_if_set_mem_map_bit(vm.clone(), in_iov.get_buf(idx));
+            }
+        }
+        if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
+            return false;
+        }
+        next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
+    }
+    nic.notify(vm.clone());
+    true
 }
 
 pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
@@ -164,14 +291,14 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     }
 
     if vq.vq_indx() != 1 {
-        println!("net rx queue notified!");
-        return false;
+        // println!("net rx queue notified!");
+        return true;
     }
 
     let tx_iov = VirtioIov::default();
     let mut vms_to_notify = 0;
 
-    let dev = nic.dev();
+    // let dev = nic.dev();
     // let buf = dev.cache();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
 
@@ -229,7 +356,8 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         return false;
     }
 
-    vq.notify(dev.int_id(), vm.clone());
+    nic.notify(vm.clone());
+    // vq.notify(dev.int_id(), vm.clone());
     // let time1 = time_current_us();
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
@@ -266,7 +394,8 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                     }
                 };
                 if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                    rx_vq.notify(nic.dev().int_id(), vm.clone());
+                    nic.notify(vm.clone());
+                    // rx_vq.notify(nic.dev().int_id(), vm.clone());
                 }
             } else {
                 let msg = IpiEthernetMsg {
@@ -332,7 +461,8 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             };
 
             if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                rx_vq.notify(nic.dev().int_id(), vm);
+                nic.notify(vm);
+                // rx_vq.notify(nic.dev().int_id(), vm);
             }
         }
         _ => {
@@ -370,6 +500,15 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
         if !ethernet_is_arp(frame) {
             return (false, 0);
         }
+        // println!("Core {} send arp:", current_cpu().id);
+        //
+        // for i in 0..60 {
+        //     if i % 16 == 0 {
+        //         println!("");
+        //     }
+        //     print!("{:x} ", unsafe { *((frame.as_ptr() as usize + i) as *const u8) });
+        // }
+        // println!("");
         return ethernet_broadcast(tx_iov.clone(), len);
     }
 
@@ -427,6 +566,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     };
 
     if !nic.dev().activated() {
+        // println!("ethernet_send_to: vm[{}] nic dev is not activate", vmid);
         return false;
     }
 
@@ -546,4 +686,24 @@ fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
         }
     }
     return Err(());
+}
+
+pub fn virtio_net_announce(vm: Vm) {
+    println!("vm[{}] virtio_net_announce", vm.id());
+    match vm.emu_net_dev(0) {
+        EmuDevs::VirtioNet(nic) => match nic.dev().desc() {
+            DevDesc::NetDesc(desc) => {
+                println!(
+                    "virtio_net_announce: cur status {}, set status {}",
+                    desc.status(),
+                    VIRTIO_NET_S_ANNOUNCE
+                );
+                let status = desc.status();
+                desc.set_status(status | VIRTIO_NET_S_ANNOUNCE);
+                nic.notify_config(vm);
+            }
+            _ => {}
+        },
+        _ => {}
+    }
 }
