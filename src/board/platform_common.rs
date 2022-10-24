@@ -1,4 +1,5 @@
 use crate::arch::GicDesc;
+use crate::arch::SmmuDesc;
 
 pub const PLATFORM_CPU_NUM_MAX: usize = 8;
 pub const TOTAL_MEM_REGION_MAX: usize = 16;
@@ -34,6 +35,7 @@ pub struct PlatCpuConfig {
 #[repr(C)]
 pub struct ArchDesc {
     pub gic_desc: GicDesc,
+    pub smmu_desc: SmmuDesc,
 }
 
 #[repr(C)]

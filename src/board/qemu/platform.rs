@@ -1,5 +1,6 @@
 // TODO: move these core name to device
 use crate::arch::GicDesc;
+use crate::arch::SmmuDesc;
 use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
 use crate::device::ARM_CORTEX_A57;
 use crate::driver::{read, write};
@@ -72,6 +73,11 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
             gich_addr: PLATFORM_GICH_BASE,
             gicv_addr: PLATFORM_GICV_BASE,
             maintenance_int_id: 25,
+        },
+        smmu_desc: SmmuDesc {
+            base: 0,
+            interrupt_id: 0,
+            global_mask: 0,
         },
     },
 };

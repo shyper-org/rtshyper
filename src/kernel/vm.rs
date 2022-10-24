@@ -306,10 +306,20 @@ impl Vm {
         }
     }
 
-    // pub fn set_med_blk_id(&mut self, med_blk_id: usize) {
-    //     let mut vm_inner = self.inner.lock();
-    //     vm_inner.med_blk_id = Some(med_blk_id);
-    // }
+    pub fn set_iommu_ctx_id(&self, id: usize) {
+        let mut vm_inner = self.inner.lock();
+        vm_inner.iommu_ctx_id = Some(id);
+    }
+
+    pub fn iommu_ctx_id(&self) -> usize {
+        let vm_inner = self.inner.lock();
+        match vm_inner.iommu_ctx_id {
+            None => {
+                panic!("vm {} do not have iommu context bank", vm_inner.id);
+            }
+            Some(id) => id,
+        }
+    }
 
     pub fn med_blk_id(&self) -> usize {
         let vm_inner = self.inner.lock();
@@ -989,6 +999,9 @@ pub struct VmInner {
     pub migrate_save_pf: Vec<PageFrame>,
     pub migrate_restore_pf: Vec<PageFrame>,
 
+    // iommu
+    pub iommu_ctx_id: Option<usize>,
+
     // emul devs
     pub emu_devs: Vec<EmuDevs>,
     pub med_blk_id: Option<usize>,
@@ -1017,6 +1030,8 @@ impl VmInner {
             share_mem_base: SHARE_MEM_BASE, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
+
+            iommu_ctx_id: None,
             emu_devs: Vec::new(),
             med_blk_id: None,
         }
@@ -1044,6 +1059,7 @@ impl VmInner {
             share_mem_base: SHARE_MEM_BASE, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],
+            iommu_ctx_id: None,
             emu_devs: Vec::new(),
             med_blk_id: None,
         }

@@ -95,6 +95,7 @@ pub enum EmuDeviceType {
     EmuDeviceTVirtioConsole = 5,
     EmuDeviceTShyper = 6,
     EmuDeviceTVirtioBlkMediated = 7,
+    EmuDeviceTIOMMU = 8,
 }
 
 impl Display for EmuDeviceType {
@@ -108,6 +109,7 @@ impl Display for EmuDeviceType {
             EmuDeviceType::EmuDeviceTVirtioConsole => write!(f, "virtio console"),
             EmuDeviceType::EmuDeviceTShyper => write!(f, "device shyper"),
             EmuDeviceType::EmuDeviceTVirtioBlkMediated => write!(f, "medaited virtio block"),
+            EmuDeviceType::EmuDeviceTIOMMU => write!(f, "IOMMU"),
         }
     }
 }
@@ -136,6 +138,7 @@ impl EmuDeviceType {
             5 => EmuDeviceType::EmuDeviceTVirtioConsole,
             6 => EmuDeviceType::EmuDeviceTShyper,
             7 => EmuDeviceType::EmuDeviceTVirtioBlkMediated,
+            8 => EmuDeviceType::EmuDeviceTIOMMU,
             _ => panic!("Unknown  EmuDeviceType value: {}", value),
         }
     }

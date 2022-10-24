@@ -128,18 +128,18 @@ pub struct FlexBitmap {
 
 impl FlexBitmap {
     pub fn new(len: usize) -> FlexBitmap {
-        let map = vec![0; len / 64];
+        let map = vec![0; (len + 64 - 1) / 64];
         FlexBitmap { len, map }
     }
 
     pub fn init_dirty(&mut self) {
-        for i in 0..(self.len / 64) {
+        for i in 0..self.map.len() {
             self.map[i] = usize::MAX;
         }
     }
 
     pub fn clear(&mut self) {
-        for i in 0..(self.len / 64) {
+        for i in 0..self.map.len() {
             self.map[i] = 0;
         }
     }

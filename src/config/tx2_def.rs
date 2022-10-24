@@ -59,6 +59,15 @@ pub fn mvm_config_init() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
+        name: Some(String::from("iommu")),
+        base_ipa: 0x12000000,
+        length: 0x1000000,
+        irq_id: 0,
+        cfg_list: Vec::new(),
+        emu_type: EmuDeviceType::EmuDeviceTIOMMU,
+        mediated: false,
+    });
+    emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some(String::from("vm_service")),
         base_ipa: 0,
         length: 0,
@@ -163,7 +172,7 @@ pub fn mvm_config_init() {
         PassthroughRegion { ipa: 0x0e000000, pa: 0x0e000000, length: 0x80000 , dev_property: true},
         PassthroughRegion { ipa: 0x10000000, pa: 0x10000000, length: 0x1000000, dev_property: true },
         // smmu
-        PassthroughRegion { ipa: 0x12000000, pa: 0x12000000, length: 0x1000000 , dev_property: true},
+        // PassthroughRegion { ipa: 0x12000000, pa: 0x12000000, length: 0x1000000 , dev_property: true},
         PassthroughRegion { ipa: 0x13e00000, pa: 0x13e00000, length: 0x20000, dev_property: true },
         PassthroughRegion { ipa: 0x13ec0000, pa: 0x13ec0000, length: 0x40000, dev_property: true },
         // PassthroughRegion { ipa: 0x15040000, pa: 0x15040000, length: 0x40000 },
@@ -199,7 +208,7 @@ pub fn mvm_config_init() {
     // vm0 vm_region
     let mut vm_region: Vec<VmRegion> = Vec::new();
     vm_region.push(VmRegion {
-        ipa_start: 0x90000000,
+        ipa_start: 0xa0000000,
         length: 0x60000000,
     });
     // vm_region.push(VmRegion {
@@ -208,10 +217,8 @@ pub fn mvm_config_init() {
     // });
 
     // vm0 config
-
     let mvm_config_entry = VmConfigEntry {
         id: 0,
-        // name: Some("privileged"),
         name: Some(String::from("privileged")),
         os_type: VmType::VmTOs,
         cmdline:
@@ -220,10 +227,10 @@ pub fn mvm_config_init() {
         
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
-            kernel_load_ipa: 0x90080000,
+            kernel_load_ipa: 0xa0080000,
             kernel_load_pa: 0,
-            kernel_entry_point: 0x90080000,
-            device_tree_load_ipa: 0x90000000,
+            kernel_entry_point: 0xa0080000,
+            device_tree_load_ipa: 0xa0000000,
             ramdisk_load_ipa: 0,
             mediated_block_index: None,
         })),

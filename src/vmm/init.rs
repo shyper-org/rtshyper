@@ -1,17 +1,18 @@
 use alloc::vec::Vec;
 
-use crate::arch::{emu_intc_handler, emu_intc_init, partial_passthrough_intc_handler, partial_passthrough_intc_init};
+use crate::arch::{
+    emu_intc_handler, emu_intc_init, emu_smmu_handler, partial_passthrough_intc_handler, partial_passthrough_intc_init,
+};
+use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
-use crate::arch::PTE_S2_DEVICE;
-use crate::arch::PTE_S2_NORMAL;
 use crate::board::*;
 use crate::config::vm_cfg_entry;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    active_vm_id, add_async_used_info, cpu_idle, current_cpu, shyper_init, VcpuState, vm_if_init_mem_map, VM_IF_LIST,
-    vm_if_set_cpu_id, VmPa, VmType,
+    active_vm_id, add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, VcpuState,
+    vm_if_init_mem_map, VM_IF_LIST, vm_if_set_cpu_id, VmPa, VmType, iommu_add_device,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -235,6 +236,19 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     return false;
                 }
             }
+            EmuDeviceTIOMMU => {
+                emu_register_dev(
+                    EmuDeviceTIOMMU,
+                    vm.id(),
+                    idx,
+                    emu_dev.base_ipa,
+                    emu_dev.length,
+                    emu_smmu_handler,
+                );
+                if !iommmu_vm_init(vm.clone()) {
+                    return false;
+                }
+            }
             EmuDeviceTShyper => {
                 if !shyper_init(vm.clone(), emu_dev.base_ipa, emu_dev.length) {
                     return false;
@@ -276,6 +290,18 @@ fn vmm_init_passthrough_device(vm: Vm) -> bool {
     }
     for irq in vm.config().passthrough_device_irqs() {
         if !interrupt_vm_register(vm.clone(), irq) {
+            return false;
+        }
+    }
+    true
+}
+
+fn vmm_init_iommu_device(vm: Vm) -> bool {
+    for stream_id in vm.config().passthrough_device_stread_ids() {
+        if stream_id == 0 {
+            break;
+        }
+        if !iommu_add_device(vm.clone(), stream_id) {
             return false;
         }
     }
@@ -344,6 +370,10 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                                 emu_cfg.length as u64,
                             );
                         }
+                        EmuDeviceTIOMMU => {
+                            #[cfg(feature = "tx2")]
+                            println!("EmuDeviceTIOMMU");
+                        }
                         _ => {
                             todo!();
                         }
@@ -403,6 +433,10 @@ pub fn vmm_setup_config(vm_id: usize) {
     if !vmm_init_passthrough_device(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_passthrough_device failed");
     }
+    if !vmm_init_iommu_device(vm.clone()) {
+        panic!("vmm_setup_config: vmm_init_iommu_device failed");
+    }
+
     add_async_used_info(vm_id);
     println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }

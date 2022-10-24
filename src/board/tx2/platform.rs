@@ -1,4 +1,5 @@
 use crate::arch::GicDesc;
+use crate::arch::SmmuDesc;
 use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion, SchedRule};
 use crate::board::SchedRule::RoundRobin;
 use crate::device::ARM_CORTEX_A57;
@@ -107,6 +108,11 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
             gich_addr: PLATFORM_GICH_BASE,
             gicv_addr: PLATFORM_GICV_BASE,
             maintenance_int_id: 25,
+        },
+        smmu_desc: SmmuDesc {
+            base: 0x12000000,
+            interrupt_id: 187,
+            global_mask: 0x7f80,
         },
     },
 };

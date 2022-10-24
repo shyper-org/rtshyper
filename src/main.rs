@@ -5,6 +5,8 @@
 #![feature(alloc_error_handler)]
 #![feature(const_btree_new)]
 #![feature(drain_filter)]
+#![allow(unused_doc_comments)]
+#![allow(special_module_name)]
 
 #[macro_use]
 extern crate alloc;
@@ -25,7 +27,7 @@ use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
 use vmm::{mvm_init, vmm_boot};
 
-use crate::kernel::{cpu_sched_init, hvc_init};
+use crate::kernel::{cpu_sched_init, hvc_init, iommu_init};
 
 #[macro_export]
 macro_rules! print {
@@ -90,6 +92,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         let _ = kernel::logger_init();
         init_vm0_dtb(dtb);
         hvc_init();
+        iommu_init();
     }
     cpu_init();
     interrupt_init();

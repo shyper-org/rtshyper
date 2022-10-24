@@ -158,10 +158,10 @@ pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
         // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
         lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
-        // for i in 0..8 {
-        //     let addr = 0x12000000 + i * 0x200000;
-        //     lvl2_pt.lvl1[pt_lvl2_idx(addr) + 32] = BlockDescriptor::new(addr, true);
-        // }
+        for i in 0..(0x100_0000 / 0x200000) {
+            let addr = 0x12000000 + i * 0x200000;
+            lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
+        }
     }
     #[cfg(feature = "pi4")]
     {

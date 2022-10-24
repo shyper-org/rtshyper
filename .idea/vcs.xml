@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="VcsDirectoryMappings">
-    <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/libfdt-binding" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/vm-fdt" vcs="Git" />
-  </component>
-</project>
