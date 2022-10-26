@@ -139,7 +139,7 @@ pub fn mediated_dev_init() {
 }
 
 // only run in vm0
-pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
+pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> Result<usize, ()> {
     let vm = active_vm().unwrap();
     let blk_pa = vm_ipa2pa(vm.clone(), mmio_ipa);
     let mediated_blk = MediatedBlk {
@@ -158,11 +158,11 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> bool {
     );
     mediated_blk.set_cache_pa(cache_pa);
     mediated_blk_list_push(mediated_blk);
-    true
+    Ok(0)
 }
 
 // service VM finish blk request, and inform the requested VM
-pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
+pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> Result<usize, ()> {
     let dev_pa_reg = vm_ipa2pa(active_vm().unwrap(), dev_ipa_reg);
 
     // check weather src vm is still alive
@@ -170,7 +170,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
         Some(blk) => blk,
         None => {
             println!("illegal mediated blk pa {:x} ipa {:x}", dev_pa_reg, dev_ipa_reg);
-            return false;
+            return Err(());
         }
     };
     if mediated_blk.avail == false {
@@ -181,7 +181,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> bool {
     }
     // invoke the excuter to handle finished IO task
     async_task_exe();
-    return true;
+    Ok(0)
 }
 
 pub fn mediated_notify_ipi_handler(msg: &IpiMessage) {

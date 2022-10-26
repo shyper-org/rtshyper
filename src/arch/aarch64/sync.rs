@@ -100,7 +100,7 @@ pub fn hvc_handler() {
         }
         Err(_) => {
             println!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
-            current_cpu().set_gpr(HVC_RETURN_REG, 0);
+            current_cpu().set_gpr(HVC_RETURN_REG, usize::MAX);
         }
     }
     // let time_end = timer_arch_get_counter();

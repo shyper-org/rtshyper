@@ -7,6 +7,7 @@ use crate::kernel::{
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
+use crate::lib::memset_safe;
 
 pub fn vmm_remove_vm(vm_id: usize) {
     if vm_id == 0 {
@@ -28,6 +29,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vm_if_reset(vm_id);
     // free mem
     for idx in 0..vm.region_num() {
+        memset_safe(vm.pa_start(idx) as *mut u8, 0, vm.pa_length(idx));
         mem_vm_region_free(vm.pa_start(idx), vm.pa_length(idx));
     }
     // emu dev
@@ -42,7 +44,9 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vmm_remove_vm_list(vm_id);
     // remove vm cfg
     vm_cfg_remove_vm_entry(vm_id);
-    // println!("remove vm[{}] successfully", vm_id);
+    // remove vm unilib
+    crate::lib::unilib::unilib_fs_remove(vm_id);
+    println!("remove vm[{}] successfully", vm_id);
 }
 
 pub fn vmm_remove_vm_list(vm_id: usize) {

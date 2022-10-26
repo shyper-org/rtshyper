@@ -37,6 +37,7 @@ pub const HVC_VMM: usize = 1;
 pub const HVC_IVC: usize = 2;
 pub const HVC_MEDIATED: usize = 3;
 pub const HVC_CONFIG: usize = 0x11;
+pub const HVC_UNILIB: usize = 0x12;
 
 // hvc_sys_event
 pub const HVC_SYS_REBOOT: usize = 0;
@@ -85,6 +86,16 @@ pub const HVC_MEDIATED_DEV_APPEND: usize = 0x30;
 pub const HVC_MEDIATED_DEV_NOTIFY: usize = 0x31;
 pub const HVC_MEDIATED_DRV_NOTIFY: usize = 0x32;
 
+pub const HVC_UNILIB_FS_INIT: usize = 0;
+pub const HVC_UNILIB_FS_OPEN: usize = 1;
+pub const HVC_UNILIB_FS_CLOSE: usize = 2;
+pub const HVC_UNILIB_FS_READ: usize = 3;
+pub const HVC_UNILIB_FS_WRITE: usize = 4;
+pub const HVC_UNILIB_FS_LSEEK: usize = 5;
+pub const HVC_UNILIB_FS_STAT: usize = 6;
+pub const HVC_UNILIB_FS_APPEND: usize = 7;
+pub const HVC_UNILIB_FS_FINISHED: usize = 8;
+
 // hvc_config_event
 pub const HVC_CONFIG_ADD_VM: usize = 0;
 pub const HVC_CONFIG_DELETE_VM: usize = 1;
@@ -104,6 +115,7 @@ pub enum HvcGuestMsg {
     Default(HvcDefaultMsg),
     Manage(HvcManageMsg),
     Migrate(HvcMigrateMsg),
+    UniLib(HvcUniLibMsg),
 }
 
 #[repr(C)]
@@ -132,6 +144,16 @@ pub struct HvcMigrateMsg {
     pub page_num: usize, // bitmap page num
 }
 
+#[repr(C)]
+pub struct HvcUniLibMsg {
+    pub fid: usize,
+    pub event: usize,
+    pub vm_id: usize,
+    pub arg_1: usize,
+    pub arg_2: usize,
+    pub arg_3: usize,
+}
+
 pub fn add_share_mem(mem_type: usize, base: usize) {
     let mut list = SHARE_MEM_LIST.lock();
     list.insert(mem_type, base);
@@ -158,32 +180,17 @@ pub fn hvc_guest_handler(
     x5: usize,
     x6: usize,
 ) -> Result<usize, ()> {
-    let res;
     match hvc_type {
-        HVC_SYS => {
-            return hvc_sys_handler(event, x0);
-        }
-        HVC_VMM => {
-            return hvc_vmm_handler(event, x0, x1);
-        }
-        HVC_IVC => {
-            return hvc_ivc_handler(event, x0, x1);
-        }
-        HVC_MEDIATED => {
-            res = hvc_mediated_handler(event, x0, x1);
-        }
-        HVC_CONFIG => {
-            return hvc_config_handler(event, x0, x1, x2, x3, x4, x5, x6);
-        }
+        HVC_SYS => hvc_sys_handler(event, x0),
+        HVC_VMM => hvc_vmm_handler(event, x0, x1),
+        HVC_IVC => hvc_ivc_handler(event, x0, x1),
+        HVC_MEDIATED => hvc_mediated_handler(event, x0, x1),
+        HVC_CONFIG => hvc_config_handler(event, x0, x1, x2, x3, x4, x5, x6),
+        HVC_UNILIB => hvc_unilib_handler(event, x0, x1, x2),
         _ => {
             println!("hvc_guest_handler: unknown hvc type {} event {}", hvc_type, event);
-            return Err(());
+            Err(())
         }
-    }
-    if res {
-        Ok(HVC_FINISH)
-    } else {
-        Err(())
     }
 }
 
@@ -231,7 +238,6 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         HVC_VMM_LIST_VM => vmm_list_vm(x0),
         HVC_VMM_GET_VM_STATE => {
             todo!();
-            Ok(HVC_FINISH)
         }
         HVC_VMM_BOOT_VM => {
             vmm_boot_vm(x0);
@@ -239,7 +245,6 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
         }
         HVC_VMM_SHUTDOWN_VM => {
             todo!();
-            Ok(HVC_FINISH)
         }
         HVC_VMM_REBOOT_VM => {
             vmm_reboot_vm(x0);
@@ -372,22 +377,34 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     }
 }
 
-fn hvc_mediated_handler(event: usize, x0: usize, x1: usize) -> bool {
+fn hvc_mediated_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
     match event {
-        HVC_MEDIATED_DEV_APPEND => {
-            // println!("mediated dev_append");
-            mediated_dev_append(x0, x1);
-        }
-        HVC_MEDIATED_DEV_NOTIFY => {
-            // println!("mediated notify");
-            mediated_blk_notify_handler(x0);
-        }
+        HVC_MEDIATED_DEV_APPEND => mediated_dev_append(x0, x1),
+        HVC_MEDIATED_DEV_NOTIFY => mediated_blk_notify_handler(x0),
         _ => {
             println!("unknown mediated event {}", event);
-            return false;
+            return Err(());
         }
     }
-    true
+}
+
+use crate::lib::unilib::*;
+fn hvc_unilib_handler(event: usize, x0: usize, x1: usize, x2: usize) -> Result<usize, ()> {
+    match event {
+        HVC_UNILIB_FS_INIT => unilib_fs_init(),
+        HVC_UNILIB_FS_OPEN => unilib_fs_open(x0, x1, x2),
+        HVC_UNILIB_FS_CLOSE => unilib_fs_close(x0),
+        HVC_UNILIB_FS_READ => unilib_fs_read(x0, x1, x2),
+        HVC_UNILIB_FS_WRITE => unilib_fs_write(x0, x1, x2),
+        HVC_UNILIB_FS_LSEEK => unilib_fs_lseek(x0, x1, x2),
+        HVC_UNILIB_FS_STAT => unilib_fs_stat(),
+        HVC_UNILIB_FS_APPEND => unilib_fs_append(x0),
+        HVC_UNILIB_FS_FINISHED => unilib_fs_finished(x0),
+        _ => {
+            println!("unknown mediated event {}", event);
+            return Err(());
+        }
+    }
 }
 
 pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
@@ -439,6 +456,14 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
                 target_addr as *const u8,
                 msg as *const _ as *const u8,
                 size_of::<HvcManageMsg>(),
+            );
+            (msg.fid, msg.event)
+        }
+        HvcGuestMsg::UniLib(msg) => {
+            memcpy_safe(
+                target_addr as *const u8,
+                msg as *const _ as *const u8,
+                size_of::<HvcUniLibMsg>(),
             );
             (msg.fid, msg.event)
         }
@@ -602,6 +627,9 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         todo!();
                     }
                 },
+                HVC_UNILIB => {
+                    hvc_guest_notify(msg.trgt_vmid);
+                }
                 _ => {
                     todo!();
                 }
