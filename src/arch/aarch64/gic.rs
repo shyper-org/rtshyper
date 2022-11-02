@@ -35,7 +35,7 @@ const GIC_PRIO_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
 const GIC_TARGET_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
 const GIC_CONFIG_REGS_NUM: usize = GIC_INTS_MAX * 2 / 32;
 const GIC_SEC_REGS_NUM: usize = GIC_INTS_MAX * 2 / 32;
-const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
+pub const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
 
 pub const GIC_LIST_REGS_NUM: usize = 64;
 
@@ -162,6 +162,18 @@ impl GicDistributor {
 
     pub fn is_activer(&self, idx: usize) -> u32 {
         self.ISACTIVER[idx].get()
+    }
+
+    pub fn is_pender(&self, idx: usize) -> u32 {
+        self.ISPENDR[idx].get()
+    }
+
+    pub fn cpendsgir(&self, idx: usize) -> u32 {
+        self.CPENDSGIR[idx].get()
+    }
+
+    pub fn igroup(&self, idx: usize) -> u32 {
+        self.IGROUPR[idx].get()
     }
 
     pub fn ipriorityr(&self, idx: usize) -> u32 {
@@ -526,6 +538,10 @@ impl GicHypervisorInterface {
 
     pub fn misr(&self) -> u32 {
         self.MISR.get()
+    }
+
+    pub fn apr(&self) -> u32 {
+        self.APR.get()
     }
 
     pub fn set_lr(&self, lr_idx: usize, val: u32) {

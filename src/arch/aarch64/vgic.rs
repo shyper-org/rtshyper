@@ -189,12 +189,12 @@ impl VgicInt {
         vgic_int.in_act = is_act;
     }
 
-    fn in_pend(&self) -> bool {
+    pub fn in_pend(&self) -> bool {
         let vgic_int = self.inner.lock();
         vgic_int.in_pend
     }
 
-    fn in_act(&self) -> bool {
+    pub fn in_act(&self) -> bool {
         let vgic_int = self.inner.lock();
         vgic_int.in_act
     }
@@ -288,7 +288,7 @@ impl VgicInt {
         vgic_int.hw
     }
 
-    fn state(&self) -> IrqState {
+    pub fn state(&self) -> IrqState {
         let vgic_int = self.inner.lock();
         vgic_int.state
     }
@@ -1731,7 +1731,7 @@ impl Vgic {
         let vm = match active_vm() {
             Some(vm) => vm,
             None => {
-                panic!("emu_icfgr_access: current vcpu.vm is none");
+                panic!("emu_sgiregs_access: current vcpu.vm is none");
             }
         };
 
@@ -1775,6 +1775,7 @@ impl Vgic {
             }
         } else {
             // TODO: CPENDSGIR and SPENDSGIR access
+            unimplemented!();
         }
     }
 
