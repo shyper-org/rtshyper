@@ -6,7 +6,8 @@ use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::{
-    Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GICC, GicContext, GICD, GICH, VmContext,
+    Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext,
+    GICD, GICH, VmContext,
 };
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
@@ -122,79 +123,6 @@ impl Vcpu {
         let mut inner = self.inner.lock();
         let vm = inner.vm.clone().unwrap();
         inner.gic_ctx;
-        // println!("GICD_CTLR {:x}", GICD.ctlr());
-        // print!("#### GICD ITARGETSR ####");
-        // for i in 0..GIC_INTS_MAX * 8 / 32 {
-        //     if i % 16 == 0 {
-        //         println!("");
-        //     }
-        //     print!("{:x} ", GICD.itargetsr(i));
-        // }
-        // println!("");
-        //
-        // print!("#### GICD IPRIORITYR ####");
-        // for i in 0..GIC_INTS_MAX * 8 / 32 {
-        //     if i % 16 == 0 {
-        //         println!("");
-        //     }
-        //     print!("{:x} ", GICD.ipriorityr(i));
-        // }
-        // println!("");
-        //
-        // println!("GICC_RPR {:x}", GICC.rpr());
-        // println!("GICC_HPPIR {:x}", GICC.hppir());
-        // println!("GICC_BPR {:x}", GICC.bpr());
-        // println!("GICC_ABPR {:x}", GICC.abpr());
-        // println!("#### GICC APR ####");
-        // for i in 0..4 {
-        //     print!("{:x} ", GICC.apr(i));
-        // }
-        // println!("");
-        //
-        // println!("#### GICC NSAPR ####");
-        // for i in 0..4 {
-        //     print!("{:x} ", GICC.nsapr(i));
-        // }
-        // println!("");
-        //
-        // println!("GICC_HPPIR {:x}", GICC.hppir());
-        // println!("GICC_BPR {:x}", GICC.bpr());
-        // println!("GICC_ABPR {:x}", GICC.abpr());
-        // println!("#### GICC APR ####");
-        // for i in 0..4 {
-        //     print!("{:x} ", GICC.apr(i));
-        // }
-        // println!("");
-        //
-        // println!("#### GICC NSAPR ####");
-        // for i in 0..4 {
-        //     print!("{:x} ", GICC.nsapr(i));
-        // }
-        // println!("");
-        //
-        // println!("GICH_MISR {:x}", GICH.misr());
-        // println!("GICV_CTLR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
-        // });
-        // println!("GICV_PMR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
-        // });
-        // println!("GICV_BPR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
-        // });
-        // println!("GICV_ABPR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
-        // });
-        // println!("GICV_STATUSR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
-        // });
-        // println!(
-        //     "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
-        // );
         for irq in vm.config().passthrough_device_irqs() {
             inner.gic_ctx.add_irq(irq as u64);
         }
@@ -233,63 +161,7 @@ impl Vcpu {
         // println!("Core[{}] save gic context", current_cpu().id);
         let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
         *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
-
-        // println!("GICD_CTLR {:x}", GICD.ctlr());
-        // print!("#### GICD ITARGETSR ####");
-        // for i in 0..GIC_INTS_MAX * 8 / 32 {
-        //     if i % 8 == 0 {
-        //         println!("");
-        //     }
-        //     print!("{:x} ", GICD.itargetsr(i));
-        // }
-        // println!("");
-        //
-        // print!("#### GICD IPRIORITYR ####");
-        // for i in 0..GIC_INTS_MAX * 8 / 32 {
-        //     if i % 16 == 0 {
-        //         println!("");
-        //     }
-        //     print!("{:x} ", GICD.ipriorityr(i));
-        // }
-        // println!("");
-        //
-        // println!("GICC_RPR {:x}", GICC.rpr());
-        // println!("GICC_HPPIR {:x}", GICC.hppir());
-        // println!("GICC_BPR {:x}", GICC.bpr());
-        // println!("GICC_ABPR {:x}", GICC.abpr());
-        // println!("#### GICC APR ####");
-        // for i in 0..4 {
-        //     print!("{:x} ", GICC.apr(i));
-        // }
-        // println!("");
-        // println!("#### GICC NSAPR ####");
-        // for i in 0..4 {
-        //     print!("{:x} ", GICC.nsapr(i));
-        // }
-        //
-        // println!("GICH_MISR {:x}", GICH.misr());
-        // println!("GICV_CTLR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
-        // });
-        // println!("GICV_PMR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
-        // });
-        // println!("GICV_BPR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
-        // });
-        // println!("GICV_ABPR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
-        // });
-        // println!("GICV_STATUSR {:x}", unsafe {
-        //     *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
-        // });
-        // println!(
-        //     "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
-        //     unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
-        // );
+        // show_vcpu_reg_context();
     }
 
     pub fn context_vm_restore(&self) {
@@ -711,4 +583,113 @@ pub fn vcpu_run(announce: bool) {
     unsafe {
         context_vm_entry(sp - size);
     }
+}
+
+pub fn show_vcpu_reg_context() {
+    print!("#### GICD ISENABLER ####");
+    for i in 0..GIC_INTS_MAX / 32 {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.is_enabler(i));
+    }
+    println!("");
+    print!("#### GICD ISACTIVER ####");
+    for i in 0..GIC_INTS_MAX / 32 {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.is_activer(i));
+    }
+    println!("");
+    print!("#### GICD ISPENDER ####");
+    for i in 0..GIC_INTS_MAX / 32 {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.is_pender(i));
+    }
+    println!("");
+    print!("#### GICD IGROUP ####");
+    for i in 0..GIC_INTS_MAX / 32 {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.igroup(i));
+    }
+    println!("");
+    print!("#### GICD ICFGR ####");
+    for i in 0..GIC_INTS_MAX * 2 / 32 {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.icfgr(i));
+    }
+    println!("");
+    print!("#### GICD CPENDSGIR ####");
+    for i in 0..GIC_SGI_REGS_NUM {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.cpendsgir(i));
+    }
+    println!("");
+    println!("GICH_APR {:x}", GICH.misr());
+
+    println!("GICD_CTLR {:x}", GICD.ctlr());
+    print!("#### GICD ITARGETSR ####");
+    for i in 0..GIC_INTS_MAX * 8 / 32 {
+        if i % 8 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.itargetsr(i));
+    }
+    println!("");
+
+    print!("#### GICD IPRIORITYR ####");
+    for i in 0..GIC_INTS_MAX * 8 / 32 {
+        if i % 16 == 0 {
+            println!("");
+        }
+        print!("{:x} ", GICD.ipriorityr(i));
+    }
+    println!("");
+
+    println!("GICC_RPR {:x}", GICC.rpr());
+    println!("GICC_HPPIR {:x}", GICC.hppir());
+    println!("GICC_BPR {:x}", GICC.bpr());
+    println!("GICC_ABPR {:x}", GICC.abpr());
+    println!("#### GICC APR ####");
+    for i in 0..4 {
+        print!("{:x} ", GICC.apr(i));
+    }
+    println!("");
+    println!("#### GICC NSAPR ####");
+    for i in 0..4 {
+        print!("{:x} ", GICC.nsapr(i));
+    }
+
+    println!("GICH_MISR {:x}", GICH.misr());
+    println!("GICV_CTLR {:x}", unsafe {
+        *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
+    });
+    println!("GICV_PMR {:x}", unsafe {
+        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
+    });
+    println!("GICV_BPR {:x}", unsafe {
+        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
+    });
+    println!("GICV_ABPR {:x}", unsafe {
+        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
+    });
+    println!("GICV_STATUSR {:x}", unsafe {
+        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
+    });
+    println!(
+        "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
+        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
+    );
 }

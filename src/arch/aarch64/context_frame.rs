@@ -324,8 +324,8 @@ impl VmContext {
     pub fn ext_regs_store(&mut self) {
         unsafe {
             asm!("mrs {0}, CNTVOFF_EL2", out(reg) self.cntvoff_el2);
-            asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) self.cntp_cval_el0);
-            asm!("mrs {0}, CNTV_CVAL_EL0", out(reg) self.cntv_cval_el0);
+            // asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) self.cntp_cval_el0);
+            // asm!("mrs {0}, CNTV_CVAL_EL0", out(reg) self.cntv_cval_el0);
             asm!("mrs {0:x}, CNTKCTL_EL1", out(reg) self.cntkctl_el1);
             asm!("mrs {0:x}, CNTP_CTL_EL0", out(reg) self.cntp_ctl_el0);
             asm!("mrs {0:x}, CNTV_CTL_EL0", out(reg) self.cntv_ctl_el0);
@@ -372,13 +372,13 @@ impl VmContext {
         // println!("restore CNTV_TVAL_EL0 {:x}", self.cntv_tval_el0);
         unsafe {
             asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) self.cntvoff_el2);
-            asm!("msr CNTP_CVAL_EL0, {0}", "isb", in(reg) self.cntp_cval_el0);
-            asm!("msr CNTV_CVAL_EL0, {0}", "isb", in(reg) self.cntv_cval_el0);
+            // asm!("msr CNTP_CVAL_EL0, {0}", "isb", in(reg) self.cntp_cval_el0);
+            // asm!("msr CNTV_CVAL_EL0, {0}", "isb", in(reg) self.cntv_cval_el0);
             asm!("msr CNTKCTL_EL1, {0:x}", "isb", in(reg) self.cntkctl_el1);
             asm!("msr CNTP_CTL_EL0, {0:x}", "isb", in(reg) self.cntp_ctl_el0);
             asm!("msr CNTV_CTL_EL0, {0:x}", "isb", in(reg) self.cntv_ctl_el0);
-            // asm!("msr CNTP_TVAL_EL0, {0:x}", in(reg) self.cntp_tval_el0);
-            // asm!("msr CNTV_TVAL_EL0, {0:x}", in(reg) self.cntv_tval_el0);
+            asm!("msr CNTP_TVAL_EL0, {0:x}", in(reg) self.cntp_tval_el0);
+            asm!("msr CNTV_TVAL_EL0, {0:x}", in(reg) self.cntv_tval_el0);
 
             // asm!("msr VPIDR_EL2, {0:x}", "isb", in(reg) self.vpidr_el2);
             asm!("msr VMPIDR_EL2, {0}", "isb", in(reg) self.vmpidr_el2);
