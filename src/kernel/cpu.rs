@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use core::arch::asm;
 
 use spin::Mutex;
 
@@ -9,7 +8,7 @@ use crate::arch::ContextFrameTrait;
 // use core::ops::{Deref, DerefMut};
 use crate::arch::cpu_interrupt_unmask;
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{SchedType, Vcpu, VcpuPool, VcpuState, Vm};
+use crate::kernel::{SchedType, Vcpu, VcpuArray, VcpuState, Vm, Scheduler};
 use crate::kernel::IpiMessage;
 use crate::lib::trace;
 
@@ -72,10 +71,6 @@ fn cpu_if_init() {
     }
 }
 
-// struct CpuSelf {}
-
-// impl Deref<Cpu> for CpuSelf {}
-
 #[repr(C)]
 #[repr(align(4096))]
 // #[derive(Clone)]
@@ -87,7 +82,7 @@ pub struct Cpu {
     pub ctx: Option<usize>,
 
     pub sched: SchedType,
-    // pub vcpu_pool: Option<Box<VcpuPool>>,
+    pub vcpu_array: VcpuArray,
     pub current_irq: usize,
     pub cpu_pt: CpuPt,
     pub stack: [u8; CPU_STACK_SIZE],
@@ -102,6 +97,7 @@ impl Cpu {
             active_vcpu: None,
             ctx: None,
             sched: SchedType::None,
+            vcpu_array: VcpuArray::new(),
             current_irq: 0,
             cpu_pt: CpuPt {
                 lvl1: [0; PTE_PER_PAGE],
@@ -193,15 +189,6 @@ impl Cpu {
         }
     }
 
-    pub fn vcpu_pool(&self) -> VcpuPool {
-        match &self.sched {
-            SchedType::SchedRR(rr) => rr.pool.clone(),
-            SchedType::None => {
-                panic!("cpu[{}] has no vcpu_pool", self.id);
-            }
-        }
-    }
-
     pub fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
         self.active_vcpu = active_vcpu.clone();
         match active_vcpu {
@@ -209,6 +196,13 @@ impl Cpu {
             Some(vcpu) => {
                 vcpu.set_state(VcpuState::VcpuAct);
             }
+        }
+    }
+
+    pub fn scheduler(&mut self) -> &mut impl Scheduler {
+        match &mut self.sched {
+            SchedType::None => panic!("scheduler is None"),
+            SchedType::SchedRR(rr) => rr,
         }
     }
 }
@@ -221,6 +215,7 @@ pub static mut CPU: Cpu = Cpu {
     cpu_state: CpuState::CpuInv,
     active_vcpu: None,
     ctx: None,
+    vcpu_array: VcpuArray::new(),
     sched: SchedType::None,
     current_irq: 0,
     cpu_pt: CpuPt {
@@ -291,9 +286,8 @@ pub fn cpu_idle() {
     current_cpu().cpu_state = state;
     cpu_interrupt_unmask();
     loop {
-        unsafe {
-            asm!("wfi");
-        }
+        // TODO: replace it with an Arch function `arch_idle`
+        cortex_a::asm::wfi();
     }
 }
 
@@ -307,22 +301,10 @@ pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [
     Cpu::default(),
     Cpu::default(),
 ];
-// static CPU_LIST: Mutex<[Cpu; PLATFORM_CPU_NUM_MAX]> = Mutex::new([
-//     Cpu::default(),
-//     Cpu::default(),
-//     Cpu::default(),
-//     Cpu::default(),
-//     Cpu::default(),
-//     Cpu::default(),
-//     Cpu::default(),
-//     Cpu::default(),
-// ]);
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
 pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
-    // let mut cpu_lock = CPU_LIST.lock();
-    // let mut cpu = &mut (*cpu_lock)[cpu_id];
     let mut cpu = unsafe { &mut CPU_LIST[cpu_id] };
     (*cpu).id = cpu_id;
 

@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::arch::{Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, GICD, VmContext};
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
-use crate::kernel::{current_cpu, interrupt_vm_inject, timer_enable, vm_if_set_state};
+use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
 use crate::lib::{cache_invalidate_d, memcpy_safe};
 
@@ -115,7 +115,7 @@ impl Vcpu {
         inner.vm_ctx.gic_save_state();
     }
 
-    pub fn context_gic_store(&self) {
+    pub fn context_gic_irqs_store(&self) {
         let mut inner = self.inner.lock();
         let vm = inner.vm.clone().unwrap();
         inner.gic_ctx;
@@ -150,7 +150,7 @@ impl Vcpu {
         inner.gic_ctx.set_gicv_pmr(*gicv_pmr);
     }
 
-    pub fn context_gic_restore(&self) {
+    pub fn context_gic_irqs_restore(&self) {
         let inner = self.inner.lock();
 
         for irq_state in inner.gic_ctx.irq_state.iter() {
@@ -226,7 +226,7 @@ impl Vcpu {
         }
     }
 
-    pub fn restore_cpu_ctx(&self) {
+    fn restore_cpu_ctx(&self) {
         let inner = self.inner.lock();
         match current_cpu().ctx {
             None => {
@@ -531,9 +531,8 @@ pub fn vcpu_remove(vcpu: Vcpu) {
 pub fn vcpu_idle(_vcpu: Vcpu) {
     cpu_interrupt_unmask();
     loop {
-        unsafe {
-            asm!("wfi");
-        }
+        // TODO: replace it with an Arch function `arch_idle`
+        cortex_a::asm::wfi();
     }
 }
 
@@ -544,10 +543,6 @@ pub fn vcpu_run() {
     //     active_vm_id(),
     //     active_vcpu_id()
     // );
-
-    if current_cpu().vcpu_pool().running() > 1 {
-        timer_enable(true);
-    }
 
     // let vm = crate::kernel::active_vm().unwrap();
     // vm.show_pagetable(0x17000000);
@@ -577,7 +572,6 @@ pub fn vcpu_run() {
     //     current_cpu().get_gpr(0),
     //     sp
     // );
-    // TODO: vcpu_run
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;
     }

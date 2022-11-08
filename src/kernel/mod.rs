@@ -14,7 +14,8 @@ pub use self::sched::*;
 // pub use self::task::*;
 pub use self::timer::*;
 pub use self::vcpu::*;
-pub use self::vcpu_pool::*;
+// pub use self::vcpu_pool::*;
+pub use self::vcpu_array::*;
 pub use self::vm::*;
 
 mod async_task;
@@ -33,5 +34,6 @@ mod iommu;
 mod sched;
 mod timer;
 mod vcpu;
-mod vcpu_pool;
+// mod vcpu_pool;
+mod vcpu_array;
 mod vm;

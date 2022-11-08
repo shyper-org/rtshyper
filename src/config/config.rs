@@ -614,7 +614,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
     if cmdline_length > 0 {
         memcpy_safe(
             &cmdline_u8[0] as *const _ as *const u8,
-            cmdline_ipa as *mut u8,
+            cmdline_pa as *mut u8,
             cmdline_length,
         );
     }

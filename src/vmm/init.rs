@@ -490,13 +490,10 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             let vcpu_id = vcpu.id();
 
             // only vm0 vcpu[0] state should set to pend here
-            if current_cpu().vcpu_pool().running() == 0 && vm_id == 0 {
+            if vm_id == 0 && current_cpu().vcpu_array.vcpu_num() == 0 {
                 vcpu.set_state(VcpuState::VcpuPend);
-                current_cpu().vcpu_pool().add_running();
             }
-            if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
-                panic!("core {} too many vcpu", cpu_id);
-            }
+            current_cpu().vcpu_array.append_vcpu(vcpu);
 
             vm_if_set_cpu_id(vm_id, cpu_id);
 
@@ -521,9 +518,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             };
             let vcpu_id = vcpu.id();
 
-            if !current_cpu().vcpu_pool().append_vcpu(vcpu) {
-                panic!("core {} too many vcpu", cpu_id);
-            }
+            current_cpu().vcpu_array.append_vcpu(vcpu);
 
             current_cpu().assigned = true;
             vm.set_cpu_num(vm.cpu_num() + 1);
@@ -533,19 +528,18 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     }
 
     if current_cpu().assigned {
-        let vcpu_pool = current_cpu().vcpu_pool();
-        for i in 0..vcpu_pool.vcpu_num() {
-            let vcpu = vcpu_pool.vcpu(i);
-            vcpu.set_phys_id(cpu_id);
-            if let Some(mvm) = vcpu.vm() {
-                if mvm.id() == 0 && current_cpu().id == 0 {
-                    vcpu_pool.set_active_vcpu(i);
-                    current_cpu().set_active_vcpu(Some(vcpu.clone()));
+        let vcpu_array = &current_cpu().vcpu_array;
+        for i in 0..vcpu_array.capacity() {
+            if let Some(vcpu) = vcpu_array.pop_vcpu_through_vmid(i) {
+                vcpu.set_phys_id(cpu_id);
+                if let Some(mvm) = vcpu.vm() {
+                    if mvm.id() == 0 && current_cpu().id == 0 {
+                        current_cpu().set_active_vcpu(Some(vcpu.clone()));
+                    }
                 }
+                println!("core {} i {} vcpu_num {} arch_reset", cpu_id, i, vcpu_array.vcpu_num());
+                vcpu.arch_reset();
             }
-            println!("core {} i {} vcpu_num {} arch_reset", cpu_id, i, vcpu_pool.vcpu_num());
-
-            vcpu.arch_reset();
         }
     }
 
@@ -599,13 +593,9 @@ pub fn mvm_init() {
 pub fn vmm_boot() {
     if current_cpu().assigned && active_vcpu_id() == 0 {
         // let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
-        let vcpu_pool = current_cpu().vcpu_pool();
-        for i in 0..vcpu_pool.vcpu_num() {
-            let vcpu = vcpu_pool.vcpu(i);
-            if vcpu.vm_id() == active_vm_id() {
-                // Before running, every vcpu need to reset context state
-                vcpu.reset_context();
-            }
+        match current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) {
+            Some(vcpu) => vcpu.reset_context(),
+            None => panic!("vmm_boot: current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) is None"),
         }
         // active_vm().unwrap().set_migration_state(false);
         println!("Core {} start running", current_cpu().id);
@@ -618,13 +608,9 @@ pub fn vmm_boot() {
 }
 
 pub fn vmm_migrate_boot() {
-    let vcpu_pool = current_cpu().vcpu_pool();
-    for i in 0..vcpu_pool.vcpu_num() {
-        let vcpu = vcpu_pool.vcpu(i);
-        if vcpu.vm_id() == active_vm_id() {
-            // Before running, reset vcpu vmpidr reg
-            vcpu.reset_vmpidr();
-        }
+    match current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) {
+        Some(vcpu) => vcpu.reset_vmpidr(),
+        None => panic!("vmm_migrate_boot: current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) is None"),
     }
 
     // println!("Core[{}] start running", current_cpu().id);

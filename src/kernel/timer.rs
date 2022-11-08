@@ -1,6 +1,6 @@
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
 // use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{current_cpu, InterruptHandler, SchedType, SchedulerTrait};
+use crate::kernel::{current_cpu, InterruptHandler, Scheduler};
 
 // #[derive(Copy, Clone)]
 // struct Timer(bool);
@@ -42,13 +42,13 @@ pub fn timer_enable(val: bool) {
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
 }
 
-fn timer_notify_after(us: usize) {
+fn timer_notify_after(ms: usize) {
     use crate::arch::{timer_arch_enable_irq, timer_arch_set};
-    if us == 0 {
+    if ms == 0 {
         return;
     }
 
-    timer_arch_set(us);
+    timer_arch_set(ms);
     timer_arch_enable_irq();
 }
 
@@ -56,19 +56,7 @@ pub fn timer_irq_handler(_arg: usize) {
     use crate::arch::timer_arch_disable_irq;
 
     timer_arch_disable_irq();
-    // timer_notify_after(1000);
-    let vcpu_pool = current_cpu().vcpu_pool();
+    current_cpu().scheduler().do_schedule();
 
-    if vcpu_pool.running() > 1 {
-        match &current_cpu().sched {
-            SchedType::SchedRR(rr) => {
-                rr.schedule();
-                // TODO: vcpu_pool_switch(ANY_PENDING_VCPU)
-                timer_notify_after(vcpu_pool.slice());
-            }
-            SchedType::None => {
-                panic!("cpu{} sched should not be None", current_cpu().id);
-            }
-        }
-    }
+    timer_notify_after(1);
 }

@@ -6,7 +6,7 @@ use tock_registers::interfaces::*;
 const CTL_IMASK: usize = 1 << 1;
 
 pub static TIMER_FREQ: Mutex<usize> = Mutex::new(0);
-pub static TIMER_SLICE: Mutex<usize> = Mutex::new(0);
+pub static TIMER_SLICE: Mutex<usize> = Mutex::new(0); // ms
 
 pub fn timer_arch_set(num: usize) {
     let slice_lock = TIMER_SLICE.lock();
@@ -43,7 +43,7 @@ pub fn timer_arch_init() {
     let mut freq_lock = TIMER_FREQ.lock();
     let mut slice_lock = TIMER_SLICE.lock();
     *freq_lock = timer_arch_get_frequency();
-    *slice_lock = (*freq_lock) / 100;
+    *slice_lock = (*freq_lock) / 1000; // ms
 
     let ctl = 0x3 & (1 | !CTL_IMASK);
     let tval = *slice_lock * 10;

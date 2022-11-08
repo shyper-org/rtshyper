@@ -25,9 +25,9 @@ use crate::kernel::{
     AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion,
     hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler,
     InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, ipi_send_msg, IpiHandler,
-    IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerRR, SHARE_MEM_LIST,
-    timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, VcpuPool, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST,
-    VM_NUM_MAX, VM_REGION, VmInterface, VmRegion, FairQueue,
+    IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SHARE_MEM_LIST,
+    timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX,
+    VM_REGION, VmInterface, VmRegion, FairQueue, SchedulerUpdate,
 };
 use crate::lib::{BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
@@ -605,24 +605,7 @@ pub fn current_cpu_update(src_cpu: &Cpu) {
     // current_cpu().sched = src_cpu.sched;
     match &src_cpu.sched {
         SchedType::SchedRR(rr) => {
-            let new_rr = SchedulerRR {
-                pool: VcpuPool::default(),
-            };
-            for idx in 0..rr.pool.vcpu_num() {
-                let src_vcpu = rr.pool.vcpu(idx);
-                let vm_id = src_vcpu.vm_id();
-                let new_vcpu = vm(vm_id).unwrap().vcpu(src_vcpu.id()).unwrap();
-                new_rr.pool.append_vcpu(new_vcpu.clone());
-            }
-            new_rr.pool.set_running(rr.pool.running());
-            new_rr.pool.set_slice(rr.pool.slice());
-            if rr.pool.active_idx() < rr.pool.vcpu_num() {
-                new_rr.pool.set_active_vcpu(rr.pool.active_idx());
-                cpu.active_vcpu = Some(new_rr.pool.vcpu(rr.pool.active_idx()));
-            } else {
-                cpu.active_vcpu = None;
-            }
-            cpu.sched = SchedType::SchedRR(new_rr);
+            cpu.sched = SchedType::SchedRR(rr.update());
         }
         SchedType::None => {
             cpu.sched = SchedType::None;

@@ -183,20 +183,21 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         }
     }
 
-    for idx in 0..current_cpu().vcpu_pool().vcpu_num() {
-        let vcpu = current_cpu().vcpu_pool().vcpu(idx);
-        match vcpu.vm() {
-            Some(vm) => {
-                if vm.has_interrupt(int_id) {
-                    if vcpu.state() as usize == VcpuState::VcpuInv as usize {
-                        return true;
-                    }
+    for id in 0..current_cpu().vcpu_array.capacity() {
+        if let Some(vcpu) = current_cpu().vcpu_array.pop_vcpu_through_vmid(id) {
+            match vcpu.vm() {
+                Some(vm) => {
+                    if vm.has_interrupt(int_id) {
+                        if vcpu.state() as usize == VcpuState::VcpuInv as usize {
+                            return true;
+                        }
 
-                    interrupt_vm_inject(vm.clone(), vcpu.clone(), int_id, src);
-                    return false;
+                        interrupt_vm_inject(vm.clone(), vcpu.clone(), int_id, src);
+                        return false;
+                    }
                 }
+                None => {}
             }
-            None => {}
         }
     }
 
@@ -213,7 +214,7 @@ pub fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::IntInjectMsg(int_msg) => {
             let vm_id = int_msg.vm_id;
             let int_id = int_msg.int_id;
-            match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
+            match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
                 None => {
                     panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
                 }

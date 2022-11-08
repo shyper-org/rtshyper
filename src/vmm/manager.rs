@@ -9,8 +9,8 @@ use crate::config::NAME_MAX_LEN;
 use crate::config::vm_cfg_entry;
 use crate::config::vm_type;
 use crate::kernel::{
-    active_vcpu_id, active_vm, cpu_idle, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg,
-    vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
+    active_vcpu_id, active_vm, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
+    vm_ipa2pa, VM_NUM_MAX, Scheduler,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -20,7 +20,7 @@ use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::lib::{bit_extract, memcpy_safe, memset_safe};
-use crate::vmm::{vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config};
+use crate::vmm::{vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_remove_vcpu};
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
@@ -193,7 +193,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
         gicc_clear_current_irq(true);
         vmm_boot();
     } else {
-        match current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(vm_id) {
+        match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
             None => {
                 let m = IpiVmmMsg {
                     vmid: vm_id,
@@ -203,9 +203,9 @@ pub fn vmm_boot_vm(vm_id: usize) {
                     println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
                 }
             }
-            Some(vcpu_idx) => {
+            Some(vcpu) => {
                 gicc_clear_current_irq(true);
-                current_cpu().vcpu_pool().yield_vcpu(vcpu_idx);
+                current_cpu().scheduler().yield_to(vcpu);
                 vmm_boot();
             }
         };
@@ -416,10 +416,14 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
                 vmm_assign_vcpu(vmm.vmid);
             }
             VmmEvent::VmmRemoveCpu => {
-                current_cpu().vcpu_pool().remove_vcpu(vmm.vmid);
-                if current_cpu().vcpu_pool().running() == 0 {
-                    gicc_clear_current_irq(true);
-                    cpu_idle();
+                println!(
+                    "vmm_ipi_handler: core {} remove vcpu for vm[{}]",
+                    current_cpu().id,
+                    vmm.vmid
+                );
+                match vm(vmm.vmid) {
+                    Some(vm) => vmm_remove_vcpu(vm),
+                    None => panic!("vmm_ipi_handler: VmmEvent::VmmRemoveCpu cannot find VM[{}]", vmm.vmid),
                 }
             }
             _ => {

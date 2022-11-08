@@ -1,9 +1,9 @@
-use crate::arch::GIC_SGIS_NUM;
+use crate::arch::{GIC_SGIS_NUM, gicc_clear_current_irq};
 use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, mem_vm_region_free,
-    remove_async_used_info, remove_vm, remove_vm_async_task, vcpu_remove, vm, Vm,
+    remove_async_used_info, remove_vm, remove_vm_async_task, vcpu_remove, vm, Vm, Scheduler, cpu_idle,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
@@ -57,11 +57,19 @@ pub fn vmm_remove_vm_list(vm_id: usize) {
 pub fn vmm_remove_vcpu(vm: Vm) {
     for idx in 0..vm.cpu_num() {
         let vcpu = vm.vcpu(idx).unwrap();
-        // remove vcpu from VCPU_LIST
-        vcpu_remove(vcpu.clone());
-        // remove vcpu from scheduler vcpu_pool
         if vcpu.phys_id() == current_cpu().id {
-            current_cpu().vcpu_pool().remove_vcpu(vm.id());
+            // remove vcpu from VCPU_LIST
+            vcpu_remove(vcpu.clone());
+            let vcpu = current_cpu().vcpu_array.pop_vcpu_through_vmid(vm.id());
+            current_cpu().vcpu_array.remove_vcpu(vm.id());
+            if let Some(vcpu) = vcpu {
+                // remove vcpu from scheduler
+                current_cpu().scheduler().sleep(vcpu);
+            }
+            if current_cpu().vcpu_array.vcpu_num() == 0 {
+                gicc_clear_current_irq(true);
+                cpu_idle();
+            }
         } else {
             let m = IpiVmmMsg {
                 vmid: vm.id(),

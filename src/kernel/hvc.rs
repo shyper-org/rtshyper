@@ -12,7 +12,7 @@ use crate::kernel::{
     IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, mem_heap_region_reserve,
     migrate_finish_ipi_handler, migrate_memcpy, migrate_ready, UPDATE_IMG_BASE_ADDR, update_request, vcpu_idle, vm,
     vm_if_copy_mem_map, vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr,
-    vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
+    vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX, Scheduler,
 };
 use crate::lib::{func_barrier, memcpy_safe, set_barrier_num, time_current_us, trace};
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_migrate_boot, vmm_reboot_vm, vmm_remove_vm};
@@ -495,7 +495,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 // notify current cpu's vcpu
 pub fn hvc_guest_notify(vm_id: usize) {
     let vm = vm(vm_id).unwrap();
-    match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
+    match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
         None => {
             println!(
                 "hvc_guest_notify: Core {} failed to find vcpu of VM {}",
@@ -512,7 +512,7 @@ pub fn hvc_guest_notify(vm_id: usize) {
 pub fn hvc_ipi_handler(msg: &IpiMessage) {
     match &msg.ipi_message {
         IpiInnerMsg::HvcMsg(msg) => {
-            if current_cpu().vcpu_pool().pop_vcpu_through_vmid(msg.trgt_vmid).is_none() {
+            if current_cpu().vcpu_array.pop_vcpu_through_vmid(msg.trgt_vmid).is_none() {
                 println!(
                     "hvc_ipi_handler: Core {} failed to find vcpu of VM {}",
                     current_cpu().id,
@@ -564,7 +564,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                             migrate_finish_ipi_handler(msg.src_vmid);
                             return;
                         }
-                        let trgt_vcpu = match current_cpu().vcpu_pool().pop_vcpu_through_vmid(msg.trgt_vmid) {
+                        let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(msg.trgt_vmid) {
                             None => {
                                 println!(
                                     "Core {} failed to find target vcpu, vmid {}",
@@ -584,7 +584,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                             trgt_vcpu.context_vm_store();
                         }
                         // save gic register for each vcpu
-                        trgt_vcpu.context_gic_store();
+                        trgt_vcpu.context_gic_irqs_store();
                         func_barrier();
                         if trgt_vcpu.id() == 0 {
                             vm.context_vm_migrate_save();
@@ -604,15 +604,14 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         // vm.set_migration_state(true);
 
                         gicc_clear_current_irq(true);
-                        match current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(msg.trgt_vmid) {
+                        match current_cpu().vcpu_array.pop_vcpu_through_vmid(msg.trgt_vmid) {
                             None => {
                                 panic!("Core[{}] does not have VM[{}] vcpu", current_cpu().id, msg.trgt_vmid);
                             }
-                            Some(vcpu_idx) => {
-                                let vcpu = current_cpu().vcpu_pool().vcpu(vcpu_idx);
-                                current_cpu().vcpu_pool().yield_vcpu(vcpu_idx);
+                            Some(vcpu) => {
+                                current_cpu().scheduler().yield_to(vcpu.clone());
                                 // restore gic register for each vcpu
-                                vcpu.context_gic_restore();
+                                vcpu.context_gic_irqs_restore();
                             }
                         }
                         vmm_migrate_boot();

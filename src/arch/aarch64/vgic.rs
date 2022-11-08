@@ -2340,7 +2340,7 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
             return;
         }
     }
-    let trgt_vcpu = match current_cpu().vcpu_pool().pop_vcpu_through_vmid(vm_id) {
+    let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
         None => {
             println!("Core {} received vgic msg from unknown VM {}", current_cpu().id, vm_id);
             return;

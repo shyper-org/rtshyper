@@ -1,7 +1,5 @@
 use crate::arch::{gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
-use crate::kernel::{
-    cpu_idle, current_cpu, ipi_intra_broadcast_msg, SchedType, SchedulerTrait, timer_enable, Vcpu, VcpuState, Vm,
-};
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, Scheduler, timer_enable, Vcpu, VcpuState, Vm};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
@@ -146,34 +144,18 @@ fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
     vcpu.reset_context();
     vcpu.set_gpr(0, ctx);
     vcpu.set_elr(entry);
-
-    current_cpu().vcpu_pool().add_running();
-    if current_cpu().active_vcpu.is_none() {
-        current_cpu().set_active_vcpu(Some(vcpu.clone()));
-    }
-
-    match &current_cpu().sched {
-        SchedType::SchedRR(rr) => {
-            // should add a new fun to change vcpu in pool to trgt
-            // rr.schedule();
-            let idx = current_cpu().vcpu_pool().pop_vcpuidx_through_vmid(vcpu.vm_id());
-            rr.yield_next(idx.unwrap());
-        }
-        SchedType::None => {
-            println!("Core {} has no scheduler", current_cpu().id);
-        }
-    }
-
-    if current_cpu().vcpu_pool().running() > 1 {
-        timer_enable(true);
-    }
+    // Just wake up the vcpu and
+    // invoke current_cpu().sched.schedule()
+    // let the scheduler enable or disable timer
+    current_cpu().scheduler().wakeup(vcpu);
+    current_cpu().scheduler().do_schedule();
 }
 
 // Todo: need to support more vcpu in one Core
 pub fn psci_ipi_handler(msg: &IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::Power(power_msg) => {
-            let trgt_vcpu = match current_cpu().vcpu_pool().pop_vcpu_through_vmid(power_msg.src) {
+            let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(power_msg.src) {
                 None => {
                     println!(
                         "Core {} failed to find target vcpu, source vmid {}",
@@ -203,7 +185,10 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
                     psci_vcpu_on(trgt_vcpu, power_msg.entry, power_msg.context);
                 }
                 PowerEvent::PsciIpiCpuOff => {
-                    current_cpu().active_vcpu.clone().unwrap().shutdown();
+                    // TODO: 为什么ipi cpu off是当前vcpu shutdown，而vcpu shutdown 最后是把平台的物理核心shutdown
+                    // 没有用到。不用管
+                    // current_cpu().active_vcpu.clone().unwrap().shutdown();
+                    unimplemented!("PowerEvent::PsciIpiCpuOff")
                 }
                 PowerEvent::PsciIpiCpuReset => {
                     vcpu_arch_init(active_vm().unwrap(), current_cpu().active_vcpu.clone().unwrap());

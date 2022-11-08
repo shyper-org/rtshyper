@@ -147,6 +147,7 @@ pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         //     pt.lvl1[i] = BlockDescriptor::invalid();
         // }
 
+        // map the devices to HIGH 32GB, whose offset is 2^35 = 0x8_0000_0000
         lvl1_pt.lvl1[32] = BlockDescriptor::table(lvl2_base);
         // 0x200000 ~ 2MB
         // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)

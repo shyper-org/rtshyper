@@ -11,6 +11,7 @@ build = "build.rs"
 panic = "abort"
 
 [profile.release]
+lto = true
 panic = "abort"
 debug = true
 
