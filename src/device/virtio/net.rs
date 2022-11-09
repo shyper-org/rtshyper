@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::config::{vm_num, vm_type};
-use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE, VringUsed};
+use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
@@ -101,7 +101,7 @@ impl NetDesc {
     }
 
     pub fn status(&self) -> u16 {
-        let mut inner = self.inner.lock();
+        let inner = self.inner.lock();
         inner.status
     }
 
@@ -189,7 +189,6 @@ const VIRTIO_NET_CTRL_ANNOUNCE: u8 = 3;
 const VIRTIO_NET_CTRL_ANNOUNCE_ACK: u8 = 0;
 
 pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
-    println!("virtio_net_handle_ctrl");
     if vq.ready() == 0 {
         println!("virtio net control queue is not ready!");
         return false;
@@ -197,19 +196,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
     let out_iov = VirtioIov::default();
     let in_iov = VirtioIov::default();
-    // let dev = nic.dev();
-    // let buf = dev.cache();
-    // let vq_size = vq.num();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
-    // vq.show_addr_info();
-    // vq.show_avail_info(4);
-    vq.show_desc_info(4, vm.clone());
-    // println!(
-    //     "vq.idx {} last_avail_idx {} next_desc_idx_opt {:#?}",
-    //     vq.vq_indx(),
-    //     vq.last_avail_idx(),
-    //     next_desc_idx_opt
-    // );
     while next_desc_idx_opt.is_some() {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
         let mut len = 0;
@@ -217,9 +204,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         in_iov.clear();
 
         loop {
-            // println!("vq.desc_addr({}) {:x}", idx, vq.desc_addr(idx));
             let addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(idx));
-            // println!("pa addr {:x}", addr);
             if addr == 0 {
                 println!("virtio_net_handle_ctrl: failed to desc addr");
                 return false;
@@ -237,14 +222,11 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
         let ctrl = VirtioNetCtrlHdr::default();
         out_iov.to_buf(&ctrl as *const _ as usize, size_of::<VirtioNetCtrlHdr>());
-        println!("ctrl class {}", ctrl.class);
-        println!("ctrl command {}", ctrl.command);
         match ctrl.class {
             VIRTIO_NET_CTRL_ANNOUNCE => {
                 let status: u8 = if ctrl.command == VIRTIO_NET_CTRL_ANNOUNCE_ACK {
                     match nic.dev().desc() {
                         DevDesc::NetDesc(desc) => {
-                            println!("set status to VIRTIO_NET_S_LINK_UP");
                             desc.set_status(VIRTIO_NET_S_LINK_UP);
                             VIRTIO_NET_OK
                         }
@@ -284,7 +266,6 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 }
 
 pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
-    // let time_begin = time_current_us();
     if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
         return false;
@@ -298,8 +279,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     let tx_iov = VirtioIov::default();
     let mut vms_to_notify = 0;
 
-    // let dev = nic.dev();
-    // let buf = dev.cache();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
 
     while next_desc_idx_opt.is_some() {
@@ -329,11 +308,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
         if vm.id() != 0 {
             let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
-            // println!(
-            //     "virtio_net_notify_handler: used addr {:x}, size {}",
-            //     used_addr,
-            //     size_of::<VringUsed>()
-            // );
             if *VM_STATE_FLAG.lock() == 1 {
                 println!("vm1 virtio net write memory in 0x{:x}", used_addr);
             }
@@ -350,7 +324,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
 
-    // let time0 = time_current_us();
     if !vq.avail_is_avail() {
         println!("invalid descriptor table index");
         return false;
@@ -358,11 +331,9 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
     nic.notify(vm.clone());
     // vq.notify(dev.int_id(), vm.clone());
-    // let time1 = time_current_us();
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
-            // let vm = crate::kernel::vm(trgt_vmid);
             let vm = match crate::kernel::vm(trgt_vmid) {
                 None => {
                     println!(
@@ -375,7 +346,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             };
             let vcpu = vm.vcpu(0).unwrap();
             if vcpu.phys_id() == current_cpu().id {
-                // if vm.id() == active_vm_id() {
                 let nic = match vm.emu_net_dev(0) {
                     EmuDevs::VirtioNet(x) => x,
                     _ => {
@@ -415,20 +385,13 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         trgt_vmid += 1;
         vms_to_notify = vms_to_notify >> 1;
     }
-    // let time_end = time_current_us();
-    // if active_vm_id() == 1 {
-    //     println!("virtio_net_notify_handler: handler desc ring {}us, vq notify {}us, ipi {}us", time0 - time_begin, time1 - time0, time_end - time1);
-    // }
-    // panic!("end virtio_net_notify_handler");
     true
 }
 
 pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
-    // let begin = time_current_us();
     match msg.ipi_message {
         IpiInnerMsg::EnternetMsg(ethernet_msg) => {
             let trgt_vmid = ethernet_msg.trgt_vmid;
-            // let vm = vm(trgt_vmid);
             let vm = match vm(trgt_vmid) {
                 None => {
                     println!(
@@ -469,10 +432,6 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
             panic!("illegal ipi message type in ethernet_ipi_rev_handler");
         }
     }
-    // let end = time_current_us();
-    // if active_vm_id() == 1 {
-    //     println!("ethernet_ipi_rev_handler time {}us", end - begin);
-    // }
 }
 
 fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
@@ -500,15 +459,6 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
         if !ethernet_is_arp(frame) {
             return (false, 0);
         }
-        // println!("Core {} send arp:", current_cpu().id);
-        //
-        // for i in 0..60 {
-        //     if i % 16 == 0 {
-        //         println!("");
-        //     }
-        //     print!("{:x} ", unsafe { *((frame.as_ptr() as usize + i) as *const u8) });
-        // }
-        // println!("");
         return ethernet_broadcast(tx_iov.clone(), len);
     }
 
@@ -656,11 +606,6 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
 
     if vmid != 0 {
         let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
-        // println!(
-        //     "ethernet_send_to: rx_vq used addr pa {:x}, size {}",
-        //     used_addr,
-        //     size_of::<VringUsed>()
-        // );
         if *VM_STATE_FLAG.lock() == 1 {
             println!("B: vm0 virtio net write vm1 memory in 0x{:x}", used_addr);
         }
@@ -689,15 +634,9 @@ fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
 }
 
 pub fn virtio_net_announce(vm: Vm) {
-    println!("vm[{}] virtio_net_announce", vm.id());
     match vm.emu_net_dev(0) {
         EmuDevs::VirtioNet(nic) => match nic.dev().desc() {
             DevDesc::NetDesc(desc) => {
-                println!(
-                    "virtio_net_announce: cur status {}, set status {}",
-                    desc.status(),
-                    VIRTIO_NET_S_ANNOUNCE
-                );
                 let status = desc.status();
                 desc.set_status(status | VIRTIO_NET_S_ANNOUNCE);
                 nic.notify_config(vm);

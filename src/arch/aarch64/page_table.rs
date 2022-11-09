@@ -1,3 +1,4 @@
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 // use rlibc::{memcpy, memset};
@@ -159,16 +160,17 @@ impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct PageTable {
     pub directory: PageFrame,
-    pub pages: Mutex<Vec<PageFrame>>,
+    pub pages: Arc<Mutex<Vec<PageFrame>>>,
 }
 
 impl PageTable {
     pub fn new(directory: PageFrame) -> PageTable {
         PageTable {
             directory,
-            pages: Mutex::new(Vec::new()),
+            pages: Arc::new(Mutex::new(Vec::new())),
         }
     }
 

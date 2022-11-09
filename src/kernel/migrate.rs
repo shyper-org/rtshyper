@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use crate::arch::{
     Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, GicContext, IrqState,
     PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
@@ -10,19 +8,18 @@ use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs}
 use crate::kernel::{
     active_vm, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg, HvcMigrateMsg,
     mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_copy_mem_map,
-    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache, vm_ipa2pa,
+    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
 };
-use crate::lib::cache_invalidate_d;
 
 pub struct VMData {
     pub vm_ctx: [VmContext; PLATFORM_VCPU_NUM_MAX],
     pub vcpu_ctx: [Aarch64ContextFrame; PLATFORM_VCPU_NUM_MAX],
     pub gic_ctx: [GicContext; PLATFORM_VCPU_NUM_MAX],
+    pub vgic_ctx: VgicMigData,
     pub emu_devs: [EmuDevData; EMU_DEV_NUM_MAX],
 }
 
 pub enum EmuDevData {
-    Vgic(VgicMigData),
     VirtioBlk(VirtioMmioData),
     VirtioNet(VirtioMmioData),
     VirtioConsole(VirtioMmioData),
@@ -239,17 +236,6 @@ pub fn migrate_ready(vmid: usize) {
         map_migrate_vm_mem(trgt_vm.clone(), get_share_mem(MIGRATE_SEND));
         match mem_pages_alloc(vm_if_mem_map_page_num(vmid)) {
             Ok(pf) => {
-                // println!(
-                //     "bitmap size to page num {}, start pa 0x{:x}",
-                //     vm_if_mem_map_page_num(vmid),
-                //     pf.pa()
-                // );
-                // println!("before");
-                // active_vm().unwrap().show_pagetable(0x2200000000);
-                // map dirty bitmap
-                // unsafe {
-                //     asm!("dsb ish", "isb");
-                // }
                 active_vm().unwrap().pt_map_range(
                     get_share_mem(MIGRATE_BITMAP),
                     PAGE_SIZE * vm_if_mem_map_page_num(vmid),
@@ -257,27 +243,16 @@ pub fn migrate_ready(vmid: usize) {
                     PTE_S2_RO,
                     true,
                 );
-                // let va: usize = 0x2200000000 >> 12;
-                // unsafe {
-                //     asm!("ic iallu", "dsb ish");
-                //     asm!("dsb ish", "tlbi vae2is, {0:x}", "dsb ish", "isb", in(reg) va);
-                // }
-                // tlb_invalidate_guest_all();
-                // println!("after");
-                // active_vm().unwrap().show_pagetable(0x2200000000);
-                // unsafe {
-                //     cache_invalidate_d(pf.pa(), PAGE_SIZE * vm_if_mem_map_page_num(vmid));
-                // }
                 vm_if_set_mem_map_cache(vmid, pf);
             }
             Err(_) => {
-                panic!("HVC_VMM_MIGRATE_MEMCPY: mem_pages_alloc failed");
+                panic!("migrate_ready: mem_pages_alloc failed");
             }
         }
     }
 }
 
-pub fn migrate_memcpy(vmid: usize) {
+pub fn send_migrate_memcpy_msg(vmid: usize) {
     // copy trgt_vm dirty mem map to kernel module
     // println!("migrate_memcpy, vm_id {}", vmid);
     hvc_send_msg_to_vm(

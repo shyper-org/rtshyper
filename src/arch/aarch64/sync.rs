@@ -8,7 +8,6 @@ use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, EmuContext};
 use crate::kernel::{active_vm, current_cpu, hvc_guest_handler, migrate_data_abort_handler};
-use crate::lib::time_current_us;
 
 pub const HVC_RETURN_REG: usize = 0;
 
