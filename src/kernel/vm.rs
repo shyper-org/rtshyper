@@ -1,7 +1,6 @@
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::arch::asm;
 use core::mem::size_of;
 
 use spin::Mutex;
@@ -14,8 +13,7 @@ use crate::board::SHARE_MEM_BASE;
 use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::kernel::{
-    EmuDevData, get_share_mem, interrupt_vm_inject, mem_pages_alloc, VgicMigData, VirtioMmioData, VM_CONTEXT_RECEIVE,
-    VM_CONTEXT_SEND, VMData,
+    EmuDevData, get_share_mem, mem_pages_alloc, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND, VMData,
 };
 use crate::lib::*;
 use crate::mm::PageFrame;
@@ -480,22 +478,15 @@ impl Vm {
 
     pub fn pt_read_only(&self) {
         let vm_inner = self.inner.lock();
-        match &vm_inner.pt {
+        match vm_inner.pt.clone() {
             Some(pt) => {
-                for i in 0..vm_inner.mem_region_num {
+                let num = vm_inner.mem_region_num;
+                drop(vm_inner);
+                for i in 0..num {
+                    let vm_inner = self.inner.lock();
                     let ipa_start = vm_inner.pa_region[i].pa_start + vm_inner.pa_region[i].offset as usize;
                     let len = vm_inner.pa_region[i].pa_length;
-                    // println!(
-                    //     "vm[1] set read only ipa start 0x{:x}, len {:x}, offset {:x}",
-                    //     ipa_start, len, vm_inner.pa_region[i].offset
-                    // );
-                    // let mut ttbr0_el1: usize = 0;
-                    // let mut ttbr1_el1: usize = 0;
-                    // unsafe {
-                    //     asm!("mrs {0:x}, TTBR0_EL1", out(reg) ttbr0_el1);
-                    //     asm!("mrs {0:x}, TTBR1_EL1", out(reg) ttbr1_el1);
-                    // }
-                    // println!("ttbr0_el1 {:x}, ttbr1_el1 {:x}", ttbr0_el1, ttbr1_el1);
+                    drop(vm_inner);
                     pt.access_permission(ipa_start, len, PTE_S2_FIELD_AP_RO);
                 }
             }
@@ -763,6 +754,7 @@ impl Vm {
             Ok(pf) => {
                 let mut vm_data = unsafe { &mut *(pf.pa as *mut VMData) };
                 let base = get_share_mem(VM_CONTEXT_SEND);
+                // println!("pt map base 0x{:x} size 0x{:x}", base, size);
                 mvm.pt_map_range(base, round_up(size, PAGE_SIZE), pf.pa(), PTE_S2_RO, true);
 
                 // key: pcpuid, val: vcpuid
@@ -782,11 +774,7 @@ impl Vm {
                 for (idx, emu) in inner.emu_devs.iter().enumerate() {
                     match emu {
                         EmuDevs::Vgic(vgic) => {
-                            vm_data.emu_devs[idx] = EmuDevData::Vgic(VgicMigData::default());
-                            if let EmuDevData::Vgic(vgic_data) = &mut vm_data.emu_devs[idx] {
-                                // println!("vm[{}] save vgic", inner.id);
-                                vgic.save_vgic_data(vgic_data, &cpuid_map);
-                            }
+                            vgic.save_vgic_data(&mut vm_data.vgic_ctx, &cpuid_map);
                         }
                         EmuDevs::VirtioBlk(mmio) => {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioBlk(VirtioMmioData::default());
@@ -816,39 +804,9 @@ impl Vm {
             }
             Err(_) => {}
         }
-        // println!(
-        //     "size of vm ctx {:x}, size of vcpu ctx {:x}",
-        //     size_of::<VmContext>(),
-        //     size_of::<Aarch64ContextFrame>()
-        // );
     }
 
     pub fn context_vm_migrate_restore(&self) {
-        // let addr_0: usize = 0xf0200000;
-        // let addr_1: usize = 0x170200000;
-        // let mut offset = 0;
-        // loop {
-        //     if offset >= 0x80000000 {
-        //         break;
-        //     }
-        //     let val0 = unsafe { *((addr_0 + offset) as *const u64) };
-        //     let val1 = unsafe { *((addr_1 + offset) as *const u64) };
-        //     if val0 != val1 {
-        //         println!(
-        //             "addr 0 0x{:x}, addr 1 0x{:x} val is 0x{:x} and {:x}",
-        //             addr_0 + offset,
-        //             addr_1 + offset,
-        //             val0,
-        //             val1
-        //         );
-        //         offset &= !0xfff;
-        //         offset += PAGE_SIZE;
-        //         continue;
-        //     }
-        //     offset += 8;
-        // }
-        // println!("context_vm_migrate_restore: pass mem assert eq");
-
         // key: vcpuid, val: pcpuid
         let mut vcpuid_map: BTreeMap<usize, usize> = BTreeMap::new();
         for vcpu_id in 0..self.cpu_num() {
@@ -861,10 +819,7 @@ impl Vm {
         for (idx, emu) in inner.emu_devs.iter().enumerate() {
             match emu {
                 EmuDevs::Vgic(vgic) => {
-                    // println!("context_vm_migrate_restore: vgic");
-                    if let EmuDevData::Vgic(vgic_data) = &vm_data.emu_devs[idx] {
-                        vgic.restore_vgic_data(vgic_data, &inner.vcpu_list, &vcpuid_map);
-                    }
+                    vgic.restore_vgic_data(&vm_data.vgic_ctx, &inner.vcpu_list, &vcpuid_map);
                 }
                 EmuDevs::VirtioBlk(mmio) => {
                     if let EmuDevData::VirtioBlk(mmio_data) = &vm_data.emu_devs[idx] {
@@ -881,21 +836,6 @@ impl Vm {
                     // println!("context_vm_migrate_restore: console");
                     if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
                         mmio.restore_mmio_data(mmio_data, &inner.pa_region);
-
-                        // // update vm0 virtio console
-                        // if let DevDescData::ConsoleDesc(desc) = &mmio_data.dev.desc {
-                        //     let vm = vm(desc.oppo_end_vmid as usize).unwrap();
-                        //     let console = vm.emu_console_dev(desc.oppo_end_ipa as usize);
-                        //     println!("migrate vm0 console");
-                        //     if let EmuDevs::VirtioConsole(console_mmio) = console {
-                        //         let dev = console_mmio.dev();
-                        //         if let DevDescData::ConsoleDesc(desc_data) = &mut mmio_data.oppo_dev.desc {
-                        //             println!("vm0 console end vm id is {}", inner.id);
-                        //             desc_data.oppo_end_vmid = inner.id as u16;
-                        //         }
-                        //         dev.restore_virt_dev_data(&mmio_data.oppo_dev);
-                        //     }
-                        // }
                     }
                 }
                 EmuDevs::None => {}
@@ -920,16 +860,6 @@ impl Vm {
         let mut inner = self.inner.lock();
         inner.share_mem_base += len;
     }
-
-    // pub fn migration_state(&self) -> bool {
-    //     let inner = self.inner.lock();
-    //     inner.migration_state
-    // }
-    //
-    // pub fn set_migration_state(&self, state: bool) {
-    //     let mut inner = self.inner.lock();
-    //     inner.migration_state = state;
-    // }
 }
 
 #[repr(align(4096))]

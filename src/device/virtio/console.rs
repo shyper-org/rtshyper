@@ -1,10 +1,9 @@
 use alloc::sync::Arc;
-use core::mem::size_of;
 
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{VirtioMmio, Virtq, VringUsed};
+use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;

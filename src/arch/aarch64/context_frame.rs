@@ -3,7 +3,7 @@ use core::fmt::Formatter;
 
 use cortex_a::registers::*;
 
-use crate::arch::{GICD, GicState};
+use crate::arch::{GICD, GicState, timer_arch_get_counter};
 
 global_asm!(include_str!("fpsimd.S"));
 
@@ -184,6 +184,7 @@ pub struct VmContext {
     cntp_cval_el0: u64,
     cntv_cval_el0: u64,
     pub cntkctl_el1: u32,
+    cntvct_el0: u64,
     cntp_ctl_el0: u32,
     cntv_ctl_el0: u32,
     cntp_tval_el0: u32,
@@ -237,6 +238,7 @@ impl VmContext {
             cntp_cval_el0: 0,
             cntv_cval_el0: 0,
             cntkctl_el1: 0,
+            cntvct_el0: 0,
             cntp_ctl_el0: 0,
             cntv_ctl_el0: 0,
             cntp_tval_el0: 0,
@@ -290,6 +292,7 @@ impl VmContext {
         self.cntp_tval_el0 = 0;
         self.cntv_tval_el0 = 0;
         self.cntkctl_el1 = 0;
+        self.cntvct_el0 = 0;
         self.cntp_ctl_el0 = 0;
         self.vpidr_el2 = 0;
         self.vmpidr_el2 = 0;
@@ -325,13 +328,13 @@ impl VmContext {
         unsafe {
             asm!("mrs {0}, CNTVOFF_EL2", out(reg) self.cntvoff_el2);
             // asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) self.cntp_cval_el0);
-            // asm!("mrs {0}, CNTV_CVAL_EL0", out(reg) self.cntv_cval_el0);
+            asm!("mrs {0}, CNTV_CVAL_EL0", out(reg) self.cntv_cval_el0);
             asm!("mrs {0:x}, CNTKCTL_EL1", out(reg) self.cntkctl_el1);
             asm!("mrs {0:x}, CNTP_CTL_EL0", out(reg) self.cntp_ctl_el0);
             asm!("mrs {0:x}, CNTV_CTL_EL0", out(reg) self.cntv_ctl_el0);
-            // asm!("mrs {0:x}, CNTP_TVAL_EL0", out(reg) self.cntp_tval_el0);
-            // asm!("mrs {0:x}, CNTV_TVAL_EL0", out(reg) self.cntv_tval_el0);
-
+            asm!("mrs {0:x}, CNTP_TVAL_EL0", out(reg) self.cntp_tval_el0);
+            asm!("mrs {0:x}, CNTV_TVAL_EL0", out(reg) self.cntv_tval_el0);
+            asm!("mrs {0:x}, CNTVCT_EL0", out(reg) self.cntvct_el0);
             // asm!("mrs {0:x}, VPIDR_EL2", out(reg) self.vpidr_el2);
             asm!("mrs {0}, VMPIDR_EL2", out(reg) self.vmpidr_el2);
 
@@ -369,16 +372,17 @@ impl VmContext {
 
     pub fn ext_regs_restore(&self) {
         // println!("restore CNTV_CTL_EL0 {:x}", self.cntv_ctl_el0);
-        // println!("restore CNTV_TVAL_EL0 {:x}", self.cntv_tval_el0);
+        // println!("restore CNTV_CVAL_EL0 {:x}", self.cntv_cval_el0);
+        let curpct = timer_arch_get_counter() as u64;
         unsafe {
-            asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) self.cntvoff_el2);
+            asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) curpct - self.cntvct_el0);
             // asm!("msr CNTP_CVAL_EL0, {0}", "isb", in(reg) self.cntp_cval_el0);
-            // asm!("msr CNTV_CVAL_EL0, {0}", "isb", in(reg) self.cntv_cval_el0);
+            asm!("msr CNTV_CVAL_EL0, {0}", "isb", in(reg) self.cntv_cval_el0);
             asm!("msr CNTKCTL_EL1, {0:x}", "isb", in(reg) self.cntkctl_el1);
-            asm!("msr CNTP_CTL_EL0, {0:x}", "isb", in(reg) self.cntp_ctl_el0);
+            // asm!("msr CNTP_CTL_EL0, {0:x}", "isb", in(reg) self.cntp_ctl_el0);
             asm!("msr CNTV_CTL_EL0, {0:x}", "isb", in(reg) self.cntv_ctl_el0);
-            asm!("msr CNTP_TVAL_EL0, {0:x}", in(reg) self.cntp_tval_el0);
-            asm!("msr CNTV_TVAL_EL0, {0:x}", in(reg) self.cntv_tval_el0);
+            // asm!("msr CNTP_TVAL_EL0, {0:x}", in(reg) self.cntp_tval_el0);
+            // asm!("msr CNTV_TVAL_EL0, {0:x}", in(reg) self.cntv_tval_el0);
 
             // asm!("msr VPIDR_EL2, {0:x}", "isb", in(reg) self.vpidr_el2);
             asm!("msr VMPIDR_EL2, {0}", "isb", in(reg) self.vmpidr_el2);

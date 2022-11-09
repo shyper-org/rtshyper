@@ -9,12 +9,10 @@ use crate::arch::{
     Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext,
     GICD, GICH, VmContext,
 };
-use crate::arch::tlb_invalidate_guest_all;
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
-use crate::device::EmuDevs;
-use crate::kernel::{current_cpu, EmuDevData, interrupt_vm_inject, timer_enable, VirtioMmioData, vm_if_set_state, VMData};
+use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
-use crate::lib::{cache_invalidate_d, memcpy_safe};
+use crate::lib::memcpy_safe;
 
 use super::{CpuState, Vm, VmType};
 
@@ -138,21 +136,9 @@ impl Vcpu {
 
         for irq_state in inner.gic_ctx.irq_state.iter() {
             if irq_state.id != 0 {
-                // println!("Core {} set irq {} GICD", current_cpu().id, irq_state.id);
                 GICD.set_enable(irq_state.id as usize, irq_state.enable != 0);
                 GICD.set_prio(irq_state.id as usize, irq_state.priority);
                 GICD.set_trgt(irq_state.id as usize, 1 << platform_cpuid_to_cpuif(current_cpu().id));
-                let int_id = irq_state.id as usize;
-                println!(
-                    "Core[{}] context_gic_restore after: int {} ISENABLER {:x}, ISACTIVER {:x}, IPRIORITY {:x}, ITARGETSR {:x}, ICFGR {:x}",
-                    current_cpu().id,
-                    int_id,
-                    GICD.is_enabler(int_id / 32),
-                    GICD.is_activer(int_id / 32),
-                    GICD.ipriorityr(int_id / 4),
-                    GICD.itargetsr(int_id / 4),
-                    GICD.icfgr(int_id / 2)
-                );
             }
         }
 
@@ -169,11 +155,10 @@ impl Vcpu {
         self.restore_cpu_ctx();
 
         let inner = self.inner.lock();
-        inner.vm_ctx.ext_regs_restore();
-
         // restore vm's VFP and SIMD
         inner.vm_ctx.fpsimd_restore_context();
         inner.vm_ctx.gic_restore_state();
+        inner.vm_ctx.ext_regs_restore();
         drop(inner);
 
         // restore vm's Stage2 MMU context
@@ -521,21 +506,6 @@ pub fn vcpu_idle(_vcpu: Vcpu) {
 }
 
 pub fn vcpu_run(announce: bool) {
-    // println!(
-    //     "Core {} (vm {}, vcpu {}) start running",
-    //     current_cpu().id,
-    //     active_vm_id(),
-    //     active_vcpu_id()
-    // );
-    println!(
-        "VMData size is {:x}, EmuDevData size is {:x}, VirtioMmioData size is {:x}",
-        size_of::<VMData>(),
-        size_of::<EmuDevData>(),
-        size_of::<VirtioMmioData>(),
-    );
-
-    // let vm = crate::kernel::active_vm().unwrap();
-    // vm.show_pagetable(0x17000000);
     let vcpu = current_cpu().active_vcpu.clone().unwrap();
     vcpu.set_state(VcpuState::VcpuAct);
     let vm = vcpu.vm().unwrap().clone();
@@ -543,40 +513,20 @@ pub fn vcpu_run(announce: bool) {
     let size = size_of::<Aarch64ContextFrame>();
     current_cpu().set_ctx((sp - size) as *mut _);
 
-    vcpu.context_vm_restore();
     if announce {
-        // match vm.emu_console_dev(0) {
-        //     EmuDevs::VirtioConsole(console) => {
-        //         interrupt_vm_inject(vm.clone(), vcpu.clone(), console.dev().int_id(), 0);
-        //     }
-        //     _ => {}
-        // }
-        // match vm.emu_net_dev(0) {
-        //     EmuDevs::VirtioNet(net) => {
-        //         interrupt_vm_inject(vm.clone(), vcpu.clone(), net.dev().int_id(), 0);
-        //     }
-        //     _ => {}
-        // }
         crate::device::virtio_net_announce(vm.clone());
     }
-    tlb_invalidate_guest_all();
-    // vcpu.show_ctx();
 
     current_cpu().cpu_state = CpuState::CpuRun;
     vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
-    for i in 0..vm.mem_region_num() {
-        unsafe {
-            cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
-        }
-    }
-
-    // println!(
-    //     "vcpu run elr {:x} x0 {:016x} sp 0x{:x}",
-    //     current_cpu().active_vcpu.clone().unwrap().elr(),
-    //     current_cpu().get_gpr(0),
-    //     sp
-    // );
+    vcpu.context_vm_restore();
+    // tlb_invalidate_guest_all();
+    // for i in 0..vm.mem_region_num() {
+    //     unsafe {
+    //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
+    //     }
+    // }
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;
     }

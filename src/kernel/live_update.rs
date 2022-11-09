@@ -22,12 +22,12 @@ use crate::device::{
 };
 use crate::kernel::{
     async_blk_io_req, ASYNC_IO_TASK_LIST, async_ipi_req, ASYNC_IPI_TASK_LIST, ASYNC_USED_INFO_LIST, AsyncTask,
-    AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, HEAP_REGION, HeapRegion,
+    AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, FairQueue, HEAP_REGION, HeapRegion,
     hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler,
     InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, ipi_send_msg, IpiHandler,
-    IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SHARE_MEM_LIST,
+    IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerUpdate, SHARE_MEM_LIST,
     timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX,
-    VM_REGION, VmInterface, VmRegion, FairQueue, SchedulerUpdate,
+    VM_REGION, VmInterface, VmRegion,
 };
 use crate::lib::{BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
@@ -641,7 +641,7 @@ pub fn vm_list_alloc(src_vm_list: &Mutex<Vec<Vm>>) {
             Some(page_table) => {
                 let new_page_table = PageTable {
                     directory: PageFrame::new(page_table.directory.pa),
-                    pages: Mutex::new(vec![]),
+                    pages: Arc::new(Mutex::new(vec![])),
                 };
                 for page in page_table.pages.lock().iter() {
                     new_page_table.pages.lock().push(PageFrame::new(page.pa));
@@ -701,7 +701,7 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
             for dev in old_emu_devs.iter() {
                 // TODO: wip
                 let new_dev = match dev {
-                    EmuDevs::Vgic(vgic) => {
+                    EmuDevs::Vgic(_) => {
                         // set vgic after vcpu update
                         EmuDevs::None
                     }
