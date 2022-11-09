@@ -529,8 +529,8 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
 
     if current_cpu().assigned {
         let vcpu_array = &current_cpu().vcpu_array;
-        for i in 0..vcpu_array.capacity() {
-            if let Some(vcpu) = vcpu_array.pop_vcpu_through_vmid(i) {
+        for (i, vcpu) in current_cpu().vcpu_array.iter().enumerate() {
+            if let Some(vcpu) = vcpu {
                 vcpu.set_phys_id(cpu_id);
                 if let Some(mvm) = vcpu.vm() {
                     if mvm.id() == 0 && current_cpu().id == 0 {

@@ -192,8 +192,8 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         }
     }
 
-    for id in 0..current_cpu().vcpu_array.capacity() {
-        if let Some(vcpu) = current_cpu().vcpu_array.pop_vcpu_through_vmid(id) {
+    for vcpu in current_cpu().vcpu_array.iter() {
+        if let Some(vcpu) = vcpu {
             match vcpu.vm() {
                 Some(vm) => {
                     if vm.has_interrupt(int_id) {

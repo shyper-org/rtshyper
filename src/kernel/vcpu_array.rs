@@ -1,3 +1,4 @@
+use alloc::slice::{Iter, IterMut};
 use crate::board::{PLAT_DESC, SchedRule};
 use crate::kernel::{current_cpu, SchedType, SchedulerRR, Vcpu, VM_NUM_MAX, interrupt_cpu_enable};
 
@@ -14,7 +15,7 @@ impl VcpuArray {
         }
     }
 
-    #[inline]
+    #[deprecated]
     pub const fn capacity(&self) -> usize {
         self.array.len()
     }
@@ -67,6 +68,14 @@ impl VcpuArray {
             // hard code: remove el1 timer interrupt 27
             interrupt_cpu_enable(27, false);
         }
+    }
+
+    pub fn iter(&self) -> Iter<'_, Option<Vcpu>> {
+        self.array.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<'_, Option<Vcpu>> {
+        self.array.iter_mut()
     }
 }
 
