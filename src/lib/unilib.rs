@@ -5,7 +5,7 @@
  *  In the case of 1-to-1 CPU partion strategy, I don't think it's a problem.
  *  But for different Unishypers runs on one single CPU, stucking in EL2 may cause a big efficiency problem,
  *  We still need some notify mechanism to improve the CPU usage.
-*/
+ */
 use alloc::collections::BTreeMap;
 
 use spin::Mutex;
@@ -118,7 +118,7 @@ impl UnilibFS {
 }
 
 pub fn unilib_fs_remove(vm_id: usize) {
-    println!("unilib_fs_remove: VM[{}] umount unilib-fs", vm_id);
+    // println!("unilib_fs_remove: VM[{}] umount unilib-fs", vm_id);
     let mut lock = UNILIB_FS_LIST.lock();
     lock.remove(&vm_id);
 }

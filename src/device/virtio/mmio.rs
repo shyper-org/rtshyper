@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-
 use spin::Mutex;
 
 // pub const VIRTIO_MMIO_MAGIC_VALUE: usize = 0x000;
@@ -178,7 +177,7 @@ impl VirtioMmio {
 
     pub fn notify_config(&self, vm: Vm) {
         let mut inner = self.inner.lock();
-        inner.regs.irt_stat = 3;
+        inner.regs.irt_stat |= 2;
         let int_id = inner.dev.int_id();
         let trgt_id = vm.vcpu(0).unwrap().phys_id();
         drop(inner);
@@ -195,7 +194,7 @@ impl VirtioMmio {
 
     pub fn notify(&self, vm: Vm) {
         let mut inner = self.inner.lock();
-        inner.regs.irt_stat = VIRTIO_MMIO_INT_VRING;
+        inner.regs.irt_stat |= VIRTIO_MMIO_INT_VRING;
         let int_id = inner.dev.int_id();
         let trgt_id = vm.vcpu(0).unwrap().phys_id();
         drop(inner);

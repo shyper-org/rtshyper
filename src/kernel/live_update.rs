@@ -17,7 +17,7 @@ use crate::config::{
 };
 use crate::device::{
     BlkIov, EMU_DEVS_LIST, emu_virtio_mmio_handler, EmuDevEntry, EmuDeviceType, EmuDevs, ethernet_ipi_rev_handler,
-    MEDIATED_BLK_LIST, mediated_ipi_handler, mediated_notify_ipi_handler, MediatedBlk, virtio_blk_notify_handler,
+    MEDIATED_BLK_LIST, mediated_ipi_handler, MediatedBlk, virtio_blk_notify_handler,
     virtio_console_notify_handler, virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
 };
 use crate::kernel::{
@@ -423,6 +423,7 @@ pub fn async_task_update(
                         AsyncTaskData::AsyncIoTask(IoAsyncMsg {
                             src_vmid: vm_id,
                             vq: new_vq.clone(),
+                            dev: blk.clone(),
                             io_type: io_msg.io_type,
                             blk_id: io_msg.blk_id,
                             sector: io_msg.sector,
@@ -560,7 +561,6 @@ pub fn ipi_handler_list_update(src_ipi_handler_list: &Mutex<Vec<IpiHandler>>) {
             IpiType::IpiTHvc => hvc_ipi_handler,
             IpiType::IpiTVMM => vmm_ipi_handler,
             IpiType::IpiTMediatedDev => mediated_ipi_handler,
-            IpiType::IpiTMediatedNotify => mediated_notify_ipi_handler,
             IpiType::IpiTIntInject => interrupt_inject_ipi_handler,
             IpiType::IpiTHyperFresh => hyper_fresh_ipi_handler,
         };
@@ -1016,8 +1016,7 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
         new_vgic.save_vgic(src_vgic.clone());
 
         let vm = vm(src_vm.id()).unwrap();
-        if let EmuDevs::None = vm.emu_dev(vm.intc_dev_id()) {
-        } else {
+        if let EmuDevs::None = vm.emu_dev(vm.intc_dev_id()) {} else {
             panic!("illegal vgic emu dev idx in vm.emu_devs");
         }
         vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));

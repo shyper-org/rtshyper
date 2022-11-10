@@ -268,16 +268,23 @@ pub fn send_migrate_memcpy_msg(vmid: usize) {
 }
 
 pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
+    let mut len = 0;
     for i in 0..vm.region_num() {
         active_vm()
             .unwrap()
-            .pt_map_range(ipa_start, vm.pa_length(i), vm.pa_start(i), PTE_S2_NORMAL, true);
-        // println!(
-        //     "ipa {:x}, length {:x}, pa start {:x}",
-        //     ipa_start,
-        //     vm.pa_length(i),
-        //     vm.pa_start(i)
-        // );
+            .pt_map_range(ipa_start + len, vm.pa_length(i), vm.pa_start(i), PTE_S2_NORMAL, true);
+        len += vm.pa_length(i);
+    }
+}
+
+pub fn unmap_migrate_vm_mem(vm: Vm, ipa_start: usize) {
+    let mut len = 0;
+    for i in 0..vm.region_num() {
+        // println!("unmap_migrate_vm_mem, ipa_start {:x}, len {:x}", ipa_start, vm.pa_length(i));
+        active_vm()
+            .unwrap()
+            .pt_unmap_range(ipa_start + len, vm.pa_length(i), true);
+        len += vm.pa_length(i);
     }
 }
 

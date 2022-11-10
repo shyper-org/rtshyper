@@ -1,7 +1,6 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem::size_of;
-
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
@@ -189,6 +188,7 @@ const VIRTIO_NET_CTRL_ANNOUNCE: u8 = 3;
 const VIRTIO_NET_CTRL_ANNOUNCE_ACK: u8 = 0;
 
 pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
+    println!("virtio_net_handle_ctrl");
     if vq.ready() == 0 {
         println!("virtio net control queue is not ready!");
         return false;

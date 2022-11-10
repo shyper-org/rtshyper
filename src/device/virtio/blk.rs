@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
@@ -238,7 +237,7 @@ impl VirtioBlkReq {
         }
     }
 
-    pub fn add_req_node(&self, node: VirtioBlkReqNode, vm: Vm) {
+    pub fn add_req_node(&self, node: VirtioBlkReqNode, _vm: Vm) {
         let mut list = self.req_list.lock();
         // let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         // push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());
@@ -361,7 +360,7 @@ impl VirtioBlkReqInner {
     }
 }
 
-pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
+pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, dev: VirtioMmio, cache: usize, vm: Vm) {
     let region_start = req.region_start();
     let region_size = req.region_size();
     let mut cache_ptr = cache;
@@ -387,6 +386,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                         AsyncTaskData::AsyncIoTask(IoAsyncMsg {
                             src_vmid: vm.id(),
                             vq: vq.clone(),
+                            dev: dev.clone(),
                             io_type: VIRTIO_BLK_T_IN,
                             blk_id: vm.med_blk_id(),
                             sector: sector + region_start,
@@ -440,6 +440,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                         AsyncTaskData::AsyncIoTask(IoAsyncMsg {
                             src_vmid: vm.id(),
                             vq: vq.clone(),
+                            dev: dev.clone(),
                             io_type: VIRTIO_BLK_T_OUT,
                             blk_id: vm.med_blk_id(),
                             sector: sector + region_start,
@@ -466,7 +467,10 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, cache: usize, vm: Vm) {
                 }
                 memcpy_safe(data_bg as *mut u8, name, 20);
                 let task = AsyncTask::new(
-                    AsyncTaskData::AsyncNoneTask(IoIdAsyncMsg { vq: vq.clone() }),
+                    AsyncTaskData::AsyncNoneTask(IoIdAsyncMsg {
+                        vq: vq.clone(),
+                        dev: dev.clone(),
+                    }),
                     vm.id(),
                     async_blk_id_req,
                 );
@@ -611,7 +615,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
             } else {
                 /*state handler*/
                 if !vq.desc_is_writable(next_desc_idx) {
-                    println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx,);
+                    println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx, );
                     blk.notify(vm.clone());
                     // vq.notify(dev.int_id(), vm.clone());
                     return false;
@@ -639,11 +643,11 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     }
 
     if !req.mediated() {
-        generate_blk_req(req.clone(), vq.clone(), dev.cache(), vm.clone());
+        generate_blk_req(req.clone(), vq.clone(), blk.clone(), dev.cache(), vm.clone());
     } else {
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         let cache = mediated_blk.cache_pa();
-        generate_blk_req(req.clone(), vq.clone(), cache, vm.clone());
+        generate_blk_req(req.clone(), vq.clone(), blk.clone(), cache, vm.clone());
     };
 
     // let time1 = time_current_us();

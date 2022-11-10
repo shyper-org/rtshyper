@@ -2,22 +2,17 @@
 use alloc::collections::{BTreeMap, LinkedList};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use spin::mutex::Mutex;
+
+use crate::device::{BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VirtioMmio, Virtq};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
+use crate::lib::{memcpy_safe, sleep, trace};
+
 // use core::future::Future;
 // use core::pin::Pin;
 // use core::task::Context;
 
-use spin::mutex::Mutex;
 // use woke::{waker_ref, Woke};
-
-use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN,
-    VIRTIO_BLK_T_OUT, Virtq,
-};
-use crate::kernel::{
-    current_cpu, interrupt_vm_inject, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiMediatedNotifyMsg, IpiType, vm,
-    vm_if_get_cpu_id,
-};
-use crate::lib::{memcpy_safe, trace, sleep};
 
 pub static TASK_IPI_COUNT: Mutex<usize> = Mutex::new(0);
 pub static TASK_COUNT: Mutex<usize> = Mutex::new(0);
@@ -61,6 +56,7 @@ pub struct UsedInfo {
 pub struct IoAsyncMsg {
     pub src_vmid: usize,
     pub vq: Virtq,
+    pub dev: VirtioMmio,
     pub io_type: usize,
     pub blk_id: usize,
     pub sector: usize,
@@ -72,6 +68,7 @@ pub struct IoAsyncMsg {
 #[derive(Clone)]
 pub struct IoIdAsyncMsg {
     pub vq: Virtq,
+    pub dev: VirtioMmio,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -452,47 +449,15 @@ pub fn finish_async_task(ipi: bool) {
                 _ => {}
             }
 
-            let target_id = vm_if_get_cpu_id(task.src_vmid);
             update_used_info(args.vq.clone(), task.src_vmid);
-            if target_id != current_cpu().id {
-                let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };
-                ipi_send_msg(
-                    target_id,
-                    IpiType::IpiTMediatedNotify,
-                    IpiInnerMsg::MediatedNotifyMsg(msg),
-                );
-            } else {
-                match vm(task.src_vmid) {
-                    None => {
-                        println!("finish_async_task: vm[{}] no exist", task.src_vmid);
-                    }
-                    Some(vm) => {
-                        interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
-                    }
-                }
-            }
+            let src_vm = vm(task.src_vmid).unwrap();
+            args.dev.notify(src_vm.clone());
         }
         AsyncTaskData::AsyncIpiTask(_) => {}
         AsyncTaskData::AsyncNoneTask(args) => {
-            let target_id = vm_if_get_cpu_id(task.src_vmid);
             update_used_info(args.vq.clone(), task.src_vmid);
-            if target_id != current_cpu().id {
-                let msg = IpiMediatedNotifyMsg { vm_id: task.src_vmid };
-                ipi_send_msg(
-                    target_id,
-                    IpiType::IpiTMediatedNotify,
-                    IpiInnerMsg::MediatedNotifyMsg(msg),
-                );
-            } else {
-                match vm(task.src_vmid) {
-                    None => {
-                        println!("finish_async_task: vm[{}] no exist", task.src_vmid);
-                    }
-                    Some(vm) => {
-                        interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
-                    }
-                }
-            }
+            let src_vm = vm(task.src_vmid).unwrap();
+            args.dev.notify(src_vm.clone());
         }
     }
 }

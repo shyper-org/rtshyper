@@ -2,7 +2,6 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
 use core::mem::size_of;
-
 use spin::Mutex;
 
 use crate::arch::{
@@ -406,6 +405,7 @@ impl VcpuInner {
     }
 
     fn reset_vmpidr(&mut self) {
+        let old = self.vm_ctx.vmpidr_el2;
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
 
@@ -417,6 +417,7 @@ impl VcpuInner {
 
         vmpidr |= self.id;
         self.vm_ctx.vmpidr_el2 = vmpidr as u64;
+        println!("vmpidr old {:x}, new {:x}", old, vmpidr);
     }
 
     fn reset_context(&mut self) {

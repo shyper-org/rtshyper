@@ -10,12 +10,12 @@ use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register, ipi_send_msg,
     IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, mem_heap_region_reserve,
-    migrate_finish_ipi_handler, migrate_ready, Scheduler, send_migrate_memcpy_msg, UPDATE_IMG_BASE_ADDR,
-    update_request, vcpu_idle, VgicMigData, VirtioMmioData, vm, vm_if_copy_mem_map, vm_if_dirty_mem_map,
-    vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum, vm_if_set_ivc_arg_ptr, VM_NUM_MAX,
-    VMData,
+    migrate_finish_ipi_handler, migrate_ready, Scheduler, send_migrate_memcpy_msg, unmap_migrate_vm_mem,
+    UPDATE_IMG_BASE_ADDR, update_request, vcpu_idle, VgicMigData, VirtioMmioData, vm, vm_if_copy_mem_map,
+    vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum,
+    vm_if_mem_map_page_num, vm_if_set_ivc_arg_ptr, VM_NUM_MAX, VMData,
 };
-use crate::lib::{func_barrier, memcpy_safe, set_barrier_num, trace};
+use crate::lib::{func_barrier, memcpy_safe, round_up, set_barrier_num, trace};
 use crate::lib::unilib::*;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_migrate_boot, vmm_reboot_vm, vmm_remove_vm};
 
@@ -328,13 +328,35 @@ fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_VM_BOOT => {
+            let mvm = vm(0).unwrap();
             let vm = vm(x0).unwrap();
+
+            let size = size_of::<VMData>();
+            println!("HVC_VMM_MIGRATE_VM_BOOT share mem VM_CONTEXT_RECEIVE {:x} MIGRATE_RECEIVE {:x}", get_share_mem(VM_CONTEXT_RECEIVE), get_share_mem(MIGRATE_RECEIVE));
+            mvm.pt_unmap_range(get_share_mem(VM_CONTEXT_RECEIVE), round_up(size, PAGE_SIZE), true);
+            unmap_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
+
             vm.context_vm_migrate_restore();
             for vcpu_id in 0..vm.cpu_num() {
                 let cpu_trgt = vm.vcpuid_to_pcpuid(vcpu_id).unwrap();
                 // send ipi to target vcpu, copy data and boot vm (in ipi copy gic data)
                 send_hvc_ipi(0, x0, HVC_VMM, HVC_VMM_MIGRATE_VM_BOOT, cpu_trgt);
             }
+            Ok(HVC_FINISH)
+        }
+        HVC_VMM_MIGRATE_FINISH => {
+            let mvm = vm(0).unwrap();
+            let trgt_vm = vm(x0).unwrap();
+            let size = size_of::<VMData>();
+            mvm.pt_unmap_range(get_share_mem(VM_CONTEXT_SEND), round_up(size, PAGE_SIZE), true);
+            mvm.pt_unmap_range(
+                get_share_mem(MIGRATE_BITMAP),
+                PAGE_SIZE * vm_if_mem_map_page_num(x0),
+                true,
+            );
+            unmap_migrate_vm_mem(trgt_vm, get_share_mem(MIGRATE_SEND));
+            vmm_remove_vm(x0);
+            *VM_STATE_FLAG.lock() = 0;
             Ok(HVC_FINISH)
         }
         HVC_VMM_VM_REMOVE => {

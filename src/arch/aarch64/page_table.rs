@@ -251,6 +251,23 @@ impl PageTable {
         }
     }
 
+    pub fn unmap_2mb(&self, ipa: usize) {
+        let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
+        let l1e = directory.entry(pt_lvl1_idx(ipa));
+        if l1e.valid() {
+            let l2e = l1e.entry(pt_lvl2_idx(ipa));
+            if l2e.valid() {
+                l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry(0));
+                if empty_page(l1e.to_pa()) {
+                    let l1e_pa = l1e.to_pa();
+                    directory.set_entry(pt_lvl1_idx(ipa), Aarch64PageTableEntry(0));
+                    let mut pages = self.pages.lock();
+                    pages.retain(|pf| pf.pa() != l1e_pa);
+                }
+            }
+        }
+    }
+
     pub fn map(&self, ipa: usize, pa: usize, pte: usize) {
         // if ipa >= 0x4_0000_0000 {
         //     println!("map ipa 0x{:x} to pa 0x{:x}", ipa, pa);
@@ -302,16 +319,48 @@ impl PageTable {
         // }
     }
 
+    pub fn unmap(&self, ipa: usize) {
+        let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
+        let l1e = directory.entry(pt_lvl1_idx(ipa));
+        if l1e.valid() {
+            let l2e = l1e.entry(pt_lvl2_idx(ipa));
+            if l2e.valid() {
+                let l3e = l2e.entry(pt_lvl3_idx(ipa));
+                if l3e.valid() {
+                    l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(0));
+                    // check l2e
+                    if empty_page(l2e.to_pa()) {
+                        let l2e_pa = l2e.to_pa();
+                        l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry(0));
+                        let mut pages = self.pages.lock();
+                        pages.retain(|pf| pf.pa != l2e_pa);
+                        // check l1e
+                        if empty_page(l1e.to_pa()) {
+                            let l1e_pa = l1e.to_pa();
+                            directory.set_entry(pt_lvl1_idx(ipa), Aarch64PageTableEntry(0));
+                            pages.retain(|pf| pf.pa != l1e_pa);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub fn map_range_2mb(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
         let size_2mb = 1 << LVL2_SHIFT;
         let page_num = round_up(len, size_2mb) / size_2mb;
-        // println!(
-        //     "map_range_2mb: ipa {:x}, len {:x}, pa {:x}, pte 0b{:b}, page_num {:x}, size_2mb {:x}",
-        //     ipa, len, pa, pte, page_num, size_2mb
-        // );
 
         for i in 0..page_num {
             self.map_2mb(ipa + i * size_2mb, pa + i * size_2mb, pte);
+        }
+    }
+
+    pub fn unmap_range_2mb(&self, ipa: usize, len: usize) {
+        let size_2mb = 1 << LVL2_SHIFT;
+        let page_num = round_up(len, size_2mb) / size_2mb;
+
+        for i in 0..page_num {
+            self.unmap_2mb(ipa + i * size_2mb);
         }
     }
 
@@ -325,6 +374,13 @@ impl PageTable {
         // }
         for i in 0..page_num {
             self.map(ipa + i * PAGE_SIZE, pa + i * PAGE_SIZE, pte);
+        }
+    }
+
+    pub fn unmap_range(&self, ipa: usize, len: usize) {
+        let page_num = round_up(len, PAGE_SIZE) / PAGE_SIZE;
+        for i in 0..page_num {
+            self.unmap(ipa + i * PAGE_SIZE);
         }
     }
 
@@ -354,4 +410,22 @@ impl PageTable {
             self.map_range(ipa, len, pa, pte);
         }
     }
+
+    pub fn pt_unmap_range(&self, ipa: usize, len: usize, map_block: bool) {
+        let size_2mb = 1 << LVL2_SHIFT;
+        if ipa % size_2mb == 0 && len % size_2mb == 0 && map_block {
+            self.unmap_range_2mb(ipa, len);
+        } else {
+            self.unmap_range(ipa, len);
+        }
+    }
+}
+
+pub fn empty_page(addr: usize) -> bool {
+    for i in 0..(PAGE_SIZE / 8) {
+        if unsafe { ((addr + i * 8) as *const usize).read_volatile() != 0 } {
+            return false;
+        }
+    }
+    true
 }

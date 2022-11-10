@@ -158,13 +158,14 @@ pub fn vm_if_copy_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     let mem_map_cache = vm_if.mem_map_cache.clone();
     let map = vm_if.mem_map.as_mut().unwrap();
-    map.set(0x15, true); // TODO: hard code for offset 0x15000
-                         // println!(
-                         //     "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",
-                         //     map.sum(),
-                         //     map.first(),
-                         //     size_of::<u64>() * map.vec_len()
-                         // );
+    map.set(0x15, true);
+    // TODO: hard code for offset 0x15000
+    // println!(
+    //     "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",
+    //     map.sum(),
+    //     map.first(),
+    //     size_of::<u64>() * map.vec_len()
+    // );
     memcpy_safe(
         mem_map_cache.as_ref().unwrap().pa() as *const u8,
         map.slice() as *const _ as *const u8,
@@ -451,6 +452,16 @@ impl Vm {
             Some(pt) => pt.pt_map_range(ipa, len, pa, pte, map_block),
             None => {
                 panic!("Vm::pt_map_range: vm{} pt is empty", vm_inner.id);
+            }
+        }
+    }
+
+    pub fn pt_unmap_range(&self, ipa: usize, len: usize, map_block: bool) {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => pt.pt_unmap_range(ipa, len, map_block),
+            None => {
+                panic!("Vm::pt_umnmap_range: vm{} pt is empty", vm_inner.id);
             }
         }
     }

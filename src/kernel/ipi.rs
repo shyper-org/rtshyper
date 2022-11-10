@@ -104,7 +104,6 @@ pub enum IpiType {
     IpiTHvc = 4,
     IpiTVMM = 5,
     IpiTMediatedDev = 6,
-    IpiTMediatedNotify = 7,
     IpiTIntInject = 8,
 }
 

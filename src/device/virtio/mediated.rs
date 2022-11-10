@@ -2,10 +2,10 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
-use crate::device::{BLK_IRQ, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
+use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
     active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
-    interrupt_vm_inject, IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2pa,
+    IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2pa,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::trace;
@@ -133,9 +133,6 @@ pub fn mediated_dev_init() {
     if !ipi_register(IpiType::IpiTMediatedDev, mediated_ipi_handler) {
         panic!("mediated_dev_init: failed to register ipi IpiTMediatedDev");
     }
-    if !ipi_register(IpiType::IpiTMediatedNotify, mediated_notify_ipi_handler) {
-        panic!("mediated_dev_init: failed to register ipi IpiTMediatedNotify");
-    }
 }
 
 // only run in vm0
@@ -182,16 +179,6 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> Result<usize, ()> {
     // invoke the excuter to handle finished IO task
     async_task_exe();
     Ok(0)
-}
-
-pub fn mediated_notify_ipi_handler(msg: &IpiMessage) {
-    match &msg.ipi_message {
-        IpiInnerMsg::MediatedNotifyMsg(msg) => {
-            let vm = vm(msg.vm_id).unwrap();
-            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), BLK_IRQ, 0);
-        }
-        _ => {}
-    }
 }
 
 fn check_sum(addr: usize, len: usize) -> usize {
