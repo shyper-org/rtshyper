@@ -7,7 +7,7 @@ use spin::Mutex;
 
 use crate::config::vm_num;
 use crate::device::{
-    BLK_IRQ, BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler,
+    BlkIov, mediated_blk_list_get, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler,
     VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, Virtq,
 };
 use crate::kernel::{

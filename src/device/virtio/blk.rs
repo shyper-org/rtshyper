@@ -10,8 +10,6 @@ use crate::kernel::{
 };
 use crate::lib::{memcpy_safe, trace};
 
-pub const BLK_IRQ: usize = 0x20 + 0x10;
-
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 
@@ -615,7 +613,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
             } else {
                 /*state handler*/
                 if !vq.desc_is_writable(next_desc_idx) {
-                    println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx, );
+                    println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx);
                     blk.notify(vm.clone());
                     // vq.notify(dev.int_id(), vm.clone());
                     return false;

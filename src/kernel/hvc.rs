@@ -246,7 +246,7 @@ fn hvc_sys_handler(event: usize, x0: usize) -> Result<usize, ()> {
     }
 }
 
-fn hvc_vmm_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
+fn hvc_vmm_handler(event: usize, x0: usize, _x1: usize) -> Result<usize, ()> {
     match event {
         HVC_VMM_LIST_VM => vmm_list_vm(x0),
         HVC_VMM_GET_VM_STATE => {

@@ -158,7 +158,7 @@ pub fn vm_if_copy_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     let mem_map_cache = vm_if.mem_map_cache.clone();
     let map = vm_if.mem_map.as_mut().unwrap();
-    map.set(0x15, true);
+    // map.set(0x15, true);
     // TODO: hard code for offset 0x15000
     // println!(
     //     "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",

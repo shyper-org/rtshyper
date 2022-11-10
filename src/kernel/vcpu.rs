@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::arch::{
     Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext,
-    GICD, GICH, VmContext,
+    GICD, GICH, VmContext, timer_arch_get_counter,
 };
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
@@ -289,6 +289,11 @@ impl Vcpu {
         inner.reset_vmpidr();
     }
 
+    pub fn reset_vtimer_offset(&self) {
+        let mut inner = self.inner.lock();
+        inner.reset_vtimer_offset();
+    }
+
     pub fn context_ext_regs_store(&self) {
         let mut inner = self.inner.lock();
         inner.context_ext_regs_store();
@@ -405,7 +410,6 @@ impl VcpuInner {
     }
 
     fn reset_vmpidr(&mut self) {
-        let old = self.vm_ctx.vmpidr_el2;
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
 
@@ -417,7 +421,11 @@ impl VcpuInner {
 
         vmpidr |= self.id;
         self.vm_ctx.vmpidr_el2 = vmpidr as u64;
-        println!("vmpidr old {:x}, new {:x}", old, vmpidr);
+    }
+
+    fn reset_vtimer_offset(&mut self) {
+        let curpct = timer_arch_get_counter() as u64;
+        self.vm_ctx.cntvoff_el2 = curpct - self.vm_ctx.cntvct_el0;
     }
 
     fn reset_context(&mut self) {
@@ -514,14 +522,13 @@ pub fn vcpu_run(announce: bool) {
     let size = size_of::<Aarch64ContextFrame>();
     current_cpu().set_ctx((sp - size) as *mut _);
 
-    if announce {
-        crate::device::virtio_net_announce(vm.clone());
-    }
-
     current_cpu().cpu_state = CpuState::CpuRun;
     vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
     vcpu.context_vm_restore();
+    if announce {
+        crate::device::virtio_net_announce(vm.clone());
+    }
     // tlb_invalidate_guest_all();
     // for i in 0..vm.mem_region_num() {
     //     unsafe {

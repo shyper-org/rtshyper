@@ -54,22 +54,26 @@ pub fn vmm_remove_vm_list(vm_id: usize) {
     vm.clear_vcpu();
 }
 
+pub fn vmm_cpu_remove_vcpu(vmid: usize) {
+    let vcpu = current_cpu().vcpu_array.pop_vcpu_through_vmid(vmid);
+    current_cpu().vcpu_array.remove_vcpu(vmid);
+    if let Some(vcpu) = vcpu {
+        // remove vcpu from scheduler
+        current_cpu().scheduler().sleep(vcpu);
+    }
+    if current_cpu().vcpu_array.vcpu_num() == 0 {
+        gicc_clear_current_irq(true);
+        cpu_idle();
+    }
+}
+
 pub fn vmm_remove_vcpu(vm: Vm) {
     for idx in 0..vm.cpu_num() {
         let vcpu = vm.vcpu(idx).unwrap();
+        // remove vcpu from VCPU_LIST
+        vcpu_remove(vcpu.clone());
         if vcpu.phys_id() == current_cpu().id {
-            // remove vcpu from VCPU_LIST
-            vcpu_remove(vcpu.clone());
-            let vcpu = current_cpu().vcpu_array.pop_vcpu_through_vmid(vm.id());
-            current_cpu().vcpu_array.remove_vcpu(vm.id());
-            if let Some(vcpu) = vcpu {
-                // remove vcpu from scheduler
-                current_cpu().scheduler().sleep(vcpu);
-            }
-            if current_cpu().vcpu_array.vcpu_num() == 0 {
-                gicc_clear_current_irq(true);
-                cpu_idle();
-            }
+            vmm_cpu_remove_vcpu(vm.id());
         } else {
             let m = IpiVmmMsg {
                 vmid: vm.id(),

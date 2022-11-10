@@ -47,6 +47,7 @@ pub const VIRTIO_MMIO_CONFIG: usize = 0x100;
 pub const VIRTIO_MMIO_REGS_END: usize = 0x200;
 
 pub const VIRTIO_MMIO_INT_VRING: u32 = 1 << 0;
+pub const VIRTIO_MMIO_INT_CONFIG: u32 = 1 << 1;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -177,7 +178,7 @@ impl VirtioMmio {
 
     pub fn notify_config(&self, vm: Vm) {
         let mut inner = self.inner.lock();
-        inner.regs.irt_stat |= 2;
+        inner.regs.irt_stat |= VIRTIO_MMIO_INT_CONFIG;
         let int_id = inner.dev.int_id();
         let trgt_id = vm.vcpu(0).unwrap().phys_id();
         drop(inner);

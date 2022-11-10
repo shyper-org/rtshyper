@@ -3,7 +3,7 @@ use core::fmt::Formatter;
 
 use cortex_a::registers::*;
 
-use crate::arch::{GICD, GicState, timer_arch_get_counter};
+use crate::arch::{GICD, GicState};
 
 global_asm!(include_str!("fpsimd.S"));
 
@@ -184,7 +184,7 @@ pub struct VmContext {
     cntp_cval_el0: u64,
     cntv_cval_el0: u64,
     pub cntkctl_el1: u32,
-    cntvct_el0: u64,
+    pub cntvct_el0: u64,
     cntp_ctl_el0: u32,
     cntv_ctl_el0: u32,
     cntp_tval_el0: u32,
@@ -373,9 +373,8 @@ impl VmContext {
     pub fn ext_regs_restore(&self) {
         // println!("restore CNTV_CTL_EL0 {:x}", self.cntv_ctl_el0);
         // println!("restore CNTV_CVAL_EL0 {:x}", self.cntv_cval_el0);
-        let curpct = timer_arch_get_counter() as u64;
         unsafe {
-            asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) curpct - self.cntvct_el0);
+            asm!("msr CNTVOFF_EL2, {0}", "isb", in(reg) self.cntvoff_el2);
             // asm!("msr CNTP_CVAL_EL0, {0}", "isb", in(reg) self.cntp_cval_el0);
             asm!("msr CNTV_CVAL_EL0, {0}", "isb", in(reg) self.cntv_cval_el0);
             asm!("msr CNTKCTL_EL1, {0:x}", "isb", in(reg) self.cntkctl_el1);

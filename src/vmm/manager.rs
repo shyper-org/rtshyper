@@ -20,7 +20,7 @@ use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::lib::{bit_extract, memcpy_safe, memset_safe};
-use crate::vmm::{vmm_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_remove_vcpu};
+use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
@@ -129,7 +129,7 @@ pub fn vmm_set_up_cpu(vm_id: usize) {
                     println!("vmm_set_up_cpu: failed to send ipi to Core {}", target_cpu_id);
                 }
             } else {
-                vmm_assign_vcpu(vm_id);
+                vmm_cpu_assign_vcpu(vm_id);
             }
         }
         cpu_allocate_bitmap >>= 1;
@@ -413,7 +413,7 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
                     current_cpu().id,
                     vmm.vmid
                 );
-                vmm_assign_vcpu(vmm.vmid);
+                vmm_cpu_assign_vcpu(vmm.vmid);
             }
             VmmEvent::VmmRemoveCpu => {
                 println!(
@@ -421,10 +421,7 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
                     current_cpu().id,
                     vmm.vmid
                 );
-                match vm(vmm.vmid) {
-                    Some(vm) => vmm_remove_vcpu(vm),
-                    None => panic!("vmm_ipi_handler: VmmEvent::VmmRemoveCpu cannot find VM[{}]", vmm.vmid),
-                }
+                vmm_cpu_remove_vcpu(vmm.vmid);
             }
             _ => {
                 todo!();

@@ -345,7 +345,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
                             #[cfg(feature = "pi4")]
-                            let r = fdt_setup_gic(
+                                let r = fdt_setup_gic(
                                 dtb,
                                 (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
                                 (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
@@ -457,10 +457,10 @@ impl VmAssignment {
     }
 }
 
-pub fn vmm_assign_vcpu(vm_id: usize) {
+pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
     if current_cpu().assigned {
-        println!("vmm_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
+        println!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
     } else {
         current_cpu().assigned = false;
         // println!("vmm_assign_vcpu vm[{}] cpu {} hasn't been assigned",vm_id,cpu_id);
@@ -473,7 +473,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
     let cfg_cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
 
     println!(
-        "vmm_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
+        "vmm_cpu_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
         vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap
     );
 
@@ -547,7 +547,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
         if cfg_cpu_num == vm.cpu_num() {
             vm.set_ready(true);
             println!(
-                "vmm_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}",
+                "vmm_cpu_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}",
                 cpu_id,
                 vm_id,
                 cfg_cpu_num,
@@ -555,7 +555,7 @@ pub fn vmm_assign_vcpu(vm_id: usize) {
             );
         } else {
             println!(
-                "vmm_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}",
+                "vmm_cpu_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}",
                 cpu_id,
                 vm_id,
                 cfg_cpu_num,
@@ -580,7 +580,7 @@ pub fn mvm_init() {
 
     println!("core {} init vm 0", current_cpu().id);
 
-    vmm_assign_vcpu(0);
+    vmm_cpu_assign_vcpu(0);
     barrier();
 
     if current_cpu().id == 0 {
@@ -608,10 +608,9 @@ pub fn vmm_boot() {
 }
 
 pub fn vmm_migrate_boot() {
-    match current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) {
-        Some(vcpu) => vcpu.reset_vmpidr(),
-        None => panic!("vmm_migrate_boot: current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) is None"),
-    }
+    let vcpu = current_cpu().active_vcpu.clone().unwrap();
+    vcpu.reset_vmpidr();
+    vcpu.reset_vtimer_offset();
 
     // println!("Core[{}] start running", current_cpu().id);
     vcpu_run(true);
