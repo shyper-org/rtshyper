@@ -34,11 +34,11 @@ pub fn timer_init() {
 }
 
 pub fn timer_enable(val: bool) {
-    println!(
-        "Core {} {} EL2 timer",
-        current_cpu().id,
-        if val { "enable" } else { "disable" }
-    );
+    // println!(
+    //     "Core {} {} EL2 timer",
+    //     current_cpu().id,
+    //     if val { "enable" } else { "disable" }
+    // );
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
 }
 

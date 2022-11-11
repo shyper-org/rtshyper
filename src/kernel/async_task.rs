@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use spin::mutex::Mutex;
 
 use crate::device::{BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VirtioMmio, Virtq};
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
+use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
 use crate::lib::{memcpy_safe, sleep, trace};
 
 // use core::future::Future;
@@ -264,7 +264,7 @@ pub fn async_ipi_req() {
     drop(ipi_list);
     match task.task_data {
         AsyncTaskData::AsyncIpiTask(msg) => {
-            if current_cpu().id == 0 {
+            if active_vm_id() == 0 {
                 virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
             } else {
                 // add_task_ipi_count();
@@ -340,7 +340,7 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     drop(ipi_list);
     drop(io_list);
     loop {
-        if current_cpu().id == 0 || ASYNC_IPI_TASK_LIST.lock().len() < 1024 {
+        if active_vm_id() == 0 || ASYNC_IPI_TASK_LIST.lock().len() < 1024 {
             break;
         } else {
             sleep(100);
@@ -350,7 +350,7 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     // if this is a normal VM and this is the first IO request
     // (which generate a ipi async task in `virtio_mediated_blk_notify_handler`)
     // invoke the executor to handle it
-    if current_cpu().id != 0
+    if active_vm_id() != 0
         && ASYNC_IO_TASK_LIST.lock().is_empty()
         && ASYNC_IPI_TASK_LIST.lock().len() == 1
         && async_exe_status() == AsyncExeStatus::Pending
@@ -361,7 +361,7 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
 
 // async task executor
 pub fn async_task_exe() {
-    if current_cpu().id == 0 {
+    if active_vm_id() == 0 {
         match async_exe_status() {
             AsyncExeStatus::Pending => {
                 set_async_exe_status(AsyncExeStatus::Scheduling);
@@ -401,7 +401,7 @@ pub fn async_task_exe() {
         }
         drop(ipi_list);
         drop(io_list);
-        if task.handle() || (ipi && current_cpu().id == 0) {
+        if task.handle() || (ipi && active_vm_id() == 0) {
             // task finish
             finish_async_task(ipi);
         } else {
@@ -410,7 +410,7 @@ pub fn async_task_exe() {
             return;
         }
         // not a service VM, end loop
-        if current_cpu().id != 0 {
+        if active_vm_id() != 0 {
             return;
         }
     }

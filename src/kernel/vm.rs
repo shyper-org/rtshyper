@@ -758,7 +758,6 @@ impl Vm {
     }
 
     pub fn context_vm_migrate_save(&self) {
-        // TODO: 仅支持单核VM，支持多核并不困难，遍历所有vcpu即可
         let mvm = vm(0).unwrap();
         let size = size_of::<VMData>();
         match mem_pages_alloc(round_up(size, PAGE_SIZE) / PAGE_SIZE) {

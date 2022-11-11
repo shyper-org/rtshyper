@@ -4,10 +4,7 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
-use crate::kernel::{
-    active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData,
-    AsyncTaskState, IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2pa,
-};
+use crate::kernel::{active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData, AsyncTaskState, current_cpu, IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2pa};
 use crate::lib::{memcpy_safe, trace};
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
@@ -496,9 +493,7 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, dev: VirtioMmio, cache: us
 }
 
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
-    // if current_cpu().id == 1 {
     //     add_task_count();
-    // }
     let task = AsyncTask::new(
         AsyncTaskData::AsyncIpiTask(IpiMediatedMsg {
             src_id: vm.id(),

@@ -212,6 +212,7 @@ impl Vcpu {
 
     pub fn set_phys_id(&self, phys_id: usize) {
         let mut inner = self.inner.lock();
+        println!("set vcpu {} phys id {}", inner.id, phys_id);
         inner.phys_id = phys_id;
     }
 

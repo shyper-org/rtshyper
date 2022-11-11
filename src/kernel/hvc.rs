@@ -332,7 +332,6 @@ fn hvc_vmm_handler(event: usize, x0: usize, _x1: usize) -> Result<usize, ()> {
             let vm = vm(x0).unwrap();
 
             let size = size_of::<VMData>();
-            println!("HVC_VMM_MIGRATE_VM_BOOT share mem VM_CONTEXT_RECEIVE {:x} MIGRATE_RECEIVE {:x}", get_share_mem(VM_CONTEXT_RECEIVE), get_share_mem(MIGRATE_RECEIVE));
             mvm.pt_unmap_range(get_share_mem(VM_CONTEXT_RECEIVE), round_up(size, PAGE_SIZE), true);
             unmap_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
 
@@ -498,7 +497,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
 
     let cpu_trgt = vm_if_get_cpu_id(vm_id);
     if cpu_trgt != current_cpu().id {
-        println!("cpu {} send hvc msg to cpu {}", current_cpu().id, cpu_trgt);
+        // println!("cpu {} send hvc msg to cpu {}", current_cpu().id, cpu_trgt);
         let ipi_msg = IpiHvcMsg {
             src_vmid: 0,
             trgt_vmid: vm_id,
