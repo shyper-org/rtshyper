@@ -19,6 +19,7 @@ use crate::kernel::HVC_CONFIG;
 use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
+use crate::lib::sleep;
 use crate::lib::{bit_extract, memcpy_safe, memset_safe};
 use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
@@ -143,16 +144,15 @@ pub fn vmm_set_up_cpu(vm_id: usize) {
     );
 
     // Waiting till others set up.
-    loop {
-        println!(
-            "vmm_set_up_cpu: on core {}, waiting VM [{}] to be set up",
-            current_cpu().id,
-            vm_id
-        );
-        if vm.ready() {
-            break;
-        }
+    println!(
+        "vmm_set_up_cpu: on core {}, waiting VM [{}] to be set up",
+        current_cpu().id,
+        vm_id
+    );
+    while !vm.ready() {
+        sleep(10);
     }
+    println!("vmm_set_up_cpu: VM [{}] is ready", vm_id);
 }
 
 /* Init VM before boot.
