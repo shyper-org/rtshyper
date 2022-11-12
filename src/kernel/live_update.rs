@@ -615,7 +615,6 @@ pub fn current_cpu_update(src_cpu: &Cpu) {
     // assert_eq!(cpu.id, src_cpu.id);
     // assert_eq!(cpu.ctx, src_cpu.ctx);
     // assert_eq!(cpu.cpu_state, src_cpu.cpu_state);
-    // assert_eq!(cpu.assigned, src_cpu.assigned);
     // assert_eq!(cpu.current_irq, src_cpu.current_irq);
     // assert_eq!(cpu.cpu_pt, src_cpu.cpu_pt);
     // assert_eq!(cpu.stack, src_cpu.stack);

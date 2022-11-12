@@ -137,8 +137,6 @@ fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
             current_cpu().id
         );
     }
-    let assigned = true;
-    current_cpu().assigned = assigned;
     current_cpu().cpu_state = CpuState::CpuRun;
     // let vcpu = current_cpu().active_vcpu.clone().unwrap();
     vcpu.reset_context();

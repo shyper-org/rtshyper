@@ -80,6 +80,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         println!("Welcome to Qemu Sybilla Hypervisor!");
         #[cfg(feature = "pi4")]
         println!("Welcome to PI4 Sybilla Hypervisor!");
+        println!("Built At {}", env!("BUILD_TIME"));
 
         #[cfg(feature = "pi4")]
         {
@@ -109,7 +110,7 @@ pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     if cpu_id != 0 {
         crate::kernel::cpu_idle();
     }
-    // println!("Start booting Manager VM ...");
+    println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     vmm_boot();
 
     loop {}

@@ -462,11 +462,8 @@ impl VmAssignment {
 
 pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
-    if current_cpu().assigned {
+    if current_cpu().assigned() {
         println!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
-    } else {
-        current_cpu().assigned = false;
-        // println!("vmm_assign_vcpu vm[{}] cpu {} hasn't been assigned",vm_id,cpu_id);
     }
 
     // let cpu_config = vm(vm_id).config().cpu;
@@ -499,10 +496,9 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
             println!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
         }
         current_cpu().vcpu_array.append_vcpu(vcpu);
-        current_cpu().assigned = true;
     }
 
-    if current_cpu().assigned {
+    if current_cpu().assigned() {
         let vcpu_array = &current_cpu().vcpu_array;
         for (i, vcpu) in current_cpu().vcpu_array.iter().enumerate() {
             if let Some(vcpu) = vcpu {
@@ -518,25 +514,8 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
         }
     }
 
-    if vm_id != 0 {
-        if cfg_cpu_num == vm.cpu_num() {
-            vm.set_ready(true);
-            println!(
-                "vmm_cpu_assign_vcpu: core {} vm[{}] is ready cfg_cpu_num {} cur_cpu_num {}",
-                cpu_id,
-                vm_id,
-                cfg_cpu_num,
-                vm.cpu_num()
-            );
-        } else {
-            println!(
-                "vmm_cpu_assign_vcpu: core {} vm[{}] cfg_cpu_num {} cur_cpu_num {}",
-                cpu_id,
-                vm_id,
-                cfg_cpu_num,
-                vm.cpu_num()
-            );
-        }
+    if cfg_cpu_num == vm.cpu_num() {
+        vm.set_ready(true);
     }
 }
 
@@ -560,12 +539,11 @@ pub fn mvm_init() {
     if current_cpu().id == 0 {
         // TODO: vmm_setup_contact_config
         vmm_setup_config(0);
-        println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     }
 }
 
 pub fn vmm_boot() {
-    if current_cpu().assigned && active_vcpu_id() == 0 {
+    if current_cpu().assigned() && active_vcpu_id() == 0 {
         // let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
         match current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) {
             Some(vcpu) => vcpu.reset_context(),

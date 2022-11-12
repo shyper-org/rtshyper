@@ -76,7 +76,6 @@ fn cpu_if_init() {
 // #[derive(Clone)]
 pub struct Cpu {
     pub id: usize,
-    pub assigned: bool,
     pub cpu_state: CpuState,
     pub active_vcpu: Option<Vcpu>,
     pub ctx: Option<usize>,
@@ -92,7 +91,6 @@ impl Cpu {
     const fn default() -> Cpu {
         Cpu {
             id: 0,
-            assigned: false,
             cpu_state: CpuState::CpuInv,
             active_vcpu: None,
             ctx: None,
@@ -205,13 +203,16 @@ impl Cpu {
             SchedType::SchedRR(rr) => rr,
         }
     }
+
+    pub fn assigned(&self) -> bool {
+        self.vcpu_array.vcpu_num() != 0
+    }
 }
 
 #[no_mangle]
 #[link_section = ".cpu_private"]
 pub static mut CPU: Cpu = Cpu {
     id: 0,
-    assigned: false,
     cpu_state: CpuState::CpuInv,
     active_vcpu: None,
     ctx: None,
