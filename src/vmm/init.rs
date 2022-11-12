@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use spin::Mutex;
 
 use crate::arch::{
     emu_intc_handler, emu_intc_init, emu_smmu_handler, partial_passthrough_intc_handler, partial_passthrough_intc_init,
@@ -12,8 +11,8 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    active_vm_id, add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, VcpuState,
-    vm_if_init_mem_map, VM_IF_LIST, vm_if_set_cpu_id, VmPa, VmType, iommu_add_device,
+    active_vm_id, add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map,
+    VM_IF_LIST, VmPa, VmType, iommu_add_device,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -22,7 +21,10 @@ use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
 use crate::lib::{barrier, trace};
 
+#[cfg(feature = "ramdisk")]
 pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.cpio");
+#[cfg(not(feature = "ramdisk"))]
+pub static CPIO_RAMDISK: &'static [u8] = &[];
 
 fn vmm_init_memory(vm: Vm) -> bool {
     let result = mem_page_alloc();
@@ -473,51 +475,32 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     let cfg_cpu_num = vm.config().cpu_num();
     let cfg_cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
 
+    if cfg_cpu_num != cfg_cpu_allocate_bitmap.count_ones() as usize {
+        panic!(
+            "vmm_cpu_assign_vcpu: VM[{}] cpu_num {} not match cpu_allocated_bitmap {:#b}",
+            vm_id, cfg_cpu_num, cfg_cpu_allocate_bitmap
+        );
+    }
+
     println!(
         "vmm_cpu_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
         vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap
     );
 
-    // make sure that vcpu assign is executed sequentially, otherwise
-    // the PCPUs may found that vm.cpu_num() == 0 at the same time and
-    // if cfg_master is not setted, they will not set master vcpu for VM
-    static SYNC_VCPU_ASSIGN: Mutex<()> = Mutex::new(());
-    let lock_guard = SYNC_VCPU_ASSIGN.lock();
     // Judge if current cpu is allocated.
-    if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 && vm.cpu_num() < cfg_cpu_num {
-        // vm.vcpu(0) must be the VM's master vcpu
-        let trgt_id = if cpu_id == cfg_master || (!vm.has_master_cpu() && vm.cpu_num() == cfg_cpu_num - 1) {
-            0
-        } else {
-            if vm.has_master_cpu() {
-                cfg_cpu_num - vm.cpu_num()
-            } else {
-                // if master vcpu is not assigned, retain id 0 for it
-                cfg_cpu_num - vm.cpu_num() - 1
-            }
-        };
-        let vcpu = match vm.vcpu(trgt_id) {
-            None => panic!("core {} vm {} don't have vcpu {}", cpu_id, vm_id, trgt_id),
+    if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 {
+        let vcpu = match vm.select_vcpu2assign(cpu_id) {
+            None => panic!("core {} vm {} cannot find proper vcpu to assign", cpu_id, vm_id),
             Some(vcpu) => vcpu,
         };
-        if trgt_id == 0 {
-            // only vm0 vcpu[0] state should set to pend here
-            if vm_id == 0 && current_cpu().vcpu_array.vcpu_num() == 0 {
-                vcpu.set_state(VcpuState::VcpuPend);
-            }
-            vm_if_set_cpu_id(vm_id, cpu_id);
-
-            vm.set_has_master_cpu(true);
+        if vcpu.id() == 0 {
             println!("* Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
         } else {
             println!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
         }
         current_cpu().vcpu_array.append_vcpu(vcpu);
         current_cpu().assigned = true;
-        vm.set_cpu_num(vm.cpu_num() + 1);
-        vm.set_ncpu(vm.ncpu() | 1 << cpu_id);
     }
-    drop(lock_guard);
 
     if current_cpu().assigned {
         let vcpu_array = &current_cpu().vcpu_array;

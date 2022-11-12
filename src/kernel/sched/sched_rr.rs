@@ -54,7 +54,6 @@ impl SchedulerRR {
         }
         current_cpu().set_active_vcpu(Some(next_vcpu.clone()));
         next_vcpu.context_vm_restore();
-        next_vcpu.inject_int_inlist();
     }
 }
 

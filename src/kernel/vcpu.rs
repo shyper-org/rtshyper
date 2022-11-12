@@ -166,6 +166,7 @@ impl Vcpu {
         unsafe {
             asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
         }
+        self.inject_int_inlist();
     }
 
     pub fn gic_restore_context(&self) {
@@ -336,7 +337,7 @@ impl Vcpu {
     }
 
     // TODO: ugly lock for self.inner
-    pub fn inject_int_inlist(&self) {
+    fn inject_int_inlist(&self) {
         let inner = self.inner.lock();
         match inner.vm.clone() {
             None => {}

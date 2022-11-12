@@ -82,9 +82,6 @@ pub fn vmm_alloc_vcpu(vm_id: usize) {
         }
     }
 
-    // remain to be init when assigning vcpu
-    vm.set_cpu_num(0);
-    vm.set_ncpu(0);
     println!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<0b{:b}>",
         vm.id(),
@@ -162,7 +159,7 @@ pub fn vmm_set_up_cpu(vm_id: usize) {
  */
 pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
-    if current_cpu().id == 0 {
+    if active_vm_id() == 0 {
         if vm_id == 0 {
             panic!("not support boot for vm0");
         }
@@ -173,7 +170,12 @@ pub fn vmm_init_gvm(vm_id: usize) {
 
         vmm_setup_config(vm_id);
     } else {
-        println!("Core {} should not init VM [{}]", current_cpu().id, vm_id);
+        println!(
+            "VM[{}] Core {} should not init VM [{}]",
+            active_vm_id(),
+            current_cpu().id,
+            vm_id
+        );
     }
 }
 

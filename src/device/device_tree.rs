@@ -4,11 +4,9 @@ use vm_fdt::{Error, FdtWriter, FdtWriterResult};
 
 #[cfg(feature = "pi4")]
 use crate::arch::PAGE_SIZE;
-use crate::board::PLAT_DESC;
 use crate::config::{DtbDevType, VmDtbDevConfig};
 use crate::config::VmConfigEntry;
 use crate::device::EmuDeviceType;
-use crate::lib::bit_num;
 use crate::SYSTEM_FDT;
 use crate::vmm::CPIO_RAMDISK;
 
@@ -199,7 +197,7 @@ fn create_cpu_node(fdt: &mut FdtWriter, config: VmConfigEntry) -> FdtWriterResul
     fdt.property_u32("#size-cells", 0)?;
     fdt.property_u32("#address-cells", 0x2)?;
 
-    let cpu_num = bit_num(config.cpu_allocated_bitmap() as usize, PLAT_DESC.cpu_desc.num);
+    let cpu_num = config.cpu_allocated_bitmap().count_ones();
     for cpu_id in 0..cpu_num {
         let cpu_name = format!("cpu@{:x}", cpu_id);
         let cpu_node = fdt.begin_node(&cpu_name)?;

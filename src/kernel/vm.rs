@@ -58,7 +58,7 @@ pub fn vm_if_get_type(vm_id: usize) -> VmType {
     vm_if.vm_type
 }
 
-pub fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
+fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id = master_cpu_id;
     println!(
@@ -355,16 +355,19 @@ impl Vm {
 
     pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
         let vm_inner = self.inner.lock();
-        if vm_inner.vcpu_list.len() > index {
-            assert_eq!(index, vm_inner.vcpu_list[index].id());
-            Some(vm_inner.vcpu_list[index].clone())
-        } else {
-            println!(
-                "vcpu idx {} is to large than vcpu_list len {}",
-                index,
-                vm_inner.vcpu_list.len()
-            );
-            None
+        match vm_inner.vcpu_list.get(index).cloned() {
+            Some(vcpu) => {
+                assert_eq!(index, vcpu.id());
+                Some(vcpu)
+            }
+            None => {
+                println!(
+                    "vcpu idx {} is to large than vcpu_list len {}",
+                    index,
+                    vm_inner.vcpu_list.len()
+                );
+                None
+            }
         }
     }
 
@@ -383,24 +386,39 @@ impl Vm {
         vm_inner.vcpu_list.clear();
     }
 
-    pub fn set_has_master_cpu(&self, has_master: bool) {
+    pub fn select_vcpu2assign(&self, cpu_id: usize) -> Option<Vcpu> {
+        let cfg_master = self.config().cpu_master();
+        let cfg_cpu_num = self.config().cpu_num();
+        let cfg_cpu_allocate_bitmap = self.config().cpu_allocated_bitmap();
+        // make sure that vcpu assign is executed sequentially, otherwise
+        // the PCPUs may found that vm.cpu_num() == 0 at the same time and
+        // if cfg_master is not setted, they will not set master vcpu for VM
         let mut vm_inner = self.inner.lock();
-        vm_inner.has_master = has_master;
-    }
-
-    pub fn has_master_cpu(&self) -> bool {
-        let vm_inner = self.inner.lock();
-        vm_inner.has_master
-    }
-
-    pub fn set_ncpu(&self, ncpu: usize) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.ncpu = ncpu;
-    }
-
-    pub fn set_cpu_num(&self, cpu_num: usize) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.cpu_num = cpu_num;
+        if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 && vm_inner.cpu_num < cfg_cpu_num {
+            // vm.vcpu(0) must be the VM's master vcpu
+            let trgt_id = if cpu_id == cfg_master || (!vm_inner.has_master && vm_inner.cpu_num == cfg_cpu_num - 1) {
+                0
+            } else if vm_inner.has_master {
+                cfg_cpu_num - vm_inner.cpu_num
+            } else {
+                // if master vcpu is not assigned, retain id 0 for it
+                cfg_cpu_num - vm_inner.cpu_num - 1
+            };
+            match vm_inner.vcpu_list.get(trgt_id).cloned() {
+                None => None,
+                Some(vcpu) => {
+                    if vcpu.id() == 0 {
+                        vm_if_set_cpu_id(vm_inner.id, cpu_id);
+                        vm_inner.has_master = true;
+                    }
+                    vm_inner.cpu_num += 1;
+                    vm_inner.ncpu |= 1 << cpu_id;
+                    Some(vcpu)
+                }
+            }
+        } else {
+            None
+        }
     }
 
     pub fn set_entry_point(&self, entry_point: usize) {

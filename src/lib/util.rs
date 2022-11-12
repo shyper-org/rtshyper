@@ -56,17 +56,6 @@ pub fn bit_set(bits: usize, off: usize) -> usize {
     bits | (1 << off)
 }
 
-#[inline(always)]
-pub fn bit_num(bits: usize, size: usize) -> usize {
-    let mut num = 0;
-    for i in 0..size {
-        if (bits & (1 << i)) != 0 {
-            num += 1;
-        }
-    }
-    num
-}
-
 // change find nth
 pub fn bitmap_find_nth(bitmap: usize, start: usize, size: usize, nth: usize, set: bool) -> Option<usize> {
     if size + start > 64 {
