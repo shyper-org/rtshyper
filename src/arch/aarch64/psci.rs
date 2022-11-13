@@ -202,22 +202,41 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
     }
 }
 
-pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
+fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let vcpu_id = mpidr & 0xff;
     let vm = active_vm().unwrap();
-    let physical_linear_id = vm.vcpuid_to_pcpuid(vcpu_id);
+    // let physical_linear_id = vm.vcpuid_to_pcpuid(vcpu_id);
 
-    if vcpu_id >= vm.cpu_num() || physical_linear_id.is_err() {
+    // if vcpu_id >= vm.cpu_num() || physical_linear_id.is_err() {
+    //     println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
+    //     return usize::MAX - 1;
+    // }
+    // #[cfg(feature = "tx2")]
+    // {
+    //     let cluster = (mpidr >> 8) & 0xff;
+    //     if vm.id() == 0 && cluster != 1 {
+    //         println!("psci_guest_cpu_on: L4T only support cluster #1");
+    //         return usize::MAX - 1;
+    //     }
+    // }
+    let physical_linear_id = {
+        let cluster = (mpidr >> 8) & 0xff;
+        if vm.id() == 0 {
+            if cluster == 0 {
+                Ok(vcpu_id + 4)
+            } else {
+                if vcpu_id >= vm.cpu_num() {
+                    println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
+                }
+                vm.vcpuid_to_pcpuid(vcpu_id)
+            }
+        } else {
+            vm.vcpuid_to_pcpuid(vcpu_id)
+        }
+    };
+    if physical_linear_id.is_err() {
         println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
         return usize::MAX - 1;
-    }
-    #[cfg(feature = "tx2")]
-    {
-        let cluster = (mpidr >> 8) & 0xff;
-        if vm.id() == 0 && cluster != 1 {
-            println!("psci_guest_cpu_on: L4T only support cluster #1");
-            return usize::MAX - 1;
-        }
     }
 
     let m = IpiPowerMessage {
@@ -226,6 +245,13 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         entry,
         context: ctx,
     };
+
+    println!(
+        "ipi power on VM[{}] vcpu {} on core {}",
+        vm.id(),
+        vcpu_id,
+        physical_linear_id.unwrap()
+    );
 
     if !ipi_send_msg(physical_linear_id.unwrap(), IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
         println!("psci_guest_cpu_on: fail to send msg");
