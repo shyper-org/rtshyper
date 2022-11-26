@@ -21,7 +21,7 @@ vm-fdt = { git = "https://github.com/OhmR/vm-fdt" }
 #woke = "0.0.2"
 fdt = { path = "libfdt-binding" }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_trace"] }
-volatile = "0.4.4"
+#volatile = "0.4.4"
 spin = { version = "0.9.4", features = ["use_ticket_mutex"] }
 cortex-a = "7.4.0"
 buddy_system_allocator = "0.8.0"

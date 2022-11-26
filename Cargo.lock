@@ -310,7 +310,6 @@ dependencies = [
  "spin 0.9.4",
  "tock-registers",
  "vm-fdt",
- "volatile",
 ]
 
 [[package]]
@@ -407,12 +406,6 @@ source = "git+https://github.com/OhmR/vm-fdt#5dc42b7341bfd13ca94ef4d8cf5a1a2a60a
 dependencies = [
  "cstr_core",
 ]
-
-[[package]]
-name = "volatile"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4c2dbd44eb8b53973357e6e207e370f0c1059990df850aca1eca8947cf464f0"
 
 [[package]]
 name = "which"

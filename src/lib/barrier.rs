@@ -1,68 +1,52 @@
-use core::arch::global_asm;
-
-use volatile::Volatile;
+use core::ptr;
+use core::sync::atomic::AtomicUsize;
+use core::sync::atomic::Ordering;
 
 use crate::board::PLAT_DESC;
 use crate::lib::round_up;
 
-global_asm!(include_str!("../arch/aarch64/barrier.S"));
-
-#[repr(C)]
 struct CpuSyncToken {
-    lock: u32,
     n: usize,
-    count: usize,
+    count: AtomicUsize,
     ready: bool,
 }
 
 static mut CPU_GLB_SYNC: CpuSyncToken = CpuSyncToken {
-    lock: 0,
     n: PLAT_DESC.cpu_desc.num,
-    count: 0,
+    count: AtomicUsize::new(0),
     ready: true,
 };
 
 static mut CPU_FUNC_SYNC: CpuSyncToken = CpuSyncToken {
-    lock: 0,
     n: 0,
-    count: 0,
+    count: AtomicUsize::new(0),
     ready: true,
 };
-
-extern "C" {
-    pub fn spin_lock(lock: usize);
-    pub fn spin_unlock(lock: usize);
-}
 
 #[inline(never)]
 pub fn barrier() {
     unsafe {
-        let lock_addr = &CPU_GLB_SYNC.lock as *const _ as usize;
-        spin_lock(lock_addr);
-        let mut count = Volatile::new(&mut CPU_GLB_SYNC.count);
-        count.update(|count| *count += 1);
-        let next_count = round_up(count.read(), CPU_GLB_SYNC.n);
-        spin_unlock(lock_addr);
-        while count.read() < next_count {}
+        let ori = CPU_GLB_SYNC.count.fetch_add(1, Ordering::Relaxed);
+        let next_count = round_up(ori + 1, CPU_GLB_SYNC.n);
+        while CPU_GLB_SYNC.count.load(Ordering::Acquire) < next_count {
+            core::hint::spin_loop();
+        }
     }
 }
 
 #[inline(never)]
 pub fn func_barrier() {
     unsafe {
-        let lock_addr = &CPU_FUNC_SYNC.lock as *const _ as usize;
-        spin_lock(lock_addr);
-        let mut count = Volatile::new(&mut CPU_FUNC_SYNC.count);
-        count.update(|count| *count += 1);
-        let next_count = round_up(count.read(), CPU_FUNC_SYNC.n);
-        spin_unlock(lock_addr);
-        while count.read() < next_count {}
+        let ori = CPU_FUNC_SYNC.count.fetch_add(1, Ordering::Relaxed);
+        let next_count = round_up(ori + 1, CPU_FUNC_SYNC.n);
+        while CPU_FUNC_SYNC.count.load(Ordering::Acquire) < next_count {
+            core::hint::spin_loop();
+        }
     }
 }
 
 pub fn set_barrier_num(num: usize) {
     unsafe {
-        let mut n = Volatile::new(&mut CPU_FUNC_SYNC.n);
-        n.update(|n| *n = num);
+        ptr::write_volatile(&mut CPU_FUNC_SYNC.n, num);
     }
 }
