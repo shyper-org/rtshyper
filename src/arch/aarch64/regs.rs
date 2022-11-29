@@ -1,16 +1,29 @@
-// TODO: fix these two fn
-// #[inline(always)]
-// pub fn mrs(reg: &str) -> usize {
-//     let val = 0;
-//     unsafe {
-//         // llvm_asm!("mrs %0, " #reg : "=r"(val));
-//     }
-//     val
-// }
+// Move to ARM register from system coprocessor register.
+// MRS Xd, sysreg "Xd = sysreg"
+macro_rules! mrs {
+    ($val: expr, $reg: expr, $asm_width:tt) => {
+        unsafe {
+            core::arch::asm!(concat!("mrs {0:", $asm_width, "}, ", stringify!($reg)), out(reg) $val, options(nomem, nostack));
+        }
+    };
+    ($val: expr, $reg: expr) => {
+        unsafe {
+            core::arch::asm!(concat!("mrs {0}, ", stringify!($reg)), out(reg) $val, options(nomem, nostack));
+        }
+    };
+}
 
-// #[inline(always)]
-// pub fn msr(val: usize, reg: &str) {
-//     unsafe {
-//         // llvm_asm!("msr " #reg ", %0\n\r" ::"r"(val));
-//     }
-// }
+// Move to system coprocessor register from ARM register.
+// MSR sysreg, Xn "sysreg = Xn"
+macro_rules! msr {
+    ($reg: expr, $val: expr, $asm_width:tt) => {
+        unsafe {
+            core::arch::asm!(concat!("msr ", stringify!($reg), ", {0:", $asm_width, "}"), in(reg) $val, options(nomem, nostack));
+        }
+    };
+    ($reg: expr, $val: expr) => {
+        unsafe {
+            core::arch::asm!(concat!("msr ", stringify!($reg), ", {0}"), in(reg) $val, options(nomem, nostack));
+        }
+    };
+}

@@ -163,6 +163,7 @@ impl Vcpu {
         // restore vm's Stage2 MMU context
         let vttbr = (self.vm_id() << 48) | self.vm_pt_dir();
         // println!("vttbr {:x}", vttbr);
+        // TODO: replace the arch related expr
         unsafe {
             asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
         }

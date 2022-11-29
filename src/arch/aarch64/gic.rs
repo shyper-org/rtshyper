@@ -138,12 +138,10 @@ pub struct GicDistributor {
 impl core::ops::Deref for GicDistributor {
     type Target = GicDistributorBlock;
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            if self.base_addr < 0x1000 {
-                panic!("illegal gicd addr {}", self.base_addr);
-            }
-            &*self.ptr()
+        if self.base_addr < 0x1000 {
+            panic!("illegal gicd addr {}", self.base_addr);
         }
+        unsafe { &*self.ptr() }
     }
 }
 
@@ -406,12 +404,10 @@ pub struct GicCpuInterface {
 impl core::ops::Deref for GicCpuInterface {
     type Target = GicCpuInterfaceBlock;
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            if self.base_addr < 0x1000 {
-                panic!("illegal gicc addr {}", self.base_addr);
-            }
-            &*self.ptr()
+        if self.base_addr < 0x1000 {
+            panic!("illegal gicc addr {}", self.base_addr);
         }
+        unsafe { &*self.ptr() }
     }
 }
 

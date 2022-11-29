@@ -16,6 +16,9 @@ pub use self::tlb::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 
+#[macro_use]
+mod regs;
+
 mod context_frame;
 mod cpu;
 mod exception;
@@ -25,7 +28,6 @@ mod interrupt;
 mod mmu;
 mod page_table;
 mod psci;
-mod regs;
 mod smc;
 mod smmu;
 mod sync;

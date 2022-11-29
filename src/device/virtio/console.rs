@@ -73,12 +73,10 @@ impl ConsoleDesc {
 
     pub fn offset_data(&self, offset: usize) -> u32 {
         let start_addr = self.start_addr();
-        let value = unsafe {
-            if trace() && start_addr + offset < 0x1000 {
-                println!("value addr is {}", start_addr + offset);
-            }
-            *((start_addr + offset) as *const u32)
-        };
+        if trace() && start_addr + offset < 0x1000 {
+            println!("value addr is {}", start_addr + offset);
+        }
+        let value = unsafe { *((start_addr + offset) as *const u32) };
         return value;
     }
 

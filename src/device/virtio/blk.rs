@@ -106,12 +106,10 @@ impl BlkDesc {
 
     pub fn offset_data(&self, offset: usize) -> u32 {
         let start_addr = self.start_addr();
-        let value = unsafe {
-            if trace() && start_addr + offset < 0x1000 {
-                panic!("illegal addr {:x}", start_addr + offset);
-            }
-            *((start_addr + offset) as *const u32)
-        };
+        if trace() && start_addr + offset < 0x1000 {
+            panic!("illegal addr {:x}", start_addr + offset);
+        }
+        let value = unsafe { *((start_addr + offset) as *const u32) };
         return value;
     }
 }
@@ -399,9 +397,9 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, dev: VirtioMmio, cache: us
                 } else {
                     todo!();
                 }
-                for iov_idx in 0..req_node.iov.len() {
-                    let data_bg = req_node.iov[iov_idx].data_bg;
-                    let len = req_node.iov[iov_idx].len as usize;
+                for iov in req_node.iov.iter() {
+                    let data_bg = iov.data_bg;
+                    let len = iov.len as usize;
 
                     if len < SECTOR_BSIZE {
                         println!("blk_req_handler: read len < SECTOR_BSIZE");
@@ -417,9 +415,9 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, dev: VirtioMmio, cache: us
                 }
             }
             VIRTIO_BLK_T_OUT => {
-                for iov_idx in 0..req_node.iov.len() {
-                    let data_bg = req_node.iov[iov_idx].data_bg;
-                    let len = req_node.iov[iov_idx].len as usize;
+                for iov in req_node.iov.iter() {
+                    let data_bg = iov.data_bg;
+                    let len = iov.len as usize;
                     if len < SECTOR_BSIZE {
                         println!("blk_req_handler: read len < SECTOR_BSIZE");
                         continue;

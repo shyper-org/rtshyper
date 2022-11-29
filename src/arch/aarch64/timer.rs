@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use spin::Mutex;
 use tock_registers::interfaces::*;
 
@@ -12,23 +10,17 @@ pub fn timer_arch_set(num: usize) {
     let slice_lock = TIMER_SLICE.lock();
     let val = *slice_lock * num;
     drop(slice_lock);
-    unsafe {
-        asm!("msr CNTHP_TVAL_EL2, {0}", "isb", in(reg) val);
-    };
+    msr!(CNTHP_TVAL_EL2, val);
 }
 
 pub fn timer_arch_enable_irq() {
     let val = 1;
-    unsafe {
-        asm!("msr CNTHP_CTL_EL2, {0:x}", "isb", in(reg) val);
-    };
+    msr!(CNTHP_CTL_EL2, val, "x");
 }
 
 pub fn timer_arch_disable_irq() {
     let val = 2;
-    unsafe {
-        asm!("msr CNTHP_CTL_EL2, {0:x}", "isb", in(reg) val);
-    };
+    msr!(CNTHP_CTL_EL2, val, "x");
 }
 
 pub fn timer_arch_get_counter() -> usize {
@@ -47,8 +39,6 @@ pub fn timer_arch_init() {
 
     let ctl = 0x3 & (1 | !CTL_IMASK);
     let tval = *slice_lock * 10;
-    unsafe {
-        asm!("msr CNTHP_CTL_EL2, {0}", "isb", in(reg) ctl);
-        asm!("msr CNTHP_TVAL_EL2, {0}", "isb", in(reg) tval);
-    }
+    msr!(CNTHP_CTL_EL2, ctl);
+    msr!(CNTHP_TVAL_EL2, tval);
 }

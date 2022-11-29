@@ -17,11 +17,6 @@ extern crate log;
 
 // extern crate rlibc;
 
-// #[macro_export]
-// macro_rules! cpu {
-//     () => ($crate::kernel::cpu())
-// }
-
 use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;

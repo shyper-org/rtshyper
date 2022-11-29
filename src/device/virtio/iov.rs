@@ -82,12 +82,10 @@ impl VirtioIov {
 
         for iov_data in &inner.vector {
             if iov_data.len > idx {
-                return unsafe {
-                    if trace() && iov_data.buf + idx < 0x1000 {
-                        panic!("illegal addr {:x}", iov_data.buf + idx);
-                    }
-                    from_raw_parts((iov_data.buf + idx) as *const u8, 14)
-                };
+                if trace() && iov_data.buf + idx < 0x1000 {
+                    panic!("illegal addr {:x}", iov_data.buf + idx);
+                }
+                return unsafe { from_raw_parts((iov_data.buf + idx) as *const u8, 14) };
             } else {
                 idx -= iov_data.len;
             }

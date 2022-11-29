@@ -82,9 +82,6 @@ impl Virtq {
                 if avail_idx == inner.last_avail_idx {
                     return None;
                 }
-                // unsafe {
-                //     llvm_asm!("dsb ish");
-                // }
                 let idx = inner.last_avail_idx as usize % inner.num;
                 let avail_desc_idx = avail.ring[idx];
                 inner.last_avail_idx = inner.last_avail_idx.wrapping_add(1);
@@ -259,12 +256,10 @@ impl Virtq {
 
     pub fn set_desc_table(&self, addr: usize) {
         let mut inner = self.inner.lock();
-        inner.desc_table = Some(unsafe {
-            if trace() && addr < 0x1000 {
-                panic!("illegal desc ring addr {:x}", addr);
-            }
-            slice::from_raw_parts_mut(addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE)
-        });
+        if trace() && addr < 0x1000 {
+            panic!("illegal desc ring addr {:x}", addr);
+        }
+        inner.desc_table = Some(unsafe { slice::from_raw_parts_mut(addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
     }
 
     pub fn set_avail(&self, addr: usize) {

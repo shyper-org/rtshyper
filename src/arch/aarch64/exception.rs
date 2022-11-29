@@ -1,4 +1,4 @@
-use core::arch::{asm, global_asm};
+use core::arch::global_asm;
 
 use tock_registers::interfaces::*;
 
@@ -35,11 +35,8 @@ fn exception_far() -> usize {
 
 #[inline(always)]
 fn exception_hpfar() -> usize {
-    // cortex_a::registers::HPFAR_EL2.get() as usize
     let hpfar: u64;
-    unsafe {
-        asm!("mrs {0}, HPFAR_EL2", out(reg) hpfar);
-    }
+    mrs!(hpfar, HPFAR_EL2);
     hpfar as usize
 }
 

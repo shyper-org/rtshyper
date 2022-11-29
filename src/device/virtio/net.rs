@@ -117,12 +117,10 @@ impl NetDesc {
     pub fn offset_data(&self, offset: usize) -> u32 {
         let inner = self.inner.lock();
         let start_addr = &inner.mac[0] as *const _ as usize;
-        let value = unsafe {
-            if trace() && start_addr + offset < 0x1000 {
-                println!("value addr is {}", start_addr + offset);
-            }
-            *((start_addr + offset) as *const u32)
-        };
+        if trace() && start_addr + offset < 0x1000 {
+            println!("value addr is {}", start_addr + offset);
+        }
+        let value = unsafe { *((start_addr + offset) as *const u32) };
         return value;
     }
 
@@ -584,12 +582,10 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         println!("ethernet_send_to: rx_len smaller than tx_len");
         return false;
     }
-    let header = unsafe {
-        if trace() && tx_iov.get_buf(0) < 0x1000 {
-            panic!("illegal header addr {}", tx_iov.get_buf(0));
-        }
-        &mut *(tx_iov.get_buf(0) as *mut VirtioNetHdr)
-    };
+    if trace() && tx_iov.get_buf(0) < 0x1000 {
+        panic!("illegal header addr {}", tx_iov.get_buf(0));
+    }
+    let header = unsafe { &mut *(tx_iov.get_buf(0) as *mut VirtioNetHdr) };
     header.num_buffers = 1;
 
     if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {

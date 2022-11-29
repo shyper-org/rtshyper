@@ -13,11 +13,8 @@ pub fn time_current_ms() -> usize {
 }
 
 pub fn sleep(us: usize) {
-    use core::arch::asm;
     let end = time_current_us() + us;
     while time_current_us() < end {
-        unsafe {
-            asm!("nop");
-        }
+        core::hint::spin_loop();
     }
 }
