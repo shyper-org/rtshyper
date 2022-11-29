@@ -108,24 +108,24 @@ pub fn exception_data_abort_access_is_sign_ext() -> bool {
 }
 
 #[no_mangle]
-unsafe extern "C" fn current_el_sp0_synchronous() {
+extern "C" fn current_el_sp0_synchronous() {
     panic!("current_el_sp0_synchronous");
 }
 
 #[no_mangle]
-unsafe extern "C" fn current_el_sp0_irq() {
+extern "C" fn current_el_sp0_irq() {
     // lower_aarch64_irq(ctx);
     panic!("current_el_sp0_irq");
 }
 
 #[no_mangle]
-unsafe extern "C" fn current_el_sp0_serror() {
+extern "C" fn current_el_sp0_serror() {
     panic!("current_el0_serror");
 }
 
 #[no_mangle]
 #[inline(never)]
-unsafe extern "C" fn current_el_spx_synchronous() {
+extern "C" fn current_el_spx_synchronous() {
     panic!(
         "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
         current_cpu().id,
@@ -137,18 +137,18 @@ unsafe extern "C" fn current_el_spx_synchronous() {
 }
 
 #[no_mangle]
-unsafe extern "C" fn current_el_spx_irq(ctx: *mut ContextFrame) {
+extern "C" fn current_el_spx_irq(ctx: *mut ContextFrame) {
     // println!("current_el_spx_irq");
     lower_aarch64_irq(ctx);
 }
 
 #[no_mangle]
-unsafe extern "C" fn current_el_spx_serror() {
+extern "C" fn current_el_spx_serror() {
     panic!("current_elx_serror");
 }
 
 #[no_mangle]
-unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
+extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     // println!("lower_aarch64_synchronous");
     let status = fresh_status();
     if status != FreshStatus::None {
@@ -172,7 +172,7 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
         0x16 => {
             hvc_handler();
         }
-        _ => {
+        _ => unsafe {
             println!(
                 "x0 {:x}, x1 {:x}, x29 {:x}",
                 (*ctx).gpr(0),
@@ -187,13 +187,13 @@ unsafe extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
                 exception_fault_addr(),
                 (*ctx).exception_pc()
             );
-        }
+        },
     }
     current_cpu().clear_ctx();
 }
 
 #[no_mangle]
-unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
+extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     current_cpu().set_ctx(ctx);
     let (id, src) = gicc_get_current_irq();
     // if current_cpu().id == 2 {
@@ -247,6 +247,6 @@ unsafe extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
 }
 
 #[no_mangle]
-unsafe extern "C" fn lower_aarch64_serror() {
+extern "C" fn lower_aarch64_serror() {
     panic!("lower aarch64 serror");
 }

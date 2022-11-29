@@ -127,7 +127,7 @@ const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
-pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
+pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl1_base = lvl1_pt as *const _ as usize;
     let lvl2_base = lvl2_pt as *const _ as usize;
     memset_safe(lvl1_base as *mut u8, 0, PAGE_SIZE);
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
-pub unsafe extern "C" fn mmu_init(pt: &PageTables) {
+pub extern "C" fn mmu_init(pt: &PageTables) {
     use cortex_a::registers::*;
     MAIR_EL2.write(
         MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck

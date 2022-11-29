@@ -571,14 +571,16 @@ pub fn vm_cfg_remove_vm_entry(vm_id: usize) {
 /* Generate a new VM Config Entry, set basic value */
 pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
     let config_pa = vm_ipa2pa(active_vm().unwrap(), config_ipa);
-    let vm_name_ipa = unsafe { *((config_pa + 8 * 0) as *const usize) };
-    let vm_name_length = unsafe { *((config_pa + 8 * 1) as *const usize) };
-    let vm_type = unsafe { *((config_pa + 8 * 2) as *const usize) };
-    let cmdline_ipa = unsafe { *((config_pa + 8 * 3) as *const usize) };
-    let cmdline_length = unsafe { *((config_pa + 8 * 4) as *const usize) };
-    let kernel_load_ipa = unsafe { *((config_pa + 8 * 5) as *const usize) };
-    let device_tree_load_ipa = unsafe { *((config_pa + 8 * 6) as *const usize) };
-    let ramdisk_load_ipa = unsafe { *((config_pa + 8 * 7) as *const usize) };
+    let (
+        vm_name_ipa,
+        vm_name_length,
+        vm_type,
+        cmdline_ipa,
+        cmdline_length,
+        kernel_load_ipa,
+        device_tree_load_ipa,
+        ramdisk_load_ipa,
+    ) = unsafe { *(config_pa as *const _) };
     println!("\n\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.

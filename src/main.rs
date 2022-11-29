@@ -61,7 +61,7 @@ mod vmm;
 pub static SYSTEM_FDT: spin::Once<alloc::vec::Vec<u8>> = spin::Once::new();
 
 #[no_mangle]
-pub unsafe fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
+pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
     // let out_str = b"AArch64 Bare Metal";
     // for byte in out_str {

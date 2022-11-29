@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.9)
 project(libfdt-binding)
 
+# set(CMAKE_BUILD_TYPE "Release")
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_COMPILER aarch64-elf-gcc)
 set(CMAKE_ASM_COMPILER aarch64-elf-gcc)
+# set(CMAKE_C_FLAGS_RELEASE "-O3")
 
 include_directories(.)
 

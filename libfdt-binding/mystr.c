@@ -1,5 +1,12 @@
 void *memcpy(void *dst, const void *src, unsigned long count);
 
+int memcmp(const void *vl, const void *vr, unsigned long n) {
+    const unsigned char *l = vl, *r = vr;
+    for (; n && *l == *r; n--, l++, r++)
+        ;
+    return n ? *l - *r : 0;
+}
+
 void *memchr(const void *src, int c, unsigned long n) {
     const unsigned char *s = src;
     c = (unsigned char)c;
