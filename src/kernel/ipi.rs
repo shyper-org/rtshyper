@@ -100,6 +100,7 @@ pub enum IpiType {
     IpiTIntc = 0,
     IpiTPower = 1,
     IpiTEthernetMsg = 2,
+    #[deprecated]
     IpiTHyperFresh = 3,
     IpiTHvc = 4,
     IpiTVMM = 5,

@@ -4,7 +4,7 @@ use spin::Mutex;
 
 use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
-use crate::kernel::{current_cpu, hyper_fresh_ipi_handler, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
+use crate::kernel::{current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::lib::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
@@ -92,9 +92,6 @@ pub fn interrupt_init() {
         }
         if !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
             panic!("interrupt_init: failed to register ipi vmm");
-        }
-        if !ipi_register(IpiType::IpiTHyperFresh, hyper_fresh_ipi_handler) {
-            panic!("interrupt_init: failed to register ipi hyper fresh");
         }
 
         println!("Interrupt init ok");
