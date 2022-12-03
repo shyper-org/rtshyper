@@ -444,22 +444,6 @@ pub fn vmm_setup_config(vm_id: usize) {
     println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }
 
-struct VmAssignment {
-    has_master: bool,
-    cpu_num: usize,
-    cpus: usize,
-}
-
-impl VmAssignment {
-    fn default() -> VmAssignment {
-        VmAssignment {
-            has_master: false,
-            cpu_num: 0,
-            cpus: 0,
-        }
-    }
-}
-
 pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
     if current_cpu().assigned() {

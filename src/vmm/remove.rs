@@ -49,14 +49,13 @@ pub fn vmm_remove_vm(vm_id: usize) {
     println!("remove vm[{}] successfully", vm_id);
 }
 
-pub fn vmm_remove_vm_list(vm_id: usize) {
+fn vmm_remove_vm_list(vm_id: usize) {
     let vm = remove_vm(vm_id);
-    vm.clear_vcpu();
+    vm.clear_list();
 }
 
 pub fn vmm_cpu_remove_vcpu(vmid: usize) {
-    let vcpu = current_cpu().vcpu_array.pop_vcpu_through_vmid(vmid);
-    current_cpu().vcpu_array.remove_vcpu(vmid);
+    let vcpu = current_cpu().vcpu_array.remove_vcpu(vmid);
     if let Some(vcpu) = vcpu {
         // remove vcpu from scheduler
         current_cpu().scheduler().sleep(vcpu);
@@ -67,7 +66,7 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
     }
 }
 
-pub fn vmm_remove_vcpu(vm: Vm) {
+fn vmm_remove_vcpu(vm: Vm) {
     for idx in 0..vm.cpu_num() {
         let vcpu = vm.vcpu(idx).unwrap();
         // remove vcpu from VCPU_LIST
@@ -86,7 +85,7 @@ pub fn vmm_remove_vcpu(vm: Vm) {
     }
 }
 
-pub fn vmm_remove_emulated_device(vm: Vm) {
+fn vmm_remove_emulated_device(vm: Vm) {
     let config = vm.config().emulated_device_list();
     for (idx, emu_dev) in config.iter().enumerate() {
         // mmio / vgic will be removed with struct vm
@@ -105,7 +104,7 @@ pub fn vmm_remove_emulated_device(vm: Vm) {
     }
 }
 
-pub fn vmm_remove_passthrough_device(vm: Vm) {
+fn vmm_remove_passthrough_device(vm: Vm) {
     for irq in vm.config().passthrough_device_irqs() {
         if irq > GIC_SGIS_NUM {
             interrupt_vm_remove(vm.clone(), irq);

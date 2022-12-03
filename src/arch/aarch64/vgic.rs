@@ -20,7 +20,7 @@ use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write}
 use super::gic::*;
 
 #[derive(Clone)]
-pub struct VgicInt {
+struct VgicInt {
     inner: Arc<Mutex<VgicIntInner>>,
     pub lock: Arc<Mutex<()>>,
 }
@@ -787,7 +787,7 @@ impl Vgic {
         cpu_priv[cpu_id].sgis[idx].act = act;
     }
 
-    pub fn vgicd_interrupt(&self, idx: usize) -> VgicInt {
+    fn vgicd_interrupt(&self, idx: usize) -> VgicInt {
         let vgicd = self.vgicd.lock();
         vgicd.interrupts[idx].clone()
     }

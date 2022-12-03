@@ -94,8 +94,8 @@ impl Scheduler for SchedulerRR {
         let mut need_schedule = false;
         {
             let queue = &mut self.queue;
-            for (idx, inner_vcpu) in queue.iter_mut().enumerate() {
-                if inner_vcpu.vm_id() == vcpu.vm_id() {
+            match queue.iter().position(|x| x.vm_id() == vcpu.vm_id()) {
+                Some(idx) => {
                     queue.remove(idx);
                     if idx < self.active_idx {
                         self.active_idx -= 1;
@@ -106,8 +106,8 @@ impl Scheduler for SchedulerRR {
                             need_schedule = true;
                         }
                     }
-                    break;
                 }
+                None => {}
             }
         }
         if self.queue.len() <= 1 {

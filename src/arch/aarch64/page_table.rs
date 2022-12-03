@@ -299,7 +299,7 @@ impl PageTable {
                 pages.push(frame);
                 l1e.set_entry(pt_lvl2_idx(ipa), l2e);
             } else {
-                println!("map lv2 page failed");
+                println!("map lv2 page failed {:#?}", result.err());
                 return;
             }
         } else if l2e.to_pte() & 0b11 == PTE_BLOCK {

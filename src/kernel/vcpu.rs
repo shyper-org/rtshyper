@@ -245,17 +245,7 @@ impl Vcpu {
 
     pub fn vm(&self) -> Option<Vm> {
         let inner = self.inner.lock();
-        // inner.vm.clone()
-        match &inner.vm {
-            None => None,
-            Some(vm) => Some(vm.clone()),
-        }
-        // if inner.vm.is_none() {
-        //     None
-        // } else {
-        //     inner.vm.clone()
-        //     // Some(inner.vm.as_ref().unwrap().clone())
-        // }
+        inner.vm.clone()
     }
 
     pub fn phys_id(&self) -> usize {
@@ -264,17 +254,11 @@ impl Vcpu {
     }
 
     pub fn vm_id(&self) -> usize {
-        let inner = self.inner.lock();
-        let vm = inner.vm.clone().unwrap();
-        drop(inner);
-        vm.id()
+        self.vm().unwrap().id()
     }
 
     pub fn vm_pt_dir(&self) -> usize {
-        let inner = self.inner.lock();
-        let vm = inner.vm.clone().unwrap();
-        drop(inner);
-        vm.pt_dir()
+        self.vm().unwrap().pt_dir()
     }
 
     pub fn arch_reset(&self) {
@@ -509,7 +493,7 @@ pub fn vcpu_remove(vcpu: Vcpu) {
     panic!("illegal vm{} vcpu{}, not exist in vcpu_list", vcpu.vm_id(), vcpu.id());
 }
 
-pub fn vcpu_idle(_vcpu: Vcpu) {
+pub fn vcpu_idle(_vcpu: Vcpu) -> ! {
     cpu_interrupt_unmask();
     loop {
         // TODO: replace it with an Arch function `arch_idle`
@@ -517,27 +501,30 @@ pub fn vcpu_idle(_vcpu: Vcpu) {
     }
 }
 
-pub fn vcpu_run(announce: bool) {
-    let vcpu = current_cpu().active_vcpu.clone().unwrap();
-    vcpu.set_state(VcpuState::VcpuAct);
-    let vm = vcpu.vm().unwrap().clone();
+// WARNING: No Auto `drop` in this function
+pub fn vcpu_run(announce: bool) -> ! {
     let sp = &(current_cpu().stack) as *const _ as usize + CPU_STACK_SIZE;
     let size = size_of::<Aarch64ContextFrame>();
-    current_cpu().set_ctx((sp - size) as *mut _);
+    {
+        let vcpu = current_cpu().active_vcpu.clone().unwrap();
+        vcpu.set_state(VcpuState::VcpuAct);
+        let vm = vcpu.vm().unwrap().clone();
+        current_cpu().set_ctx((sp - size) as *mut _);
 
-    current_cpu().cpu_state = CpuState::CpuRun;
-    vm_if_set_state(active_vm_id(), super::VmState::VmActive);
+        current_cpu().cpu_state = CpuState::CpuRun;
+        vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
-    vcpu.context_vm_restore();
-    if announce {
-        crate::device::virtio_net_announce(vm.clone());
+        vcpu.context_vm_restore();
+        if announce {
+            crate::device::virtio_net_announce(vm.clone());
+        }
+        // tlb_invalidate_guest_all();
+        // for i in 0..vm.mem_region_num() {
+        //     unsafe {
+        //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
+        //     }
+        // }
     }
-    // tlb_invalidate_guest_all();
-    // for i in 0..vm.mem_region_num() {
-    //     unsafe {
-    //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
-    //     }
-    // }
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;
     }

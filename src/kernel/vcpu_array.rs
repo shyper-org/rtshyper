@@ -49,24 +49,25 @@ impl VcpuArray {
         self.len += 1;
     }
 
-    pub fn remove_vcpu(&mut self, vm_id: usize) {
+    pub fn remove_vcpu(&mut self, vm_id: usize) -> Option<Vcpu> {
         if vm_id >= self.array.len() {
             panic!("vm_id > self.array.len()");
         }
         match self.array[vm_id].clone() {
-            Some(_) => {
+            Some(vcpu) => {
                 self.len -= 1;
                 self.array[vm_id] = None;
+                if self.len == 0 {
+                    // hard code: remove el1 timer interrupt 27
+                    interrupt_cpu_enable(27, false);
+                }
+                Some(vcpu)
             }
             None => panic!(
                 "no vcpu from vm[{}] exist in Core[{}] vcpu_pool",
                 vm_id,
                 current_cpu().id
             ),
-        }
-        if self.len == 0 {
-            // hard code: remove el1 timer interrupt 27
-            interrupt_cpu_enable(27, false);
         }
     }
 

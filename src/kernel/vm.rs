@@ -381,8 +381,10 @@ impl Vm {
         }
     }
 
-    pub fn clear_vcpu(&self) {
+    // avoid circular references
+    pub fn clear_list(&self) {
         let mut vm_inner = self.inner.lock();
+        vm_inner.emu_devs.clear();
         vm_inner.vcpu_list.clear();
     }
 
@@ -1012,11 +1014,7 @@ pub fn remove_vm(id: usize) -> Vm {
 
 pub fn vm(id: usize) -> Option<Vm> {
     let vm_list = VM_LIST.lock();
-    let vm_ref = vm_list.iter().find(|&x| x.id() == id);
-    match vm_ref {
-        None => None,
-        Some(vm) => Some(vm.clone()),
-    }
+    vm_list.iter().find(|&x| x.id() == id).cloned()
 }
 
 pub fn vm_list_size() -> usize {

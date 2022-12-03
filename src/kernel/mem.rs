@@ -103,6 +103,7 @@ fn mem_vm_region_init() {
     println!("Memory VM regions init ok!");
 }
 
+#[derive(Debug)]
 pub enum AllocError {
     AllocZeroPage,
     OutOfFrame,

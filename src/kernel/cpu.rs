@@ -282,7 +282,7 @@ pub fn cpu_init() {
     }
 }
 
-pub fn cpu_idle() {
+pub fn cpu_idle() -> ! {
     let state = CpuState::CpuIdle;
     current_cpu().cpu_state = state;
     cpu_interrupt_unmask();

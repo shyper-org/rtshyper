@@ -351,7 +351,7 @@ impl VmConfigEntry {
 
     pub fn set_cpu_cfg(&self, num: usize, allocate_bitmap: usize, master: usize) {
         let mut cpu_cfg = self.cpu.lock();
-        cpu_cfg.num = num;
+        cpu_cfg.num = usize::min(num, allocate_bitmap.count_ones() as usize);
         cpu_cfg.allocate_bitmap = allocate_bitmap as u32;
         cpu_cfg.master = master as i32;
     }

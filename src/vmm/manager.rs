@@ -191,7 +191,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
     //     vm_id,
     //     phys_id
     // );
-    if current_cpu().active_vcpu.clone().is_some() && vm_id == active_vm_id() {
+    if current_cpu().active_vcpu.is_some() && vm_id == active_vm_id() {
         gicc_clear_current_irq(true);
         vmm_boot();
     } else {
