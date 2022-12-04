@@ -5,7 +5,6 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::lib::{BitAlloc, BitAlloc4K, BitAlloc64K, BitMap};
 use crate::lib::memset_safe;
-use crate::mm::PageFrame;
 
 use super::AllocError;
 
@@ -64,65 +63,37 @@ impl HeapRegion {
         }
     }
 
-    pub fn alloc_page(&mut self) -> Result<PageFrame, AllocError> {
-        let mut bit: usize = self.region.size;
-
-        if self.map.get(self.region.last) == 0 {
-            bit = self.region.last;
+    fn first_fit(&self, size: usize) -> Option<usize> {
+        if size <= 1 && self.map.get(self.region.last) == 0 {
+            Some(self.region.last)
         } else {
+            let mut bit = None;
+            let mut count = 0;
             for i in 0..self.region.size {
                 if self.map.get(i) == 0 {
-                    bit = i;
-                    break;
+                    count += 1;
+                    if count >= size {
+                        bit = Some(i - count + 1);
+                        break;
+                    }
+                } else {
+                    count = 0;
                 }
             }
+            bit
         }
-
-        if bit == self.region.size {
-            println!(
-                "alloc_page: allocate {} pages failed (heap_base 0x{:x} remain {} total {})",
-                1, self.region.base, self.region.free, self.region.size
-            );
-            return Err(AllocError::OutOfFrame);
-        }
-
-        if bit < self.region.size - 1 {
-            self.region.last = bit + 1;
-        } else {
-            self.region.last = 0;
-        }
-        self.map.set(bit);
-        self.region.free -= 1;
-
-        let addr = self.region.base + bit * PAGE_SIZE;
-        // println!("alloc page addr 0x{:x}", addr);
-        memset_safe(addr as *mut u8, 0, PAGE_SIZE);
-        return Ok(PageFrame::new(addr));
     }
 
-    pub fn alloc_pages(&mut self, size: usize) -> Result<PageFrame, AllocError> {
-        let mut bit: usize = self.region.size;
-        let mut count: usize = 0;
-        for i in 0..self.region.size {
-            if count >= size {
-                bit = i - count;
-                break;
-            }
-
-            if self.map.get(i) == 0 {
-                count += 1;
-            } else {
-                count = 0;
-            }
-        }
-
-        if bit == self.region.size {
+    pub fn alloc_pages(&mut self, size: usize) -> Result<usize, AllocError> {
+        let res = self.first_fit(size);
+        if res.is_none() {
             println!(
-                "alloc_page: allocate {} pages failed (heap_base 0x{:x} remain {} total {})",
+                "alloc_pages: allocate {} pages failed (heap_base 0x{:x} remain {} total {})",
                 size, self.region.base, self.region.free, self.region.size
             );
             return Err(AllocError::OutOfFrame);
         }
+        let bit = res.unwrap();
 
         for i in bit..bit + size {
             self.map.set(i);
@@ -136,16 +107,16 @@ impl HeapRegion {
 
         let addr = self.region.base + bit * PAGE_SIZE;
         memset_safe(addr as *mut u8, 0, size * PAGE_SIZE);
-        return Ok(PageFrame::new(addr));
+        return Ok(addr);
     }
 
-    pub fn free_page(&mut self, base: usize) -> bool {
+    pub fn free_pages(&mut self, base: usize, size: usize) -> bool {
         use crate::lib::range_in_range;
-        if !range_in_range(base, PAGE_SIZE, self.region.base, self.region.size * PAGE_SIZE) {
+        if !range_in_range(base, size * PAGE_SIZE, self.region.base, self.region.size * PAGE_SIZE) {
             panic!(
                 "free_page: out of range (addr 0x{:x} page num {} heap base 0x{:x} heap size 0x{:x})",
                 base,
-                1,
+                size,
                 self.region.base,
                 self.region.size * PAGE_SIZE
             );
@@ -153,9 +124,10 @@ impl HeapRegion {
         }
 
         let page_idx = (base - self.region.base) / PAGE_SIZE;
-        self.map.clear(page_idx);
-
-        self.region.free += 1;
+        for idx in page_idx..page_idx + size {
+            self.map.clear(idx);
+        }
+        self.region.free += size;
         self.region.last = page_idx;
         return true;
     }

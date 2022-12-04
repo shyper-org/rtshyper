@@ -109,12 +109,12 @@ pub enum AllocError {
     OutOfFrame,
 }
 
-pub fn mem_heap_reset() {
+fn mem_heap_reset() {
     let heap = HEAP_REGION.lock();
     memset_safe(heap.region.base as *mut u8, 0, heap.region.size * PAGE_SIZE);
 }
 
-pub fn mem_heap_alloc(page_num: usize, _aligned: bool) -> Result<PageFrame, AllocError> {
+pub fn mem_heap_alloc(page_num: usize, _aligned: bool) -> Result<usize, AllocError> {
     if page_num == 0 {
         return Err(AllocZeroPage);
     }
@@ -124,32 +124,20 @@ pub fn mem_heap_alloc(page_num: usize, _aligned: bool) -> Result<PageFrame, Allo
         return Err(OutOfFrame);
     }
 
-    if page_num == 1 {
-        return heap.alloc_page();
-    }
-
     heap.alloc_pages(page_num)
 }
 
+pub fn mem_heap_free(addr: usize, page_num: usize) -> bool {
+    let mut heap = HEAP_REGION.lock();
+    heap.free_pages(addr, page_num)
+}
+
 pub fn mem_page_alloc() -> Result<PageFrame, AllocError> {
-    mem_heap_alloc(1, false)
+    PageFrame::alloc_pages(1)
 }
 
 pub fn mem_pages_alloc(page_num: usize) -> Result<PageFrame, AllocError> {
-    mem_heap_alloc(page_num, false)
-}
-
-pub fn mem_pages_free(addr: usize, page_num: usize) -> bool {
-    if page_num == 1 {
-        let mut heap = HEAP_REGION.lock();
-        return heap.free_page(addr);
-    } else {
-        println!(
-            "mem_pages_free: multiple pages free occured at address 0x{:x}, {} pages",
-            addr, page_num
-        );
-        return false;
-    }
+    PageFrame::alloc_pages(page_num)
 }
 
 pub fn mem_vm_region_alloc(size: usize) -> usize {

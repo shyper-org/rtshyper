@@ -1,16 +1,26 @@
 use crate::arch::PAGE_SIZE;
-use crate::kernel::mem_pages_free;
+use crate::kernel::{mem_heap_free, mem_heap_alloc, AllocError};
 use crate::lib::{memset_safe, trace};
 
+// FIXME: RAII Object but with Clone trait, which may cause serious
+//          memory problem like double allocation or double free
 #[derive(Clone, Debug)]
 pub struct PageFrame {
     pub pa: usize,
+    pub page_num: usize,
 }
 
 impl PageFrame {
-    pub fn new(pa: usize) -> Self {
+    pub fn new(pa: usize, page_num: usize) -> Self {
         assert_eq!(pa % PAGE_SIZE, 0);
-        PageFrame { pa }
+        PageFrame { pa, page_num }
+    }
+
+    pub fn alloc_pages(page_num: usize) -> Result<Self, AllocError> {
+        match mem_heap_alloc(page_num, false) {
+            Ok(pa) => Ok(Self::new(pa, page_num)),
+            Err(err) => Err(err),
+        }
     }
 
     pub fn pa(&self) -> usize {
@@ -38,6 +48,6 @@ impl PageFrame {
 
 impl Drop for PageFrame {
     fn drop(&mut self) {
-        mem_pages_free(self.pa, 1);
+        mem_heap_free(self.pa, 1);
     }
 }

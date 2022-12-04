@@ -17,8 +17,8 @@ use crate::config::{
 };
 use crate::device::{
     BlkIov, EMU_DEVS_LIST, emu_virtio_mmio_handler, EmuDevEntry, EmuDeviceType, EmuDevs, ethernet_ipi_rev_handler,
-    MEDIATED_BLK_LIST, mediated_ipi_handler, MediatedBlk, virtio_blk_notify_handler,
-    virtio_console_notify_handler, virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
+    MEDIATED_BLK_LIST, mediated_ipi_handler, MediatedBlk, virtio_blk_notify_handler, virtio_console_notify_handler,
+    virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
 };
 use crate::kernel::{
     async_blk_io_req, ASYNC_IO_TASK_LIST, async_ipi_req, ASYNC_IPI_TASK_LIST, ASYNC_USED_INFO_LIST, AsyncTask,
@@ -594,7 +594,7 @@ pub fn vm_if_list_update(src_vm_if_list: &[Mutex<VmInterface>; VM_NUM_MAX]) {
         };
         cur_vm_if.mem_map_cache = match &vm_if.mem_map_cache {
             None => None,
-            Some(cache) => Some(PageFrame::new(cache.pa)),
+            Some(cache) => Some(PageFrame::new(cache.pa, cache.page_num)),
         };
     }
 }
@@ -639,11 +639,11 @@ pub fn vm_list_alloc(src_vm_list: &Mutex<Vec<Vm>>) {
             None => None,
             Some(page_table) => {
                 let new_page_table = PageTable {
-                    directory: PageFrame::new(page_table.directory.pa),
+                    directory: PageFrame::new(page_table.directory.pa, page_table.directory.page_num),
                     pages: Arc::new(Mutex::new(vec![])),
                 };
                 for page in page_table.pages.lock().iter() {
-                    new_page_table.pages.lock().push(PageFrame::new(page.pa));
+                    new_page_table.pages.lock().push(PageFrame::new(page.pa, page.page_num));
                 }
                 Some(new_page_table)
             }
@@ -669,14 +669,14 @@ pub fn vm_list_alloc(src_vm_list: &Mutex<Vec<Vm>>) {
         dst_inner.migrate_save_pf = {
             let mut pf = vec![];
             for page in src_inner.migrate_save_pf.iter() {
-                pf.push(PageFrame::new(page.pa));
+                pf.push(PageFrame::new(page.pa, page.page_num));
             }
             pf
         };
         dst_inner.migrate_restore_pf = {
             let mut pf = vec![];
             for page in src_inner.migrate_restore_pf.iter() {
-                pf.push(PageFrame::new(page.pa));
+                pf.push(PageFrame::new(page.pa, page.page_num));
             }
             pf
         };
@@ -1015,7 +1015,8 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
         new_vgic.save_vgic(src_vgic.clone());
 
         let vm = vm(src_vm.id()).unwrap();
-        if let EmuDevs::None = vm.emu_dev(vm.intc_dev_id()) {} else {
+        if let EmuDevs::None = vm.emu_dev(vm.intc_dev_id()) {
+        } else {
             panic!("illegal vgic emu dev idx in vm.emu_devs");
         }
         vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));

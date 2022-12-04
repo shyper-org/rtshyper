@@ -56,7 +56,7 @@ pub fn interrupt_reserve_int(int_id: usize, handler: InterruptHandler) {
 }
 
 fn interrupt_is_reserved(int_id: usize) -> bool {
-    let mut hyper_bitmap_lock = INTERRUPT_HYPER_BITMAP.lock();
+    let hyper_bitmap_lock = INTERRUPT_HYPER_BITMAP.lock();
     hyper_bitmap_lock.get(int_id) != 0
 }
 

@@ -24,7 +24,7 @@ pub trait BitAlloc {
     fn clear(&mut self, idx: usize);
 
     // Get a bit
-    fn get(&mut self, idx: usize) -> usize;
+    fn get(&self, idx: usize) -> usize;
 
     // Whether there are free bits remaining
     // fn any(&self) -> bool;
@@ -76,7 +76,7 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
         // self.0 = self.0 & (!(1 << idx) & 0xffff);
     }
 
-    fn get(&mut self, idx: usize) -> usize {
+    fn get(&self, idx: usize) -> usize {
         let i = idx / T::CAP;
         self.map[i].get(idx % T::CAP)
     }
@@ -110,7 +110,7 @@ impl BitAlloc for BitAlloc16 {
         self.0 = self.0 & (!(1 << idx) & 0xffff);
     }
 
-    fn get(&mut self, idx: usize) -> usize {
+    fn get(&self, idx: usize) -> usize {
         if self.0 & (1 << idx) != 0 {
             1
         } else {

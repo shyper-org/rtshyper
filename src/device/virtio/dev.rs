@@ -236,7 +236,7 @@ impl VirtDev {
         // inner.cache is set by fn dev_init, no need to copy here
         inner.cache = match &src_dev_inner.cache {
             None => None,
-            Some(page) => Some(PageFrame::new(page.pa)),
+            Some(page) => Some(PageFrame::new(page.pa, page.page_num)),
         };
         inner.stat.copy_from(src_dev_inner.stat.clone());
     }
@@ -299,7 +299,7 @@ impl VirtDevInner {
                 match mem_pages_alloc(BLOCKIF_IOV_MAX) {
                     Ok(page_frame) => {
                         // println!("PageFrame pa {:x}", page_frame.pa());
-                        self.cache = Some(page_frame.clone());
+                        self.cache = Some(page_frame);
                         // if mediated {
                         //     // todo: change to iov ring
                         //     let cache_size = BLOCKIF_IOV_MAX * PAGE_SIZE;
