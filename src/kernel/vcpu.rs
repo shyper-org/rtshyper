@@ -7,12 +7,12 @@ use crate::arch::{
     ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext, GICD,
     GICH, VmContext, timer_arch_get_counter,
 };
-use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
+use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id};
 use crate::lib::memcpy_safe;
 
-use super::{CpuState, Vm, VmType};
+use super::{CpuState, Vm, VmType, WeakVm};
 
 #[derive(Clone, Copy, Debug)]
 pub enum VcpuState {
@@ -27,20 +27,12 @@ pub struct Vcpu {
 }
 
 impl Vcpu {
-    pub fn default() -> Vcpu {
-        Vcpu {
-            inner: Arc::new(Mutex::new(VcpuInner::default())),
-        }
-    }
-
-    pub fn init(&self, vm: Vm, vcpu_id: usize) {
-        let mut inner = self.inner.lock();
-        inner.vm = Some(vm.clone());
-        inner.id = vcpu_id;
-        inner.phys_id = 0;
-        drop(inner);
-        crate::arch::vcpu_arch_init(vm.clone(), self.clone());
-        self.reset_context();
+    pub fn new(vm: Vm, vcpu_id: usize) -> Self {
+        let this = Self {
+            inner: Arc::new(Mutex::new(VcpuInner::new(vm.get_weak(), vcpu_id))),
+        };
+        crate::arch::vcpu_arch_init(vm.clone(), this.clone());
+        this
     }
 
     pub fn shutdown(&self) {
@@ -118,7 +110,7 @@ impl Vcpu {
 
     pub fn context_gic_irqs_store(&self) {
         let mut inner = self.inner.lock();
-        let vm = inner.vm.clone().unwrap();
+        let vm = inner.vm.get_vm().unwrap();
         inner.gic_ctx;
         for irq in vm.config().passthrough_device_irqs() {
             inner.gic_ctx.add_irq(irq as u64);
@@ -238,7 +230,7 @@ impl Vcpu {
 
     pub fn vm(&self) -> Option<Vm> {
         let inner = self.inner.lock();
-        inner.vm.clone()
+        inner.vm.get_vm()
     }
 
     pub fn phys_id(&self) -> usize {
@@ -327,7 +319,7 @@ pub struct VcpuInner {
     pub id: usize,
     pub phys_id: usize,
     pub state: VcpuState,
-    pub vm: Option<Vm>,
+    pub vm: WeakVm,
     pub int_list: Vec<usize>,
     pub vcpu_ctx: ContextFrame,
     pub vm_ctx: VmContext,
@@ -335,12 +327,12 @@ pub struct VcpuInner {
 }
 
 impl VcpuInner {
-    pub fn default() -> VcpuInner {
-        VcpuInner {
-            id: 0,
+    pub fn new(vm: WeakVm, id: usize) -> Self {
+        Self {
+            id,
             phys_id: 0,
             state: VcpuState::VcpuInv,
-            vm: None,
+            vm,
             int_list: vec![],
             vcpu_ctx: ContextFrame::default(),
             vm_ctx: VmContext::default(),
@@ -353,8 +345,7 @@ impl VcpuInner {
     }
 
     fn vm_id(&self) -> usize {
-        let vm = self.vm.as_ref().unwrap();
-        vm.id()
+        self.vm.get_vm().unwrap().id()
     }
 
     fn arch_ctx_reset(&mut self) {
@@ -450,30 +441,6 @@ impl VcpuInner {
             self.vcpu_ctx.gpr(0)
         );
     }
-}
-
-pub static VCPU_LIST: Mutex<Vec<Vcpu>> = Mutex::new(Vec::new());
-
-pub fn vcpu_alloc() -> Option<Vcpu> {
-    let mut vcpu_list = VCPU_LIST.lock();
-    if vcpu_list.len() >= PLATFORM_VCPU_NUM_MAX {
-        return None;
-    }
-
-    let val = Vcpu::default();
-    vcpu_list.push(val.clone());
-    Some(val.clone())
-}
-
-pub fn vcpu_remove(vcpu: Vcpu) {
-    let mut vcpu_list = VCPU_LIST.lock();
-    for (idx, core) in vcpu_list.iter().enumerate() {
-        if core.id() == vcpu.id() && core.vm_id() == vcpu.vm_id() {
-            vcpu_list.remove(idx);
-            return;
-        }
-    }
-    panic!("illegal vm{} vcpu{}, not exist in vcpu_list", vcpu.vm_id(), vcpu.id());
 }
 
 pub fn vcpu_idle(_vcpu: Vcpu) -> ! {

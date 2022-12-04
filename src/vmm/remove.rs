@@ -3,7 +3,7 @@ use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, mem_vm_region_free,
-    remove_async_used_info, remove_vm, remove_vm_async_task, vcpu_remove, vm, Vm, Scheduler, cpu_idle,
+    remove_async_used_info, remove_vm, remove_vm_async_task, Vm, Scheduler, cpu_idle,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
@@ -15,13 +15,8 @@ pub fn vmm_remove_vm(vm_id: usize) {
         return;
     }
 
-    let vm = match vm(vm_id) {
-        None => {
-            println!("vmm_remove_vm: vm[{}] not exist", vm_id);
-            return;
-        }
-        Some(vm) => vm,
-    };
+    // remove vm: page table / mmio / vgic will be removed when vm drop
+    let vm = remove_vm(vm_id);
 
     // vcpu
     vmm_remove_vcpu(vm.clone());
@@ -40,18 +35,11 @@ pub fn vmm_remove_vm(vm_id: usize) {
     remove_vm_async_task(vm_id);
     // async used info
     remove_async_used_info(vm_id);
-    // remove vm: page table / mmio / vgic will be removed with struct vm
-    vmm_remove_vm_list(vm_id);
     // remove vm cfg
     vm_cfg_remove_vm_entry(vm_id);
     // remove vm unilib
     crate::lib::unilib::unilib_fs_remove(vm_id);
     info!("remove vm[{}] successfully", vm_id);
-}
-
-fn vmm_remove_vm_list(vm_id: usize) {
-    let vm = remove_vm(vm_id);
-    vm.clear_list();
 }
 
 pub fn vmm_cpu_remove_vcpu(vmid: usize) {
@@ -69,8 +57,6 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
 fn vmm_remove_vcpu(vm: Vm) {
     for idx in 0..vm.cpu_num() {
         let vcpu = vm.vcpu(idx).unwrap();
-        // remove vcpu from VCPU_LIST
-        vcpu_remove(vcpu.clone());
         if vcpu.phys_id() == current_cpu().id {
             vmm_cpu_remove_vcpu(vm.id());
         } else {

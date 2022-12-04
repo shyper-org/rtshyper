@@ -1,5 +1,5 @@
 use alloc::collections::BTreeMap;
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::mem::size_of;
 
@@ -264,10 +264,23 @@ impl VmPa {
     }
 }
 
-// #[repr(align(4096))]
 #[derive(Clone)]
 pub struct Vm {
     pub inner: Arc<Mutex<VmInner>>,
+}
+
+#[derive(Clone)]
+pub struct WeakVm {
+    inner: Weak<Mutex<VmInner>>,
+}
+
+impl WeakVm {
+    pub fn get_vm(&self) -> Option<Vm> {
+        match Weak::upgrade(&self.inner) {
+            Some(inner) => Some(Vm { inner }),
+            None => None,
+        }
+    }
 }
 
 impl Vm {
@@ -275,9 +288,9 @@ impl Vm {
         self.inner.clone()
     }
 
-    pub fn default() -> Vm {
-        Vm {
-            inner: Arc::new(Mutex::new(VmInner::default())),
+    pub fn get_weak(&self) -> WeakVm {
+        WeakVm {
+            inner: Arc::downgrade(&self.inner),
         }
     }
 
@@ -379,13 +392,6 @@ impl Vm {
             println!("VM[{}] insert VCPU {}", vm_inner.id, vcpu.id());
             vm_inner.vcpu_list.insert(vcpu.id(), vcpu);
         }
-    }
-
-    // avoid circular references
-    pub fn clear_list(&self) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.emu_devs.clear();
-        vm_inner.vcpu_list.clear();
     }
 
     pub fn select_vcpu2assign(&self, cpu_id: usize) -> Option<Vcpu> {
@@ -931,35 +937,6 @@ pub struct VmInner {
 }
 
 impl VmInner {
-    pub const fn default() -> VmInner {
-        VmInner {
-            id: 0,
-            ready: false,
-            config: None,
-            dtb: None,
-            pt: None,
-            mem_region_num: 0,
-            pa_region: Vec::new(),
-            entry_point: 0,
-
-            has_master: false,
-            vcpu_list: Vec::new(),
-            cpu_num: 0,
-            ncpu: 0,
-
-            intc_dev_id: 0,
-            int_bitmap: Some(BitAlloc4K::default()),
-            // migration_state: false,
-            share_mem_base: SHARE_MEM_BASE, // hard code
-            migrate_save_pf: vec![],
-            migrate_restore_pf: vec![],
-
-            iommu_ctx_id: None,
-            emu_devs: Vec::new(),
-            med_blk_id: None,
-        }
-    }
-
     pub fn new(id: usize) -> VmInner {
         VmInner {
             id,
