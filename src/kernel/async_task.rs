@@ -4,7 +4,10 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::mutex::Mutex;
 
-use crate::device::{BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VirtioMmio, Virtq};
+use crate::device::{
+    BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
+    VirtioMmio, Virtq,
+};
 use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
 use crate::lib::{memcpy_safe, sleep, trace};
 
@@ -336,6 +339,10 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     } else {
         io_list.push_back(task);
     }
+    let need_execute = ipi_list.len() == 1
+        && io_list.is_empty()
+        && active_vm_id() != 0
+        && async_exe_status() == AsyncExeStatus::Pending;
     // println!("add_async_task: ipi len {} io len {}", ipi_list.len(), io_list.len());
     drop(ipi_list);
     drop(io_list);
@@ -350,11 +357,7 @@ pub fn add_async_task(task: AsyncTask, ipi: bool) {
     // if this is a normal VM and this is the first IO request
     // (which generate a ipi async task in `virtio_mediated_blk_notify_handler`)
     // invoke the executor to handle it
-    if active_vm_id() != 0
-        && ASYNC_IO_TASK_LIST.lock().is_empty()
-        && ASYNC_IPI_TASK_LIST.lock().len() == 1
-        && async_exe_status() == AsyncExeStatus::Pending
-    {
+    if need_execute {
         async_task_exe();
     }
 }

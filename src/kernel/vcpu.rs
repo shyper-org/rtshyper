@@ -313,28 +313,23 @@ impl Vcpu {
 
     pub fn push_int(&self, int: usize) {
         let mut inner = self.inner.lock();
-        for i in &inner.int_list {
-            if *i == int {
-                return;
-            }
+        if !inner.int_list.contains(&int) {
+            inner.int_list.push(int);
         }
-        inner.int_list.push(int);
     }
 
-    // TODO: ugly lock for self.inner
     fn inject_int_inlist(&self) {
-        let inner = self.inner.lock();
-        match inner.vm.clone() {
+        match self.vm() {
             None => {}
             Some(vm) => {
+                let mut inner = self.inner.lock();
                 let int_list = inner.int_list.clone();
+                inner.int_list.clear();
                 drop(inner);
                 for int in int_list {
                     // println!("schedule: inject int {} for vm {}", int, vm.id());
                     interrupt_vm_inject(vm.clone(), self.clone(), int, 0);
                 }
-                let mut inner = self.inner.lock();
-                inner.int_list.clear();
             }
         }
     }
