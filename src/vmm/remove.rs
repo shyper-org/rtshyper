@@ -11,7 +11,7 @@ use crate::lib::memset_safe;
 
 pub fn vmm_remove_vm(vm_id: usize) {
     if vm_id == 0 {
-        println!("Rust-Shyper do not support remove vm0");
+        warn!("Rust-Shyper do not support remove vm0");
         return;
     }
 
@@ -46,7 +46,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vm_cfg_remove_vm_entry(vm_id);
     // remove vm unilib
     crate::lib::unilib::unilib_fs_remove(vm_id);
-    println!("remove vm[{}] successfully", vm_id);
+    info!("remove vm[{}] successfully", vm_id);
 }
 
 fn vmm_remove_vm_list(vm_id: usize) {
@@ -79,7 +79,7 @@ fn vmm_remove_vcpu(vm: Vm) {
                 event: VmmEvent::VmmRemoveCpu,
             };
             if !ipi_send_msg(vcpu.phys_id(), IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                println!("vmm_remove_vcpu: failed to send ipi to Core {}", vcpu.phys_id());
+                warn!("vmm_remove_vcpu: failed to send ipi to Core {}", vcpu.phys_id());
             }
         }
     }
@@ -90,7 +90,7 @@ fn vmm_remove_emulated_device(vm: Vm) {
     for (idx, emu_dev) in config.iter().enumerate() {
         // mmio / vgic will be removed with struct vm
         if !emu_dev.emu_type.removable() {
-            println!("vmm_remove_emulated_device: cannot remove device {}", emu_dev.emu_type);
+            warn!("vmm_remove_emulated_device: cannot remove device {}", emu_dev.emu_type);
             return;
         }
         emu_remove_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length);

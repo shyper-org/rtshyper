@@ -502,7 +502,6 @@ pub fn vcpu_run(announce: bool) -> ! {
     let size = size_of::<Aarch64ContextFrame>();
     {
         let vcpu = current_cpu().active_vcpu.clone().unwrap();
-        vcpu.set_state(VcpuState::VcpuAct);
         let vm = vcpu.vm().unwrap().clone();
         current_cpu().set_ctx((sp - size) as *mut _);
 

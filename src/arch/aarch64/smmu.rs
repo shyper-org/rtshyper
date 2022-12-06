@@ -415,7 +415,7 @@ impl SmmuV2 {
          * result of this feature test.
          */
         if glb_rs0.IDR0.get() as usize & SMMUV2_IDR0_CTTW_BIT == 0 {
-            println!("smmuv2 does not support coherent page table walks");
+            warn!("smmuv2 does not support coherent page table walks");
         }
 
         if glb_rs0.IDR0.get() as usize & SMMUV2_IDR0_BTM_BIT == 0 {
@@ -548,7 +548,7 @@ impl SmmuV2 {
                 return Some(i);
             }
         }
-        println!("smmu_alloc_ctxbnk: cannot alloc ctxbnk");
+        warn!("smmu_alloc_ctxbnk: cannot alloc ctxbnk");
         None
     }
 
@@ -574,7 +574,7 @@ impl SmmuV2 {
         self.context_bank[context_id]
             .TTBR0
             .set((root_pt & bit_mask!(12, SMMUV2_CB_TTBA_END - 12)) as u64);
-        println!(
+        info!(
             "write smmu cb[{}] TTBR0 {:#x}, vm[{}] root_pt {:#x}",
             context_id,
             self.context_bank[context_id].TTBR0.get(),
@@ -618,7 +618,7 @@ pub fn smmu_add_device(context_id: usize, stream_id: usize) -> bool {
                 smmu_v2.write_s2c(smr, context_id);
             }
             _ => {
-                println!("smmu_add_device: smmuv2 no more free sme available.");
+                warn!("smmu_add_device: smmuv2 no more free sme available.");
                 return false;
             }
         }
@@ -632,7 +632,7 @@ fn emu_smmu_revise_cbar(emu_ctx: &EmuContext) {
     let cbar_addr = smmu_v2.glb_rs1.as_ref().unwrap().CBAR.as_ptr() as usize;
     let context_id = (emu_ctx.address - (cbar_addr - 0x8_0000_0000)) / size_of::<u32>();
     let vm_context_id = active_vm().unwrap().iommu_ctx_id();
-    println!(
+    debug!(
         "emu_smmu_revise_cbar: vm {} access context id {}, vm context is {}",
         active_vm_id(),
         context_id,
@@ -678,7 +678,7 @@ pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
                 unsafe { ptr::write_volatile((address + 0x8_0000_0000) as *mut u32, val as u32) };
             };
         } else {
-            println!(
+            info!(
                 "emu_smmu_handler: vm {} is not allowed to access context[{}]",
                 active_vm_id(),
                 (address - (smmu_v2.context_bank[0].base_addr as usize - 0x8_0000_0000)) / 0x10000,

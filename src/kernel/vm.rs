@@ -61,7 +61,7 @@ pub fn vm_if_get_type(vm_id: usize) -> VmType {
 fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id = master_cpu_id;
-    println!(
+    debug!(
         "vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}",
         vm_id, master_cpu_id
     );
@@ -290,7 +290,7 @@ impl Vm {
     pub fn init_intc_mode(&self, emu: bool) {
         let vm_inner = self.inner.lock();
         for vcpu in &vm_inner.vcpu_list {
-            println!(
+            info!(
                 "vm {} vcpu {} set {} hcr",
                 vm_inner.id,
                 vcpu.id(),

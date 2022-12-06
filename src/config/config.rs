@@ -532,7 +532,7 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
             vm_config.vm_num += 1;
             vm_config.entries.push(vm_cfg_entry.clone());
             println!(
-                "\nSuccessfully add {}[{}] name {:?}, currently vm_num {}\n",
+                "\nSuccessfully add {}[{}] name {:?}, currently vm_num {}",
                 if vm_id == 0 { "MVM" } else { "GVM" },
                 vm_cfg_entry.id(),
                 vm_cfg_entry.clone().name.unwrap(),

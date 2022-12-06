@@ -19,7 +19,7 @@ use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
-use crate::lib::{barrier, trace};
+use crate::lib::trace;
 
 #[cfg(feature = "ramdisk")]
 pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.cpio");
@@ -258,11 +258,11 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                 }
             }
             _ => {
-                println!("vmm_init_emulated_device: unknown emulated device");
+                warn!("vmm_init_emulated_device: unknown emulated device");
                 return false;
             }
         }
-        println!(
+        info!(
             "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
             vm.id(),
             idx,
@@ -282,7 +282,7 @@ fn vmm_init_passthrough_device(vm: Vm) -> bool {
             vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_NORMAL, true);
         }
 
-        println!(
+        debug!(
             "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>, {}",
             vm.id(),
             region.ipa,
@@ -375,7 +375,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                         }
                         EmuDeviceTIOMMU => {
                             #[cfg(feature = "tx2")]
-                            println!("EmuDeviceTIOMMU");
+                            trace!("EmuDeviceTIOMMU");
                         }
                         _ => {
                             todo!();
@@ -441,13 +441,13 @@ pub fn vmm_setup_config(vm_id: usize) {
     }
 
     add_async_used_info(vm_id);
-    println!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
+    info!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }
 
 pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
     if current_cpu().assigned() {
-        println!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
+        debug!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
     }
 
     // let cpu_config = vm(vm_id).config().cpu;
@@ -463,8 +463,8 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
         );
     }
 
-    println!(
-        "vmm_cpu_assign_vcpu vm[{}] cpu {} cfg_master {}  cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
+    info!(
+        "vmm_cpu_assign_vcpu: vm[{}] cpu {} cfg_master {} cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
         vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap
     );
 
@@ -486,12 +486,6 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
         let vcpu_array = &current_cpu().vcpu_array;
         for (i, vcpu) in current_cpu().vcpu_array.iter().enumerate() {
             if let Some(vcpu) = vcpu {
-                vcpu.set_phys_id(cpu_id);
-                if let Some(mvm) = vcpu.vm() {
-                    if mvm.id() == 0 && current_cpu().id == 0 {
-                        current_cpu().set_active_vcpu(Some(vcpu.clone()));
-                    }
-                }
                 println!("core {} i {} vcpu_num {} arch_reset", cpu_id, i, vcpu_array.vcpu_num());
                 vcpu.arch_reset();
             }
@@ -504,25 +498,11 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
 }
 
 pub fn mvm_init() {
-    barrier();
-
     if current_cpu().id == 0 {
         // Set up basic config.
-        super::vmm_init_config();
+        crate::config::mvm_config_init();
         // Add VM 0
-        super::vmm_push_vm(0);
-        super::vmm_alloc_vcpu(0);
-    }
-    barrier();
-
-    println!("core {} init vm 0", current_cpu().id);
-
-    vmm_cpu_assign_vcpu(0);
-    barrier();
-
-    if current_cpu().id == 0 {
-        // TODO: vmm_setup_contact_config
-        vmm_setup_config(0);
+        super::vmm_init_gvm(0);
     }
 }
 
@@ -534,11 +514,11 @@ pub fn vmm_boot() {
             None => panic!("vmm_boot: current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) is None"),
         }
         // active_vm().unwrap().set_migration_state(false);
-        println!("Core {} start running", current_cpu().id);
+        info!("Core {} start running", current_cpu().id);
         vcpu_run(false);
     } else {
         // If there is no available vm(vcpu), just go idle
-        println!("Core {} idle", current_cpu().id);
+        info!("Core {} idle", current_cpu().id);
         cpu_idle();
     }
 }

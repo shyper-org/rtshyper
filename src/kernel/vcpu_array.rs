@@ -39,7 +39,8 @@ impl VcpuArray {
         if self.array[vm_id].is_some() {
             panic!("self.array[vm_id].is_some()");
         }
-        println!(
+        vcpu.set_phys_id(current_cpu().id);
+        info!(
             "append_vcpu: append VM[{}] vcpu {} on core {}",
             vm_id,
             vcpu.id(),
@@ -84,7 +85,7 @@ impl VcpuArray {
 pub fn cpu_sched_init() {
     match PLAT_DESC.cpu_desc.sched_list[current_cpu().id] {
         SchedRule::RoundRobin => {
-            println!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
+            info!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
             current_cpu().sched = SchedType::SchedRR(SchedulerRR::new(1));
         }
         _ => {

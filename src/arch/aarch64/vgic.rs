@@ -1582,7 +1582,7 @@ impl Vgic {
             }
         }
         if first_int >= 16 && !vm_has_interrupt_flag {
-            println!(
+            warn!(
                 "emu_activer_access: vm[{}] does not have interrupt {}",
                 vm_id, first_int
             );
@@ -1639,7 +1639,7 @@ impl Vgic {
                 }
             }
             if first_int >= 16 && !vm_has_interrupt_flag {
-                println!(
+                warn!(
                     "emu_icenabler_access: vm[{}] does not have interrupt {}",
                     vm_id, first_int
                 );
@@ -1691,7 +1691,7 @@ impl Vgic {
                 }
             }
             if first_int >= 16 && !vm_has_interrupt_flag {
-                println!("emu_icfgr_access: vm[{}] does not have interrupt {}", vm_id, first_int);
+                warn!("emu_icfgr_access: vm[{}] does not have interrupt {}", vm_id, first_int);
                 return;
             }
         }
@@ -1800,7 +1800,7 @@ impl Vgic {
                 }
             }
             if first_int >= 16 && !vm_has_interrupt_flag {
-                println!(
+                warn!(
                     "emu_ipriorityr_access: vm[{}] does not have interrupt {}",
                     vm_id, first_int
                 );

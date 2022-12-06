@@ -496,10 +496,10 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
                 mmio.set_dev_stat(value);
                 if mmio.dev_stat() == 0 {
                     mmio.dev_reset();
-                    println!("VM {} virtio device {} is reset", active_vm_id(), mmio.id());
+                    info!("VM {} virtio device {} is reset", active_vm_id(), mmio.id());
                 } else if mmio.dev_stat() == 0xf {
                     mmio.dev().set_activated(true);
-                    println!("VM {} virtio device {} init ok", active_vm_id(), mmio.id());
+                    info!("VM {} virtio device {} init ok", active_vm_id(), mmio.id());
                 }
             }
             _ => {
@@ -565,14 +565,14 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 Ok(virtq) => {
                     virtq.set_ready(value);
                     if value == VIRTQ_READY {
-                        println!(
+                        info!(
                             "VM {} virtio device {} queue {} ready",
                             active_vm_id(),
                             mmio.id(),
                             q_sel
                         );
                     } else {
-                        println!(
+                        warn!(
                             "VM {} virtio device {} queue {} init failed",
                             active_vm_id(),
                             mmio.id(),

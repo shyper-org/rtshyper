@@ -11,7 +11,7 @@
 #[macro_use]
 extern crate alloc;
 extern crate fdt;
-// #[macro_use]
+#[macro_use]
 // extern crate lazy_static;
 extern crate log;
 
@@ -20,7 +20,7 @@ extern crate log;
 use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
-use vmm::{mvm_init, vmm_boot};
+use vmm::{mvm_init, vmm_boot_vm};
 
 use crate::kernel::{cpu_sched_init, hvc_init, iommu_init};
 
@@ -84,8 +84,8 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         }
 
         heap_init();
-        mem_init();
         let _ = kernel::logger_init();
+        mem_init();
         init_vm0_dtb(dtb);
         hvc_init();
         iommu_init();
@@ -94,10 +94,6 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     interrupt_init();
     timer_init();
     cpu_sched_init();
-    // if cpu_id == 0 {
-    //     tmp();
-    // }
-    mvm_init();
     if cpu_id == 0 {
         mediated_dev_init();
     }
@@ -105,8 +101,9 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     if cpu_id != 0 {
         crate::kernel::cpu_idle();
     }
+    mvm_init();
     println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
-    vmm_boot();
+    vmm_boot_vm(0);
 
     loop {}
 }

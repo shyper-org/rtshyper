@@ -146,7 +146,7 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> Result<usize, (
     mediated_blk.set_nreq(0);
 
     let cache_pa = vm_ipa2pa(vm.clone(), mediated_blk.cache_ipa());
-    println!(
+    info!(
         "mediated_dev_append: dev_ipa_reg 0x{:x}, cache ipa 0x{:x}, cache_pa 0x{:x}, dma_block_max 0x{:x}",
         mmio_ipa,
         mediated_blk.cache_ipa(),

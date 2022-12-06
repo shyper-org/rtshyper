@@ -41,7 +41,7 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
     };
 
     if !ipi_intra_broadcast_msg(vm, IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
-        println!("power_arch_vm_shutdown_secondary_cores: fail to ipi_intra_broadcast_msg");
+        warn!("power_arch_vm_shutdown_secondary_cores: fail to ipi_intra_broadcast_msg");
     }
 }
 
@@ -73,7 +73,7 @@ fn psci_guest_sys_reset() {
 
 #[inline(never)]
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
-    println!(
+    debug!(
         "smc_guest_handler: fid 0x{:x}, x1 0x{:x}, x2 0x{:x}, x3 0x{:x}",
         fid, x1, x2, x3
     );
@@ -155,7 +155,7 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
         IpiInnerMsg::Power(power_msg) => {
             let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(power_msg.src) {
                 None => {
-                    println!(
+                    warn!(
                         "Core {} failed to find target vcpu, source vmid {}",
                         current_cpu().id,
                         power_msg.src
@@ -167,14 +167,14 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
             match power_msg.event {
                 PowerEvent::PsciIpiCpuOn => {
                     if trgt_vcpu.state() as usize != VcpuState::VcpuInv as usize {
-                        println!(
+                        warn!(
                             "psci_ipi_handler: target VCPU {} in VM {} is already running",
                             trgt_vcpu.id(),
                             trgt_vcpu.vm().unwrap().id()
                         );
                         return;
                     }
-                    println!(
+                    info!(
                         "Core {} (vm {}, vcpu {}) is woke up",
                         current_cpu().id,
                         trgt_vcpu.vm().unwrap().id(),
@@ -208,14 +208,14 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let physical_linear_id = vm.vcpuid_to_pcpuid(vcpu_id);
 
     if vcpu_id >= vm.cpu_num() || physical_linear_id.is_err() {
-        println!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
+        warn!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
         return usize::MAX - 1;
     }
     #[cfg(feature = "tx2")]
     {
         let cluster = (mpidr >> 8) & 0xff;
         if vm.id() == 0 && cluster != 1 {
-            println!("psci_guest_cpu_on: L4T only support cluster #1");
+            warn!("psci_guest_cpu_on: L4T only support cluster #1");
             return usize::MAX - 1;
         }
     }
@@ -228,7 +228,7 @@ pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     };
 
     if !ipi_send_msg(physical_linear_id.unwrap(), IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
-        println!("psci_guest_cpu_on: fail to send msg");
+        warn!("psci_guest_cpu_on: fail to send msg");
         return usize::MAX - 1;
     }
 

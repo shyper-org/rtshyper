@@ -41,7 +41,7 @@ pub fn vmm_shutdown_secondary_vm() {
  * @param[in]  vm_id: new added VM id.
  */
 pub fn vmm_push_vm(vm_id: usize) {
-    println!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
+    info!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
     if push_vm(vm_id).is_err() {
         return;
     }
@@ -159,18 +159,14 @@ pub fn vmm_set_up_cpu(vm_id: usize) {
  */
 pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
-    if active_vm_id() == 0 {
-        if vm_id == 0 {
-            panic!("not support boot for vm0");
-        }
-
+    if (current_cpu().id == 0 && vm_id == 0) || (active_vm_id() == 0 && active_vm_id() != vm_id) {
         vmm_push_vm(vm_id);
 
         vmm_set_up_cpu(vm_id);
 
         vmm_setup_config(vm_id);
     } else {
-        println!(
+        error!(
             "VM[{}] Core {} should not init VM [{}]",
             active_vm_id(),
             current_cpu().id,

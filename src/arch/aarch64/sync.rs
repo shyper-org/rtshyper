@@ -88,7 +88,7 @@ pub fn smc_handler() {
     let x3 = current_cpu().get_gpr(3);
 
     if !smc_guest_handler(fid, x1, x2, x3) {
-        println!("smc_handler: unknown fid 0x{:x}", fid);
+        warn!("smc_handler: unknown fid 0x{:x}", fid);
         current_cpu().set_gpr(0, 0);
     }
 
@@ -116,7 +116,7 @@ pub fn hvc_handler() {
             current_cpu().set_gpr(HVC_RETURN_REG, val);
         }
         Err(_) => {
-            println!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
+            warn!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
             current_cpu().set_gpr(HVC_RETURN_REG, usize::MAX);
         }
     }

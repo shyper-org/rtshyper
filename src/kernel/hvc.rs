@@ -388,7 +388,7 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             }
             vm.add_share_mem_base(x1);
             add_share_mem(x0, base);
-            println!(
+            info!(
                 "VM{} add share mem type 0x{:x} base 0x{:x} len 0x{:x}",
                 active_vm_id(),
                 x0,
