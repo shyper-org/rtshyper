@@ -7,8 +7,9 @@ use alloc::vec::Vec;
 use spin::{Mutex, RwLock};
 
 use crate::arch::{
-    emu_intc_handler, GIC_LRS_NUM, gic_maintenance_handler, gicc_clear_current_irq, INTERRUPT_EN_SET, PageTable,
-    partial_passthrough_intc_handler, psci_ipi_handler, TIMER_FREQ, TIMER_SLICE, Vgic, vgic_ipi_handler,
+    emu_intc_handler, emu_smmu_handler, GIC_LRS_NUM, gic_maintenance_handler, gicc_clear_current_irq, INTERRUPT_EN_SET,
+    PageTable, partial_passthrough_intc_handler, psci_ipi_handler, SMMU_V2, SmmuV2, TIMER_FREQ, TIMER_SLICE, Vgic,
+    vgic_ipi_handler,
 };
 use crate::board::PLAT_DESC;
 use crate::config::{
@@ -21,13 +22,13 @@ use crate::device::{
     virtio_mediated_blk_notify_handler, virtio_net_notify_handler, VirtioMmio,
 };
 use crate::kernel::{
-    async_blk_io_req, ASYNC_IO_TASK_LIST, async_ipi_req, ASYNC_IPI_TASK_LIST, ASYNC_USED_INFO_LIST, AsyncTask,
-    AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, FairQueue, HEAP_REGION, HeapRegion,
-    hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP, interrupt_inject_ipi_handler,
-    InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register, ipi_send_msg, IpiHandler,
-    IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType, SchedulerUpdate, SHARE_MEM_LIST,
-    timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, vm, Vm, VM_IF_LIST, vm_ipa2pa, VM_LIST, VM_NUM_MAX,
-    VM_REGION, VmInterface, VmRegion,
+    async_blk_io_req, ASYNC_EXE_STATUS, ASYNC_IO_TASK_LIST, async_ipi_req, ASYNC_IPI_TASK_LIST, ASYNC_USED_INFO_LIST,
+    AsyncExeStatus, AsyncTask, AsyncTaskData, CPU, Cpu, cpu_idle, CPU_IF_LIST, CpuIf, CpuState, current_cpu, FairQueue,
+    HEAP_REGION, HeapRegion, hvc_ipi_handler, INTERRUPT_GLB_BITMAP, INTERRUPT_HANDLERS, INTERRUPT_HYPER_BITMAP,
+    interrupt_inject_ipi_handler, InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register,
+    ipi_send_msg, IpiHandler, IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType,
+    SchedulerUpdate, SHARE_MEM_LIST, timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, vm, Vm, VM_IF_LIST,
+    vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInterface, VmRegion,
 };
 use crate::lib::{BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
@@ -60,7 +61,7 @@ pub fn fresh_status() -> FreshStatus {
 }
 
 #[cfg(not(feature = "update"))]
-pub const UPDATE_IMG_BASE_ADDR: usize = 0x88000000;
+pub const UPDATE_IMG_BASE_ADDR: usize = 0x8a000000;
 #[cfg(feature = "update")]
 pub const UPDATE_IMG_BASE_ADDR: usize = 0x83000000;
 
@@ -89,11 +90,14 @@ pub struct HypervisorAddr {
     // mediated blk
     mediated_blk_list: usize,
     // async task
+    async_exe_status: usize,
     async_ipi_task_list: usize,
     async_io_task_list: usize,
     async_used_info_list: usize,
     // shared mem
     shared_mem_list: usize,
+    // smmu_v2
+    smmu_v2: usize,
 }
 
 pub fn hyper_fresh_ipi_handler(_msg: &IpiMessage) {
@@ -105,6 +109,7 @@ pub fn update_request() {
     extern "C" {
         pub fn update_request(address_list: &HypervisorAddr, alloc: bool);
     }
+    // VM_STATE_FLAG UNILIB_FS_LIST SYSTEM_FDT
     let vm_config_table = &DEF_VM_CONFIG_TABLE as *const _ as usize;
     let emu_dev_list = &EMU_DEVS_LIST as *const _ as usize;
     let interrupt_hyper_bitmap = &INTERRUPT_HYPER_BITMAP as *const _ as usize;
@@ -123,10 +128,12 @@ pub fn update_request() {
     let time_freq = &TIMER_FREQ as *const _ as usize;
     let time_slice = &TIMER_SLICE as *const _ as usize;
     let mediated_blk_list = &MEDIATED_BLK_LIST as *const _ as usize;
+    let async_exe_status = &ASYNC_EXE_STATUS as *const _ as usize;
     let async_ipi_task_list = &ASYNC_IPI_TASK_LIST as *const _ as usize;
     let async_io_task_list = &ASYNC_IO_TASK_LIST as *const _ as usize;
     let async_used_info_list = &ASYNC_USED_INFO_LIST as *const _ as usize;
     let shared_mem_list = &SHARE_MEM_LIST as *const _ as usize;
+    let smmu_v2 = &SMMU_V2 as *const _ as usize;
 
     let addr_list = HypervisorAddr {
         cpu_id: current_cpu().id,
@@ -148,10 +155,12 @@ pub fn update_request() {
         time_freq,
         time_slice,
         mediated_blk_list,
+        async_exe_status,
         async_ipi_task_list,
         async_io_task_list,
         async_used_info_list,
         shared_mem_list,
+        smmu_v2,
     };
     if current_cpu().id == 0 {
         unsafe {
@@ -277,13 +286,22 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
             let cpu_if = &*(address_list.cpu_if_list as *const Mutex<Vec<CpuIf>>);
             cpu_if_update(cpu_if);
 
-            // ASYNC_IPI_TASK_LIST、ASYNC_IO_TASK_LIST、ASYNC_USED_INFO_LIST
+            // ASYNC_EXE_STATUS、ASYNC_IPI_TASK_LIST、ASYNC_IO_TASK_LIST、ASYNC_USED_INFO_LIST
+            let async_exe_status = &*(address_list.async_exe_status as *const Mutex<AsyncExeStatus>);
             let async_ipi_task_list = &*(address_list.async_ipi_task_list as *const Mutex<LinkedList<AsyncTask>>);
             let async_io_task_list = &*(address_list.async_io_task_list as *const Mutex<FairQueue<AsyncTask>>);
             let async_used_info_list =
                 &*(address_list.async_used_info_list as *const Mutex<BTreeMap<usize, LinkedList<UsedInfo>>>);
-            async_task_update(async_ipi_task_list, async_io_task_list, async_used_info_list);
+            async_task_update(
+                async_exe_status,
+                async_ipi_task_list,
+                async_io_task_list,
+                async_used_info_list,
+            );
 
+            // SMMU_V2
+            let smmu_v2 = &*(address_list.smmu_v2 as *const Mutex<SmmuV2>);
+            smmu_update(smmu_v2);
             set_fresh_status(FreshStatus::Finish);
             drop(lock0);
             println!(
@@ -323,7 +341,7 @@ pub fn fresh_hyper() {
     }
     if current_cpu().id == 0 {
         let ctx = current_cpu().ctx.unwrap();
-        // println!("CPU[{}] ctx {:x}", current_cpu().id, ctx);
+        println!("CPU[{}] ctx {:x}", current_cpu().id, ctx);
         current_cpu().clear_ctx();
         unsafe { fresh_hyper(ctx) };
     } else {
@@ -332,7 +350,7 @@ pub fn fresh_hyper() {
                 panic!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuInv);
             }
             CpuState::CpuIdle => {
-                // println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuIdle);
+                println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuIdle);
                 unsafe { fresh_cpu() };
                 // println!(
                 //     "Core[{}] current cpu irq {}",
@@ -343,7 +361,7 @@ pub fn fresh_hyper() {
                 cpu_idle();
             }
             CpuState::CpuRun => {
-                // println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuRun);
+                println!("Core[{}] state {:#?}", current_cpu().id, CpuState::CpuRun);
                 // println!(
                 //     "Core[{}] current cpu irq {}",
                 //     current_cpu().id,
@@ -366,16 +384,19 @@ pub fn shared_mem_list_update(src_shared_mem_list: &Mutex<BTreeMap<usize, usize>
 }
 
 pub fn async_task_update(
+    src_async_exe_status: &Mutex<AsyncExeStatus>,
     src_async_ipi_task_list: &Mutex<LinkedList<AsyncTask>>,
     src_async_io_task_list: &Mutex<FairQueue<AsyncTask>>,
     src_async_used_info_list: &Mutex<BTreeMap<usize, LinkedList<UsedInfo>>>,
 ) {
+    let mut async_exe_status = ASYNC_EXE_STATUS.lock();
     let mut async_ipi_task_list = ASYNC_IPI_TASK_LIST.lock();
     let mut async_io_task_list = ASYNC_IO_TASK_LIST.lock();
     let mut async_used_info_list = ASYNC_USED_INFO_LIST.lock();
     assert_eq!(async_ipi_task_list.len(), 0);
     assert_eq!(async_io_task_list.len(), 0);
     assert_eq!(async_used_info_list.len(), 0);
+    *async_exe_status = *src_async_exe_status.lock();
     for ipi_task in src_async_ipi_task_list.lock().iter() {
         let vm_id = ipi_task.src_vmid;
         let vm = vm(vm_id).unwrap();
@@ -612,13 +633,13 @@ pub fn current_cpu_update(src_cpu: &Cpu) {
         }
     }
 
-    // assert_eq!(cpu.id, src_cpu.id);
-    // assert_eq!(cpu.ctx, src_cpu.ctx);
-    // assert_eq!(cpu.cpu_state, src_cpu.cpu_state);
-    // assert_eq!(cpu.current_irq, src_cpu.current_irq);
-    // assert_eq!(cpu.cpu_pt, src_cpu.cpu_pt);
-    // assert_eq!(cpu.stack, src_cpu.stack);
-    // println!("Update CPU[{}]", cpu.id);
+    assert_eq!(cpu.id, src_cpu.id);
+    assert_eq!(cpu.ctx, src_cpu.ctx);
+    assert_eq!(cpu.cpu_state, src_cpu.cpu_state);
+    assert_eq!(cpu.current_irq, src_cpu.current_irq);
+    assert_eq!(cpu.cpu_pt, src_cpu.cpu_pt);
+    assert_eq!(cpu.stack, src_cpu.stack);
+    println!("Update CPU[{}]", cpu.id);
 }
 
 pub fn gic_lrs_num_update(src_gic_lrs_num: &Mutex<usize>) {
@@ -742,6 +763,10 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                             (net.vq(0).unwrap().avail()),
                             vm_ipa2pa(vm.clone(), net.vq(0).unwrap().avail_addr())
                         );
+                        println!(
+                            "VirtioNet save handler {:x}",
+                            unsafe { *(&virtio_net_notify_handler as *const _ as *const usize) }
+                        );
                         mmio.save_mmio(net.clone(), Some(virtio_net_notify_handler));
                         EmuDevs::VirtioNet(mmio)
                     }
@@ -758,6 +783,10 @@ pub fn vm_list_update(src_vm_list: &Mutex<Vec<Vm>>) {
                         assert_eq!(
                             (console.vq(0).unwrap().avail()),
                             vm_ipa2pa(vm.clone(), console.vq(0).unwrap().avail_addr())
+                        );
+                        println!(
+                            "VirtioConsole save handler {:x}",
+                            unsafe { *(&virtio_console_notify_handler as *const _ as *const usize) }
                         );
                         mmio.save_mmio(console.clone(), Some(virtio_console_notify_handler));
                         EmuDevs::VirtioConsole(mmio)
@@ -841,6 +870,7 @@ pub fn emu_dev_list_update(src_emu_dev_list: &Mutex<Vec<EmuDevEntry>>) {
             EmuDeviceType::EmuDeviceTVirtioBlk => emu_virtio_mmio_handler,
             EmuDeviceType::EmuDeviceTVirtioNet => emu_virtio_mmio_handler,
             EmuDeviceType::EmuDeviceTVirtioConsole => emu_virtio_mmio_handler,
+            EmuDeviceType::EmuDeviceTIOMMU => emu_smmu_handler,
             _ => {
                 panic!("not support emu dev entry type {}", emu_dev_entry.emu_type);
             }
@@ -1022,4 +1052,47 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
         vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));
     }
     // println!("Update {} Vcpu to VCPU_LIST", vcpu_list.len());
+}
+
+fn smmu_update(src_smmu_v2: &Mutex<SmmuV2>) {
+    let mut smmu_v2 = SMMU_V2.lock();
+    let src_smmu = src_smmu_v2.lock();
+    smmu_v2.glb_rs0 = src_smmu.glb_rs0;
+    smmu_v2.glb_rs1 = src_smmu.glb_rs1;
+    smmu_v2.context_s2_idx = src_smmu.context_s2_idx;
+    for ctx_bank in src_smmu.context_bank.iter() {
+        smmu_v2.context_bank.push(*ctx_bank);
+    }
+    smmu_v2.context_alloc_bitmap = match &src_smmu.context_alloc_bitmap {
+        Some(ctx_bitmap) => {
+            let mut bitmap = FlexBitmap::new(ctx_bitmap.len);
+            for v in ctx_bitmap.map.iter() {
+                bitmap.map.push(*v);
+            }
+            Some(bitmap)
+        }
+        None => None,
+    };
+
+    smmu_v2.smr_num = src_smmu.smr_num;
+    smmu_v2.smr_alloc_bitmap = match &src_smmu.smr_alloc_bitmap {
+        Some(smr_bitmap) => {
+            let mut bitmap = FlexBitmap::new(smr_bitmap.len);
+            for v in smr_bitmap.map.iter() {
+                bitmap.map.push(*v);
+            }
+            Some(bitmap)
+        }
+        None => None,
+    };
+    smmu_v2.group_alloc_bitmap = match &src_smmu.group_alloc_bitmap {
+        Some(group_bitmap) => {
+            let mut bitmap = FlexBitmap::new(group_bitmap.len);
+            for v in group_bitmap.map.iter() {
+                bitmap.map.push(*v);
+            }
+            Some(bitmap)
+        }
+        None => None,
+    };
 }

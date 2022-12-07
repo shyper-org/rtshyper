@@ -383,8 +383,8 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             let vm = active_vm().unwrap();
             let base = vm.share_mem_base();
             if x0 == LIVE_UPDATE_IMG {
-                // hard code for pa 0x88000000, x1 should be 0x8000000
-                vm.pt_map_range(base, x1, 0x88000000, PTE_S2_NORMAL, true);
+                // hard code for pa 0x8a000000, x1 should be 0x8000000
+                vm.pt_map_range(base, x1, 0x8a000000, PTE_S2_NORMAL, true);
             }
             vm.add_share_mem_base(x1);
             add_share_mem(x0, base);

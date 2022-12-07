@@ -171,6 +171,7 @@ register_structs! {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct SmmuGlbRS0 {
     base_addr: usize,
 }
@@ -205,6 +206,7 @@ register_structs! {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct SmmuGlbRS1 {
     base_addr: usize,
 }
@@ -274,6 +276,7 @@ register_structs! {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct SmmuContextBank {
     base_addr: usize,
 }
@@ -286,7 +289,7 @@ impl core::ops::Deref for SmmuContextBank {
 }
 
 impl SmmuContextBank {
-    const fn new(base_addr: usize) -> SmmuContextBank {
+    pub const fn new(base_addr: usize) -> SmmuContextBank {
         SmmuContextBank { base_addr }
     }
 
@@ -296,15 +299,15 @@ impl SmmuContextBank {
 }
 
 pub struct SmmuV2 {
-    glb_rs0: Option<SmmuGlbRS0>,
-    glb_rs1: Option<SmmuGlbRS1>,
-    context_s2_idx: usize,
-    context_bank: Vec<SmmuContextBank>,
-    context_alloc_bitmap: Option<FlexBitmap>,
+    pub glb_rs0: Option<SmmuGlbRS0>,
+    pub glb_rs1: Option<SmmuGlbRS1>,
+    pub context_s2_idx: usize,
+    pub context_bank: Vec<SmmuContextBank>,
+    pub context_alloc_bitmap: Option<FlexBitmap>,
 
-    smr_num: usize,
-    smr_alloc_bitmap: Option<FlexBitmap>,
-    group_alloc_bitmap: Option<FlexBitmap>,
+    pub smr_num: usize,
+    pub smr_alloc_bitmap: Option<FlexBitmap>,
+    pub group_alloc_bitmap: Option<FlexBitmap>,
 }
 
 impl SmmuV2 {
@@ -363,10 +366,10 @@ impl SmmuV2 {
 
         println!(
             concat!(
-                "SMMU info:\n",
-                "  page size {:#x}, num pages {}, context base {:#x}\n",
-                "  stream matching with {} register groups\n",
-                "  {} context banks ({} stage-2 only)"
+            "SMMU info:\n",
+            "  page size {:#x}, num pages {}, context base {:#x}\n",
+            "  stream matching with {} register groups\n",
+            "  {} context banks ({} stage-2 only)"
             ),
             page_size, num_pages, context_base, smr_num, context_bank_num, stage2_context_bank_num,
         );
@@ -588,7 +591,7 @@ impl SmmuV2 {
     }
 }
 
-static SMMU_V2: Mutex<SmmuV2> = Mutex::new(SmmuV2::new());
+pub static SMMU_V2: Mutex<SmmuV2> = Mutex::new(SmmuV2::new());
 
 pub fn smmu_init() {
     let mut smmu = SMMU_V2.lock();

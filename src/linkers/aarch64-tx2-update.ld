@@ -1,7 +1,7 @@
 ENTRY(_start)
 SECTIONS
 {
-    . = 0x88000000;
+    . = 0x8a000000;
 
 	_image_start = ABSOLUTE(.);
 

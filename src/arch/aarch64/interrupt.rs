@@ -1,6 +1,6 @@
 use crate::arch::{gic_cpu_reset, gicc_clear_current_irq};
 use crate::board::platform_cpuid_to_cpuif;
-use crate::kernel::{current_cpu, Vcpu, Vm};
+use crate::kernel::{active_vm_id, current_cpu, Vcpu, Vm};
 
 use super::GIC_SGIS_NUM;
 use super::GICD;

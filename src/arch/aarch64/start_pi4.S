@@ -133,7 +133,7 @@ update_request:
     str x30, [sp, #32]
 
     adr x2, .   // read pc to x2
-    mov x3, #0x88000000
+    mov x3, #0x8a000000
     cmp x2, x3
     bgt 1f
     bl  live_update

@@ -54,7 +54,7 @@ pub fn mem_heap_region_init() {
 /// Reserve Heap Memory from base_addr to base_addr + size
 /// #Example
 /// ```
-/// mem_heap_region_reserve(0x88000000, 0x8000000);
+/// mem_heap_region_reserve(0x8a000000, 0x8000000);
 /// ```
 pub fn mem_heap_region_reserve(base_addr: usize, size: usize) {
     let mut heap = HEAP_REGION.lock();

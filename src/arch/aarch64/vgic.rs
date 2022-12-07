@@ -568,12 +568,16 @@ impl Vgic {
     // reset vcpu in save vgic, use for hypervisor fresh
     pub fn save_vgic(&self, src_vgic: Arc<Vgic>) {
         // let time0 = time_current_us();
-        let mut src_vgicd = src_vgic.vgicd.lock();
+        let src_vgicd = src_vgic.vgicd.lock();
         let mut cur_vgicd = self.vgicd.lock();
         cur_vgicd.ctlr = src_vgicd.ctlr;
         cur_vgicd.iidr = src_vgicd.iidr;
         cur_vgicd.typer = src_vgicd.typer;
-        cur_vgicd.interrupts.append(&mut src_vgicd.interrupts);
+        for i in 0..GIC_SPI_MAX {
+            cur_vgicd.interrupts.push(VgicInt::new(i));
+        }
+        // cur_vgicd.interrupts.append(&mut src_vgicd.interrupts);
+        println!("src vgicd interrupts len {}, cur interrupts len {}", src_vgicd.interrupts.len(), cur_vgicd.interrupts.len());
         // let time1 = time_current_us();
         // let mut num = 0;
         for irq in INTERRUPT_EN_SET.lock().iter() {
@@ -601,19 +605,30 @@ impl Vgic {
                 sgis: cpu_priv.sgis,
                 interrupts: {
                     let mut interrupts = vec![];
-                    interrupts.append(&mut cpu_priv.interrupts);
-                    for interrupt in interrupts.iter_mut() {
+                    // interrupts.append(&mut cpu_priv.interrupts);
+                    for interrupt in cpu_priv.interrupts.iter_mut() {
+                        interrupts.push(interrupt.clone());
+                    }
+                    for interrupt in cpu_priv.interrupts.iter_mut() {
                         match interrupt.owner() {
                             None => {}
                             Some(vcpu) => {
                                 let vm_id = vcpu.vm_id();
                                 let vm = vm(vm_id).unwrap();
-                                interrupt.set_owner(vm.vcpu(vcpu.id()).unwrap());
+                                let int_id = interrupt.id() as usize;
+                                let phys_id = vcpu.phys_id();
+                                interrupts.push(VgicInt::priv_new(
+                                    int_id,
+                                    vm.vcpu(vcpu.id()).unwrap(),
+                                    1 << phys_id,
+                                    int_id < GIC_SGIS_NUM,
+                                ));
                                 // num1 += 1;
                             }
                         }
                         // interrupts.push(interrupt.fresh_back_up());
                     }
+                    println!("src vgicd cpu_priv interrupts len {}, cur interrupts cpu_priv len {}", cpu_priv.interrupts.len(), interrupts.len());
                     interrupts
                 },
                 pend_list: {

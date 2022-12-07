@@ -398,10 +398,12 @@ impl VirtioMmio {
 
     // use for live update
     pub fn save_mmio(&self, virtio_mmio: VirtioMmio, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
+        // println!("save mmio notify_handler addr {:x}", unsafe { *(&(notify_handler.unwrap()) as *const _ as *const usize) });
         let mut dst_dev = self.inner.lock();
         let src_dev = virtio_mmio.inner.lock();
         dst_dev.id = src_dev.id;
         dst_dev.driver_features = src_dev.driver_features;
+        dst_dev.driver_status = src_dev.driver_status;
         dst_dev.regs.save_regs(&src_dev.regs);
         dst_dev.dev.save_virt_dev(src_dev.dev.clone());
         for vq in src_dev.vq.iter() {
@@ -741,6 +743,7 @@ pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
 }
 
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
+    // println!("emu_virtio_mmio_handler active_vcpu addr {:x}", unsafe { *(&current_cpu().active_vcpu as *const _ as *const usize) });
     let vm = match active_vm() {
         Some(vm) => vm,
         None => {

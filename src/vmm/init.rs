@@ -12,7 +12,7 @@ use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     active_vm_id, add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map,
-    VM_IF_LIST, VmPa, VmType, iommu_add_device,
+    VM_IF_LIST, VmPa, VmType, iommu_add_device, Scheduler,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -348,7 +348,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
                             #[cfg(feature = "pi4")]
-                            let r = fdt_setup_gic(
+                                let r = fdt_setup_gic(
                                 dtb,
                                 (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
                                 (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,

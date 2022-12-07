@@ -13,8 +13,10 @@ const TOTAL_MEM_REGION_MAX: usize = 16;
 #[derive(Copy, Clone, Eq, Debug)]
 pub struct MemRegion {
     pub base: usize,
-    pub size: usize, // bit
-    pub free: usize, // bit
+    pub size: usize,
+    // bit
+    pub free: usize,
+    // bit
     pub last: usize, // bit
 }
 
