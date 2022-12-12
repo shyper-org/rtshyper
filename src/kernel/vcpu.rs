@@ -32,6 +32,7 @@ impl Vcpu {
             inner: Arc::new(Mutex::new(VcpuInner::new(vm.get_weak(), vcpu_id))),
         };
         crate::arch::vcpu_arch_init(vm.clone(), this.clone());
+        this.reset_context();
         this
     }
 
@@ -100,6 +101,7 @@ impl Vcpu {
     }
 
     pub fn context_vm_store(&self) {
+        self.vm().unwrap().update_vtimer();
         self.save_cpu_ctx();
 
         let mut inner = self.inner.lock();
@@ -143,6 +145,7 @@ impl Vcpu {
 
     pub fn context_vm_restore(&self) {
         // println!("context_vm_restore");
+        let _vtimer_offset = self.vm().unwrap().update_vtimer_offset();
         self.restore_cpu_ctx();
 
         let inner = self.inner.lock();
@@ -452,18 +455,22 @@ pub fn vcpu_idle(_vcpu: Vcpu) -> ! {
 }
 
 // WARNING: No Auto `drop` in this function
-pub fn vcpu_run(announce: bool) -> ! {
+pub fn vcpu_run(announce: bool) {
     {
         let vcpu = current_cpu().active_vcpu.clone().unwrap();
-        let vm = vcpu.vm().unwrap().clone();
+        let vm = vcpu.vm().unwrap();
 
-        current_cpu().cpu_state = CpuState::CpuRun;
         vm_if_set_state(active_vm_id(), super::VmState::VmActive);
 
-        vcpu.context_vm_restore();
         if announce {
-            crate::device::virtio_net_announce(vm.clone());
+            crate::device::virtio_net_announce(vm);
         }
+        // if the cpu is already running (a vcpu in scheduling queue),
+        // just return, no `context_vm_entry` required
+        if current_cpu().cpu_state == CpuState::CpuRun {
+            return;
+        }
+        current_cpu().cpu_state = CpuState::CpuRun;
         // tlb_invalidate_guest_all();
         // for i in 0..vm.mem_region_num() {
         //     unsafe {

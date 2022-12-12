@@ -5,7 +5,7 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO};
+use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO, timer_arch_get_counter};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
@@ -284,10 +284,6 @@ impl WeakVm {
 }
 
 impl Vm {
-    pub fn inner(&self) -> Arc<Mutex<VmInner>> {
-        self.inner.clone()
-    }
-
     pub fn get_weak(&self) -> WeakVm {
         WeakVm {
             inner: Arc::downgrade(&self.inner),
@@ -896,6 +892,34 @@ impl Vm {
         let mut inner = self.inner.lock();
         inner.share_mem_base += len;
     }
+
+    // Formula: Virtual Count = Physical Count - <offset>
+    //          (from ARM: Learn the architecture - Generic Timer)
+    // So, <offset> = Physical Count - Virtual Count
+    // in this case, Physical Count is `timer_arch_get_counter()`;
+    // virtual count is recorded when the VM is pending (runnning vcpu = 0)
+    // Only used in Vcpu::context_vm_store
+    pub fn update_vtimer(&self) {
+        let mut inner = self.inner.lock();
+        // println!(">>> update_vtimer: VM[{}] running {}", inner.id, inner.running);
+        inner.running -= 1;
+        if inner.running == 0 {
+            inner.vtimer = timer_arch_get_counter() - inner.vtimer_offset;
+            // info!("VM[{}] set vtimer {:#x}", inner.id, inner.vtimer);
+        }
+    }
+
+    // Only used in Vcpu::context_vm_restore
+    pub fn update_vtimer_offset(&self) -> usize {
+        let mut inner = self.inner.lock();
+        // println!(">>> update_vtimer_offset: VM[{}] running {}", inner.id, inner.running);
+        if inner.running == 0 {
+            inner.vtimer_offset = timer_arch_get_counter() - inner.vtimer;
+            // info!("VM[{}] set offset {:#x}", inner.id, inner.vtimer_offset);
+        }
+        inner.running += 1;
+        inner.vtimer_offset
+    }
 }
 
 #[repr(align(4096))]
@@ -934,6 +958,11 @@ pub struct VmInner {
     // emul devs
     pub emu_devs: Vec<EmuDevs>,
     pub med_blk_id: Option<usize>,
+
+    // VM timer
+    running: usize,
+    vtimer_offset: usize,
+    vtimer: usize,
 }
 
 impl VmInner {
@@ -962,6 +991,9 @@ impl VmInner {
             iommu_ctx_id: None,
             emu_devs: Vec::new(),
             med_blk_id: None,
+            running: 0,
+            vtimer_offset: 0,
+            vtimer: 0,
         }
     }
 }
