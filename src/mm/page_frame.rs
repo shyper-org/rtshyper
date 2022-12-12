@@ -1,6 +1,10 @@
+use core::alloc::{GlobalAlloc, Layout};
+
 use crate::arch::PAGE_SIZE;
-use crate::kernel::{mem_heap_free, mem_heap_alloc, AllocError};
+use crate::kernel::AllocError;
 use crate::lib::{memset_safe, trace};
+
+use super::HEAP_ALLOCATOR;
 
 #[derive(Debug)]
 pub struct PageFrame {
@@ -15,9 +19,18 @@ impl PageFrame {
     }
 
     pub fn alloc_pages(page_num: usize) -> Result<Self, AllocError> {
-        match mem_heap_alloc(page_num, false) {
-            Ok(pa) => Ok(Self::new(pa, page_num)),
-            Err(err) => Err(err),
+        match Layout::from_size_align(page_num * PAGE_SIZE, PAGE_SIZE) {
+            Ok(layout) => {
+                let pa = unsafe { HEAP_ALLOCATOR.alloc(layout) };
+                memset_safe(pa, 0, PAGE_SIZE);
+                let pa = pa as usize;
+                // println!(">>> alloc page frame {:#x}, {}", pa, page_num);
+                Ok(Self::new(pa, page_num))
+            }
+            Err(err) => {
+                error!("alloc_pages: Layout error {}", err);
+                Err(AllocError::OutOfFrame)
+            }
         }
     }
 
@@ -46,6 +59,8 @@ impl PageFrame {
 
 impl Drop for PageFrame {
     fn drop(&mut self) {
-        mem_heap_free(self.pa, 1);
+        // println!("<<< free page frame {:#x}, {}", self.pa, self.page_num);
+        let layout = Layout::from_size_align(self.page_num * PAGE_SIZE, PAGE_SIZE).unwrap();
+        unsafe { HEAP_ALLOCATOR.dealloc(self.pa as *mut _, layout) }
     }
 }
