@@ -70,11 +70,11 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     // tegra_emmc_blk_read(0, 0, 0 as *mut _);
     if cpu_id == 0 {
         #[cfg(feature = "tx2")]
-        println!("Welcome to TX2 Sybilla Hypervisor!");
+        println!("Welcome to TX2 Rust-Shyper Hypervisor!");
         #[cfg(feature = "qemu")]
-        println!("Welcome to Qemu Sybilla Hypervisor!");
+        println!("Welcome to Qemu Rust-Shyper Hypervisor!");
         #[cfg(feature = "pi4")]
-        println!("Welcome to PI4 Sybilla Hypervisor!");
+        println!("Welcome to PI4 Rust-Shyper Hypervisor!");
         println!("Built At {}", env!("BUILD_TIME"));
 
         #[cfg(feature = "pi4")]

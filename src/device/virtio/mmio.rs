@@ -401,14 +401,20 @@ impl VirtioMmio {
         // println!("save mmio notify_handler addr {:x}", unsafe { *(&(notify_handler.unwrap()) as *const _ as *const usize) });
         let mut dst_dev = self.inner.lock();
         let src_dev = virtio_mmio.inner.lock();
+        let is_net = src_dev.dev.is_net();
         dst_dev.id = src_dev.id;
         dst_dev.driver_features = src_dev.driver_features;
         dst_dev.driver_status = src_dev.driver_status;
         dst_dev.regs.save_regs(&src_dev.regs);
         dst_dev.dev.save_virt_dev(src_dev.dev.clone());
-        for vq in src_dev.vq.iter() {
+        for (idx, vq) in src_dev.vq.iter().enumerate() {
             let new_vq = Virtq::default();
-            new_vq.save_vq(vq.clone(), notify_handler);
+            if is_net && idx == src_dev.vq.len() - 1 && idx % 2 == 0 {
+                // control queue
+                new_vq.save_vq(vq.clone(), Some(virtio_net_handle_ctrl));
+            } else {
+                new_vq.save_vq(vq.clone(), notify_handler);
+            }
             dst_dev.vq.push(new_vq);
         }
     }

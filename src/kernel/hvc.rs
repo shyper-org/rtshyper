@@ -320,7 +320,7 @@ fn hvc_vmm_handler(event: usize, x0: usize, _x1: usize) -> Result<usize, ()> {
             Ok(HVC_FINISH)
         }
         HVC_VMM_MIGRATE_INIT_VM => {
-            println!("migrate init vm {}", x0);
+            info!("migrate init vm {}", x0);
             // vmm_init_gvm(x0);
             let vm = vm(x0).unwrap();
             map_migrate_vm_mem(vm.clone(), get_share_mem(MIGRATE_RECEIVE));
@@ -590,12 +590,12 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                             // println!("send finish ipi to core0");
                             send_hvc_ipi(msg.trgt_vmid, 0, HVC_VMM, HVC_VMM_MIGRATE_FINISH, 0);
                         }
-                        println!(
-                            "VMData size is {:x}, VgicMigData size is {:x}, VirtioMmioData size is {:x}",
-                            size_of::<VMData>(),
-                            size_of::<VgicMigData>(),
-                            size_of::<VirtioMmioData>(),
-                        );
+                        // println!(
+                        //     "VMData size is {:x}, VgicMigData size is {:x}, VirtioMmioData size is {:x}",
+                        //     size_of::<VMData>(),
+                        //     size_of::<VgicMigData>(),
+                        //     size_of::<VirtioMmioData>(),
+                        // );
                         vcpu_idle(trgt_vcpu);
                     }
                     HVC_VMM_MIGRATE_VM_BOOT => {

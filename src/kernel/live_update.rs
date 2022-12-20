@@ -30,7 +30,7 @@ use crate::kernel::{
     SchedulerUpdate, SHARE_MEM_LIST, timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, vm, Vm, VM_IF_LIST,
     vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInterface, VmRegion,
 };
-use crate::lib::{BitAlloc256, BitMap, FlexBitmap, time_current_us};
+use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
 use crate::vmm::vmm_ipi_handler;
 
@@ -1046,10 +1046,10 @@ pub fn vcpu_update(src_vcpu_list: &Mutex<Vec<Vcpu>>, src_vm_list: &Mutex<Vec<Vm>
 
         let vm = vm(src_vm.id()).unwrap();
         if let EmuDevs::None = vm.emu_dev(vm.intc_dev_id()) {
+            vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));
         } else {
             panic!("illegal vgic emu dev idx in vm.emu_devs");
         }
-        vm.set_emu_devs(vm.intc_dev_id(), EmuDevs::Vgic(Arc::new(new_vgic)));
     }
     // println!("Update {} Vcpu to VCPU_LIST", vcpu_list.len());
 }

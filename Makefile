@@ -29,6 +29,11 @@ tx2_release:
 	bash upload_release
 	${OBJDUMP} --demangle -d target/aarch64-tx2/release/rust_hypervisor > target/aarch64-tx2/release/t.txt
 
+tx2_ramdisk:
+	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features "tx2 ramdisk" --release
+	bash upload_release
+	${OBJDUMP} --demangle -d target/aarch64-tx2/release/rust_hypervisor > target/aarch64-tx2/release/t.txt
+
 tx2_update:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2-update.json --features "tx2 update" --release
 	bash upload_update

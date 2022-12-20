@@ -155,6 +155,14 @@ impl VirtDev {
         inner.mediated()
     }
 
+    pub fn is_net(&self) -> bool {
+        let inner = self.inner.lock();
+        match &inner.desc {
+            DevDesc::NetDesc(_) => { true }
+            _ => { false }
+        }
+    }
+
     // use for migration save
     pub fn restore_virt_dev_data(&self, dev_data: &VirtDevData) {
         let mut inner = self.inner.lock();
