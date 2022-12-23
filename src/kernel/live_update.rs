@@ -615,7 +615,7 @@ pub fn vm_if_list_update(src_vm_if_list: &[Mutex<VmInterface>; VM_NUM_MAX]) {
         };
         cur_vm_if.mem_map_cache = match &vm_if.mem_map_cache {
             None => None,
-            Some(cache) => Some(PageFrame::new(cache.pa, cache.page_num)),
+            Some(cache) => Some(Arc::new(PageFrame::new(cache.pa, cache.page_num))),
         };
     }
 }
@@ -660,7 +660,7 @@ pub fn vm_list_alloc(src_vm_list: &Mutex<Vec<Vm>>) {
             None => None,
             Some(page_table) => {
                 let new_page_table = PageTable {
-                    directory: PageFrame::new(page_table.directory.pa, page_table.directory.page_num),
+                    directory: Arc::new(PageFrame::new(page_table.directory.pa, page_table.directory.page_num)),
                     pages: Arc::new(Mutex::new(vec![])),
                 };
                 for page in page_table.pages.lock().iter() {

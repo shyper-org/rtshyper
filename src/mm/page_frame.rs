@@ -2,9 +2,7 @@ use crate::arch::PAGE_SIZE;
 use crate::kernel::{mem_heap_free, mem_heap_alloc, AllocError};
 use crate::lib::{memset_safe, trace};
 
-// FIXME: RAII Object but with Clone trait, which may cause serious
-//          memory problem like double allocation or double free
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PageFrame {
     pub pa: usize,
     pub page_num: usize,

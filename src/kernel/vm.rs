@@ -111,10 +111,10 @@ pub fn vm_if_init_mem_map(vm_id: usize, len: usize) {
 
 pub fn vm_if_set_mem_map_cache(vm_id: usize, pf: PageFrame) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.mem_map_cache = Some(pf);
+    vm_if.mem_map_cache = Some(Arc::new(pf));
 }
 
-pub fn vm_if_mem_map_cache(vm_id: usize) -> Option<PageFrame> {
+pub fn vm_if_mem_map_cache(vm_id: usize) -> Option<Arc<PageFrame>> {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.mem_map_cache.clone()
 }
@@ -218,7 +218,7 @@ pub struct VmInterface {
     pub ivc_arg: usize,
     pub ivc_arg_ptr: usize,
     pub mem_map: Option<FlexBitmap>,
-    pub mem_map_cache: Option<PageFrame>,
+    pub mem_map_cache: Option<Arc<PageFrame>>,
 }
 
 impl VmInterface {
