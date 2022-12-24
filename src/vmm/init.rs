@@ -11,8 +11,8 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    active_vm_id, add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map,
-    VM_IF_LIST, VmPa, VmType, iommu_add_device, Scheduler,
+    add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmPa,
+    VmType, iommu_add_device,
 };
 use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
 use crate::kernel::{vm, Vm};
@@ -482,16 +482,6 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
         current_cpu().vcpu_array.append_vcpu(vcpu);
     }
 
-    if current_cpu().assigned() {
-        let vcpu_array = &current_cpu().vcpu_array;
-        for (i, vcpu) in current_cpu().vcpu_array.iter().enumerate() {
-            if let Some(vcpu) = vcpu {
-                println!("core {} i {} vcpu_num {} arch_reset", cpu_id, i, vcpu_array.vcpu_num());
-                vcpu.arch_reset();
-            }
-        }
-    }
-
     if cfg_cpu_num == vm.cpu_num() {
         vm.set_ready(true);
     }
@@ -508,11 +498,6 @@ pub fn mvm_init() {
 
 pub fn vmm_boot() {
     if current_cpu().assigned() && active_vcpu_id() == 0 {
-        // let vcpu_pool = current_cpu().vcpu_pool.as_ref().unwrap();
-        match current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) {
-            Some(vcpu) => vcpu.reset_context(),
-            None => panic!("vmm_boot: current_cpu().vcpu_array.pop_vcpu_through_vmid(active_vm_id()) is None"),
-        }
         // active_vm().unwrap().set_migration_state(false);
         info!("Core {} start running", current_cpu().id);
         vcpu_run(false);

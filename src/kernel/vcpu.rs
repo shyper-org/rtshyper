@@ -1,16 +1,15 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::arch::asm;
 use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::{
-    Aarch64ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext,
-    GICD, GICH, VmContext, timer_arch_get_counter,
+    ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext, GICD,
+    GICH, VmContext, timer_arch_get_counter,
 };
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE, PLATFORM_VCPU_NUM_MAX};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
-use crate::kernel::{active_vcpu_id, active_vm_id, CPU_STACK_SIZE};
+use crate::kernel::{active_vcpu_id, active_vm_id};
 use crate::lib::memcpy_safe;
 
 use super::{CpuState, Vm, VmType};
@@ -41,6 +40,7 @@ impl Vcpu {
         inner.phys_id = 0;
         drop(inner);
         crate::arch::vcpu_arch_init(vm.clone(), self.clone());
+        self.reset_context();
     }
 
     pub fn shutdown(&self) {
@@ -67,7 +67,7 @@ impl Vcpu {
         memcpy_safe(
             cache_pa as *const u8,
             &(inner.vcpu_ctx) as *const _ as *const u8,
-            size_of::<Aarch64ContextFrame>(),
+            size_of::<ContextFrame>(),
         );
     }
 
@@ -94,7 +94,7 @@ impl Vcpu {
         memcpy_safe(
             &(inner.vcpu_ctx) as *const _ as *const u8,
             cache_pa as *const u8,
-            size_of::<Aarch64ContextFrame>(),
+            size_of::<ContextFrame>(),
         );
     }
 
@@ -160,13 +160,6 @@ impl Vcpu {
         inner.vm_ctx.ext_regs_restore();
         drop(inner);
 
-        // restore vm's Stage2 MMU context
-        let vttbr = (self.vm_id() << 48) | self.vm_pt_dir();
-        // println!("vttbr {:x}", vttbr);
-        // TODO: replace the arch related expr
-        unsafe {
-            asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
-        }
         self.inject_int_inlist();
     }
 
@@ -190,7 +183,7 @@ impl Vcpu {
                 memcpy_safe(
                     &(inner.vcpu_ctx) as *const _ as *const u8,
                     ctx as *const u8,
-                    size_of::<Aarch64ContextFrame>(),
+                    size_of::<ContextFrame>(),
                 );
             }
         }
@@ -206,7 +199,7 @@ impl Vcpu {
                 memcpy_safe(
                     ctx as *const u8,
                     &(inner.vcpu_ctx) as *const _ as *const u8,
-                    size_of::<Aarch64ContextFrame>(),
+                    size_of::<ContextFrame>(),
                 );
             }
         }
@@ -259,11 +252,6 @@ impl Vcpu {
 
     pub fn vm_pt_dir(&self) -> usize {
         self.vm().unwrap().pt_dir()
-    }
-
-    pub fn arch_reset(&self) {
-        let mut inner = self.inner.lock();
-        inner.arch_ctx_reset();
     }
 
     pub fn reset_context(&self) {
@@ -341,7 +329,7 @@ pub struct VcpuInner {
     pub state: VcpuState,
     pub vm: Option<Vm>,
     pub int_list: Vec<usize>,
-    pub vcpu_ctx: Aarch64ContextFrame,
+    pub vcpu_ctx: ContextFrame,
     pub vm_ctx: VmContext,
     pub gic_ctx: GicContext,
 }
@@ -354,7 +342,7 @@ impl VcpuInner {
             state: VcpuState::VcpuInv,
             vm: None,
             int_list: vec![],
-            vcpu_ctx: Aarch64ContextFrame::default(),
+            vcpu_ctx: ContextFrame::default(),
             vm_ctx: VmContext::default(),
             gic_ctx: GicContext::default(),
         }
@@ -498,12 +486,9 @@ pub fn vcpu_idle(_vcpu: Vcpu) -> ! {
 
 // WARNING: No Auto `drop` in this function
 pub fn vcpu_run(announce: bool) -> ! {
-    let sp = &(current_cpu().stack) as *const _ as usize + CPU_STACK_SIZE;
-    let size = size_of::<Aarch64ContextFrame>();
     {
         let vcpu = current_cpu().active_vcpu.clone().unwrap();
         let vm = vcpu.vm().unwrap().clone();
-        current_cpu().set_ctx((sp - size) as *mut _);
 
         current_cpu().cpu_state = CpuState::CpuRun;
         vm_if_set_state(active_vm_id(), super::VmState::VmActive);
@@ -523,7 +508,7 @@ pub fn vcpu_run(announce: bool) -> ! {
         fn context_vm_entry(ctx: usize) -> !;
     }
     unsafe {
-        context_vm_entry(sp - size);
+        context_vm_entry(current_cpu().ctx.unwrap());
     }
 }
 

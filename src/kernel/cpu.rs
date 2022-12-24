@@ -193,8 +193,36 @@ impl Cpu {
             None => {}
             Some(vcpu) => {
                 vcpu.set_state(VcpuState::VcpuAct);
+                vcpu.context_vm_restore();
+                // restore vm's Stage2 MMU context
+                let vttbr = (vcpu.vm_id() << 48) | vcpu.vm_pt_dir();
+                // println!("vttbr {:#x}", vttbr);
+                // TODO: replace the arch related expr
+                unsafe {
+                    core::arch::asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
+                }
             }
         }
+    }
+
+    pub fn schedule_to(&mut self, next_vcpu: Vcpu) {
+        if let Some(prev_vcpu) = &self.active_vcpu {
+            if prev_vcpu.vm_id() != next_vcpu.vm_id() {
+                // println!(
+                //     "next vm{} vcpu {}, prev vm{} vcpu {}",
+                //     next_vcpu.vm_id(),
+                //     next_vcpu.id(),
+                //     prev_vcpu.vm_id(),
+                //     prev_vcpu.id()
+                // );
+                prev_vcpu.set_state(VcpuState::VcpuPend);
+                prev_vcpu.context_vm_store();
+            }
+        }
+        // NOTE: Must set active first and then restore context!!!
+        //      because context restore while inject pending interrupt for VM
+        //      and will judge if current active vcpu
+        self.set_active_vcpu(Some(next_vcpu.clone()));
     }
 
     pub fn scheduler(&mut self) -> &mut impl Scheduler {
@@ -271,6 +299,9 @@ pub fn cpu_init() {
 
     let state = CpuState::CpuIdle;
     current_cpu().cpu_state = state;
+    let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;
+    let size = core::mem::size_of::<ContextFrame>();
+    current_cpu().set_ctx((sp - size) as *mut _);
     println!("Core {} init ok", cpu_id);
 
     crate::lib::barrier();

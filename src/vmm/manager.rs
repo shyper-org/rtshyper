@@ -187,23 +187,26 @@ pub fn vmm_boot_vm(vm_id: usize) {
     //     vm_id,
     //     phys_id
     // );
-    if current_cpu().active_vcpu.is_some() && vm_id == active_vm_id() {
-        gicc_clear_current_irq(true);
-        vmm_boot();
+    if phys_id != current_cpu().id {
+        let m = IpiVmmMsg {
+            vmid: vm_id,
+            event: VmmEvent::VmmBoot,
+        };
+        if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+            println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
+        }
     } else {
         match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
             None => {
-                let m = IpiVmmMsg {
-                    vmid: vm_id,
-                    event: VmmEvent::VmmBoot,
-                };
-                if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                    println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
-                }
+                panic!(
+                    "vmm_boot_vm: VM[{}] does not have vcpu on Core {}",
+                    vm_id,
+                    current_cpu().id
+                );
             }
             Some(vcpu) => {
                 gicc_clear_current_irq(true);
-                current_cpu().scheduler().yield_to(vcpu);
+                current_cpu().scheduler().wakeup(vcpu);
                 vmm_boot();
             }
         };

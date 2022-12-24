@@ -75,7 +75,7 @@ impl HeapRegion {
                 if self.map.get(i) == 0 {
                     count += 1;
                     if count >= size {
-                        bit = Some(i - count + 1);
+                        bit = Some(i + 1 - count);
                         break;
                     }
                 } else {
