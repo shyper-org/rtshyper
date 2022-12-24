@@ -193,14 +193,6 @@ impl Cpu {
             None => {}
             Some(vcpu) => {
                 vcpu.set_state(VcpuState::VcpuAct);
-                vcpu.context_vm_restore();
-                // restore vm's Stage2 MMU context
-                let vttbr = (vcpu.vm_id() << 48) | vcpu.vm_pt_dir();
-                // println!("vttbr {:#x}", vttbr);
-                // TODO: replace the arch related expr
-                unsafe {
-                    core::arch::asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
-                }
             }
         }
     }
@@ -223,6 +215,14 @@ impl Cpu {
         //      because context restore while inject pending interrupt for VM
         //      and will judge if current active vcpu
         self.set_active_vcpu(Some(next_vcpu.clone()));
+        next_vcpu.context_vm_restore();
+        // restore vm's Stage2 MMU context
+        let vttbr = (next_vcpu.vm_id() << 48) | next_vcpu.vm_pt_dir();
+        // println!("vttbr {:#x}", vttbr);
+        // TODO: replace the arch related expr
+        unsafe {
+            core::arch::asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
+        }
     }
 
     pub fn scheduler(&mut self) -> &mut impl Scheduler {

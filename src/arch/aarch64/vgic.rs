@@ -26,6 +26,31 @@ struct VgicInt {
 }
 
 impl VgicInt {
+    fn update(&self) -> Self {
+        let new_this = Self::new(self.id() as usize);
+        match self.owner() {
+            Some(vcpu) => {
+                let vm = vcpu.vm().unwrap();
+                new_this.set_owner(vm.vcpu(vcpu.id()).unwrap());
+            }
+            None => {}
+        };
+        let mut inner = new_this.inner.lock();
+        inner.id = self.id();
+        inner.hw = self.hw();
+        inner.in_lr = self.in_lr();
+        inner.lr = self.lr();
+        inner.enabled = self.enabled();
+        inner.state = self.state();
+        inner.prio = self.prio();
+        inner.targets = self.targets();
+        inner.cfg = self.cfg();
+        inner.in_pend = self.in_pend();
+        inner.in_act = self.in_act();
+        drop(inner);
+        new_this
+    }
+
     fn new(id: usize) -> VgicInt {
         VgicInt {
             inner: Arc::new(Mutex::new(VgicIntInner::new(id))),
@@ -573,25 +598,17 @@ impl Vgic {
         cur_vgicd.ctlr = src_vgicd.ctlr;
         cur_vgicd.iidr = src_vgicd.iidr;
         cur_vgicd.typer = src_vgicd.typer;
-        for i in 0..GIC_SPI_MAX {
-            cur_vgicd.interrupts.push(VgicInt::new(i));
+        for interrupt in src_vgicd.interrupts.iter() {
+            cur_vgicd.interrupts.push(interrupt.update());
         }
         // cur_vgicd.interrupts.append(&mut src_vgicd.interrupts);
-        println!("src vgicd interrupts len {}, cur interrupts len {}", src_vgicd.interrupts.len(), cur_vgicd.interrupts.len());
+        println!(
+            "src vgicd interrupts len {}, cur interrupts len {}",
+            src_vgicd.interrupts.len(),
+            cur_vgicd.interrupts.len()
+        );
         // let time1 = time_current_us();
         // let mut num = 0;
-        for irq in INTERRUPT_EN_SET.lock().iter() {
-            let interrupt = cur_vgicd.interrupts[*irq - 32].clone();
-            match interrupt.owner() {
-                None => {}
-                Some(vcpu) => {
-                    let vm_id = vcpu.vm_id();
-                    let vm = vm(vm_id).unwrap();
-                    interrupt.set_owner(vm.vcpu(vcpu.id()).unwrap());
-                    // num += 1;
-                }
-            }
-        }
 
         // cur_vgicd.interrupts.push(interrupt.fresh_back_up());
         // let time2 = time_current_us();
@@ -628,7 +645,11 @@ impl Vgic {
                         }
                         // interrupts.push(interrupt.fresh_back_up());
                     }
-                    println!("src vgicd cpu_priv interrupts len {}, cur interrupts cpu_priv len {}", cpu_priv.interrupts.len(), interrupts.len());
+                    println!(
+                        "src vgicd cpu_priv interrupts len {}, cur interrupts cpu_priv len {}",
+                        cpu_priv.interrupts.len(),
+                        interrupts.len()
+                    );
                     interrupts
                 },
                 pend_list: {

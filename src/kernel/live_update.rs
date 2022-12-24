@@ -28,7 +28,7 @@ use crate::kernel::{
     interrupt_inject_ipi_handler, InterruptHandler, IoAsyncMsg, IPI_HANDLER_LIST, ipi_irq_handler, ipi_register,
     ipi_send_msg, IpiHandler, IpiInnerMsg, IpiMediatedMsg, IpiMessage, IpiType, mem_heap_region_init, SchedType,
     SchedulerUpdate, SHARE_MEM_LIST, timer_irq_handler, UsedInfo, Vcpu, VCPU_LIST, VcpuInner, vm, Vm, VM_IF_LIST,
-    vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInterface, VmRegion,
+    vm_ipa2pa, VM_LIST, VM_NUM_MAX, VM_REGION, VmInterface, VmRegion, logger_init,
 };
 use crate::lib::{barrier, BitAlloc256, BitMap, FlexBitmap, time_current_us};
 use crate::mm::{heap_init, PageFrame};
@@ -302,6 +302,8 @@ pub extern "C" fn rust_shyper_update(address_list: &HypervisorAddr, alloc: bool)
             // SMMU_V2
             let smmu_v2 = &*(address_list.smmu_v2 as *const Mutex<SmmuV2>);
             smmu_update(smmu_v2);
+            // LOGGER
+            let _ = logger_init();
             set_fresh_status(FreshStatus::Finish);
             drop(lock0);
             println!(
