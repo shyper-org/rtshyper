@@ -482,9 +482,9 @@ pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, dev: VirtioMmio, cache: us
         // update used ring
         if !req.mediated() {
             todo!("reset num to vq size");
-            if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32) {
-                println!("blk_req_handler: fail to update used ring");
-            }
+            // if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32) {
+            //     println!("blk_req_handler: fail to update used ring");
+            // }
         } else {
             push_used_info(req_node.desc_chain_head_idx, req_node.iov_total as u32, vm.id());
         }

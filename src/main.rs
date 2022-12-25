@@ -70,11 +70,11 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     // tegra_emmc_blk_read(0, 0, 0 as *mut _);
     if cpu_id == 0 {
         #[cfg(feature = "tx2")]
-        println!("Welcome to TX2 Rust-Shyper Hypervisor!");
+        println!("Welcome to TX2 {} Hypervisor!", env!("CARGO_PKG_NAME"));
         #[cfg(feature = "qemu")]
-        println!("Welcome to Qemu Rust-Shyper Hypervisor!");
+        println!("Welcome to Qemu {} Hypervisor!", env!("CARGO_PKG_NAME"));
         #[cfg(feature = "pi4")]
-        println!("Welcome to PI4 Rust-Shyper Hypervisor!");
+        println!("Welcome to PI4 {} Hypervisor!", env!("CARGO_PKG_NAME"));
         println!("Built At {}", env!("BUILD_TIME"));
 
         #[cfg(feature = "pi4")]
@@ -102,7 +102,10 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
         crate::kernel::cpu_idle();
     }
     vm_init();
-    println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
+    println!(
+        "{} Hypervisor init ok\n\nStart booting Monitor VM ...",
+        env!("CARGO_PKG_NAME")
+    );
     vmm_boot_vm(0);
 
     loop {}

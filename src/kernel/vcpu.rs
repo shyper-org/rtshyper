@@ -449,8 +449,8 @@ impl VcpuInner {
 pub fn vcpu_idle(_vcpu: Vcpu) -> ! {
     cpu_interrupt_unmask();
     loop {
-        // TODO: replace it with an Arch function `arch_idle`
-        cortex_a::asm::wfi();
+        use crate::arch::ArchTrait;
+        crate::arch::Arch::wait_for_interrupt();
     }
 }
 

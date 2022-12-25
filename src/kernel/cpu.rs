@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE};
+use crate::arch::ArchTrait;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 // use core::ops::{Deref, DerefMut};
@@ -216,13 +217,7 @@ impl Cpu {
         //      and will judge if current active vcpu
         self.set_active_vcpu(Some(next_vcpu.clone()));
         next_vcpu.context_vm_restore();
-        // restore vm's Stage2 MMU context
-        let vttbr = (next_vcpu.vm_id() << 48) | next_vcpu.vm_pt_dir();
-        // println!("vttbr {:#x}", vttbr);
-        // TODO: replace the arch related expr
-        unsafe {
-            core::arch::asm!("msr VTTBR_EL2, {0}", "isb", in(reg) vttbr);
-        }
+        crate::arch::Arch::install_vm_page_table(next_vcpu.vm_pt_dir(), next_vcpu.vm_id());
     }
 
     pub fn scheduler(&mut self) -> &mut impl Scheduler {
@@ -318,8 +313,7 @@ pub fn cpu_idle() -> ! {
     current_cpu().cpu_state = state;
     cpu_interrupt_unmask();
     loop {
-        // TODO: replace it with an Arch function `arch_idle`
-        cortex_a::asm::wfi();
+        crate::arch::Arch::wait_for_interrupt();
     }
 }
 

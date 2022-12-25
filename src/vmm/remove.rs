@@ -11,7 +11,7 @@ use crate::lib::memset_safe;
 
 pub fn vmm_remove_vm(vm_id: usize) {
     if vm_id == 0 {
-        warn!("Rust-Shyper do not support remove vm0");
+        warn!("{} do not support remove vm0", env!("CARGO_PKG_NAME"));
         return;
     }
 

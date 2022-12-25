@@ -355,7 +355,7 @@ struct VMInfoList {
  */
 pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
     #[cfg(feature = "update")]
-    println!("Rust-Shyper list vm");
+    println!("{} list vm", env!("CARGO_PKG_NAME"));
     let vm_info_pa = vm_ipa2pa(active_vm().unwrap(), vm_info_ipa);
     if vm_info_pa == 0 {
         println!("illegal vm_info_ipa {:x}", vm_info_ipa);
