@@ -20,7 +20,7 @@ extern crate log;
 use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
-use vmm::{mvm_init, vmm_boot_vm};
+use vmm::{vm_init, vmm_boot_vm};
 
 use crate::kernel::{cpu_sched_init, hvc_init, iommu_init};
 
@@ -101,7 +101,7 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     if cpu_id != 0 {
         crate::kernel::cpu_idle();
     }
-    mvm_init();
+    vm_init();
     println!("Sybilla Hypervisor init ok\n\nStart booting Monitor VM ...");
     vmm_boot_vm(0);
 

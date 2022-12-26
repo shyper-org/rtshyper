@@ -488,12 +488,12 @@ fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
         if vm_type(vm_id) as usize != 0 {
             continue;
         }
-        trgt_vmid_map |= 1 << vm_id;
         if !ethernet_send_to(vm_id, tx_iov.clone(), len) {
-            return (false, 0);
+            continue;
         }
+        trgt_vmid_map |= 1 << vm_id;
     }
-    return (true, trgt_vmid_map);
+    (trgt_vmid_map != 0, trgt_vmid_map)
 }
 
 fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
@@ -534,6 +534,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         println!("ethernet_send_to: receive invalid avail desc idx");
         return false;
     } else if desc_header_idx_opt.is_none() {
+        // println!("ethernet_send_to: desc_header_idx_opt is none");
         return false;
     }
 

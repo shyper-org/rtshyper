@@ -153,7 +153,7 @@ pub fn vmm_set_up_cpu(vm_id: usize) {
  */
 pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
-    if (current_cpu().id == 0 && vm_id == 0) || (active_vm_id() == 0 && active_vm_id() != vm_id) {
+    if current_cpu().id == 0 || (active_vm_id() == 0 && active_vm_id() != vm_id) {
         vmm_push_vm(vm_id);
 
         vmm_set_up_cpu(vm_id);

@@ -294,6 +294,11 @@ impl VmConfigEntry {
         // println!("set_mediated_block_index {} self.med_blk_idx {:?}",med_blk_id, img_cfg.mediated_block_index);
     }
 
+    pub fn kernel_img_name(&self) -> Option<&'static str> {
+        let img_cfg = self.image.lock();
+        img_cfg.kernel_img_name
+    }
+
     pub fn kernel_load_ipa(&self) -> usize {
         let img_cfg = self.image.lock();
         img_cfg.kernel_load_ipa

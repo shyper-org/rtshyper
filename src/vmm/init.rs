@@ -106,14 +106,31 @@ pub fn vmm_init_image(vm: Vm) -> bool {
 
     // Only load MVM kernel image "L4T" from binding.
     // Load GVM kernel image from shyper-cli, you may check it for more information.
-    if vm.id() == 0 && config.os_type == VmType::VmTOs {
-        println!("MVM loading Image");
-        #[cfg(feature = "tx2")]
-        vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
-        #[cfg(feature = "pi4")]
-        vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
-        // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.78"));
-        // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
+    if config.os_type == VmType::VmTOs {
+        match vm.config().kernel_img_name() {
+            Some(name) => {
+                #[cfg(feature = "tx2")]
+                if name == "L4T" {
+                    println!("MVM {} loading Image", vm.id());
+                    vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
+                } else if name == "Image_vanilla" {
+                    println!("VM {} loading default Linux Image", vm.id());
+                    #[cfg(feature = "static-config")]
+                    vmm_load_image(vm.clone(), include_bytes!("../../image/Image_vanilla"));
+                    #[cfg(not(feature = "static-config"))]
+                    println!("*** Please enable feature `static-config`");
+                } else {
+                    warn!("Image {} is not supported", name);
+                }
+                #[cfg(feature = "pi4")]
+                vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
+                // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.78"));
+                // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
+            }
+            None => {
+                // nothing to do, its a dynamic configuration
+            }
+        }
     }
 
     if config.device_tree_load_ipa() != 0 {
@@ -348,7 +365,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
                             #[cfg(feature = "pi4")]
-                                let r = fdt_setup_gic(
+                            let r = fdt_setup_gic(
                                 dtb,
                                 (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
                                 (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
@@ -487,12 +504,19 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     }
 }
 
-pub fn mvm_init() {
+pub fn vm_init() {
     if current_cpu().id == 0 {
         // Set up basic config.
         crate::config::mvm_config_init();
         // Add VM 0
         super::vmm_init_gvm(0);
+        #[cfg(feature = "static-config")]
+        {
+            crate::config::init_tmp_config_for_vm1();
+            crate::config::init_tmp_config_for_vm2();
+            super::vmm_init_gvm(1);
+            super::vmm_init_gvm(2);
+        }
     }
 }
 

@@ -227,7 +227,7 @@ pub fn mvm_config_init() {
         String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=5\0"),
 
         image: Arc::new(Mutex::new(VmImageConfig {
-            kernel_img_name: None,
+            kernel_img_name: Some("L4T"),
             kernel_load_ipa: 0xa0080000,
             kernel_load_pa: 0,
             kernel_entry_point: 0xa0080000,
