@@ -799,13 +799,13 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
         || offset == VIRTIO_MMIO_STATUS
     {
         // println!("in virtio_mmio_prologue_access");
-        virtio_mmio_prologue_access(mmio.clone(), emu_ctx, offset, write);
+        virtio_mmio_prologue_access(mmio, emu_ctx, offset, write);
     } else if VIRTIO_MMIO_QUEUE_SEL <= offset && offset <= VIRTIO_MMIO_QUEUE_USED_HIGH {
         // println!("in virtio_mmio_queue_access");
-        virtio_mmio_queue_access(mmio.clone(), emu_ctx, offset, write);
+        virtio_mmio_queue_access(mmio, emu_ctx, offset, write);
     } else if VIRTIO_MMIO_CONFIG_GENERATION <= offset && offset <= VIRTIO_MMIO_REGS_END {
         // println!("in virtio_mmio_cfg_access");
-        virtio_mmio_cfg_access(mmio.clone(), emu_ctx, offset, write);
+        virtio_mmio_cfg_access(mmio, emu_ctx, offset, write);
     } else {
         println!(
             "emu_virtio_mmio_handler: regs wrong {}, address 0x{:x}, offset 0x{:x}",

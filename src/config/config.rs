@@ -644,7 +644,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
     );
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
-    println!("      cmdline is [{:?}]", new_vm_cfg.cmdline.clone());
+    println!("      cmdline is [{:?}]", new_vm_cfg.cmdline);
     println!("      ramdisk is [0x{:x}]", new_vm_cfg.ramdisk_load_ipa());
     vm_cfg_add_vm_entry(new_vm_cfg)
 }
@@ -743,7 +743,7 @@ pub fn vm_cfg_add_emu_dev(
         ),
         vmid,
         emu_cfg_list.len(),
-        name_str.clone().trim_end_matches(char::from(0)),
+        name_str.trim_end_matches(char::from(0)),
         cfg_list,
         base_ipa,
         length,

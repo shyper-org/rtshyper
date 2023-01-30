@@ -431,7 +431,7 @@ pub fn vmm_setup_config(vm_id: usize) {
     println!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
         vm_id,
-        config.name.clone().unwrap(),
+        config.name.unwrap(),
         current_cpu().id
     );
 

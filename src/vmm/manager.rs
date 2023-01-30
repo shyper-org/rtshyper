@@ -300,7 +300,7 @@ pub fn vmm_reboot() {
     //     vm.clone(),
     //     include_bytes!("../../image/Image_vanilla"),
     // );
-    vmm_load_image_from_mvm(vm.clone());
+    vmm_load_image_from_mvm(vm);
 
     // vcpu_run();
 }

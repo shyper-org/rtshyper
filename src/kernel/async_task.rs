@@ -272,7 +272,7 @@ pub fn async_ipi_req() {
             } else {
                 // add_task_ipi_count();
                 // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
-                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg.clone()));
+                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
             }
         }
         _ => {}
@@ -454,13 +454,13 @@ pub fn finish_async_task(ipi: bool) {
 
             update_used_info(args.vq.clone(), task.src_vmid);
             let src_vm = vm(task.src_vmid).unwrap();
-            args.dev.notify(src_vm.clone());
+            args.dev.notify(src_vm);
         }
         AsyncTaskData::AsyncIpiTask(_) => {}
         AsyncTaskData::AsyncNoneTask(args) => {
             update_used_info(args.vq.clone(), task.src_vmid);
             let src_vm = vm(task.src_vmid).unwrap();
-            args.dev.notify(src_vm.clone());
+            args.dev.notify(src_vm);
         }
     }
 }

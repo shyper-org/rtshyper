@@ -208,7 +208,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         return false;
     }
 
-    console.notify(vm.clone());
+    console.notify(vm);
     // vq.notify(dev.int_id(), vm.clone());
 
     true
@@ -327,7 +327,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    console.notify(trgt_vm.clone());
+    console.notify(trgt_vm);
     // rx_vq.notify(console.dev().int_id(), trgt_vm.clone());
     true
 }

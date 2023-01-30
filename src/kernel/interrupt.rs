@@ -172,7 +172,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         if let Some(vcpu) = &current_cpu().active_vcpu {
             if let Some(active_vm) = vcpu.vm() {
                 if active_vm.has_interrupt(int_id) {
-                    interrupt_vm_inject(active_vm.clone(), vcpu.clone(), int_id, src);
+                    interrupt_vm_inject(active_vm, vcpu.clone(), int_id, src);
                     // if current_cpu().id == 1 {
                     //     println!("GICH_MISR {:x}", GICH.misr());
                     //     println!("GICH_HCR {:x}", GICH.hcr());
@@ -198,7 +198,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
                             return true;
                         }
 
-                        interrupt_vm_inject(vm.clone(), vcpu.clone(), int_id, src);
+                        interrupt_vm_inject(vm, vcpu.clone(), int_id, src);
                         return false;
                     }
                 }
@@ -225,7 +225,7 @@ pub fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
                     panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
                 }
                 Some(vcpu) => {
-                    interrupt_vm_inject(vcpu.vm().unwrap(), vcpu.clone(), int_id, 0);
+                    interrupt_vm_inject(vcpu.vm().unwrap(), vcpu, int_id, 0);
                 }
             }
         }

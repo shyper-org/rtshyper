@@ -498,8 +498,8 @@ pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) ->
     let task = AsyncTask::new(
         AsyncTaskData::AsyncIpiTask(IpiMediatedMsg {
             src_id: vm.id(),
-            vq: vq.clone(),
-            blk: blk.clone(),
+            vq: vq,
+            blk: blk,
         }),
         vm.id(),
         async_ipi_req,
@@ -567,7 +567,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                             next_desc_idx,
                             vq.desc_flags(next_desc_idx)
                         );
-                        blk.notify(vm.clone());
+                        blk.notify(vm);
                         // vq.notify(dev.int_id(), vm.clone());
                         return false;
                     }
@@ -589,7 +589,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                             req_node.req_type,
                             vq.desc_flags(next_desc_idx)
                         );
-                        blk.notify(vm.clone());
+                        blk.notify(vm);
                         // vq.notify(dev.int_id(), vm.clone());
                         return false;
                     }
@@ -610,7 +610,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                 /*state handler*/
                 if !vq.desc_is_writable(next_desc_idx) {
                     println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx);
-                    blk.notify(vm.clone());
+                    blk.notify(vm);
                     // vq.notify(dev.int_id(), vm.clone());
                     return false;
                 }
@@ -648,7 +648,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
 
     if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
         println!("virtio blk notify");
-        blk.notify(vm.clone());
+        blk.notify(vm);
         // vq.notify(dev.int_id(), vm.clone());
     }
 

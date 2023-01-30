@@ -527,7 +527,7 @@ pub fn hvc_guest_notify(vm_id: usize) {
             );
         }
         Some(vcpu) => {
-            interrupt_vm_inject(vm.clone(), vcpu.clone(), HVC_IRQ, 0);
+            interrupt_vm_inject(vm, vcpu, HVC_IRQ, 0);
         }
     };
 }

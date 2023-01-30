@@ -46,7 +46,7 @@ pub fn interrupt_arch_ipi_send(cpu_id: usize, ipi_id: usize) {
 }
 
 pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
-    super::vgic_set_hw_int(vm.clone(), id);
+    super::vgic_set_hw_int(vm, id);
 }
 
 pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize) {
@@ -55,7 +55,7 @@ pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize) {
     // restore_vcpu_gic(current_cpu().active_vcpu.clone(), vcpu.clone());
     if let Some(cur_vcpu) = current_cpu().active_vcpu.clone() {
         if cur_vcpu.vm_id() == vcpu.vm_id() {
-            vgic.inject(vcpu.clone(), int_id);
+            vgic.inject(vcpu, int_id);
             return;
         }
     }

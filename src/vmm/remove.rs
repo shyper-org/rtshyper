@@ -30,7 +30,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     // emu dev
     vmm_remove_emulated_device(vm.clone());
     // passthrough dev
-    vmm_remove_passthrough_device(vm.clone());
+    vmm_remove_passthrough_device(vm);
     // clear async task list
     remove_vm_async_task(vm_id);
     // async used info

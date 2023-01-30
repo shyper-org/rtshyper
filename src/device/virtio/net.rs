@@ -258,7 +258,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
         next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
-    nic.notify(vm.clone());
+    nic.notify(vm);
     true
 }
 
@@ -326,7 +326,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         return false;
     }
 
-    nic.notify(vm.clone());
+    nic.notify(vm);
     // vq.notify(dev.int_id(), vm.clone());
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
@@ -607,7 +607,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
             println!("B: vm0 virtio net write vm1 memory in 0x{:x}", used_addr);
         }
         vm_if_set_mem_map_bit(vm.clone(), used_addr);
-        vm_if_set_mem_map_bit(vm.clone(), used_addr + PAGE_SIZE);
+        vm_if_set_mem_map_bit(vm, used_addr + PAGE_SIZE);
     }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         return false;

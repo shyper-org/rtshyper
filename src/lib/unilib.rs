@@ -172,7 +172,7 @@ pub fn unilib_fs_append(mmio_ipa: usize) -> Result<usize, ()> {
     let vm = active_vm().unwrap();
     let mmio_pa = vm_ipa2pa(vm.clone(), mmio_ipa);
     let unilib_fs = UnilibFS { base_addr: mmio_pa };
-    let buf_pa = vm_ipa2pa(vm.clone(), unilib_fs.buf_ipa());
+    let buf_pa = vm_ipa2pa(vm, unilib_fs.buf_ipa());
     println!(
         "unilib_fs_append: VM[{}] fs_mmio_ipa 0x{:x}, buf ipa 0x{:x}, buf_pa 0x{:x}",
         unilib_fs.vm_id(),
@@ -340,7 +340,7 @@ pub fn unilib_fs_read(fd: usize, buf_ipa: usize, len: usize) -> Result<usize, ()
     if res < 0 {
         return Ok(res as usize);
     }
-    let buf_pa = vm_ipa2pa(vm.clone(), buf_ipa);
+    let buf_pa = vm_ipa2pa(vm, buf_ipa);
     memcpy_safe(buf_pa as *mut u8, fs_cfg.get_buf(), fs_cfg.value());
     Ok(fs_cfg.value())
 }

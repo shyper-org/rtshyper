@@ -31,7 +31,7 @@ impl Vcpu {
         let this = Self {
             inner: Arc::new(Mutex::new(VcpuInner::new(vm.get_weak(), vcpu_id))),
         };
-        crate::arch::vcpu_arch_init(vm.clone(), this.clone());
+        crate::arch::vcpu_arch_init(vm, this.clone());
         this.reset_context();
         this
     }

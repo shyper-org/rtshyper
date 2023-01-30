@@ -16,7 +16,7 @@ pub fn iommu_init() {
 pub fn iommmu_vm_init(vm: Vm) -> bool {
     #[cfg(feature = "tx2")]
     {
-        return smmu_vm_init(vm.clone());
+        return smmu_vm_init(vm);
     }
     #[cfg(feature = "pi4")]
     {

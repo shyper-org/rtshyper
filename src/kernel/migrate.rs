@@ -233,7 +233,7 @@ pub struct ConsoleDescData {
 pub fn migrate_ready(vmid: usize) {
     if vm_if_mem_map_cache(vmid).is_none() {
         let trgt_vm = vm(vmid).unwrap();
-        map_migrate_vm_mem(trgt_vm.clone(), get_share_mem(MIGRATE_SEND));
+        map_migrate_vm_mem(trgt_vm, get_share_mem(MIGRATE_SEND));
         match mem_pages_alloc(vm_if_mem_map_page_num(vmid)) {
             Ok(pf) => {
                 active_vm().unwrap().pt_map_range(
