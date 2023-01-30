@@ -2,7 +2,7 @@ use core::arch::global_asm;
 
 use tock_registers::interfaces::*;
 
-use crate::arch::{ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler};
+use crate::arch::{ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
 use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
 use crate::arch::ContextFrame;
 use crate::kernel::{active_vm_id, current_cpu};
@@ -159,6 +159,7 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
         0x16 => {
             hvc_handler();
         }
+        0x18 => sysreg_handler(exception_iss() as u32),
         _ => unsafe {
             println!(
                 "x0 {:x}, x1 {:x}, x29 {:x}",

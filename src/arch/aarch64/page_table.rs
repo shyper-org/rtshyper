@@ -227,6 +227,25 @@ impl PageTable {
         (pa, size)
     }
 
+    pub fn ipa2pa(&self, ipa: usize) -> Option<usize> {
+        let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
+        let l1e = directory.entry(pt_lvl1_idx(ipa));
+        if !l1e.valid() {
+            return None;
+        }
+        let l2e = l1e.entry(pt_lvl2_idx(ipa));
+        if !l2e.valid() {
+            return None;
+        } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
+            return Some(l2e.to_pa() | (ipa & ((1 << LVL2_SHIFT) - 1)));
+        }
+        let l3e = l2e.entry(pt_lvl3_idx(ipa));
+        if l3e.valid() {
+            return Some(l3e.to_pa() | (ipa & ((1 << LVL3_SHIFT) - 1)));
+        }
+        None
+    }
+
     pub fn map_2mb(&self, ipa: usize, pa: usize, pte: usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));

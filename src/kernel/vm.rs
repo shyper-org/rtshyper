@@ -264,6 +264,15 @@ impl VmPa {
     }
 }
 
+/* HCR_EL2 init value
+ *  - VM
+ *  - RW
+ *  - IMO
+ *  - FMO
+ *  - TSC
+ */
+// const HCR_EL2_INIT_VAL: u64 = 0x80080019;
+
 #[derive(Clone)]
 pub struct Vm {
     pub inner: Arc<Mutex<VmInner>>,
@@ -312,6 +321,7 @@ impl Vm {
                 vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);
                 vcpu.set_hcr(0x80080019);
             }
+            // hcr |= 1 << 17; // set HCR_EL2.TID2=1, trap for cache id sysregs
         }
     }
 
@@ -493,7 +503,7 @@ impl Vm {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
             Some(pt) => {
-                for i in 0..vm_inner.mem_region_num {
+                for i in 0..vm_inner.pa_region.len() {
                     let start = vm_inner.pa_region[i].pa_start;
                     let end = start + vm_inner.pa_region[i].pa_length;
                     if pa >= start && pa < end {
@@ -513,7 +523,7 @@ impl Vm {
         let vm_inner = self.inner.lock();
         match vm_inner.pt.clone() {
             Some(pt) => {
-                let num = vm_inner.mem_region_num;
+                let num = vm_inner.pa_region.len();
                 drop(vm_inner);
                 for i in 0..num {
                     let vm_inner = self.inner.lock();
@@ -541,6 +551,14 @@ impl Vm {
             None => {
                 panic!("Vm::pt_dir: vm{} pt is empty", vm_inner.id);
             }
+        }
+    }
+
+    pub fn ipa2pa(&self, ipa: usize) -> Option<usize> {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => pt.ipa2pa(ipa),
+            None => panic!("Vm::ipa2pa: vm{} pt is empty", vm_inner.id),
         }
     }
 
@@ -589,14 +607,9 @@ impl Vm {
         vm_inner.pa_region[idx].offset as usize
     }
 
-    pub fn set_mem_region_num(&self, mem_region_num: usize) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.mem_region_num = mem_region_num;
-    }
-
     pub fn mem_region_num(&self) -> usize {
         let vm_inner = self.inner.lock();
-        vm_inner.mem_region_num
+        vm_inner.pa_region.len()
     }
 
     pub fn vgic(&self) -> Arc<Vgic> {
@@ -855,19 +868,22 @@ impl Vm {
                 }
                 EmuDevs::VirtioBlk(mmio) => {
                     if let EmuDevData::VirtioBlk(mmio_data) = &vm_data.emu_devs[idx] {
-                        mmio.restore_mmio_data(mmio_data, &inner.pa_region);
+                        let pt = inner.pt.as_ref().unwrap();
+                        mmio.restore_mmio_data(mmio_data, pt);
                     }
                 }
                 EmuDevs::VirtioNet(mmio) => {
                     // println!("context_vm_migrate_restore: net");
                     if let EmuDevData::VirtioNet(mmio_data) = &vm_data.emu_devs[idx] {
-                        mmio.restore_mmio_data(mmio_data, &inner.pa_region);
+                        let pt = inner.pt.as_ref().unwrap();
+                        mmio.restore_mmio_data(mmio_data, pt);
                     }
                 }
                 EmuDevs::VirtioConsole(mmio) => {
                     // println!("context_vm_migrate_restore: console");
                     if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
-                        mmio.restore_mmio_data(mmio_data, &inner.pa_region);
+                        let pt = inner.pt.as_ref().unwrap();
+                        mmio.restore_mmio_data(mmio_data, pt);
                     }
                 }
                 EmuDevs::None => {}
@@ -930,7 +946,6 @@ pub struct VmInner {
     pub dtb: Option<usize>,
     // memory config
     pub pt: Option<PageTable>,
-    pub mem_region_num: usize,
     pub pa_region: Vec<VmPa>, // Option<[VmPa; VM_MEM_REGION_MAX]>,
 
     // image config
@@ -973,7 +988,6 @@ impl VmInner {
             config: None,
             dtb: None,
             pt: None,
-            mem_region_num: 0,
             pa_region: Vec::new(),
             entry_point: 0,
 
@@ -1036,21 +1050,16 @@ pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
         println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
         return 0;
     }
-
-    for i in 0..vm.mem_region_num() {
-        if in_range(
-            (ipa as isize - vm.pa_offset(i) as isize) as usize,
-            vm.pa_start(i),
-            vm.pa_length(i),
-        ) {
-            return (ipa as isize - vm.pa_offset(i) as isize) as usize;
+    match vm.ipa2pa(ipa) {
+        Some(host_pa) => host_pa,
+        None => {
+            println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
+            0
         }
     }
-
-    println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
-    return 0;
 }
 
+#[deprecated]
 pub fn vm_pa2ipa(vm: Vm, pa: usize) -> usize {
     if pa == 0 {
         println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
@@ -1067,6 +1076,7 @@ pub fn vm_pa2ipa(vm: Vm, pa: usize) -> usize {
     return 0;
 }
 
+#[deprecated]
 pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
     if pa == 0 {
         println!("pa2ipa: access invalid pa {:x}", pa);
@@ -1083,6 +1093,7 @@ pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
     return 0;
 }
 
+#[deprecated]
 pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
     if ipa == 0 {
         // println!("ipa2pa: access invalid ipa {:x}", ipa);

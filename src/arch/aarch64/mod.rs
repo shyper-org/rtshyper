@@ -15,6 +15,7 @@ pub use self::timer::*;
 pub use self::tlb::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
+pub use self::cache::*;
 
 #[macro_use]
 mod regs;
@@ -35,3 +36,4 @@ mod timer;
 mod tlb;
 mod vcpu;
 mod vgic;
+mod cache;

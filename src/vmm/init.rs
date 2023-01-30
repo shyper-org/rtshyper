@@ -34,7 +34,6 @@ fn vmm_init_memory(vm: Vm) -> bool {
 
     if let Ok(pt_dir_frame) = result {
         vm.set_pt(pt_dir_frame);
-        vm.set_mem_region_num(config.memory_region().len());
     } else {
         println!("vmm_init_memory: page alloc failed");
         return false;

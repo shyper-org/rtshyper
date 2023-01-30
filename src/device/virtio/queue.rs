@@ -4,9 +4,10 @@ use core::slice;
 
 use spin::Mutex;
 
+use crate::arch::PageTable;
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, ipa2pa, VirtqData, Vm, vm_ipa2pa, VmPa};
+use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2pa, VmPa};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -387,7 +388,7 @@ impl Virtq {
     }
 
     // use for migration
-    pub fn restore_vq_data(&self, data: &VirtqData, pa_region: &Vec<VmPa>) {
+    pub fn restore_vq_data(&self, data: &VirtqData, pt: &PageTable) {
         let mut inner = self.inner.lock();
         inner.ready = data.ready;
         inner.vq_index = data.vq_index;
@@ -398,9 +399,18 @@ impl Virtq {
         inner.desc_table_addr = data.desc_table_ipa;
         inner.avail_addr = data.avail_ipa;
         inner.used_addr = data.used_ipa;
-        let desc_table_addr = ipa2pa(pa_region, data.desc_table_ipa);
-        let avail_addr = ipa2pa(pa_region, data.avail_ipa);
-        let used_addr = ipa2pa(pa_region, data.used_ipa);
+        let desc_table_addr = match pt.ipa2pa(data.desc_table_ipa) {
+            Some(ipa) => ipa,
+            None => 0,
+        };
+        let avail_addr = match pt.ipa2pa(data.avail_ipa) {
+            Some(ipa) => ipa,
+            None => 0,
+        };
+        let used_addr = match pt.ipa2pa(data.used_ipa) {
+            Some(ipa) => ipa,
+            None => 0,
+        };
         // println!("restore_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}, desc_table_pa {:x}, avail_pa {:x}, used_pa {:x}",
         //          data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa, desc_table_addr, avail_addr, used_addr);
         if desc_table_addr != 0 {

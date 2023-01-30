@@ -6,7 +6,7 @@ use crate::arch::{
 use crate::arch::{exception_esr, exception_fault_addr};
 use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
-use crate::device::{emu_handler, EmuContext};
+use crate::device::{emu_handler, emu_reg_handler, EmuContext};
 use crate::kernel::{active_vm, current_cpu, hvc_guest_handler, migrate_data_abort_handler};
 
 pub const HVC_RETURN_REG: usize = 0;
@@ -128,4 +128,49 @@ pub fn hvc_handler() {
     //     time_end - time_start,
     //     timer_arch_get_frequency()
     // );
+}
+
+#[inline(always)]
+fn exception_sysreg_addr(iss: u32) -> u32 {
+    // (Op0[21..20] + Op2[19..17] + Op1[16..14] + CRn[13..10]) + CRm[4..1]
+    const ESR_ISS_SYSREG_ADDR: u32 = (0xfff << 10) | (0xf << 1);
+    iss & ESR_ISS_SYSREG_ADDR
+}
+
+#[inline(always)]
+fn exception_sysreg_direction_write(iss: u32) -> bool {
+    const ESR_ISS_SYSREG_DIRECTION: u32 = 0b1;
+    (iss & ESR_ISS_SYSREG_DIRECTION) == 0
+}
+
+#[inline(always)]
+fn exception_sysreg_gpr(iss: u32) -> u32 {
+    const ESR_ISS_SYSREG_REG_OFF: u32 = 5;
+    const ESR_ISS_SYSREG_REG_LEN: u32 = 5;
+    const ESR_ISS_SYSREG_REG_MASK: u32 = (1 << ESR_ISS_SYSREG_REG_LEN) - 1;
+    (iss >> ESR_ISS_SYSREG_REG_OFF) & ESR_ISS_SYSREG_REG_MASK
+}
+
+pub fn sysreg_handler(iss: u32) {
+    let reg_addr = exception_sysreg_addr(iss);
+
+    let emu_ctx = EmuContext {
+        address: reg_addr as usize,
+        width: 8,
+        write: exception_sysreg_direction_write(iss),
+        sign_ext: false,
+        reg: exception_sysreg_gpr(iss) as usize,
+        reg_width: 8,
+    };
+
+    let elr = current_cpu().get_elr();
+    if !emu_reg_handler(&emu_ctx) {
+        panic!(
+            "sysreg_handler: Failed to handler emu reg request, ({:#x} at {:#x})",
+            emu_ctx.address, elr
+        );
+    }
+
+    let val = elr + exception_next_instruction_step();
+    current_cpu().set_elr(val);
 }
