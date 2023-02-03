@@ -136,14 +136,18 @@ pub fn platform_sys_reboot() {
     println!("Hypervisor reset...");
     // mem_heap_reset();
     crate::arch::power_arch_sys_reset();
-    loop {}
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 pub fn platform_sys_shutdown() {
     println!("Hypervisor shutdown...");
     // mem_heap_reset();
     crate::arch::power_arch_sys_shutdown();
-    loop {}
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 // TODO

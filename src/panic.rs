@@ -5,5 +5,7 @@ use core::panic::PanicInfo;
 fn panic(info: &PanicInfo) -> ! {
     println!("[Panic]");
     println!("{}", info);
-    loop {}
+    loop {
+        core::hint::spin_loop();
+    }
 }

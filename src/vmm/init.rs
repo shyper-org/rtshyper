@@ -24,9 +24,9 @@ use crate::lib::trace;
 #[cfg(feature = "ramdisk")]
 pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.cpio");
 #[cfg(not(feature = "ramdisk"))]
-pub static CPIO_RAMDISK: &'static [u8] = &[];
+pub static CPIO_RAMDISK: &[u8] = &[];
 
-fn vmm_init_memory(vm: Vm) -> bool {
+fn vmm_init_memory(vm: &Vm) -> bool {
     let result = mem_page_alloc();
     let vm_id = vm.id();
     let config = vm.config();
@@ -65,7 +65,7 @@ fn vmm_init_memory(vm: Vm) -> bool {
     true
 }
 
-pub fn vmm_load_image(vm: Vm, bin: &[u8]) {
+pub fn vmm_load_image(vm: &Vm, bin: &[u8]) {
     let size = bin.len();
     let config = vm.config();
     let load_ipa = config.kernel_load_ipa();
@@ -92,7 +92,7 @@ pub fn vmm_load_image(vm: Vm, bin: &[u8]) {
     panic!("vmm_load_image: Image config conflicts with memory config");
 }
 
-pub fn vmm_init_image(vm: Vm) -> bool {
+pub fn vmm_init_image(vm: &Vm) -> bool {
     let vm_id = vm.id();
     let config = vm.config();
 
@@ -111,20 +111,20 @@ pub fn vmm_init_image(vm: Vm) -> bool {
                 #[cfg(feature = "tx2")]
                 if name == "L4T" {
                     println!("MVM {} loading Image", vm.id());
-                    vmm_load_image(vm.clone(), include_bytes!("../../image/L4T"));
+                    vmm_load_image(vm, include_bytes!("../../image/L4T"));
                 } else if name == "Image_vanilla" {
                     println!("VM {} loading default Linux Image", vm.id());
                     #[cfg(feature = "static-config")]
-                    vmm_load_image(vm.clone(), include_bytes!("../../image/Image_vanilla"));
+                    vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
                     #[cfg(not(feature = "static-config"))]
                     println!("*** Please enable feature `static-config`");
                 } else {
                     warn!("Image {} is not supported", name);
                 }
                 #[cfg(feature = "pi4")]
-                vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
-                // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4_5.4.78"));
-                // vmm_load_image(vm.clone(), include_bytes!("../../image/Image_pi4"));
+                vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
+                // vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.78"));
+                // vmm_load_image(vm, include_bytes!("../../image/Image_pi4"));
             }
             None => {
                 // nothing to do, its a dynamic configuration
@@ -144,12 +144,12 @@ pub fn vmm_init_image(vm: Vm) -> bool {
                 let src = SYSTEM_FDT.get().unwrap();
                 let len = src.len();
                 let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                dst.clone_from_slice(&src);
-                vmm_setup_fdt(vm.clone());
+                dst.clone_from_slice(src);
+                vmm_setup_fdt(vm);
             }
         } else {
             // Init dtb for GVM.
-            match create_fdt(config.clone()) {
+            match create_fdt(&config) {
                 Ok(dtb) => {
                     let offset = config.device_tree_load_ipa() - vm.config().memory_region()[0].ipa_start;
                     println!("GVM[{}] dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
@@ -182,7 +182,7 @@ pub fn vmm_init_image(vm: Vm) -> bool {
     true
 }
 
-fn vmm_init_emulated_device(vm: Vm) -> bool {
+fn vmm_init_emulated_device(vm: &Vm) -> bool {
     let config = vm.config().emulated_device_list();
 
     for (idx, emu_dev) in config.iter().enumerate() {
@@ -197,7 +197,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     emu_dev.length,
                     emu_intc_handler,
                 );
-                emu_intc_init(vm.clone(), idx);
+                emu_intc_init(vm, idx);
             }
             EmuDeviceTGPPT => {
                 vm.set_intc_dev_id(idx);
@@ -209,7 +209,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     emu_dev.length,
                     partial_passthrough_intc_handler,
                 );
-                partial_passthrough_intc_init(vm.clone());
+                partial_passthrough_intc_init(vm);
             }
             EmuDeviceTVirtioBlk => {
                 emu_register_dev(
@@ -220,7 +220,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     emu_dev.length,
                     emu_virtio_mmio_handler,
                 );
-                if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
+                if !emu_virtio_mmio_init(vm, idx, emu_dev.mediated) {
                     return false;
                 }
             }
@@ -233,7 +233,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     emu_dev.length,
                     emu_virtio_mmio_handler,
                 );
-                if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
+                if !emu_virtio_mmio_init(vm, idx, emu_dev.mediated) {
                     return false;
                 }
                 let mut vm_if_list = VM_IF_LIST[vm.id()].lock();
@@ -251,7 +251,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     emu_dev.length,
                     emu_virtio_mmio_handler,
                 );
-                if !emu_virtio_mmio_init(vm.clone(), idx, emu_dev.mediated) {
+                if !emu_virtio_mmio_init(vm, idx, emu_dev.mediated) {
                     return false;
                 }
             }
@@ -264,12 +264,12 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
                     emu_dev.length,
                     emu_smmu_handler,
                 );
-                if !iommmu_vm_init(vm.clone()) {
+                if !iommmu_vm_init(vm) {
                     return false;
                 }
             }
             EmuDeviceTShyper => {
-                if !shyper_init(vm.clone(), emu_dev.base_ipa, emu_dev.length) {
+                if !shyper_init(vm, emu_dev.base_ipa, emu_dev.length) {
                     return false;
                 }
             }
@@ -290,7 +290,7 @@ fn vmm_init_emulated_device(vm: Vm) -> bool {
     true
 }
 
-fn vmm_init_passthrough_device(vm: Vm) -> bool {
+fn vmm_init_passthrough_device(vm: &Vm) -> bool {
     for region in vm.config().passthrough_device_regions() {
         if region.dev_property {
             vm.pt_map_range(region.ipa, region.length, region.pa, PTE_S2_DEVICE, true);
@@ -308,26 +308,26 @@ fn vmm_init_passthrough_device(vm: Vm) -> bool {
         );
     }
     for irq in vm.config().passthrough_device_irqs() {
-        if !interrupt_vm_register(vm.clone(), irq) {
+        if !interrupt_vm_register(vm, irq) {
             return false;
         }
     }
     true
 }
 
-fn vmm_init_iommu_device(vm: Vm) -> bool {
+fn vmm_init_iommu_device(vm: &Vm) -> bool {
     for stream_id in vm.config().passthrough_device_stread_ids() {
         if stream_id == 0 {
             break;
         }
-        if !iommu_add_device(vm.clone(), stream_id) {
+        if !iommu_add_device(vm, stream_id) {
             return false;
         }
     }
     true
 }
 
-pub unsafe fn vmm_setup_fdt(vm: Vm) {
+pub unsafe fn vmm_setup_fdt(vm: &Vm) {
     use fdt::*;
     let config = vm.config();
     match vm.dtb() {
@@ -352,7 +352,7 @@ pub unsafe fn vmm_setup_fdt(vm: Vm) {
             // #[cfg(feature = "pi4")]
             // fdt_set_stdout_path(dtb, "/serial@fe340000\0".as_ptr());
 
-            if config.emulated_device_list().len() > 0 {
+            if !config.emulated_device_list().is_empty() {
                 for emu_cfg in config.emulated_device_list() {
                     match emu_cfg.emu_type {
                         EmuDeviceTGicd => {
@@ -438,21 +438,21 @@ pub fn vmm_setup_config(vm_id: usize) {
     if vm_id >= VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
     }
-    if !vmm_init_memory(vm.clone()) {
+    if !vmm_init_memory(&vm) {
         panic!("vmm_setup_config: vmm_init_memory failed");
     }
 
-    if !vmm_init_image(vm.clone()) {
+    if !vmm_init_image(&vm) {
         panic!("vmm_setup_config: vmm_init_image failed");
     }
 
-    if !vmm_init_emulated_device(vm.clone()) {
+    if !vmm_init_emulated_device(&vm) {
         panic!("vmm_setup_config: vmm_init_emulated_device failed");
     }
-    if !vmm_init_passthrough_device(vm.clone()) {
+    if !vmm_init_passthrough_device(&vm) {
         panic!("vmm_setup_config: vmm_init_passthrough_device failed");
     }
-    if !vmm_init_iommu_device(vm.clone()) {
+    if !vmm_init_iommu_device(&vm) {
         panic!("vmm_setup_config: vmm_init_iommu_device failed");
     }
 

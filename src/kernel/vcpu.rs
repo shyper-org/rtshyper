@@ -14,7 +14,7 @@ use crate::lib::memcpy_safe;
 
 use super::{CpuState, Vm, VmType, WeakVm};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VcpuState {
     VcpuInv = 0,
     VcpuPend = 1,
@@ -27,11 +27,11 @@ pub struct Vcpu {
 }
 
 impl Vcpu {
-    pub fn new(vm: Vm, vcpu_id: usize) -> Self {
+    pub fn new(vm: &Vm, vcpu_id: usize) -> Self {
         let this = Self {
             inner: Arc::new(Mutex::new(VcpuInner::new(vm.get_weak(), vcpu_id))),
         };
-        crate::arch::vcpu_arch_init(vm, this.clone());
+        crate::arch::vcpu_arch_init(vm, &this);
         this.reset_context();
         this
     }
@@ -218,7 +218,7 @@ impl Vcpu {
 
     pub fn state(&self) -> VcpuState {
         let inner = self.inner.lock();
-        inner.state.clone()
+        inner.state
     }
 
     pub fn set_state(&self, state: VcpuState) {
@@ -311,7 +311,7 @@ impl Vcpu {
                 drop(inner);
                 for int in int_list {
                     // println!("schedule: inject int {} for vm {}", int, vm.id());
-                    interrupt_vm_inject(vm.clone(), self.clone(), int, 0);
+                    interrupt_vm_inject(&vm, self, int, 0);
                 }
             }
         }
@@ -490,71 +490,71 @@ pub fn show_vcpu_reg_context() {
     print!("#### GICD ISENABLER ####");
     for i in 0..GIC_INTS_MAX / 32 {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.is_enabler(i));
     }
-    println!("");
+    println!();
     print!("#### GICD ISACTIVER ####");
     for i in 0..GIC_INTS_MAX / 32 {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.is_activer(i));
     }
-    println!("");
+    println!();
     print!("#### GICD ISPENDER ####");
     for i in 0..GIC_INTS_MAX / 32 {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.is_pender(i));
     }
-    println!("");
+    println!();
     print!("#### GICD IGROUP ####");
     for i in 0..GIC_INTS_MAX / 32 {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.igroup(i));
     }
-    println!("");
+    println!();
     print!("#### GICD ICFGR ####");
     for i in 0..GIC_INTS_MAX * 2 / 32 {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.icfgr(i));
     }
-    println!("");
+    println!();
     print!("#### GICD CPENDSGIR ####");
     for i in 0..GIC_SGI_REGS_NUM {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.cpendsgir(i));
     }
-    println!("");
+    println!();
     println!("GICH_APR {:x}", GICH.misr());
 
     println!("GICD_CTLR {:x}", GICD.ctlr());
     print!("#### GICD ITARGETSR ####");
     for i in 0..GIC_INTS_MAX * 8 / 32 {
         if i % 8 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.itargetsr(i));
     }
-    println!("");
+    println!();
 
     print!("#### GICD IPRIORITYR ####");
     for i in 0..GIC_INTS_MAX * 8 / 32 {
         if i % 16 == 0 {
-            println!("");
+            println!();
         }
         print!("{:x} ", GICD.ipriorityr(i));
     }
-    println!("");
+    println!();
 
     println!("GICC_RPR {:x}", GICC.rpr());
     println!("GICC_HPPIR {:x}", GICC.hppir());
@@ -564,7 +564,7 @@ pub fn show_vcpu_reg_context() {
     for i in 0..4 {
         print!("{:x} ", GICC.apr(i));
     }
-    println!("");
+    println!();
     println!("#### GICC NSAPR ####");
     for i in 0..4 {
         print!("{:x} ", GICC.nsapr(i));

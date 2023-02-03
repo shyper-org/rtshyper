@@ -85,7 +85,7 @@ pub struct EmuDevEntry {
     pub handler: EmuDevHandler,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmuDeviceType {
     EmuDeviceTConsole = 0,
     EmuDeviceTGicd = 1,
@@ -116,14 +116,14 @@ impl Display for EmuDeviceType {
 
 impl EmuDeviceType {
     pub fn removable(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             EmuDeviceType::EmuDeviceTGicd
-            | EmuDeviceType::EmuDeviceTGPPT
-            | EmuDeviceType::EmuDeviceTVirtioBlk
-            | EmuDeviceType::EmuDeviceTVirtioNet
-            | EmuDeviceType::EmuDeviceTVirtioConsole => true,
-            _ => false,
-        }
+                | EmuDeviceType::EmuDeviceTGPPT
+                | EmuDeviceType::EmuDeviceTVirtioBlk
+                | EmuDeviceType::EmuDeviceTVirtioNet
+                | EmuDeviceType::EmuDeviceTVirtioConsole
+        )
     }
 }
 
@@ -168,7 +168,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
         current_cpu().id,
         ipa
     );
-    return false;
+    false
 }
 
 pub fn emu_register_dev(

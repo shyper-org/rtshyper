@@ -280,7 +280,7 @@ fn mem_color_region_free(vm_region: &ColorMemRegion) {
                     free_idx = Some(if idx < merge_idx { idx } else { idx - 1 });
                     color_region_list.remove(merge_idx);
                     break;
-                } else if tmp.left_neighbor(&exist_region) {
+                } else if tmp.left_neighbor(exist_region) {
                     let count = exist_region.count;
                     let mut_tmp = color_region_list.get_mut(merge_idx).unwrap();
                     mut_tmp.count += count;

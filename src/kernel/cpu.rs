@@ -189,8 +189,8 @@ impl Cpu {
     }
 
     pub fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
-        self.active_vcpu = active_vcpu.clone();
-        match active_vcpu {
+        self.active_vcpu = active_vcpu;
+        match &self.active_vcpu {
             None => {}
             Some(vcpu) => {
                 vcpu.set_state(VcpuState::VcpuAct);
@@ -255,7 +255,7 @@ pub fn current_cpu() -> &'static mut Cpu {
 }
 
 pub fn active_vcpu_id() -> usize {
-    let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
+    let active_vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     active_vcpu.id()
 }
 
@@ -265,13 +265,9 @@ pub fn active_vm_id() -> usize {
 }
 
 pub fn active_vm() -> Option<Vm> {
-    match current_cpu().active_vcpu.clone() {
-        None => {
-            return None;
-        }
-        Some(active_vcpu) => {
-            return active_vcpu.vm();
-        }
+    match current_cpu().active_vcpu.as_ref() {
+        None => None,
+        Some(active_vcpu) => active_vcpu.vm(),
     }
 }
 
@@ -332,7 +328,7 @@ pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [
 // #[link_section = ".text.boot"]
 pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
     let mut cpu = unsafe { &mut CPU_LIST[cpu_id] };
-    (*cpu).id = cpu_id;
+    cpu.id = cpu_id;
 
     let lvl1_addr = pt_map_banked_cpu(cpu);
 

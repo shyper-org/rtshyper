@@ -99,7 +99,7 @@ pub fn interrupt_init() {
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
 
-pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
+pub fn interrupt_vm_register(vm: &Vm, id: usize) -> bool {
     // println!("VM {} register interrupt {}", vm.id(), id);
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
@@ -107,13 +107,13 @@ pub fn interrupt_vm_register(vm: Vm, id: usize) -> bool {
         return false;
     }
 
-    interrupt_arch_vm_register(vm.clone(), id);
+    interrupt_arch_vm_register(vm, id);
     vm.set_int_bit_map(id);
     glb_bitmap_lock.set(id);
     true
 }
 
-pub fn interrupt_vm_remove(_vm: Vm, id: usize) {
+pub fn interrupt_vm_remove(_vm: &Vm, id: usize) {
     let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
     // vgic and vm will be removed with struct vm
     glb_bitmap_lock.clear(id);
@@ -123,7 +123,7 @@ pub fn interrupt_vm_remove(_vm: Vm, id: usize) {
     }
 }
 
-pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
+pub fn interrupt_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize, _source: usize) {
     // if vm.id() == 1 {
     //     println!("inject int {} to vm1", int_id);
     // }
@@ -148,7 +148,7 @@ pub fn interrupt_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize, _source: usize) {
 pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     if interrupt_is_reserved(int_id) {
         let irq_handler_list = INTERRUPT_HANDLERS.lock();
-        let irq_handler = irq_handler_list.get(&int_id).unwrap().clone();
+        let irq_handler = *irq_handler_list.get(&int_id).unwrap();
         drop(irq_handler_list);
         match irq_handler {
             InterruptHandler::IpiIrqHandler(ipi_handler) => {
@@ -172,7 +172,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         if let Some(vcpu) = &current_cpu().active_vcpu {
             if let Some(active_vm) = vcpu.vm() {
                 if active_vm.has_interrupt(int_id) {
-                    interrupt_vm_inject(active_vm, vcpu.clone(), int_id, src);
+                    interrupt_vm_inject(&active_vm, vcpu, int_id, src);
                     // if current_cpu().id == 1 {
                     //     println!("GICH_MISR {:x}", GICH.misr());
                     //     println!("GICH_HCR {:x}", GICH.hcr());
@@ -189,20 +189,14 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         }
     }
 
-    for vcpu in current_cpu().vcpu_array.iter() {
-        if let Some(vcpu) = vcpu {
-            match vcpu.vm() {
-                Some(vm) => {
-                    if vm.has_interrupt(int_id) {
-                        if vcpu.state() as usize == VcpuState::VcpuInv as usize {
-                            return true;
-                        }
-
-                        interrupt_vm_inject(vm, vcpu.clone(), int_id, src);
-                        return false;
-                    }
+    for vcpu in current_cpu().vcpu_array.iter().flatten() {
+        if let Some(vm) = vcpu.vm() {
+            if vm.has_interrupt(int_id) {
+                if vcpu.state() == VcpuState::VcpuInv {
+                    return true;
                 }
-                None => {}
+                interrupt_vm_inject(&vm, vcpu, int_id, src);
+                return false;
             }
         }
     }
@@ -225,13 +219,12 @@ pub fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
                     panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
                 }
                 Some(vcpu) => {
-                    interrupt_vm_inject(vcpu.vm().unwrap(), vcpu, int_id, 0);
+                    interrupt_vm_inject(&vcpu.vm().unwrap(), &vcpu, int_id, 0);
                 }
             }
         }
         _ => {
             println!("interrupt_inject_ipi_handler: illegal ipi type");
-            return;
         }
     }
 }

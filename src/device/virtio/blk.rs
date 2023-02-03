@@ -110,7 +110,7 @@ impl BlkDesc {
             panic!("illegal addr {:x}", start_addr + offset);
         }
         let value = unsafe { *((start_addr + offset) as *const u32) };
-        return value;
+        value
     }
 }
 
@@ -233,7 +233,7 @@ impl VirtioBlkReq {
         }
     }
 
-    pub fn add_req_node(&self, node: VirtioBlkReqNode, _vm: Vm) {
+    pub fn add_req_node(&self, node: VirtioBlkReqNode, _vm: &Vm) {
         let mut list = self.req_list.lock();
         // let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         // push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());
@@ -356,7 +356,7 @@ impl VirtioBlkReqInner {
     }
 }
 
-pub fn generate_blk_req(req: VirtioBlkReq, vq: Virtq, dev: VirtioMmio, cache: usize, vm: Vm) {
+pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usize, vm: &Vm) {
     let region_start = req.region_start();
     let region_size = req.region_size();
     let mut cache_ptr = cache;
@@ -630,18 +630,18 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
         req_node.iov_total = req_node.iov_sum_up;
-        req.add_req_node(req_node, vm.clone());
+        req.add_req_node(req_node, &vm);
 
         process_count += 1;
         next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     }
 
     if !req.mediated() {
-        generate_blk_req(req.clone(), vq.clone(), blk.clone(), dev.cache(), vm.clone());
+        generate_blk_req(&req, &vq, &blk, dev.cache(), &vm);
     } else {
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         let cache = mediated_blk.cache_pa();
-        generate_blk_req(req.clone(), vq.clone(), blk.clone(), cache, vm.clone());
+        generate_blk_req(&req, &vq, &blk, cache, &vm);
     };
 
     // let time1 = time_current_us();
@@ -660,5 +660,5 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
 
     // let end = time_current_us();
     // println!("init time {}us, while handle desc ring time {}us, finish task {}us", time0 - begin, time1 - time0, end - time1);
-    return true;
+    true
 }

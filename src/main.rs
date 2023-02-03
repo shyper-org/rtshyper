@@ -108,5 +108,7 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     );
     vmm_boot_vm(0);
 
-    loop {}
+    loop {
+        core::hint::spin_loop();
+    }
 }

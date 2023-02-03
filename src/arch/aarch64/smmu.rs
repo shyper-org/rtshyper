@@ -366,10 +366,10 @@ impl SmmuV2 {
 
         println!(
             concat!(
-            "SMMU info:\n",
-            "  page size {:#x}, num pages {}, context base {:#x}\n",
-            "  stream matching with {} register groups\n",
-            "  {} context banks ({} stage-2 only)"
+                "SMMU info:\n",
+                "  page size {:#x}, num pages {}, context base {:#x}\n",
+                "  stream matching with {} register groups\n",
+                "  {} context banks ({} stage-2 only)"
             ),
             page_size, num_pages, context_base, smr_num, context_bank_num, stage2_context_bank_num,
         );
@@ -476,12 +476,7 @@ impl SmmuV2 {
 
     pub fn alloc_smr(&self) -> Option<usize> {
         let alloc_bitmap = self.smr_alloc_bitmap.as_ref().unwrap();
-        for i in 0..alloc_bitmap.vec_len() {
-            if alloc_bitmap.get(i) == 0 {
-                return Some(i);
-            }
-        }
-        None
+        (0..alloc_bitmap.vec_len()).find(|&i| alloc_bitmap.get(i) == 0)
     }
 
     pub fn compatible_smr_exists(&mut self, mask: u16, id: u16, context_id: usize, group: bool) -> bool {
@@ -585,7 +580,7 @@ impl SmmuV2 {
             root_pt
         );
         let mut sctlr = self.context_bank[context_id].SCTLR.get() as usize;
-        sctlr = (sctlr) & (0xF << 28 | 0x1 << 20 | 0xF << 9 | 0x1 << 11);
+        sctlr &= 0xF << 28 | 0x1 << 20 | 0xF << 9 | 0x1 << 11;
         sctlr |= SMMUV2_SCTLR_CFRE | SMMUV2_SCTLR_CFIE | SMMUV2_SCTLR_M;
         self.context_bank[context_id].SCTLR.set(sctlr as u32);
     }
@@ -598,7 +593,7 @@ pub fn smmu_init() {
     smmu.init();
 }
 
-pub fn smmu_vm_init(vm: Vm) -> bool {
+pub fn smmu_vm_init(vm: &Vm) -> bool {
     let mut smmu_v2 = SMMU_V2.lock();
     match smmu_v2.alloc_ctxbnk() {
         Some(context_id) => {

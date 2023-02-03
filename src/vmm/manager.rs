@@ -72,7 +72,7 @@ pub fn vmm_alloc_vcpu(vm_id: usize) {
     };
 
     for i in 0..vm.config().cpu_num() {
-        let vcpu = Vcpu::new(vm.clone(), i);
+        let vcpu = Vcpu::new(&vm, i);
         vm.push_vcpu(vcpu);
     }
 
@@ -283,7 +283,7 @@ pub fn vmm_reboot() {
     }
 
     // Reset image.
-    if !vmm_init_image(vm.clone()) {
+    if !vmm_init_image(&vm) {
         panic!("vmm_reboot: vmm_init_image failed");
     }
 
@@ -292,7 +292,7 @@ pub fn vmm_reboot() {
     vm_if_set_ivc_arg_ptr(vm.id(), 0);
 
     crate::arch::interrupt_arch_clear();
-    crate::arch::vcpu_arch_init(vm.clone(), vm.vcpu(0).unwrap());
+    crate::arch::vcpu_arch_init(&vm, &vm.vcpu(0).unwrap());
     vcpu.reset_context();
 
     // TODO: rewite hard code.
@@ -300,12 +300,12 @@ pub fn vmm_reboot() {
     //     vm.clone(),
     //     include_bytes!("../../image/Image_vanilla"),
     // );
-    vmm_load_image_from_mvm(vm);
+    vmm_load_image_from_mvm(&vm);
 
     // vcpu_run();
 }
 
-pub fn vmm_load_image_from_mvm(vm: Vm) {
+pub fn vmm_load_image_from_mvm(vm: &Vm) {
     let vm_id = vm.id();
     let msg = HvcManageMsg {
         fid: HVC_CONFIG,
@@ -426,7 +426,6 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
         },
         _ => {
             println!("vmm_ipi_handler: illegal ipi type");
-            return;
         }
     }
 }

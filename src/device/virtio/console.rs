@@ -77,7 +77,7 @@ impl ConsoleDesc {
             println!("value addr is {}", start_addr + offset);
         }
         let value = unsafe { *((start_addr + offset) as *const u32) };
-        return value;
+        value
     }
 
     pub fn target_console(&self) -> (u16, u64) {

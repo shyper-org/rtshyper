@@ -9,11 +9,11 @@ pub use self::qemu_def::*;
 pub use self::tx2_def::*;
 
 mod config;
-#[cfg(feature = "static-config")]
-mod vm_def;
 #[cfg(feature = "pi4")]
 mod pi4_def;
 #[cfg(feature = "qemu")]
 mod qemu_def;
 #[cfg(feature = "tx2")]
 mod tx2_def;
+#[cfg(feature = "static-config")]
+mod vm_def;

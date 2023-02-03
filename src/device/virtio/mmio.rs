@@ -182,7 +182,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
+            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id, 0);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -199,7 +199,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(vm.clone(), vm.vcpu(0).unwrap(), int_id, 0);
+            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id, 0);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -341,7 +341,7 @@ impl VirtioMmio {
         if idx >= inner.vq.len() {
             return Err(());
         }
-        return Ok(inner.vq[idx].clone());
+        Ok(inner.vq[idx].clone())
     }
 
     pub fn id(&self) -> usize {
@@ -356,7 +356,7 @@ impl VirtioMmio {
         }
         let vq = inner.vq[idx].clone();
         drop(inner);
-        return vq.call_notify_handler(self.clone());
+        vq.call_notify_handler(self.clone())
     }
 
     // use for migration restore
@@ -513,7 +513,6 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
             }
             _ => {
                 println!("virtio_mmio_prologue_access: wrong reg write 0x{:x}", emu_ctx.address);
-                return;
             }
         }
     }
@@ -718,7 +717,7 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
     }
 }
 
-pub fn emu_virtio_mmio_init(vm: Vm, emu_dev_id: usize, mediated: bool) -> bool {
+pub fn emu_virtio_mmio_init(vm: &Vm, emu_dev_id: usize, mediated: bool) -> bool {
     let virt_dev_type: VirtioDeviceType;
     let vm_cfg = vm.config();
     let mmio = VirtioMmio::new(emu_dev_id);
@@ -815,5 +814,5 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
         );
         return false;
     }
-    return true;
+    true
 }

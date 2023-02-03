@@ -86,11 +86,11 @@ impl Virtq {
                 let idx = inner.last_avail_idx as usize % inner.num;
                 let avail_desc_idx = avail.ring[idx];
                 inner.last_avail_idx = inner.last_avail_idx.wrapping_add(1);
-                return Some(avail_desc_idx);
+                Some(avail_desc_idx)
             }
             None => {
                 println!("pop_avail_desc_idx: failed to avail table");
-                return None;
+                None
             }
         }
     }
@@ -130,7 +130,7 @@ impl Virtq {
 
     pub fn check_avail_idx(&self, avail_idx: u16) -> bool {
         let inner = self.inner.lock();
-        return inner.last_avail_idx == avail_idx;
+        inner.last_avail_idx == avail_idx
     }
 
     pub fn desc_is_writable(&self, idx: usize) -> bool {
@@ -155,11 +155,11 @@ impl Virtq {
                 used.ring[used.idx as usize % num].id = desc_chain_head_idx;
                 used.ring[used.idx as usize % num].len = len;
                 used.idx = used.idx.wrapping_add(1);
-                return true;
+                true
             }
             None => {
                 println!("update_used_ring: failed to used table");
-                return false;
+                false
             }
         }
     }
@@ -176,11 +176,11 @@ impl Virtq {
                 drop(inner);
                 // println!("call_notify_handler");
                 // println!("handler addr {:x}", unsafe { *(&handler as *const _ as *const usize) });
-                return handler(self.clone(), mmio, active_vm().unwrap());
+                handler(self.clone(), mmio, active_vm().unwrap())
             }
             None => {
                 println!("call_notify_handler: virtq notify handler is None");
-                return false;
+                false
             }
         }
     }
@@ -399,18 +399,9 @@ impl Virtq {
         inner.desc_table_addr = data.desc_table_ipa;
         inner.avail_addr = data.avail_ipa;
         inner.used_addr = data.used_ipa;
-        let desc_table_addr = match pt.ipa2pa(data.desc_table_ipa) {
-            Some(ipa) => ipa,
-            None => 0,
-        };
-        let avail_addr = match pt.ipa2pa(data.avail_ipa) {
-            Some(ipa) => ipa,
-            None => 0,
-        };
-        let used_addr = match pt.ipa2pa(data.used_ipa) {
-            Some(ipa) => ipa,
-            None => 0,
-        };
+        let desc_table_addr = pt.ipa2pa(data.desc_table_ipa).unwrap_or(0);
+        let avail_addr = pt.ipa2pa(data.avail_ipa).unwrap_or(0);
+        let used_addr = pt.ipa2pa(data.used_ipa).unwrap_or(0);
         // println!("restore_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}, desc_table_pa {:x}, avail_pa {:x}, used_pa {:x}",
         //          data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa, desc_table_addr, avail_addr, used_addr);
         if desc_table_addr != 0 {

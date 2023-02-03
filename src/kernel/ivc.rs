@@ -41,7 +41,7 @@ pub fn mem_shared_mem_init() {
     }
 }
 
-pub fn shyper_init(vm: Vm, base_ipa: usize, len: usize) -> bool {
+pub fn shyper_init(vm: &Vm, base_ipa: usize, len: usize) -> bool {
     if base_ipa == 0 || len == 0 {
         info!("vm{} shyper base ipa {:x}, len {:x}", vm.id(), base_ipa, len);
         return true;

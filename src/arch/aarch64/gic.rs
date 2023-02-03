@@ -63,7 +63,7 @@ pub fn show_en_interrupt() {
     for irq in set.iter() {
         print!("{} ", irq);
     }
-    print!("\n");
+    println!();
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -367,7 +367,7 @@ impl GicDistributor {
             0
         };
         drop(lock);
-        return pend | act;
+        pend | act
     }
 }
 

@@ -94,7 +94,7 @@ impl VirtioIov {
         println!("iov get_ptr failed");
         println!("get_ptr iov {:#?}", inner.vector);
         println!("size {}, idx {}", size, idx);
-        return &[0];
+        &[0]
     }
 
     pub fn write_through_iov(&self, dst: VirtioIov, remain: usize) -> usize {

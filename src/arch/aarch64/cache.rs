@@ -113,19 +113,19 @@ impl CacheInfoTrait for Aarch64CacheInfo {
             const CTR_L1LP_AIVIVT: usize = 0b01 << CTR_L1LP_OFF;
             const CTR_L1LP_VIPT: usize = 0b10 << CTR_L1LP_OFF;
             const CTR_L1LP_PIPT: usize = 0b11 << CTR_L1LP_OFF;
-            const CTR_L1LP_MASK: usize = (1 << CTR_L1LP_LEN - 1) << CTR_L1LP_OFF;
+            const CTR_L1LP_MASK: usize = ((1 << CTR_L1LP_LEN) - 1) << CTR_L1LP_OFF;
 
             let mut ctr: usize;
             unsafe {
                 asm!("mrs {0}, CTR_EL0", out(reg) ctr);
             }
             if ctr & CTR_L1LP_MASK == CTR_L1LP_PIPT {
-                CacheIndexed::PIPT
+                CacheIndexed::Pipt
             } else {
-                CacheIndexed::VIPT
+                CacheIndexed::Vipt
             }
         } else {
-            CacheIndexed::PIPT
+            CacheIndexed::Pipt
         };
 
         Self::new(
@@ -187,7 +187,7 @@ impl Display for Aarch64CacheInfo {
         let mut size = self.size;
         let mut index = 0;
         while index < units.len() {
-            if size >> 10 <= 0 {
+            if size >> 10 == 0 {
                 break;
             }
             size >>= 10;
@@ -221,7 +221,7 @@ pub fn cache_init() {
     for i in 1..=num_levels {
         let cache_info = Aarch64CacheInfo::get_cache_info(i);
         info_list.push(cache_info);
-        if cache_info.cache_type == CacheType::Unified && first_unified == false {
+        if cache_info.cache_type == CacheType::Unified && !first_unified {
             first_unified = true;
             min_share_level = i;
         }

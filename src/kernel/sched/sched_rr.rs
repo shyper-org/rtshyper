@@ -126,14 +126,21 @@ impl SchedulerUpdate for SchedulerRR {
         new_rr.base_slice = src_rr.base_slice;
 
         let active_vcpu = if src_rr.active_idx < src_rr.queue.len() {
-            println!("Core[{}] is some, active_idx {}, addr {:x}", current_cpu().id, src_rr.active_idx, unsafe { *(&new_rr.queue[src_rr.active_idx].clone() as *const _ as *const usize) });
+            println!(
+                "Core[{}] is some, active_idx {}, addr {:x}",
+                current_cpu().id,
+                src_rr.active_idx,
+                unsafe { *(&new_rr.queue[src_rr.active_idx].clone() as *const _ as *const usize) }
+            );
             Some(new_rr.queue[src_rr.active_idx].clone())
         } else {
             println!("Core[{}] is none", current_cpu().id);
             None
         };
         if active_vcpu.is_some() {
-            println!("core[{}] update active_vcpu addr {:x}", current_cpu().id, unsafe { *(&active_vcpu.clone().unwrap() as *const _ as *const usize) });
+            println!("core[{}] update active_vcpu addr {:x}", current_cpu().id, unsafe {
+                *(&active_vcpu.clone().unwrap() as *const _ as *const usize)
+            });
         }
         current_cpu().set_active_vcpu(active_vcpu);
         new_rr

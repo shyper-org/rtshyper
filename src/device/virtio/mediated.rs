@@ -185,7 +185,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> Result<usize, ()> {
             return Err(());
         }
     };
-    if mediated_blk.avail == false {
+    if !mediated_blk.avail {
         // finish current IO task
         set_front_io_task_state(AsyncTaskState::Finish);
     } else {

@@ -94,7 +94,7 @@ pub fn cpu_sched_init() {
     }
 }
 
-pub fn restore_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: Vcpu) {
+pub fn restore_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: &Vcpu) {
     // println!("restore_vcpu_gic");
     match cur_vcpu {
         None => {
@@ -111,7 +111,7 @@ pub fn restore_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: Vcpu) {
     }
 }
 
-pub fn save_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: Vcpu) {
+pub fn save_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: &Vcpu) {
     // println!("save_vcpu_gic");
     match cur_vcpu {
         None => {

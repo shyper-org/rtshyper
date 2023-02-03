@@ -20,6 +20,7 @@ pub use self::cache::*;
 #[macro_use]
 mod regs;
 
+mod cache;
 mod context_frame;
 mod cpu;
 mod exception;
@@ -36,4 +37,3 @@ mod timer;
 mod tlb;
 mod vcpu;
 mod vgic;
-mod cache;

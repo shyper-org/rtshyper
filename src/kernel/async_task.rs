@@ -74,7 +74,7 @@ pub struct IoIdAsyncMsg {
     pub dev: VirtioMmio,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AsyncExeStatus {
     Pending,
     Scheduling,
@@ -248,7 +248,7 @@ impl AsyncTask {
         // let mut context = Context::from_waker(&*waker);
         // self.task.lock().as_mut().poll(&mut context);
         (self.task)();
-        return false;
+        false
     }
 
     pub fn set_state(&self, state: AsyncTaskState) {
@@ -452,13 +452,13 @@ pub fn finish_async_task(ipi: bool) {
                 _ => {}
             }
 
-            update_used_info(args.vq.clone(), task.src_vmid);
+            update_used_info(&args.vq, task.src_vmid);
             let src_vm = vm(task.src_vmid).unwrap();
             args.dev.notify(src_vm);
         }
         AsyncTaskData::AsyncIpiTask(_) => {}
         AsyncTaskData::AsyncNoneTask(args) => {
-            update_used_info(args.vq.clone(), task.src_vmid);
+            update_used_info(&args.vq, task.src_vmid);
             let src_vm = vm(task.src_vmid).unwrap();
             args.dev.notify(src_vm);
         }
@@ -480,7 +480,7 @@ pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) 
     }
 }
 
-fn update_used_info(vq: Virtq, src_vmid: usize) {
+fn update_used_info(vq: &Virtq, src_vmid: usize) {
     let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
     match used_info_list.get_mut(&src_vmid) {
         Some(info_list) => {

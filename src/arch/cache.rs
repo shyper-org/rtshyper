@@ -20,7 +20,7 @@ pub trait CacheInfoTrait {
     fn num_colors(&self) -> usize;
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum CacheType {
     NoCache,
     Instruction,
@@ -37,13 +37,13 @@ impl Default for CacheType {
 
 #[derive(Copy, Clone)]
 pub enum CacheIndexed {
-    PIPT,
-    VIPT,
+    Pipt,
+    Vipt,
 }
 
 impl Default for CacheIndexed {
     fn default() -> Self {
-        Self::PIPT
+        Self::Pipt
     }
 }
 

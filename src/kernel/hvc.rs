@@ -407,7 +407,7 @@ fn hvc_mediated_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()>
         HVC_MEDIATED_DEV_NOTIFY => mediated_blk_notify_handler(x0),
         _ => {
             println!("unknown mediated event {}", event);
-            return Err(());
+            Err(())
         }
     }
 }
@@ -425,7 +425,7 @@ fn hvc_unilib_handler(event: usize, x0: usize, x1: usize, x2: usize) -> Result<u
         HVC_UNILIB_FS_FINISHED => unilib_fs_finished(x0),
         _ => {
             println!("unknown mediated event {}", event);
-            return Err(());
+            Err(())
         }
     }
 }
@@ -527,7 +527,7 @@ pub fn hvc_guest_notify(vm_id: usize) {
             );
         }
         Some(vcpu) => {
-            interrupt_vm_inject(vm, vcpu, HVC_IRQ, 0);
+            interrupt_vm_inject(&vm, &vcpu, HVC_IRQ, 0);
         }
     };
 }
@@ -632,7 +632,6 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
         }
         _ => {
             println!("vgic_ipi_handler: illegal ipi");
-            return;
         }
     }
 }

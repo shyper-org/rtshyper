@@ -16,7 +16,7 @@ const IRQ_MAX_NUM: usize = 0x40;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
 const EMULATED_DEV_MAX_NUM: usize = 16;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DtbDevType {
     DevSerial = 0,
     DevGicd = 1,
@@ -502,7 +502,7 @@ pub fn vm_type(vmid: usize) -> VmType {
         }
     }
     println!("failed to find VM[{}] in vm cfg entry list", vmid);
-    return VmType::VmTOs;
+    VmType::VmTOs
 }
 
 pub fn vm_id_list() -> Vec<usize> {
@@ -522,7 +522,7 @@ pub fn vm_cfg_entry(vmid: usize) -> Option<VmConfigEntry> {
         }
     }
     println!("failed to find VM[{}] in vm cfg entry list", vmid);
-    return None;
+    None
 }
 
 /* Add VM config entry to DEF_VM_CONFIG_TABLE */
@@ -530,7 +530,7 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     match vm_config.generate_vm_id() {
         Ok(vm_id) => {
-            if vm_id == 0 && (vm_config.entries.len() > 0 || vm_config.vm_num > 0) {
+            if vm_id == 0 && (!vm_config.entries.is_empty() || vm_config.vm_num > 0) {
                 panic!("error in mvm config init, the def vm config table is not empty");
             }
             vm_cfg_entry.set_id(vm_id);
@@ -594,7 +594,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
         println!("illegal vm_name_ipa {:x}", vm_name_ipa);
         return Err(());
     }
-    let vm_name_u8 = vec![0 as u8; vm_name_length];
+    let vm_name_u8 = vec![0_u8; vm_name_length];
     if vm_name_length > 0 {
         memcpy_safe(
             &vm_name_u8[0] as *const _ as *const u8,
@@ -617,7 +617,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
         println!("illegal cmdline_ipa {:x}", cmdline_ipa);
         return Err(());
     }
-    let cmdline_u8 = vec![0 as u8; cmdline_length];
+    let cmdline_u8 = vec![0_u8; cmdline_length];
     if cmdline_length > 0 {
         memcpy_safe(
             &cmdline_u8[0] as *const _ as *const u8,
@@ -712,7 +712,7 @@ pub fn vm_cfg_add_emu_dev(
         println!("illegal emulated device name_ipa {:x}", name_ipa);
         return Err(());
     }
-    let name_u8 = vec![0 as u8; NAME_MAX_LEN];
+    let name_u8 = vec![0_u8; NAME_MAX_LEN];
     memcpy_safe(&name_u8[0] as *const _ as *const u8, name_pa as *mut u8, NAME_MAX_LEN);
     let name_str = match String::from_utf8(name_u8.clone()) {
         Ok(str) => str,
@@ -727,7 +727,7 @@ pub fn vm_cfg_add_emu_dev(
         println!("illegal emulated device cfg_list_ipa {:x}", cfg_list_ipa);
         return Err(());
     }
-    let cfg_list = vec![0 as usize; CFG_MAX_NUM];
+    let cfg_list = vec![0_usize; CFG_MAX_NUM];
     memcpy_safe(
         &cfg_list[0] as *const _ as *const u8,
         cfg_list_pa as *mut u8,
@@ -760,12 +760,12 @@ pub fn vm_cfg_add_emu_dev(
         cfg_list,
         emu_type: match emu_dev_type {
             EmuDeviceType::EmuDeviceTVirtioBlkMediated => EmuDeviceType::EmuDeviceTVirtioBlk,
-            _ => emu_dev_type.clone(),
+            _ => emu_dev_type,
         },
-        mediated: match EmuDeviceType::from_usize(emu_type) {
-            EmuDeviceType::EmuDeviceTVirtioBlkMediated => true,
-            _ => false,
-        },
+        mediated: matches!(
+            EmuDeviceType::from_usize(emu_type),
+            EmuDeviceType::EmuDeviceTVirtioBlkMediated
+        ),
     };
     vm_cfg.add_emulated_device_cfg(emu_dev_cfg);
 
@@ -828,7 +828,7 @@ pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irq
         println!("illegal irqs_base_ipa {:x}", irqs_base_ipa);
         return Err(());
     }
-    let mut irqs = vec![0 as usize, irqs_length];
+    let mut irqs = vec![0_usize, irqs_length];
     if irqs_length > 0 {
         memcpy_safe(
             &irqs[0] as *const _ as *const u8,
@@ -863,7 +863,7 @@ pub fn vm_cfg_add_passthrough_device_streams_ids(
         println!("illegal streams_ids_base_ipa {:x}", streams_ids_base_ipa);
         return Err(());
     }
-    let mut streams_ids = vec![0 as usize, streams_ids_length];
+    let mut streams_ids = vec![0_usize, streams_ids_length];
     if streams_ids_length > 0 {
         memcpy_safe(
             &streams_ids[0] as *const _ as *const u8,
@@ -902,7 +902,7 @@ pub fn vm_cfg_add_dtb_dev(
         println!("illegal dtb_dev name ipa {:x}", name_ipa);
         return Err(());
     }
-    let dtb_dev_name_u8 = vec![0 as u8; NAME_MAX_LEN];
+    let dtb_dev_name_u8 = vec![0_u8; NAME_MAX_LEN];
     memcpy_safe(
         &dtb_dev_name_u8[0] as *const _ as *const u8,
         name_pa as *mut u8,
@@ -932,7 +932,7 @@ pub fn vm_cfg_add_dtb_dev(
     let mut dtb_irq_list: Vec<usize> = Vec::new();
 
     if irq_list_length > 0 {
-        let tmp_dtb_irq_list = vec![0 as usize, irq_list_length];
+        let tmp_dtb_irq_list = vec![0_usize, irq_list_length];
         memcpy_safe(
             &tmp_dtb_irq_list[0] as *const _ as *const u8,
             irq_list_pa as *mut u8,

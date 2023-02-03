@@ -151,13 +151,13 @@ pub fn ipi_irq_handler() {
     let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
     drop(cpu_if_list);
 
-    while !msg.is_none() {
+    while msg.is_some() {
         let ipi_msg = msg.unwrap();
         let ipi_type = ipi_msg.ipi_type as usize;
 
         let ipi_handler_list = IPI_HANDLER_LIST.lock();
         let len = ipi_handler_list.len();
-        let handler = ipi_handler_list[ipi_type].handler.clone();
+        let handler = ipi_handler_list[ipi_type].handler;
         drop(ipi_handler_list);
 
         if len <= ipi_type {

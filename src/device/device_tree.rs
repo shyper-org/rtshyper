@@ -89,7 +89,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
 }
 
 // create vm1 fdt demo
-pub fn create_fdt(config: VmConfigEntry) -> Result<Vec<u8>, Error> {
+pub fn create_fdt(config: &VmConfigEntry) -> Result<Vec<u8>, Error> {
     let mut fdt = FdtWriter::new()?;
 
     let root_node = fdt.begin_node("root")?;
@@ -104,12 +104,12 @@ pub fn create_fdt(config: VmConfigEntry) -> Result<Vec<u8>, Error> {
     fdt.property_array_u32("interrupts", &[0x1, 0x7, 0x4])?;
     fdt.end_node(psci)?;
 
-    create_memory_node(&mut fdt, config.clone())?;
+    create_memory_node(&mut fdt, config)?;
     create_timer_node(&mut fdt, 0x8)?;
     // todo: fix create_chosen_node size
     create_chosen_node(&mut fdt, &config.cmdline, config.ramdisk_load_ipa(), CPIO_RAMDISK.len())?;
-    create_cpu_node(&mut fdt, config.clone())?;
-    if config.dtb_device_list().len() > 0 {
+    create_cpu_node(&mut fdt, config)?;
+    if !config.dtb_device_list().is_empty() {
         create_serial_node(&mut fdt, &config.dtb_device_list())?;
     }
     // match &config.vm_dtb_devs {
@@ -151,8 +151,8 @@ pub fn create_fdt(config: VmConfigEntry) -> Result<Vec<u8>, Error> {
 }
 
 // hard code for tx2 vm1
-fn create_memory_node(fdt: &mut FdtWriter, config: VmConfigEntry) -> FdtWriterResult<()> {
-    if config.memory_region().len() == 0 {
+fn create_memory_node(fdt: &mut FdtWriter, config: &VmConfigEntry) -> FdtWriterResult<()> {
+    if config.memory_region().is_empty() {
         panic!("create_memory_node memory region num 0");
     }
     let memory_name = format!("memory@{:x}", config.memory_region()[0].ipa_start);
@@ -192,7 +192,7 @@ fn create_timer_node(fdt: &mut FdtWriter, trigger_lvl: u32) -> FdtWriterResult<(
     Ok(())
 }
 
-fn create_cpu_node(fdt: &mut FdtWriter, config: VmConfigEntry) -> FdtWriterResult<()> {
+fn create_cpu_node(fdt: &mut FdtWriter, config: &VmConfigEntry) -> FdtWriterResult<()> {
     let cpus = fdt.begin_node("cpus")?;
     fdt.property_u32("#size-cells", 0)?;
     fdt.property_u32("#address-cells", 0x2)?;

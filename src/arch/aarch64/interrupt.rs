@@ -45,15 +45,15 @@ pub fn interrupt_arch_ipi_send(cpu_id: usize, ipi_id: usize) {
     }
 }
 
-pub fn interrupt_arch_vm_register(vm: Vm, id: usize) {
+pub fn interrupt_arch_vm_register(vm: &Vm, id: usize) {
     super::vgic_set_hw_int(vm, id);
 }
 
-pub fn interrupt_arch_vm_inject(vm: Vm, vcpu: Vcpu, int_id: usize) {
+pub fn interrupt_arch_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize) {
     let vgic = vm.vgic();
     // println!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm_id(), vcpu.vm_id());
     // restore_vcpu_gic(current_cpu().active_vcpu.clone(), vcpu.clone());
-    if let Some(cur_vcpu) = current_cpu().active_vcpu.clone() {
+    if let Some(cur_vcpu) = current_cpu().active_vcpu.as_ref() {
         if cur_vcpu.vm_id() == vcpu.vm_id() {
             vgic.inject(vcpu, int_id);
             return;

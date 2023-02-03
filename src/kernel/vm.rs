@@ -194,7 +194,7 @@ pub enum VmState {
     VmActive = 2,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum VmType {
     VmTOs = 0,
     VmTBma = 1,
@@ -285,10 +285,7 @@ pub struct WeakVm {
 
 impl WeakVm {
     pub fn get_vm(&self) -> Option<Vm> {
-        match Weak::upgrade(&self.inner) {
-            Some(inner) => Some(Vm { inner }),
-            None => None,
-        }
+        Weak::upgrade(&self.inner).map(|inner| Vm { inner })
     }
 }
 
@@ -547,7 +544,7 @@ impl Vm {
     pub fn pt_dir(&self) -> usize {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
-            Some(pt) => return pt.base_pa(),
+            Some(pt) => pt.base_pa(),
             None => {
                 panic!("Vm::pt_dir: vm{} pt is empty", vm_inner.id);
             }
@@ -615,9 +612,7 @@ impl Vm {
     pub fn vgic(&self) -> Arc<Vgic> {
         let vm_inner = self.inner.lock();
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
-            EmuDevs::Vgic(vgic) => {
-                return vgic.clone();
-            }
+            EmuDevs::Vgic(vgic) => vgic.clone(),
             _ => {
                 panic!("vm{} cannot find vgic", vm_inner.id);
             }
@@ -629,10 +624,7 @@ impl Vm {
         if vm_inner.intc_dev_id >= vm_inner.emu_devs.len() {
             return false;
         }
-        match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
-            EmuDevs::Vgic(_) => true,
-            _ => false,
-        }
+        matches!(&vm_inner.emu_devs[vm_inner.intc_dev_id], EmuDevs::Vgic(_))
     }
 
     // TODO: should copy from or copy to addr, not copy from other vm
@@ -663,7 +655,7 @@ impl Vm {
                 _ => {}
             }
         }
-        return EmuDevs::None;
+        EmuDevs::None
     }
 
     pub fn emu_blk_dev(&self) -> EmuDevs {
@@ -672,7 +664,7 @@ impl Vm {
                 return emu.clone();
             }
         }
-        return EmuDevs::None;
+        EmuDevs::None
     }
 
     // Get console dev by ipa.
@@ -686,7 +678,7 @@ impl Vm {
         // for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
         //     println!("emu dev[{}], ipa 0x{:x}", idx, emu_dev_cfg.base_ipa);
         // }
-        return EmuDevs::None;
+        EmuDevs::None
     }
 
     pub fn ncpu(&self) -> usize {
@@ -714,9 +706,9 @@ impl Vm {
         if vcpuid < vm_inner.cpu_num {
             let vcpu = vm_inner.vcpu_list[vcpuid].clone();
             drop(vm_inner);
-            return Ok(vcpu.phys_id());
+            Ok(vcpu.phys_id())
         } else {
-            return Err(());
+            Err(())
         }
     }
 
@@ -727,29 +719,33 @@ impl Vm {
                 return Ok(vcpuid);
             }
         }
-        return Err(());
+        Err(())
     }
 
     pub fn vcpu_to_pcpu_mask(&self, mask: usize, len: usize) -> usize {
         let mut pmask = 0;
         for i in 0..len {
             let shift = self.vcpuid_to_pcpuid(i);
-            if mask & (1 << i) != 0 && !shift.is_err() {
-                pmask |= 1 << shift.unwrap();
+            if mask & (1 << i) != 0 {
+                if let Ok(shift) = shift {
+                    pmask |= 1 << shift;
+                }
             }
         }
-        return pmask;
+        pmask
     }
 
     pub fn pcpu_to_vcpu_mask(&self, mask: usize, len: usize) -> usize {
         let mut pmask = 0;
         for i in 0..len {
             let shift = self.pcpuid_to_vcpuid(i);
-            if mask & (1 << i) != 0 && !shift.is_err() {
-                pmask |= 1 << shift.unwrap();
+            if mask & (1 << i) != 0 && shift.is_ok() {
+                if let Ok(shift) = shift {
+                    pmask |= 1 << shift;
+                }
             }
         }
-        return pmask;
+        pmask
     }
 
     pub fn show_pagetable(&self, ipa: usize) {
@@ -1073,7 +1069,7 @@ pub fn vm_pa2ipa(vm: Vm, pa: usize) -> usize {
     }
 
     println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
-    return 0;
+    0
 }
 
 #[deprecated]
@@ -1090,7 +1086,7 @@ pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
     }
 
     println!("pa2ipa: access invalid pa {:x}", pa);
-    return 0;
+    0
 }
 
 #[deprecated]
@@ -1111,5 +1107,5 @@ pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
     }
 
     // println!("ipa2pa: access invalid ipa {:x}", ipa);
-    return 0;
+    0
 }
