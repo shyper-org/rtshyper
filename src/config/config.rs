@@ -1,3 +1,4 @@
+use core::ffi::CStr;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -10,7 +11,6 @@ use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
 use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
 use crate::vmm::vmm_init_gvm;
 
-pub const NAME_MAX_LEN: usize = 32;
 const CFG_MAX_NUM: usize = 0x10;
 const IRQ_MAX_NUM: usize = 0x40;
 const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
@@ -573,19 +573,24 @@ pub fn vm_cfg_remove_vm_entry(vm_id: usize) {
     println!("VM[{}] config not found in vm-config-table", vm_id);
 }
 
+fn parse_cstr_error(error: core::str::Utf8Error) -> &'static str {
+    error!("parsing cstr error: {:?}", error);
+    "unknown"
+}
+
 /* Generate a new VM Config Entry, set basic value */
 pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
     let config_pa = vm_ipa2pa(active_vm().unwrap(), config_ipa);
     let (
         vm_name_ipa,
-        vm_name_length,
+        _vm_name_length,
         vm_type,
         cmdline_ipa,
-        cmdline_length,
+        _cmdline_length,
         kernel_load_ipa,
         device_tree_load_ipa,
         ramdisk_load_ipa,
-    ) = unsafe { *(config_pa as *const _) };
+    ): (usize, usize, usize, usize, usize, usize, usize, usize) = unsafe { *(config_pa as *const _) };
     println!("\n\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.
@@ -594,22 +599,10 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
         println!("illegal vm_name_ipa {:x}", vm_name_ipa);
         return Err(());
     }
-    let vm_name_u8 = vec![0_u8; vm_name_length];
-    if vm_name_length > 0 {
-        memcpy_safe(
-            &vm_name_u8[0] as *const _ as *const u8,
-            vm_name_pa as *mut u8,
-            vm_name_length,
-        );
-    }
-
-    let vm_name_str = match String::from_utf8(vm_name_u8.clone()) {
-        Ok(_str) => _str,
-        Err(error) => {
-            println!("error: {:?} in parsing the vm_name {:?}", error, vm_name_u8);
-            String::from("unknown")
-        }
-    };
+    let vm_name_str = unsafe { CStr::from_ptr(vm_name_pa as *const _) }
+        .to_str()
+        .unwrap_or_else(parse_cstr_error)
+        .to_string();
 
     // Copy VM cmdline from user ipa.
     let cmdline_pa = vm_ipa2pa(active_vm().unwrap(), cmdline_ipa);
@@ -617,21 +610,10 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
         println!("illegal cmdline_ipa {:x}", cmdline_ipa);
         return Err(());
     }
-    let cmdline_u8 = vec![0_u8; cmdline_length];
-    if cmdline_length > 0 {
-        memcpy_safe(
-            &cmdline_u8[0] as *const _ as *const u8,
-            cmdline_pa as *mut u8,
-            cmdline_length,
-        );
-    }
-    let cmdline_str = match String::from_utf8(cmdline_u8.clone()) {
-        Ok(_str) => _str,
-        Err(error) => {
-            println!("error: {:?} in parsing the cmdline {:?}", error, cmdline_u8);
-            String::from("unknown")
-        }
-    };
+    let cmdline_str = unsafe { CStr::from_ptr(cmdline_pa as *const _) }
+        .to_str()
+        .unwrap_or_else(parse_cstr_error)
+        .to_string();
 
     // Generate a new VM config entry.
     let new_vm_cfg = VmConfigEntry::new(
@@ -712,15 +694,10 @@ pub fn vm_cfg_add_emu_dev(
         println!("illegal emulated device name_ipa {:x}", name_ipa);
         return Err(());
     }
-    let name_u8 = vec![0_u8; NAME_MAX_LEN];
-    memcpy_safe(&name_u8[0] as *const _ as *const u8, name_pa as *mut u8, NAME_MAX_LEN);
-    let name_str = match String::from_utf8(name_u8.clone()) {
-        Ok(str) => str,
-        Err(error) => {
-            println!("error: {:?} in parsing the emulated device name {:?}", error, name_u8);
-            String::from("unknown")
-        }
-    };
+    let name_str = unsafe { CStr::from_ptr(name_pa as *const _) }
+        .to_str()
+        .unwrap_or_else(parse_cstr_error)
+        .to_string();
     // Copy emu device cfg list from user ipa.
     let cfg_list_pa = vm_ipa2pa(active_vm().unwrap(), cfg_list_ipa);
     if cfg_list_pa == 0 {
@@ -729,8 +706,8 @@ pub fn vm_cfg_add_emu_dev(
     }
     let cfg_list = vec![0_usize; CFG_MAX_NUM];
     memcpy_safe(
-        &cfg_list[0] as *const _ as *const u8,
-        cfg_list_pa as *mut u8,
+        cfg_list.as_ptr() as *const _,
+        cfg_list_pa as *const _,
         CFG_MAX_NUM * 8, // sizeof(usize) / sizeof(u8)
     );
 
@@ -831,8 +808,8 @@ pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irq
     let mut irqs = vec![0_usize, irqs_length];
     if irqs_length > 0 {
         memcpy_safe(
-            &irqs[0] as *const _ as *const u8,
-            irqs_base_pa as *mut u8,
+            irqs.as_ptr() as *const _,
+            irqs_base_pa as *const _,
             irqs_length * 8, // sizeof(usize) / sizeof(u8)
         );
     }
@@ -866,8 +843,8 @@ pub fn vm_cfg_add_passthrough_device_streams_ids(
     let mut streams_ids = vec![0_usize, streams_ids_length];
     if streams_ids_length > 0 {
         memcpy_safe(
-            &streams_ids[0] as *const _ as *const u8,
-            streams_ids_base_pa as *mut u8,
+            streams_ids.as_ptr() as *const _,
+            streams_ids_base_pa as *const _,
             streams_ids_length * 8, // sizeof(usize) / sizeof(u8)
         );
     }
@@ -902,22 +879,10 @@ pub fn vm_cfg_add_dtb_dev(
         println!("illegal dtb_dev name ipa {:x}", name_ipa);
         return Err(());
     }
-    let dtb_dev_name_u8 = vec![0_u8; NAME_MAX_LEN];
-    memcpy_safe(
-        &dtb_dev_name_u8[0] as *const _ as *const u8,
-        name_pa as *mut u8,
-        NAME_MAX_LEN,
-    );
-    let dtb_dev_name_str = match String::from_utf8(dtb_dev_name_u8.clone()) {
-        Ok(str) => str,
-        Err(error) => {
-            println!(
-                "error: {:?} in parsing the DTB device name {:?}",
-                error, dtb_dev_name_u8
-            );
-            String::from("unknown")
-        }
-    };
+    let dtb_dev_name_str = unsafe { CStr::from_ptr(name_pa as *const _) }
+        .to_str()
+        .unwrap_or_else(parse_cstr_error)
+        .to_string();
     println!(
         "      get dtb dev name {:?}",
         dtb_dev_name_str.trim_end_matches(char::from(0))
@@ -934,8 +899,8 @@ pub fn vm_cfg_add_dtb_dev(
     if irq_list_length > 0 {
         let tmp_dtb_irq_list = vec![0_usize, irq_list_length];
         memcpy_safe(
-            &tmp_dtb_irq_list[0] as *const _ as *const u8,
-            irq_list_pa as *mut u8,
+            tmp_dtb_irq_list.as_ptr() as *const _,
+            irq_list_pa as *const _,
             irq_list_length * 8, // sizeof(usize) / sizeof(u8)
         );
         for i in 0..irq_list_length {

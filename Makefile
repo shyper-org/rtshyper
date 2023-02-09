@@ -4,6 +4,9 @@ DISK = /home/ohmr/work/hypervisor/disk-img/disk.img
 # Compile
 ARCH ?= aarch64
 BUILD_STD = core,alloc
+PROFILE ?= release
+# features, seperate with comma `,`
+FEATURES =
 
 # Toolchain
 TOOLCHAIN=aarch64-none-elf
@@ -12,6 +15,13 @@ GDB = ${TOOLCHAIN}-gdb
 OBJDUMP = ${TOOLCHAIN}-objdump
 
 IMAGE=rtshyper_rs
+
+# Cargo flags.
+ifeq (${PROFILE}, release)
+CARGO_FLAGS := ${CARGO_FLAGS} --release --no-default-features
+else
+CARGO_FLAGS := ${CARGO_FLAGS} --no-default-features
+endif
 
 qemu_debug:
 	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu
@@ -22,29 +32,19 @@ qemu_release:
 	${OBJDUMP} --demangle -d target/aarch64/release/${IMAGE} > target/aarch64/release/t.txt
 
 tx2:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features tx2
-	bash upload
-	${OBJDUMP} --demangle -d target/aarch64-tx2/debug/${IMAGE} > target/aarch64-tx2/debug/t.txt
-
-tx2_release:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features tx2 --release
-	bash upload_release
-	${OBJDUMP} --demangle -d target/aarch64-tx2/release/${IMAGE} > target/aarch64-tx2/release/t.txt
-
-tx2_ramdisk:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2.json --features "tx2 ramdisk" --release
-	bash upload_release
-	${OBJDUMP} --demangle -d target/aarch64-tx2/release/${IMAGE} > target/aarch64-tx2/release/t.txt
+	cargo build --target ${ARCH}-$@.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@,${FEATURES}
+	bash upload ${PROFILE}
+	${OBJDUMP} --demangle -d target/${ARCH}-$@/${PROFILE}/${IMAGE} > target/${ARCH}-$@/${PROFILE}/t.txt
 
 tx2_update:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-tx2-update.json --features "tx2 update" --release
+	cargo build --target ${ARCH}-tx2-update.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features "tx2 update"
 	bash upload_update
-	${OBJDUMP} --demangle -d target/aarch64-tx2-update/release/${IMAGE} > target/aarch64-tx2-update/release/update.txt
+	${OBJDUMP} --demangle -d target/${ARCH}-tx2-update/${PROFILE}/${IMAGE} > target/${ARCH}-tx2-update/${PROFILE}/update.txt
 
-pi4_release:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-pi4.json --features pi4 --release
-	bash pi4_upload_release
-	${OBJDUMP} --demangle -d target/aarch64-pi4/release/${IMAGE} > target/aarch64-pi4/release/t.txt
+pi4:
+	cargo build --target ${ARCH}-$@.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
+	bash pi4_upload ${PROFILE}
+	${OBJDUMP} --demangle -d target/${ARCH}-$@/${PROFILE}/${IMAGE} > target/${ARCH}-$@/${PROFILE}/t.txt
 
 run:
 	${QEMU} \

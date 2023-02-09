@@ -9,6 +9,7 @@ use crate::kernel::{
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::lib::trace;
+use shyper::MediatedBlkContent;
 
 pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
@@ -113,35 +114,6 @@ impl MediatedBlk {
     pub fn set_cache_pa(&self, cache_pa: usize) {
         self.content().cfg.cache_pa = cache_pa;
     }
-}
-
-#[repr(C)]
-pub struct MediatedBlkContent {
-    nreq: usize,
-    cfg: MediatedBlkCfg,
-    req: MediatedBlkReq,
-}
-
-#[repr(C)]
-pub struct MediatedBlkCfg {
-    name: [u8; 32],
-    block_dev_path: [u8; 32],
-    block_num: usize,
-    dma_block_max: usize,
-    cache_size: usize,
-    idx: u16,
-    // TODO: enable page cache
-    pcache: bool,
-    cache_va: usize,
-    cache_ipa: usize,
-    cache_pa: usize,
-}
-
-#[repr(C)]
-pub struct MediatedBlkReq {
-    req_type: u32,
-    sector: usize,
-    count: usize,
 }
 
 pub fn mediated_dev_init() {

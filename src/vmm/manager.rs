@@ -1,11 +1,11 @@
-use alloc::vec::Vec;
+use alloc::ffi::CString;
 
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::config::{vm_id_list, vm_num};
 // use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
-use crate::config::NAME_MAX_LEN;
+use shyper::VMInfo;
 use crate::config::vm_cfg_entry;
 use crate::config::vm_type;
 use crate::kernel::{
@@ -20,7 +20,7 @@ use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::lib::sleep;
-use crate::lib::{bit_extract, memcpy_safe, memset_safe};
+use crate::lib::{bit_extract, memset_safe};
 use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
 #[derive(Copy, Clone)]
@@ -336,14 +336,6 @@ pub fn get_vm_id(id_ipa: usize) -> bool {
 }
 
 #[repr(C)]
-struct VMInfo {
-    pub id: u32,
-    pub vm_name: [u8; NAME_MAX_LEN],
-    pub vm_type: u32,
-    pub vm_state: u32,
-}
-
-#[repr(C)]
 struct VMInfoList {
     pub vm_num: usize,
     pub info_list: [VMInfo; VM_NUM_MAX],
@@ -384,13 +376,11 @@ pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
         vm_info.info_list[idx].vm_type = vm_type as u32;
         vm_info.info_list[idx].vm_state = vm_state as u32;
 
-        let vm_name_u8: Vec<u8> = vm_cfg.vm_name().as_bytes().to_vec();
-        memcpy_safe(
-            vm_info.info_list[idx].vm_name.as_ptr() as *const _ as *const u8,
-            vm_name_u8.as_ptr(),
-            NAME_MAX_LEN,
-        );
-        vm_info.info_list[idx].vm_name[vm_name_u8.len()] = 0;
+        // From Rust to C: CString represents an owned, C-friendly string
+        let vm_name_cstring = CString::new(vm_cfg.vm_name()).unwrap();
+        let vm_name_with_null = vm_name_cstring.to_bytes_with_nul();
+        // ensure that the slice length is equal
+        vm_info.info_list[idx].vm_name[..vm_name_with_null.len()].copy_from_slice(vm_name_with_null);
     }
     Ok(0)
 }

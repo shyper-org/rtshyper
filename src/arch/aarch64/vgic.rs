@@ -903,10 +903,11 @@ impl Vgic {
 
             if let Some(idx) = lr_ind {
                 let spilled_int = self.get_int(vcpu, GICH.lr(idx) as usize & 0b1111111111).unwrap();
-                let spilled_int_lock;
-                if spilled_int.id() != interrupt.id() {
-                    spilled_int_lock = spilled_int.lock.lock();
-                }
+                // NOTE: I dont know whether the lock is needed, a very weird lock in `VgicInt`
+                // let spilled_int_lock;
+                // if spilled_int.id() != interrupt.id() {
+                //     spilled_int_lock = spilled_int.lock.lock();
+                // }
                 self.remove_lr(vcpu, &spilled_int);
                 vgic_int_yield_owner(vcpu, &spilled_int);
                 // if spilled_int.id() != interrupt.id() {
