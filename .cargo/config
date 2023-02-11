@@ -1,3 +1,6 @@
 [build]
-target = "aarch64-tx2.json"
+target = "aarch64.json"
 rustflags = ["-C", "llvm-args=-global-isel=false"]
+
+[unstable]
+build-std-features = ["compiler-builtins-mem"]

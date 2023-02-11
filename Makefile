@@ -12,9 +12,11 @@ FEATURES =
 TOOLCHAIN=aarch64-none-elf
 QEMU = /usr/share/qemu/bin/qemu-system-aarch64
 GDB = ${TOOLCHAIN}-gdb
-OBJDUMP = ${TOOLCHAIN}-objdump
+OBJDUMP = rust-objdump
 
 IMAGE=rtshyper_rs
+
+TARGET_DIR=target/${ARCH}/${PROFILE}
 
 # Cargo flags.
 ifeq (${PROFILE}, release)
@@ -32,19 +34,19 @@ qemu_release:
 	${OBJDUMP} --demangle -d target/aarch64/release/${IMAGE} > target/aarch64/release/t.txt
 
 tx2:
-	cargo build --target ${ARCH}-$@.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@,${FEATURES}
+	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@,${FEATURES}
 	bash upload ${PROFILE}
-	${OBJDUMP} --demangle -d target/${ARCH}-$@/${PROFILE}/${IMAGE} > target/${ARCH}-$@/${PROFILE}/t.txt
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
 tx2_update:
-	cargo build --target ${ARCH}-tx2-update.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features "tx2 update"
+	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features "tx2 update"
 	bash upload_update
-	${OBJDUMP} --demangle -d target/${ARCH}-tx2-update/${PROFILE}/${IMAGE} > target/${ARCH}-tx2-update/${PROFILE}/update.txt
+	${OBJDUMP} --demangle -d target/${ARCH}/${TARGET_DIR}/${IMAGE} > target/${ARCH}/${PROFILE}/update.txt
 
 pi4:
-	cargo build --target ${ARCH}-$@.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
-	bash pi4_upload ${PROFILE}
-	${OBJDUMP} --demangle -d target/${ARCH}-$@/${PROFILE}/${IMAGE} > target/${ARCH}-$@/${PROFILE}/t.txt
+	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
+	bash upload ${PROFILE}
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
 run:
 	${QEMU} \

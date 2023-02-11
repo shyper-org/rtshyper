@@ -69,12 +69,7 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) {
     // }
     // tegra_emmc_blk_read(0, 0, 0 as *mut _);
     if cpu_id == 0 {
-        #[cfg(feature = "tx2")]
-        println!("Welcome to TX2 {} Hypervisor!", env!("CARGO_PKG_NAME"));
-        #[cfg(feature = "qemu")]
-        println!("Welcome to Qemu {} Hypervisor!", env!("CARGO_PKG_NAME"));
-        #[cfg(feature = "pi4")]
-        println!("Welcome to PI4 {} Hypervisor!", env!("CARGO_PKG_NAME"));
+        println!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
         println!("Built At {}", env!("BUILD_TIME"));
 
         #[cfg(feature = "pi4")]
