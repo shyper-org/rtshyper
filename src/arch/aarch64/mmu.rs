@@ -22,6 +22,9 @@ global_asm!(include_str!("start_update.S"));
 #[cfg(not(feature = "update"))]
 global_asm!(include_str!("start_pi4.S"));
 
+#[cfg(feature = "qemu")]
+global_asm!(include_str!("start_qemu.S"));
+
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 // const PAGE_SIZE: usize = 4096;
 // const PAGE_SHIFT: usize = 12;
@@ -133,8 +136,7 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
     memset_safe(lvl1_base as *mut u8, 0, PAGE_SIZE);
     memset_safe(lvl2_base as *mut u8, 0, PAGE_SIZE);
 
-    #[cfg(feature = "tx2")]
-    {
+    if cfg!(feature = "tx2") {
         for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let output_addr = i << LVL1_SHIFT;
             lvl1_pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
@@ -163,9 +165,7 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
             let addr = 0x12000000 + i * 0x200000;
             lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
         }
-    }
-    #[cfg(feature = "pi4")]
-    {
+    } else if cfg!(feature = "pi4") {
         use crate::arch::LVL2_SHIFT;
         // crate::driver::putc('o' as u8);
         // crate::driver::putc('r' as u8);
@@ -194,6 +194,8 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         }
         // 0x8_0000_0000 + 0x0_c000_0000
         lvl1_pt.lvl1[32 + 3] = BlockDescriptor::table(lvl2_base);
+    } else if cfg!(feature = "qemu") {
+        todo!()
     }
 }
 

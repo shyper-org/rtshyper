@@ -125,6 +125,8 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
                 vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
                 // vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.78"));
                 // vmm_load_image(vm, include_bytes!("../../image/Image_pi4"));
+                #[cfg(feature = "qemu")]
+                vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
             }
             None => {
                 // nothing to do, its a dynamic configuration

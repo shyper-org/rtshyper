@@ -2,36 +2,27 @@ use crate::arch::{smmu_add_device, smmu_vm_init};
 use crate::kernel::Vm;
 
 pub fn iommu_init() {
-    #[cfg(feature = "tx2")]
-    {
+    if cfg!(feature = "tx2") {
         crate::arch::smmu_init();
         println!("IOMMU init ok");
-    }
-    #[cfg(feature = "pi4")]
-    {
+    } else {
         println!("Platform not support IOMMU");
     }
 }
 
 pub fn iommmu_vm_init(vm: &Vm) -> bool {
-    #[cfg(feature = "tx2")]
-    {
+    if cfg!(feature = "tx2") {
         smmu_vm_init(vm)
-    }
-    #[cfg(feature = "pi4")]
-    {
+    } else {
         println!("Platform not support IOMMU");
         false
     }
 }
 
 pub fn iommu_add_device(vm: &Vm, stream_id: usize) -> bool {
-    #[cfg(feature = "tx2")]
-    {
+    if cfg!(feature = "tx2") {
         smmu_add_device(vm.iommu_ctx_id(), stream_id)
-    }
-    #[cfg(feature = "pi4")]
-    {
+    } else {
         println!("Platform not support IOMMU");
         false
     }

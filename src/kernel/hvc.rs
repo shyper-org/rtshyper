@@ -116,6 +116,8 @@ pub const HVC_CONFIG_UPLOAD_KERNEL_IMAGE: usize = 9;
 pub const HVC_IRQ: usize = 32 + 0x20;
 #[cfg(feature = "pi4")]
 pub const HVC_IRQ: usize = 32 + 0x10;
+#[cfg(feature = "qemu")]
+pub const HVC_IRQ: usize = 32 + 0x20;
 
 #[repr(C)]
 pub enum HvcGuestMsg {

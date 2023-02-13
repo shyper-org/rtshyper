@@ -2,6 +2,7 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
+use crate::board::SchedRule::{self, RoundRobin};
 use crate::device::ARM_CORTEX_A57;
 use crate::driver::{read, write};
 
@@ -15,6 +16,9 @@ pub const UART_2_ADDR: usize = 0x9110000;
 
 pub const UART_1_INT: usize = 42;
 pub const UART_2_INT: usize = 43;
+
+// Hardcode
+pub const SHARE_MEM_BASE: usize = 0x7_0000_0000;
 
 pub const PLATFORM_GICD_BASE: usize = 0x08000000;
 pub const PLATFORM_GICC_BASE: usize = 0x08010000;
@@ -36,6 +40,17 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         num: 4,
         mpidr_list: [0, 1, 2, 3, 4, 5, 6, 7],
         name: [ARM_CORTEX_A57; 8],
+        sched_list: [
+            RoundRobin,
+            RoundRobin,
+            RoundRobin,
+            RoundRobin,
+            SchedRule::None,
+            SchedRule::None,
+            SchedRule::None,
+            SchedRule::None,
+        ],
+
     },
     mem_desc: PlatMemoryConfig {
         region_num: 2,
@@ -87,10 +102,21 @@ fn platform_cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
     power_arch_cpu_on(arch_core_id, entry, ctx);
 }
 
+pub fn platform_cpu_shutdown() {
+    crate::arch::power_arch_cpu_shutdown();
+}
+
 pub fn platform_power_on_secondary_cores() {
     for i in 1..PLAT_DESC.cpu_desc.num {
         platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], KERNEL_ENTRY, 0);
     }
+}
+
+pub fn platform_sys_reboot() {
+    println!("Hypervisor reset...");
+    // mem_heap_reset();
+    crate::arch::power_arch_sys_reset();
+    loop {}
 }
 
 pub fn platform_blk_init() {

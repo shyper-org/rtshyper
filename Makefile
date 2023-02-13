@@ -10,9 +10,9 @@ FEATURES =
 
 # Toolchain
 TOOLCHAIN=aarch64-none-elf
-QEMU = /usr/share/qemu/bin/qemu-system-aarch64
 GDB = ${TOOLCHAIN}-gdb
 OBJDUMP = rust-objdump
+QEMU = qemu-system-aarch64
 
 IMAGE=rtshyper_rs
 
@@ -25,13 +25,9 @@ else
 CARGO_FLAGS := ${CARGO_FLAGS} --no-default-features
 endif
 
-qemu_debug:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu
-	${OBJDUMP} --demangle -d target/aarch64/debug/${IMAGE} > target/aarch64/debug/t.txt
-
-qemu_release:
-	cargo build -Z build-std=${BUILD_STD} --target aarch64-qemu.json --features qemu --release
-	${OBJDUMP} --demangle -d target/aarch64/release/${IMAGE} > target/aarch64/release/t.txt
+qemu:
+	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
 tx2:
 	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@,${FEATURES}
@@ -48,47 +44,23 @@ pi4:
 	bash upload ${PROFILE}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
-run:
-	${QEMU} \
-		-machine virt,virtualization=on,gic-version=2\
+QEMU_OPTIONS = -machine virt,virtualization=on,gic-version=2\
 		-drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-m 8g \
 		-cpu cortex-a57 \
 		-smp 8 \
-		-kernel target/aarch64/debug/${IMAGE} \
+		-kernel ${TARGET_DIR}/${IMAGE} \
 		-global virtio-mmio.force-legacy=false \
 		-serial stdio \
 		-serial tcp:127.0.0.1:12345 \
 		-serial tcp:127.0.0.1:12346 \
 		-display none
 
-run_release:
-	${QEMU} \
-		-machine virt,virtualization=on,gic-version=2\
-		-drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-		-m 8g \
-		-cpu cortex-a57 \
-		-smp 8 \
-		-kernel target/aarch64/release/${IMAGE} \
-		-global virtio-mmio.force-legacy=false \
-		-serial stdio \
-		-serial tcp:127.0.0.1:12345 \
-		-serial tcp:127.0.0.1:12346 \
-		-display none
+run:
+	${QEMU} ${QEMU_OPTIONS}
 
 debug:
-	${QEMU} \
-		-machine virt,virtualization=on,gic-version=2\
-		-drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-		-m 8g \
-		-cpu cortex-a57 \
-		-smp 8 \
-		-kernel target/aarch64/debug/${IMAGE} \
-		-global virtio-mmio.force-legacy=false \
-		-serial stdio \
-		-serial tcp:127.0.0.1:12345 \
-		-serial tcp:127.0.0.1:12346 \
-		-display none \
+	${QEMU} ${QEMU_OPTIONS}\
 		-s -S
 
 
