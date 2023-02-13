@@ -2,8 +2,6 @@ use alloc::vec::Vec;
 
 use vm_fdt::{Error, FdtWriter, FdtWriterResult};
 
-#[cfg(feature = "pi4")]
-use crate::arch::PAGE_SIZE;
 use crate::config::{DtbDevType, VmDtbDevConfig};
 use crate::config::VmConfigEntry;
 use crate::device::EmuDeviceType;

@@ -366,7 +366,7 @@ pub unsafe fn vmm_setup_fdt(vm: &Vm) {
                                 emu_cfg.name.unwrap().as_ptr(),
                             );
                             #[cfg(feature = "pi4")]
-                            let r = fdt_setup_gic(
+                            fdt_setup_gic(
                                 dtb,
                                 (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
                                 (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
@@ -526,7 +526,7 @@ pub fn vmm_boot() {
         // active_vm().unwrap().set_migration_state(false);
         info!("Core {} start running", current_cpu().id);
         vcpu_run(false);
-    } else {
+    } else if !current_cpu().assigned() {
         // If there is no available vm(vcpu), just go idle
         info!("Core {} idle", current_cpu().id);
         cpu_idle();

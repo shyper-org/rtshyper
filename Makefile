@@ -34,14 +34,9 @@ tx2:
 	bash upload ${PROFILE}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
-tx2_update:
-	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features "tx2 update"
-	bash upload_update
-	${OBJDUMP} --demangle -d target/${ARCH}/${TARGET_DIR}/${IMAGE} > target/${ARCH}/${PROFILE}/update.txt
-
 pi4:
 	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
-	bash upload ${PROFILE}
+	bash pi4_upload ${PROFILE}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
 QEMU_OPTIONS = -machine virt,virtualization=on,gic-version=2\

@@ -38,7 +38,7 @@ _start:
     add x1, x1, x3
     add x1, x1, x2
 
-    adrp x1, boot_stack_top
+    # adrp x1, boot_stack_top
     mov sp, x1
 
     cbnz x0, 5f
@@ -51,8 +51,8 @@ _start:
 
     adrp x0, lvl1_page_table
     adrp x1, lvl2_page_table
-    ldr x2, =_bss_begin
-    ldr x3, =_bss_end
+    # ldr x2, =_bss_begin
+    # ldr x3, =_bss_end
     bl  pt_populate
 5:
     // Trap nothing from EL1 to El2
@@ -124,43 +124,6 @@ set_loop:
 	cmp x5, x3 // last way reached yet?
 	ble way_loop // if not, iterate way_loop
 	ret
-
-.global update_request
-update_request:
-    sub sp, sp, #40
-    stp x0, x1, [sp, #0]
-    stp x2, x3, [sp, #16]
-    str x30, [sp, #32]
-
-    adr x2, .   // read pc to x2
-    mov x3, #0x8a000000
-    cmp x2, x3
-    bgt 1f
-    bl  live_update
-1:
-    ldr x30, [sp, #32]
-    ldp x2, x3, [sp, #16]
-    ldp x0, x1, [sp, #0]
-    add sp, sp, #40
-    ret
-
-live_update:
-    sub sp, sp, #40
-    stp x0, x1, [sp, #0]
-    stp x2, x3, [sp, #16]
-    str x30, [sp, #32]
-
-    adr x2, .   // read pc to x0
-    sub x2, x2, #16 // sub str instruction
-    mov x3, #0x5000000
-    add x2, x2, x3
-    blr  x2
-
-    ldr x30, [sp, #32]
-    ldp x2, x3, [sp, #16]
-    ldp x0, x1, [sp, #0]
-    add sp, sp, #40
-    ret
 
 .align 12
 .section .data.boot

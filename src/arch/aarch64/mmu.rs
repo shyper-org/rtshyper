@@ -5,21 +5,13 @@ use tock_registers::interfaces::*;
 use crate::arch::pt_lvl2_idx;
 use crate::board::PLAT_DESC;
 use crate::lib::memset_safe;
-#[cfg(feature = "pi4")]
-use crate::arch::LVL2_SHIFT;
 
 use super::interface::*;
 
 #[cfg(feature = "tx2")]
-#[cfg(not(feature = "update"))]
 global_asm!(include_str!("start.S"));
 
-#[cfg(feature = "update")]
-#[cfg(feature = "tx2")]
-global_asm!(include_str!("start_update.S"));
-
 #[cfg(feature = "pi4")]
-#[cfg(not(feature = "update"))]
 global_asm!(include_str!("start_pi4.S"));
 
 #[cfg(feature = "qemu")]

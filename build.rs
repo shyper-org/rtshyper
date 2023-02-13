@@ -1,12 +1,10 @@
 use std::env::var;
-use std::process::Command;
 
 fn main() {
     println!("cargo:rustc-link-search=native={}/lib", var("PWD").unwrap());
     println!("cargo:rustc-link-lib=static=fdt-binding");
-    // note: add error checking yourself.
-    let output = Command::new("date").arg("+\"%Y-%m-%d %H:%M:%S %Z\"").output().unwrap();
-    let build_time = String::from_utf8(output.stdout).unwrap();
+
+    let build_time = chrono::offset::Local::now().format("%Y-%m-%d %H:%M:%S %Z");
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
 
     // set the linker script
@@ -21,7 +19,6 @@ fn main() {
         panic!("Unsupported platform!");
     };
     println!("cargo:rustc-env=PLATFORM={}", platform.to_uppercase());
-    let appendix = if cfg!(feature = "update") { "-update" } else { "" };
-    let linker_ld = String::from(format!("{}-{}{}.ld", arch, platform, appendix));
+    let linker_ld = format!("{}-{}.ld", arch, platform);
     println!("cargo:rustc-link-arg=-Tsrc/linkers/{}", linker_ld);
 }

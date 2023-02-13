@@ -26,8 +26,3 @@ pub trait Scheduler {
     /* yield to another cpu, only used when vcpu is new added and want to be excuted immediately */
     fn yield_to(&mut self, vcpu: Vcpu);
 }
-
-// #[cfg(feature = "update")]
-pub trait SchedulerUpdate {
-    fn update(&self) -> Self;
-}

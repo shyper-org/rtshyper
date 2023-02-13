@@ -1,0 +1,12 @@
+#!/bin/bash
+
+bin="./target/aarch64/$1"
+tftp="root@192.168.106.153:/tftp"
+
+rust-objcopy ${bin}/rtshyper_rs -O binary ${bin}/shyper.bin
+mkimage -n shyper -A arm64 -O linux -T kernel -C none -a 0xF0080000 -e 0xF0080000 \
+-d ${bin}/shyper.bin ${bin}/shyperImage
+echo "*** Upload Image Rust_Image_pi ***"
+
+scp ${bin}/shyperImage ${tftp}/Rust_Image_pi
+scp ./image/pi4_fin.dtb ${tftp}/pi4_dtb

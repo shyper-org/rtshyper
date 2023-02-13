@@ -137,43 +137,6 @@ set_loop:
 	ble way_loop // if not, iterate way_loop
 	ret
 
-.global update_request
-update_request:
-    sub sp, sp, #40
-    stp x0, x1, [sp, #0]
-    stp x2, x3, [sp, #16]
-    str x30, [sp, #32]
-
-    adr x2, .   // read pc to x2
-    mov x3, #0x8a000000
-    cmp x2, x3
-    bgt 1f
-    bl  live_update
-1:
-    ldr x30, [sp, #32]
-    ldp x2, x3, [sp, #16]
-    ldp x0, x1, [sp, #0]
-    add sp, sp, #40
-    ret
-
-live_update:
-    sub sp, sp, #40
-    stp x0, x1, [sp, #0]
-    stp x2, x3, [sp, #16]
-    str x30, [sp, #32]
-
-    adr x2, .   // read pc to x0
-    sub x2, x2, #16 // sub str instruction
-    mov x3, #0x7000000  // 0x83000000 + 0x7000000
-    add x2, x2, x3
-    blr  x2
-
-    ldr x30, [sp, #32]
-    ldp x2, x3, [sp, #16]
-    ldp x0, x1, [sp, #0]
-    add sp, sp, #40
-    ret
-
 .align 12
 .section .data.boot
 boot_stack:

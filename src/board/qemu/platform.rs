@@ -50,7 +50,6 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
             SchedRule::None,
             SchedRule::None,
         ],
-
     },
     mem_desc: PlatMemoryConfig {
         region_num: 2,

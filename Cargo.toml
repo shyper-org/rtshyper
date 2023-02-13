@@ -15,6 +15,9 @@ lto = true
 panic = "abort"
 debug = true
 
+[build-dependencies]
+chrono = "0.4.23"
+
 [dependencies]
 shyper = { path = "libshyper" }
 vm-fdt = { git = "https://github.com/migu4917/vm-fdt", features = ["alloc"] }
@@ -32,9 +35,9 @@ default-features = false
 features = ["register_types"]
 
 [features]
+default = ["tx2"]
 tx2 = []
 qemu = []
 pi4 = []
-update = []
 ramdisk = []
 static-config = []

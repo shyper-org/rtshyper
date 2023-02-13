@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use crate::kernel::{Vcpu, Scheduler, SchedulerUpdate, current_cpu, VcpuState, timer_enable, vm};
+use crate::kernel::{Vcpu, Scheduler, current_cpu, VcpuState, timer_enable};
 
 pub struct SchedulerRR {
     queue: Vec<Vcpu>,
@@ -108,41 +108,5 @@ impl Scheduler for SchedulerRR {
         if queue.len() > 1 {
             timer_enable(true);
         }
-    }
-}
-
-// #[cfg(feature = "update")]
-impl SchedulerUpdate for SchedulerRR {
-    fn update(&self) -> Self {
-        let src_rr = self;
-        let mut new_rr = SchedulerRR::default();
-        for vcpu in src_rr.queue.iter() {
-            let vm_id = vcpu.vm_id();
-            let vcpu_id = vcpu.id();
-            let vm = vm(vm_id).unwrap();
-            new_rr.queue.push(vm.vcpu(vcpu_id).unwrap());
-        }
-        new_rr.active_idx = src_rr.active_idx;
-        new_rr.base_slice = src_rr.base_slice;
-
-        let active_vcpu = if src_rr.active_idx < src_rr.queue.len() {
-            println!(
-                "Core[{}] is some, active_idx {}, addr {:x}",
-                current_cpu().id,
-                src_rr.active_idx,
-                unsafe { *(&new_rr.queue[src_rr.active_idx].clone() as *const _ as *const usize) }
-            );
-            Some(new_rr.queue[src_rr.active_idx].clone())
-        } else {
-            println!("Core[{}] is none", current_cpu().id);
-            None
-        };
-        if active_vcpu.is_some() {
-            println!("core[{}] update active_vcpu addr {:x}", current_cpu().id, unsafe {
-                *(&active_vcpu.clone().unwrap() as *const _ as *const usize)
-            });
-        }
-        current_cpu().set_active_vcpu(active_vcpu);
-        new_rr
     }
 }
