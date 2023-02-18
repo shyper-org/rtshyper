@@ -267,25 +267,27 @@ pub fn send_migrate_memcpy_msg(vmid: usize) {
     );
 }
 
-pub fn map_migrate_vm_mem(vm: Vm, ipa_start: usize) {
-    let mut len = 0;
-    for i in 0..vm.region_num() {
-        active_vm()
-            .unwrap()
-            .pt_map_range(ipa_start + len, vm.pa_length(i), vm.pa_start(i), PTE_S2_NORMAL, true);
-        len += vm.pa_length(i);
-    }
+pub fn map_migrate_vm_mem(_vm: Vm, _ipa_start: usize) {
+    todo!()
+    // let mut len = 0;
+    // for i in 0..vm.region_num() {
+    //     active_vm()
+    //         .unwrap()
+    //         .pt_map_range(ipa_start + len, vm.pa_length(i), vm.pa_start(i), PTE_S2_NORMAL, true);
+    //     len += vm.pa_length(i);
+    // }
 }
 
-pub fn unmap_migrate_vm_mem(vm: Vm, ipa_start: usize) {
-    let mut len = 0;
-    for i in 0..vm.region_num() {
-        // println!("unmap_migrate_vm_mem, ipa_start {:x}, len {:x}", ipa_start, vm.pa_length(i));
-        active_vm()
-            .unwrap()
-            .pt_unmap_range(ipa_start + len, vm.pa_length(i), true);
-        len += vm.pa_length(i);
-    }
+pub fn unmap_migrate_vm_mem(_vm: Vm, _ipa_start: usize) {
+    todo!()
+    // let mut len = 0;
+    // for i in 0..vm.region_num() {
+    //     // println!("unmap_migrate_vm_mem, ipa_start {:x}, len {:x}", ipa_start, vm.pa_length(i));
+    //     active_vm()
+    //         .unwrap()
+    //         .pt_unmap_range(ipa_start + len, vm.pa_length(i), true);
+    //     len += vm.pa_length(i);
+    // }
 }
 
 pub fn migrate_finish_ipi_handler(vm_id: usize) {
@@ -313,39 +315,40 @@ pub fn migrate_finish_ipi_handler(vm_id: usize) {
     );
 }
 
-pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
-    if emu_ctx.write {
-        // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
-        let vm = active_vm().unwrap();
-        // vm.show_pagetable(emu_ctx.address);
-        let vm_id = vm.id();
+pub fn migrate_data_abort_handler(_emu_ctx: &EmuContext) {
+    todo!()
+    // if emu_ctx.write {
+    //     // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
+    //     let vm = active_vm().unwrap();
+    //     // vm.show_pagetable(emu_ctx.address);
+    //     let vm_id = vm.id();
 
-        // emu_ctx.address here is pa, not ipa
-        let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
-        // println!(
-        //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
-        //     emu_ctx.address, pa, len
-        // );
-        let mut bit = 0;
-        for i in 0..vm.region_num() {
-            let start = vm.pa_start(i);
-            let end = start + vm.pa_length(i);
-            if pa >= start && pa < end {
-                bit += (pa - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
-                vm_if_set_mem_map(vm_id, bit, len / PAGE_SIZE);
-                break;
-            }
-            bit += vm.pa_length(i) / PAGE_SIZE;
-            if i + 1 == vm.region_num() {
-                panic!(
-                    "migrate_data_abort_handler: can not found addr 0x{:x} in vm{} pa region",
-                    pa, vm_id
-                );
-            }
-        }
-        // flush tlb for updating page table
-        tlb_invalidate_guest_all();
-    } else {
-        panic!("migrate_data_abort_handler: permission should be read only");
-    }
+    //     // emu_ctx.address here is pa, not ipa
+    //     let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
+    //     // println!(
+    //     //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
+    //     //     emu_ctx.address, pa, len
+    //     // );
+    //     let mut bit = 0;
+    //     for i in 0..vm.region_num() {
+    //         let start = vm.pa_start(i);
+    //         let end = start + vm.pa_length(i);
+    //         if pa >= start && pa < end {
+    //             bit += (pa - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
+    //             vm_if_set_mem_map(vm_id, bit, len / PAGE_SIZE);
+    //             break;
+    //         }
+    //         bit += vm.pa_length(i) / PAGE_SIZE;
+    //         if i + 1 == vm.region_num() {
+    //             panic!(
+    //                 "migrate_data_abort_handler: can not found addr 0x{:x} in vm{} pa region",
+    //                 pa, vm_id
+    //             );
+    //         }
+    //     }
+    //     // flush tlb for updating page table
+    //     tlb_invalidate_guest_all();
+    // } else {
+    //     panic!("migrate_data_abort_handler: permission should be read only");
+    // }
 }

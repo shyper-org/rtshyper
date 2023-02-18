@@ -17,6 +17,7 @@ pub use self::vcpu::*;
 pub use self::vcpu_array::*;
 pub use self::vm::*;
 
+pub mod access;
 mod async_task;
 mod cpu;
 mod hvc;

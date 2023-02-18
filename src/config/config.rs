@@ -1,4 +1,5 @@
 use core::ffi::CStr;
+use core::ops::Range;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -8,8 +9,9 @@ use spin::Mutex;
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
-use crate::lib::{BitAlloc, BitAlloc16, memcpy_safe};
+use crate::lib::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
+use crate::kernel::access::{copy_segment_to_vm, copy_segment_from_vm};
 
 const CFG_MAX_NUM: usize = 0x10;
 const IRQ_MAX_NUM: usize = 0x40;
@@ -101,6 +103,10 @@ impl VmRegion {
             length: 0,
         }
     }
+
+    pub fn as_range(&self) -> Range<usize> {
+        self.ipa_start..(self.ipa_start + self.length)
+    }
 }
 
 impl PartialEq for VmRegion {
@@ -112,11 +118,15 @@ impl PartialEq for VmRegion {
 #[derive(Clone)]
 pub struct VmMemoryConfig {
     pub region: Vec<VmRegion>,
+    pub colors: Vec<usize>,
 }
 
 impl VmMemoryConfig {
     pub const fn default() -> VmMemoryConfig {
-        VmMemoryConfig { region: vec![] }
+        VmMemoryConfig {
+            region: vec![],
+            colors: vec![],
+        }
     }
 }
 
@@ -124,7 +134,6 @@ impl VmMemoryConfig {
 pub struct VmImageConfig {
     pub kernel_img_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
-    pub kernel_load_pa: usize,
     pub kernel_entry_point: usize,
     // pub device_tree_filename: Option<&'static str>,
     pub device_tree_load_ipa: usize,
@@ -138,7 +147,6 @@ impl VmImageConfig {
         VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0,
-            kernel_load_pa: 0,
             kernel_entry_point: 0,
             // device_tree_filename: None,
             device_tree_load_ipa: 0,
@@ -151,7 +159,6 @@ impl VmImageConfig {
         VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa,
-            kernel_load_pa: 0,
             kernel_entry_point: kernel_load_ipa,
             // device_tree_filename: None,
             device_tree_load_ipa,
@@ -304,16 +311,6 @@ impl VmConfigEntry {
         img_cfg.kernel_load_ipa
     }
 
-    pub fn set_kernel_load_pa(&mut self, kernel_load_pa: usize) {
-        let mut img_cfg = self.image.lock();
-        img_cfg.kernel_load_pa = kernel_load_pa
-    }
-
-    pub fn kernel_load_pa(&self) -> usize {
-        let img_cfg = self.image.lock();
-        img_cfg.kernel_load_pa
-    }
-
     pub fn kernel_entry_point(&self) -> usize {
         let img_cfg = self.image.lock();
         img_cfg.kernel_entry_point
@@ -332,6 +329,19 @@ impl VmConfigEntry {
     pub fn memory_region(&self) -> Vec<VmRegion> {
         let mem_cfg = self.memory.lock();
         mem_cfg.region.clone()
+    }
+
+    pub fn memory_color_bitmap(&self) -> usize {
+        let mem_cfg = self.memory.lock();
+        if mem_cfg.colors.is_empty() {
+            usize::MAX
+        } else {
+            let mut color_bitmap = 0;
+            for color in mem_cfg.colors.iter() {
+                color_bitmap |= 1 << color;
+            }
+            color_bitmap
+        }
     }
 
     pub fn add_memory_cfg(&self, ipa_start: usize, length: usize) {
@@ -699,17 +709,8 @@ pub fn vm_cfg_add_emu_dev(
         .unwrap_or_else(parse_cstr_error)
         .to_string();
     // Copy emu device cfg list from user ipa.
-    let cfg_list_pa = vm_ipa2pa(active_vm().unwrap(), cfg_list_ipa);
-    if cfg_list_pa == 0 {
-        println!("illegal emulated device cfg_list_ipa {:x}", cfg_list_ipa);
-        return Err(());
-    }
-    let cfg_list = vec![0_usize; CFG_MAX_NUM];
-    memcpy_safe(
-        cfg_list.as_ptr() as *const _,
-        cfg_list_pa as *const _,
-        CFG_MAX_NUM * 8, // sizeof(usize) / sizeof(u8)
-    );
+    let mut cfg_list = vec![0_usize; CFG_MAX_NUM];
+    copy_segment_from_vm(&active_vm().unwrap(), cfg_list.as_mut_slice(), cfg_list_ipa);
 
     println!(
         concat!(
@@ -799,19 +800,9 @@ pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irq
         vmid, irqs_base_ipa, irqs_length
     );
 
-    // Copy passthrough device irqs from user ipa.
-    let irqs_base_pa = vm_ipa2pa(active_vm().unwrap(), irqs_base_ipa);
-    if irqs_base_pa == 0 {
-        println!("illegal irqs_base_ipa {:x}", irqs_base_ipa);
-        return Err(());
-    }
-    let mut irqs = vec![0_usize, irqs_length];
+    let mut irqs = vec![0_usize; irqs_length];
     if irqs_length > 0 {
-        memcpy_safe(
-            irqs.as_ptr() as *const _,
-            irqs_base_pa as *const _,
-            irqs_length * 8, // sizeof(usize) / sizeof(u8)
-        );
+        copy_segment_from_vm(&active_vm().unwrap(), irqs.as_mut_slice(), irqs_base_ipa);
     }
     println!("      irqs {:?}", irqs);
 
@@ -835,18 +826,9 @@ pub fn vm_cfg_add_passthrough_device_streams_ids(
     );
 
     // Copy passthrough device streams ids from user ipa.
-    let streams_ids_base_pa = vm_ipa2pa(active_vm().unwrap(), streams_ids_base_ipa);
-    if streams_ids_base_pa == 0 {
-        println!("illegal streams_ids_base_ipa {:x}", streams_ids_base_ipa);
-        return Err(());
-    }
-    let mut streams_ids = vec![0_usize, streams_ids_length];
+    let mut streams_ids = vec![0_usize; streams_ids_length];
     if streams_ids_length > 0 {
-        memcpy_safe(
-            streams_ids.as_ptr() as *const _,
-            streams_ids_base_pa as *const _,
-            streams_ids_length * 8, // sizeof(usize) / sizeof(u8)
-        );
+        copy_segment_from_vm(&active_vm().unwrap(), streams_ids.as_mut_slice(), streams_ids_base_ipa)
     }
     println!("      get streams_ids {:?}", streams_ids);
 
@@ -889,20 +871,11 @@ pub fn vm_cfg_add_dtb_dev(
     );
 
     // Copy DTB device irq list from user ipa.
-    let irq_list_pa = vm_ipa2pa(active_vm().unwrap(), irq_list_ipa);
-    if irq_list_pa == 0 {
-        println!("illegal dtb_dev irq list ipa {:x}", irq_list_ipa);
-        return Err(());
-    }
     let mut dtb_irq_list: Vec<usize> = Vec::new();
 
     if irq_list_length > 0 {
-        let tmp_dtb_irq_list = vec![0_usize, irq_list_length];
-        memcpy_safe(
-            tmp_dtb_irq_list.as_ptr() as *const _,
-            irq_list_pa as *const _,
-            irq_list_length * 8, // sizeof(usize) / sizeof(u8)
-        );
+        let mut tmp_dtb_irq_list = vec![0_usize; irq_list_length];
+        copy_segment_from_vm(&active_vm().unwrap(), tmp_dtb_irq_list.as_mut_slice(), irq_list_ipa);
         for i in 0..irq_list_length {
             dtb_irq_list.push(tmp_dtb_irq_list[i]);
         }
@@ -935,7 +908,7 @@ pub fn vm_cfg_add_dtb_dev(
  * Set up GVM configuration;
  * Set VM kernel image load region;
  */
-fn vm_cfg_finish_configuration(vmid: usize, img_size: usize) -> Vm {
+fn vm_cfg_finish_configuration(vmid: usize, _img_size: usize) -> Vm {
     // Set up GVM configuration.
     vmm_init_gvm(vmid);
 
@@ -947,25 +920,6 @@ fn vm_cfg_finish_configuration(vmid: usize, img_size: usize) -> Vm {
         Some(vm) => vm,
     };
 
-    let mut config = vm.config();
-    let load_ipa = config.kernel_load_ipa();
-
-    // Find actual physical memory region according to kernel image ipa.
-    for (idx, region) in config.memory_region().iter().enumerate() {
-        if load_ipa < region.ipa_start || load_ipa + img_size > region.ipa_start + region.length {
-            continue;
-        }
-        let offset = load_ipa - region.ipa_start;
-        println!(
-            "VM [{}] {} kernel image region: ipa=<0x{:x}>, pa=<0x{:x}>, img_size=<{}KB>",
-            vm.id(),
-            config.vm_name(),
-            load_ipa,
-            vm.pa_start(idx) + offset,
-            img_size / 1024
-        );
-        config.set_kernel_load_pa(vm.pa_start(idx) + offset);
-    }
     vm
 }
 
@@ -998,25 +952,12 @@ pub fn vm_cfg_upload_kernel_image(
         "VM[{}] Upload kernel image. cache_ipa:{:x} load_offset:{:x} load_size:{:x}",
         vmid, cache_ipa, load_offset, load_size
     );
-    // Get cache pa.
-    let cache_pa = vm_ipa2pa(active_vm().unwrap(), cache_ipa);
-    if cache_pa == 0 {
-        println!("illegal cache ipa {:x}", cache_ipa);
-        return Err(());
-    }
-    let src = unsafe { core::slice::from_raw_parts_mut((cache_pa) as *mut u8, load_size) };
-
-    // Get kernel image load pa.
-    let load_pa = config.kernel_load_pa();
-    if load_pa == 0 {
-        println!(
-            "vm_cfg_upload_kernel_image: failed to get kernel image load pa of VM[{}]",
-            vmid
-        );
-        return Err(());
-    }
-    // Copy from user space.
-    let dst = unsafe { core::slice::from_raw_parts_mut((load_pa + load_offset) as *mut u8, load_size) };
-    dst.copy_from_slice(src);
+    let mut bin = vec![0_u8; load_size];
+    let src = bin.as_mut_slice();
+    // TODO: a little slow because twice copy. Try to add copy_from_vm_to_vm
+    // Copy from VM0 address space first
+    copy_segment_from_vm(&active_vm().unwrap(), src, cache_ipa);
+    // then copy to another GVM address space
+    copy_segment_to_vm(&vm, config.kernel_load_ipa() + load_offset, src);
     Ok(0)
 }

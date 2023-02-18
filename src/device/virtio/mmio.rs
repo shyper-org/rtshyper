@@ -13,7 +13,7 @@ use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, VirtioMmioData, vm_ipa2pa, VmPa};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, VirtioMmioData, vm_ipa2pa};
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
 
@@ -373,7 +373,7 @@ impl VirtioMmio {
     }
 
     // use for migration save
-    pub fn save_mmio_data(&self, mmio_data: &mut VirtioMmioData, pa_region: &Vec<VmPa>) {
+    pub fn save_mmio_data(&self, mmio_data: &mut VirtioMmioData) {
         let inner = self.inner.lock();
         mmio_data.id = inner.id;
         mmio_data.driver_features = inner.driver_features;
@@ -381,7 +381,7 @@ impl VirtioMmio {
         mmio_data.regs = inner.regs;
         inner.dev.save_virt_dev_data(&mut mmio_data.dev);
         for (idx, vq) in inner.vq.iter().enumerate() {
-            vq.save_vq_data(&mut mmio_data.vq[idx], pa_region);
+            vq.save_vq_data(&mut mmio_data.vq[idx]);
         }
 
         // if let DevDescData::ConsoleDesc(desc_data) = &mmio_data.dev.desc {

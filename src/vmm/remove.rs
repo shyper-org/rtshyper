@@ -2,12 +2,11 @@ use crate::arch::{GIC_SGIS_NUM, gicc_clear_current_irq};
 use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
-    current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, mem_vm_region_free,
-    remove_async_used_info, remove_vm, remove_vm_async_task, Vm, Scheduler, cpu_idle,
+    current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_async_used_info, remove_vm,
+    remove_vm_async_task, Vm, Scheduler, cpu_idle,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
-use crate::lib::memset_safe;
 
 pub fn vmm_remove_vm(vm_id: usize) {
     if vm_id == 0 {
@@ -22,11 +21,6 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vmm_remove_vcpu(&vm);
     // reset vm interface
     vm_if_reset(vm_id);
-    // free mem
-    for idx in 0..vm.region_num() {
-        memset_safe(vm.pa_start(idx) as *mut u8, 0, vm.pa_length(idx));
-        mem_vm_region_free(vm.pa_start(idx), vm.pa_length(idx));
-    }
     // emu dev
     vmm_remove_emulated_device(&vm);
     // passthrough dev

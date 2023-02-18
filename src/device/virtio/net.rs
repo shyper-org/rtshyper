@@ -243,14 +243,15 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
         // update ctrl queue used ring
         if vm.id() != 0 {
-            let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
-            if *VM_STATE_FLAG.lock() == 1 {
-                println!("vm1 virtio net ctrl write memory in 0x{:x}", used_addr);
-            }
-            vm_if_set_mem_map_bit(vm.clone(), used_addr);
+            // let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            // if *VM_STATE_FLAG.lock() == 1 {
+            //     println!("vm1 virtio net ctrl write memory in 0x{:x}", used_addr);
+            // }
+            vm_if_set_mem_map_bit(&vm, vq.used_addr());
 
             for idx in 0..in_iov.num() {
-                vm_if_set_mem_map_bit(vm.clone(), in_iov.get_buf(idx));
+                // TODO: in_iov.get_buf(idx) is pa, but i need a ipa
+                vm_if_set_mem_map_bit(&vm, in_iov.get_buf(idx));
             }
         }
         if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
@@ -304,12 +305,12 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
 
         if vm.id() != 0 {
-            let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
-            if *VM_STATE_FLAG.lock() == 1 {
-                println!("vm1 virtio net write memory in 0x{:x}", used_addr);
-            }
-            vm_if_set_mem_map_bit(vm.clone(), used_addr);
-            vm_if_set_mem_map_bit(vm.clone(), used_addr + PAGE_SIZE);
+            // let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
+            // if *VM_STATE_FLAG.lock() == 1 {
+            //     println!("vm1 virtio net write memory in 0x{:x}", used_addr);
+            // }
+            vm_if_set_mem_map_bit(&vm, vq.used_addr());
+            vm_if_set_mem_map_bit(&vm, vq.used_addr() + PAGE_SIZE);
         }
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
@@ -369,7 +370,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                     src_vmid: active_vm_id(),
                     trgt_vmid,
                 };
-                let cpu_trgt = vm_if_get_cpu_id(trgt_vmid);
+                let cpu_trgt = vm_if_get_cpu_id(trgt_vmid).unwrap();
                 if !ipi_send_msg(cpu_trgt, IpiType::IpiTEthernetMsg, IpiInnerMsg::EnternetMsg(msg)) {
                     println!(
                         "virtio_net_notify_handler: failed to send ipi message, target {}",
@@ -555,13 +556,13 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
 
         if vmid != 0 {
-            let mut addr = round_down(dst, PAGE_SIZE);
-            if *VM_STATE_FLAG.lock() == 1 {
-                println!("A: vm0 virtio net write vm1 memory in 0x{:x}", addr);
-            }
-            while addr <= round_down(dst + desc_len, PAGE_SIZE) {
-                vm_if_set_mem_map_bit(vm.clone(), addr);
-                addr += PAGE_SIZE;
+            let mut ipa_addr = round_down(rx_vq.desc_addr(desc_idx), PAGE_SIZE);
+            // if *VM_STATE_FLAG.lock() == 1 {
+            //     println!("A: vm0 virtio net write vm1 memory in 0x{:x}", addr);
+            // }
+            while ipa_addr <= round_down(rx_vq.desc_addr(desc_idx) + desc_len, PAGE_SIZE) {
+                vm_if_set_mem_map_bit(&vm, ipa_addr);
+                ipa_addr += PAGE_SIZE;
             }
         }
         rx_iov.push_data(dst, desc_len);
@@ -598,12 +599,12 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     }
 
     if vmid != 0 {
-        let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
-        if *VM_STATE_FLAG.lock() == 1 {
-            println!("B: vm0 virtio net write vm1 memory in 0x{:x}", used_addr);
-        }
-        vm_if_set_mem_map_bit(vm.clone(), used_addr);
-        vm_if_set_mem_map_bit(vm, used_addr + PAGE_SIZE);
+        // let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
+        // if *VM_STATE_FLAG.lock() == 1 {
+        //     println!("B: vm0 virtio net write vm1 memory in 0x{:x}", used_addr);
+        // }
+        vm_if_set_mem_map_bit(&vm, rx_vq.used_addr());
+        vm_if_set_mem_map_bit(&vm, rx_vq.used_addr() + PAGE_SIZE);
     }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         return false;

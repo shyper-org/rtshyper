@@ -494,7 +494,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
         }
     };
 
-    let cpu_trgt = vm_if_get_cpu_id(vm_id);
+    let cpu_trgt = vm_if_get_cpu_id(vm_id).unwrap();
     if cpu_trgt != current_cpu().id {
         // println!("cpu {} send hvc msg to cpu {}", current_cpu().id, cpu_trgt);
         let ipi_msg = IpiHvcMsg {

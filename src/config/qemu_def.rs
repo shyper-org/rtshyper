@@ -106,7 +106,6 @@ pub fn mvm_config_init() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: Some("Image"),
             kernel_load_ipa: 0x58080000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0x58080000,
             // device_tree_filename: Some("qemu1.bin"),
             device_tree_load_ipa: 0x52000000,
@@ -121,6 +120,7 @@ pub fn mvm_config_init() {
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
+            colors: vec![],
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList { emu_dev_list: emu_dev_config })),
         vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),

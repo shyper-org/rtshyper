@@ -11,15 +11,15 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmPa,
-    VmType, iommu_add_device,
+    add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType,
+    iommu_add_device, mem_vm_region_alloc_by_colors, ColorMemRegion,
 };
-use crate::kernel::{mem_page_alloc, mem_vm_region_alloc};
+use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
-use crate::lib::trace;
+use crate::kernel::access::copy_segment_to_vm;
 
 #[cfg(feature = "ramdisk")]
 pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.cpio");
@@ -27,38 +27,55 @@ pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.
 pub static CPIO_RAMDISK: &[u8] = &[];
 
 fn vmm_init_memory(vm: &Vm) -> bool {
-    let result = mem_page_alloc();
     let vm_id = vm.id();
     let config = vm.config();
-    let mut vm_mem_size: usize = 0; // size for pages
-
-    if let Ok(pt_dir_frame) = result {
+    let vm_mem_size = config.memory_region().iter().map(|x| x.length).sum::<usize>();
+    if let Ok(pt_dir_frame) = mem_page_alloc() {
         vm.set_pt(pt_dir_frame);
     } else {
         println!("vmm_init_memory: page alloc failed");
         return false;
     }
 
-    for vm_region in config.memory_region() {
-        let pa = mem_vm_region_alloc(vm_region.length);
-        vm_mem_size += vm_region.length;
-
-        if pa == 0 {
-            println!("vmm_init_memory: vm memory region is not large enough");
-            return false;
+    fn count_missing_num(regions: &[ColorMemRegion]) -> Vec<usize> {
+        let mut list = vec![0; regions.first().unwrap().count];
+        // enumerate then skip the first one
+        for (i, region) in regions.iter().enumerate().skip(1) {
+            let prev_count = regions.get(i - 1).unwrap().count;
+            for _ in prev_count..region.count {
+                list.push(list.last().unwrap() + i);
+            }
         }
+        list
+    }
 
-        println!(
-            "VM {} memory region: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>",
-            vm_id, vm_region.ipa_start, pa, vm_region.length
-        );
-        vm.pt_map_range(vm_region.ipa_start, vm_region.length, pa, PTE_S2_NORMAL, vm_id == 0);
-
-        vm.add_region(VmPa {
-            pa_start: pa,
-            pa_length: vm_region.length,
-            offset: vm_region.ipa_start as isize - pa as isize,
-        });
+    for vm_region in config.memory_region() {
+        match mem_vm_region_alloc_by_colors(vm_region.length, config.memory_color_bitmap()) {
+            Ok(vm_color_regions) => {
+                debug!("{:#?}", vm_color_regions);
+                assert!(!vm_color_regions.is_empty());
+                // NOTE: continuous ipa should across colors, and the vm_color_regions must be sorted by count
+                let missing_list = count_missing_num(&vm_color_regions);
+                for (i, region) in vm_color_regions.iter().enumerate() {
+                    for j in 0..region.count {
+                        let missing_num = missing_list.get(j).unwrap();
+                        let page_idx = i + j * vm_color_regions.len() - missing_num;
+                        let ipa = vm_region.ipa_start + page_idx * PAGE_SIZE;
+                        let pa = region.base + j * region.step;
+                        vm.pt_map_range(ipa, PAGE_SIZE, pa, PTE_S2_NORMAL, false);
+                    }
+                }
+                vm.append_color_regions(vm_color_regions);
+            }
+            Err(_) => {
+                println!(
+                    "vmm_init_memory: mem_vm_region_alloc_by_colors failed, length {}, color bitmap {:#x}",
+                    vm_region.length,
+                    config.memory_color_bitmap()
+                );
+                return false;
+            }
+        }
     }
     vm_if_init_mem_map(vm_id, (vm_mem_size + PAGE_SIZE - 1) / PAGE_SIZE);
 
@@ -66,30 +83,7 @@ fn vmm_init_memory(vm: &Vm) -> bool {
 }
 
 pub fn vmm_load_image(vm: &Vm, bin: &[u8]) {
-    let size = bin.len();
-    let config = vm.config();
-    let load_ipa = config.kernel_load_ipa();
-    for (idx, region) in config.memory_region().iter().enumerate() {
-        if load_ipa < region.ipa_start || load_ipa + size > region.ipa_start + region.length {
-            continue;
-        }
-
-        let offset = load_ipa - region.ipa_start;
-        println!(
-            "VM {} loads kernel: ipa=<0x{:x}>, pa=<0x{:x}>, size=<{}K>",
-            vm.id(),
-            load_ipa,
-            vm.pa_start(idx) + offset,
-            size / 1024
-        );
-        if trace() && vm.pa_start(idx) + offset < 0x1000 {
-            panic!("illegal addr {:x}", vm.pa_start(idx) + offset);
-        }
-        let dst = unsafe { core::slice::from_raw_parts_mut((vm.pa_start(idx) + offset) as *mut u8, size) };
-        dst.clone_from_slice(bin);
-        return;
-    }
-    panic!("vmm_load_image: Image config conflicts with memory config");
+    copy_segment_to_vm(vm, vm.config().kernel_load_ipa(), bin);
 }
 
 pub fn vmm_init_image(vm: &Vm) -> bool {
@@ -114,10 +108,11 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
                     vmm_load_image(vm, include_bytes!("../../image/L4T"));
                 } else if name == "Image_vanilla" {
                     println!("VM {} loading default Linux Image", vm.id());
-                    #[cfg(feature = "static-config")]
-                    vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
-                    #[cfg(not(feature = "static-config"))]
-                    println!("*** Please enable feature `static-config`");
+                    if cfg!(feature = "static-config") {
+                        vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
+                    } else {
+                        println!("*** Please enable feature `static-config`");
+                    }
                 } else {
                     warn!("Image {} is not supported", name);
                 }
@@ -129,7 +124,7 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
                 vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
             }
             None => {
-                // nothing to do, its a dynamic configuration
+                info!("VM[{}] is a dynamic configuration", vm_id);
             }
         }
     }
@@ -138,24 +133,21 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
         // Init dtb for Linux.
         if vm_id == 0 {
             // Init dtb for MVM.
-            use crate::SYSTEM_FDT;
-            let offset = config.device_tree_load_ipa() - config.memory_region()[0].ipa_start;
-            println!("MVM[{}] dtb addr 0x{:x}", vm_id, vm.pa_start(0) + offset);
-            vm.set_dtb((vm.pa_start(0) + offset) as *mut fdt::myctypes::c_void);
-            unsafe {
-                let src = SYSTEM_FDT.get().unwrap();
-                let len = src.len();
-                let dst = core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len);
-                dst.clone_from_slice(src);
-                vmm_setup_fdt(vm);
+            use crate::device::SYSTEM_FDT;
+            let mut dtb = SYSTEM_FDT.get().unwrap().clone();
+            // enlarge the size of dtb, because vmm_setup_fdt_vm0 will enlarge it unsafely!
+            dtb.resize(dtb.len() << 1, 0);
+            let size = unsafe { vmm_setup_fdt_vm0(vm, dtb.as_ptr() as *mut _) };
+            if size >= dtb.len() {
+                panic!("unsafe dtb editing!!");
             }
+            dtb.resize(size, 0);
+            copy_segment_to_vm(vm, config.device_tree_load_ipa(), dtb.as_slice());
         } else {
             // Init dtb for GVM.
             match create_fdt(&config) {
                 Ok(dtb) => {
-                    let offset = config.device_tree_load_ipa() - vm.config().memory_region()[0].ipa_start;
-                    println!("GVM[{}] dtb addr 0x{:x}", vm.id(), vm.pa_start(0) + offset);
-                    crate::lib::memcpy_safe((vm.pa_start(0) + offset) as *const u8, dtb.as_ptr(), dtb.len());
+                    copy_segment_to_vm(vm, config.device_tree_load_ipa(), dtb.as_slice());
                 }
                 _ => {
                     panic!("vmm_setup_config: create fdt for vm{} fail", vm.id());
@@ -175,10 +167,7 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
     // ...
     if config.ramdisk_load_ipa() != 0 {
         println!("VM {} use ramdisk CPIO_RAMDISK", vm_id);
-        let offset = config.ramdisk_load_ipa() - config.memory_region()[0].ipa_start;
-        let len = CPIO_RAMDISK.len();
-        let dst = unsafe { core::slice::from_raw_parts_mut((vm.pa_start(0) + offset) as *mut u8, len) };
-        dst.clone_from_slice(CPIO_RAMDISK);
+        copy_segment_to_vm(vm, config.ramdisk_load_ipa(), CPIO_RAMDISK);
     }
 
     true
@@ -329,84 +318,79 @@ fn vmm_init_iommu_device(vm: &Vm) -> bool {
     true
 }
 
-pub unsafe fn vmm_setup_fdt(vm: &Vm) {
+unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
     use fdt::*;
     let config = vm.config();
-    match vm.dtb() {
-        Some(dtb) => {
-            let mut mr = Vec::new();
-            for r in config.memory_region() {
-                mr.push(region {
-                    ipa_start: r.ipa_start as u64,
-                    length: r.length as u64,
-                });
-            }
-            #[cfg(feature = "tx2")]
-            fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
-            #[cfg(feature = "pi4")]
-            fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@200000\0".as_ptr());
-            // FDT+TIMER
-            fdt_add_timer(dtb, 0x8);
-            // FDT+BOOTCMD
-            fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
-            #[cfg(feature = "tx2")]
-            fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
-            // #[cfg(feature = "pi4")]
-            // fdt_set_stdout_path(dtb, "/serial@fe340000\0".as_ptr());
+    let mut mr = Vec::new();
+    for r in config.memory_region() {
+        mr.push(region {
+            ipa_start: r.ipa_start as u64,
+            length: r.length as u64,
+        });
+    }
+    #[cfg(feature = "tx2")]
+    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
+    #[cfg(feature = "pi4")]
+    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@200000\0".as_ptr());
+    // FDT+TIMER
+    fdt_add_timer(dtb, 0x8);
+    // FDT+BOOTCMD
+    fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
+    #[cfg(feature = "tx2")]
+    fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
+    // #[cfg(feature = "pi4")]
+    // fdt_set_stdout_path(dtb, "/serial@fe340000\0".as_ptr());
 
-            if !config.emulated_device_list().is_empty() {
-                for emu_cfg in config.emulated_device_list() {
-                    match emu_cfg.emu_type {
-                        EmuDeviceTGicd => {
-                            #[cfg(feature = "tx2")]
-                            fdt_setup_gic(
-                                dtb,
-                                PLATFORM_GICD_BASE as u64,
-                                PLATFORM_GICC_BASE as u64,
-                                emu_cfg.name.unwrap().as_ptr(),
-                            );
-                            #[cfg(feature = "pi4")]
-                            fdt_setup_gic(
-                                dtb,
-                                (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
-                                (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
-                                emu_cfg.name.unwrap().as_ptr(),
-                            );
-                        }
-                        EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
-                            #[cfg(feature = "tx2")]
-                            fdt_add_virtio(
-                                dtb,
-                                emu_cfg.name.unwrap().as_ptr(),
-                                emu_cfg.irq_id as u32 - 0x20,
-                                emu_cfg.base_ipa as u64,
-                            );
-                        }
-                        EmuDeviceTShyper => {
-                            #[cfg(feature = "tx2")]
-                            fdt_add_vm_service(
-                                dtb,
-                                emu_cfg.irq_id as u32 - 0x20,
-                                emu_cfg.base_ipa as u64,
-                                emu_cfg.length as u64,
-                            );
-                        }
-                        EmuDeviceTIOMMU => {
-                            #[cfg(feature = "tx2")]
-                            trace!("EmuDeviceTIOMMU");
-                        }
-                        _ => {
-                            todo!();
-                        }
-                    }
+    if !config.emulated_device_list().is_empty() {
+        for emu_cfg in config.emulated_device_list() {
+            match emu_cfg.emu_type {
+                EmuDeviceTGicd => {
+                    #[cfg(feature = "tx2")]
+                    fdt_setup_gic(
+                        dtb,
+                        PLATFORM_GICD_BASE as u64,
+                        PLATFORM_GICC_BASE as u64,
+                        emu_cfg.name.unwrap().as_ptr(),
+                    );
+                    #[cfg(feature = "pi4")]
+                    fdt_setup_gic(
+                        dtb,
+                        (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
+                        (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
+                        emu_cfg.name.unwrap().as_ptr(),
+                    );
+                }
+                EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
+                    #[cfg(feature = "tx2")]
+                    fdt_add_virtio(
+                        dtb,
+                        emu_cfg.name.unwrap().as_ptr(),
+                        emu_cfg.irq_id as u32 - 0x20,
+                        emu_cfg.base_ipa as u64,
+                    );
+                }
+                EmuDeviceTShyper => {
+                    #[cfg(feature = "tx2")]
+                    fdt_add_vm_service(
+                        dtb,
+                        emu_cfg.irq_id as u32 - 0x20,
+                        emu_cfg.base_ipa as u64,
+                        emu_cfg.length as u64,
+                    );
+                }
+                EmuDeviceTIOMMU => {
+                    #[cfg(feature = "tx2")]
+                    trace!("EmuDeviceTIOMMU");
+                }
+                _ => {
+                    todo!();
                 }
             }
-            println!("after dtb size {}", fdt_size(dtb));
-        }
-        None => {
-            println!("None dtb");
         }
     }
+    let size = fdt_size(dtb) as usize;
+    println!("after dtb size {:#x}", size);
+    size
 }
 
 /* Setup VM Configuration before boot.

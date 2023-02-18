@@ -168,7 +168,6 @@ pub fn mvm_config_init() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: Some("Raspi4"),
             kernel_load_ipa: 0x280000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0x280000,
             device_tree_load_ipa: 0x10000000,
             ramdisk_load_ipa: 0,
@@ -176,6 +175,7 @@ pub fn mvm_config_init() {
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
+            colors: (0..16).step_by(2).collect(),
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,

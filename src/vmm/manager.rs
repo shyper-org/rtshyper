@@ -20,7 +20,7 @@ use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::lib::sleep;
-use crate::lib::{bit_extract, memset_safe};
+use crate::lib::bit_extract;
 use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
 #[derive(Copy, Clone)]
@@ -174,7 +174,7 @@ pub fn vmm_init_gvm(vm_id: usize) {
  * @param[in] vm_id: target VM id to boot.
  */
 pub fn vmm_boot_vm(vm_id: usize) {
-    let phys_id = vm_if_get_cpu_id(vm_id);
+    let phys_id = vm_if_get_cpu_id(vm_id).unwrap();
     // println!(
     //     "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
     //     current_cpu().id,
@@ -224,7 +224,7 @@ pub fn vmm_reboot_vm(arg: usize) {
         if cur_vm.id() == vm_id {
             vmm_reboot();
         } else {
-            let cpu_trgt = vm_if_get_cpu_id(vm_id);
+            let cpu_trgt = vm_if_get_cpu_id(vm_id).unwrap();
             let m = IpiVmmMsg {
                 vmid: vm_id,
                 event: VmmEvent::VmmReboot,
@@ -270,17 +270,13 @@ pub fn vmm_reboot() {
     );
 
     // Clear memory region.
-    for idx in 0..vm.mem_region_num() {
-        println!(
-            "Core {} (VM [{}] vcpu {}) reset mem region start {:x} size {:x}",
-            current_cpu().id,
-            vm.id(),
-            active_vcpu_id(),
-            vm.pa_start(idx),
-            vm.pa_length(idx)
-        );
-        memset_safe(vm.pa_start(idx) as *mut u8, 0, vm.pa_length(idx));
-    }
+    println!(
+        "Core {} (VM [{}] vcpu {}) reset mem region",
+        current_cpu().id,
+        vm.id(),
+        active_vcpu_id(),
+    );
+    vm.reset_color_regions();
 
     // Reset image.
     if !vmm_init_image(&vm) {

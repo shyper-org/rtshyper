@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
+use spin::once::Once;
 use core::mem::size_of;
 
 use spin::Mutex;
@@ -14,10 +15,12 @@ use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::kernel::{
     EmuDevData, get_share_mem, mem_pages_alloc, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND, VMData,
+    mem_vm_color_region_free,
 };
 use crate::lib::*;
 use crate::mm::PageFrame;
 
+use super::ColorMemRegion;
 use super::vcpu::Vcpu;
 
 pub const DIRTY_MEM_THRESHOLD: usize = 0x2000;
@@ -59,18 +62,17 @@ pub fn vm_if_get_type(vm_id: usize) -> VmType {
 }
 
 fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.master_cpu_id = master_cpu_id;
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.master_cpu_id.call_once(|| master_cpu_id);
     debug!(
         "vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}",
         vm_id, master_cpu_id
     );
 }
 
-// todo: rewrite return val to Option<usize>
-pub fn vm_if_get_cpu_id(vm_id: usize) -> usize {
+pub fn vm_if_get_cpu_id(vm_id: usize) -> Option<usize> {
     let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.master_cpu_id
+    vm_if.master_cpu_id.get().cloned()
 }
 
 pub fn vm_if_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
@@ -124,24 +126,23 @@ pub fn vm_if_dirty_mem_map(vm_id: usize) {
     vm_if.mem_map.as_mut().unwrap().init_dirty();
 }
 
-pub fn vm_if_set_mem_map_bit(vm: Vm, pa: usize) {
+pub fn vm_if_set_mem_map_bit(vm: &Vm, ipa: usize) {
     let mut vm_if = VM_IF_LIST[vm.id()].lock();
     let mut bit = 0;
-    for i in 0..vm.region_num() {
-        let start = vm.pa_start(i);
-        let len = vm.pa_length(i);
-        if pa >= start && pa < start + len {
-            bit += (pa - start) / PAGE_SIZE;
+    for region in vm.config().memory_region().iter() {
+        let range = region.as_range();
+        if range.contains(&ipa) {
+            bit += (ipa - range.start) / PAGE_SIZE;
             // if vm_if.mem_map.as_mut().unwrap().get(bit) == 0 {
             //     println!("vm_if_set_mem_map_bit: set pa 0x{:x}", pa);
             // }
             vm_if.mem_map.as_mut().unwrap().set(bit, true);
             return;
         } else {
-            bit += len / PAGE_SIZE;
+            bit += range.len() / PAGE_SIZE;
         }
     }
-    panic!("vm_if_set_mem_map_bit: illegal pa 0x{:x}", pa);
+    error!("vm_if_set_mem_map_bit: illegal ipa 0x{:#x}", ipa);
 }
 
 pub fn vm_if_set_mem_map(vm_id: usize, bit: usize, len: usize) {
@@ -211,7 +212,7 @@ impl VmType {
 }
 
 pub struct VmInterface {
-    pub master_cpu_id: usize,
+    pub master_cpu_id: Once<usize>,
     pub state: VmState,
     pub vm_type: VmType,
     pub mac: [u8; 6],
@@ -224,7 +225,7 @@ pub struct VmInterface {
 impl VmInterface {
     const fn default() -> VmInterface {
         VmInterface {
-            master_cpu_id: 0,
+            master_cpu_id: Once::new(),
             state: VmState::VmPending,
             vm_type: VmType::VmTBma,
             mac: [0; 6],
@@ -236,7 +237,7 @@ impl VmInterface {
     }
 
     fn reset(&mut self) {
-        self.master_cpu_id = 0;
+        self.master_cpu_id = Once::new();
         self.state = VmState::VmPending;
         self.vm_type = VmType::VmTBma;
         self.mac = [0; 6];
@@ -275,7 +276,7 @@ impl VmPa {
 
 #[derive(Clone)]
 pub struct Vm {
-    pub inner: Arc<Mutex<VmInner>>,
+    inner: Arc<Mutex<VmInner>>,
 }
 
 #[derive(Clone)]
@@ -407,9 +408,12 @@ impl Vm {
         let mut vm_inner = self.inner.lock();
         if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 && vm_inner.cpu_num < cfg_cpu_num {
             // vm.vcpu(0) must be the VM's master vcpu
-            let trgt_id = if cpu_id == cfg_master || (!vm_inner.has_master && vm_inner.cpu_num == cfg_cpu_num - 1) {
+            let trgt_id = if cpu_id == cfg_master
+                || (vm_if_get_cpu_id(vm_inner.id).is_none() && vm_inner.cpu_num == cfg_cpu_num - 1)
+            {
                 0
-            } else if vm_inner.has_master {
+            } else if vm_if_get_cpu_id(vm_inner.id).is_some() {
+                // VM has master
                 cfg_cpu_num - vm_inner.cpu_num
             } else {
                 // if master vcpu is not assigned, retain id 0 for it
@@ -420,7 +424,6 @@ impl Vm {
                 Some(vcpu) => {
                     if vcpu.id() == 0 {
                         vm_if_set_cpu_id(vm_inner.id, cpu_id);
-                        vm_inner.has_master = true;
                     }
                     vm_inner.cpu_num += 1;
                     vm_inner.ncpu |= 1 << cpu_id;
@@ -496,38 +499,35 @@ impl Vm {
     }
 
     // ap: access permission
-    pub fn pt_set_access_permission(&self, pa: usize, ap: usize) -> (usize, usize) {
-        let vm_inner = self.inner.lock();
-        match &vm_inner.pt {
-            Some(pt) => {
-                for i in 0..vm_inner.pa_region.len() {
-                    let start = vm_inner.pa_region[i].pa_start;
-                    let end = start + vm_inner.pa_region[i].pa_length;
-                    if pa >= start && pa < end {
-                        let ipa_start = (pa as isize + vm_inner.pa_region[i].offset) as usize;
-                        return pt.access_permission(ipa_start, PAGE_SIZE, ap);
-                    }
-                }
-                panic!("pt_set_access_permission illegal pa 0x{:x}", pa);
-            }
-            None => {
-                panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
-            }
-        }
+    pub fn pt_set_access_permission(&self, _pa: usize, _ap: usize) -> (usize, usize) {
+        todo!()
+        // let vm_inner = self.inner.lock();
+        // match &vm_inner.pt {
+        //     Some(pt) => {
+        //         for i in 0..vm_inner.pa_region.len() {
+        //             let start = vm_inner.pa_region[i].pa_start;
+        //             let end = start + vm_inner.pa_region[i].pa_length;
+        //             if pa >= start && pa < end {
+        //                 let ipa_start = (pa as isize + vm_inner.pa_region[i].offset) as usize;
+        //                 return pt.access_permission(ipa_start, PAGE_SIZE, ap);
+        //             }
+        //         }
+        //         panic!("pt_set_access_permission illegal pa 0x{:x}", pa);
+        //     }
+        //     None => {
+        //         panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
+        //     }
+        // }
     }
 
     pub fn pt_read_only(&self) {
+        let config = self.config();
         let vm_inner = self.inner.lock();
         match vm_inner.pt.clone() {
             Some(pt) => {
-                let num = vm_inner.pa_region.len();
                 drop(vm_inner);
-                for i in 0..num {
-                    let vm_inner = self.inner.lock();
-                    let ipa_start = vm_inner.pa_region[i].pa_start + vm_inner.pa_region[i].offset as usize;
-                    let len = vm_inner.pa_region[i].pa_length;
-                    drop(vm_inner);
-                    pt.access_permission(ipa_start, len, PTE_S2_FIELD_AP_RO);
+                for region in config.memory_region().iter() {
+                    pt.access_permission(region.ipa_start, region.length, PTE_S2_FIELD_AP_RO);
                 }
             }
             None => {
@@ -579,35 +579,45 @@ impl Vm {
         }
     }
 
-    pub fn add_region(&self, region: VmPa) {
+    pub fn reset_color_regions(&self) {
+        let vm_inner = self.inner.lock();
+        vm_inner.color_pa_info.reset();
+    }
+
+    pub fn append_color_regions(&self, mut regions: Vec<ColorMemRegion>) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.pa_region.push(region);
+        vm_inner.color_pa_info.color_pa_region.append(&mut regions);
     }
 
-    pub fn region_num(&self) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.pa_region.len()
-    }
+    // #[deprecated]
+    // pub fn add_region(&self, region: VmPa) {
+    //     let mut vm_inner = self.inner.lock();
+    //     vm_inner.pa_region.push(region);
+    // }
 
-    pub fn pa_start(&self, idx: usize) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.pa_region[idx].pa_start
-    }
+    // #[deprecated]
+    // pub fn region_num(&self) -> usize {
+    //     let vm_inner = self.inner.lock();
+    //     vm_inner.pa_region.len()
+    // }
 
-    pub fn pa_length(&self, idx: usize) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.pa_region[idx].pa_length
-    }
+    // #[deprecated]
+    // pub fn pa_start(&self, idx: usize) -> usize {
+    //     let vm_inner = self.inner.lock();
+    //     vm_inner.pa_region[idx].pa_start
+    // }
 
-    pub fn pa_offset(&self, idx: usize) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.pa_region[idx].offset as usize
-    }
+    // #[deprecated]
+    // pub fn pa_length(&self, idx: usize) -> usize {
+    //     let vm_inner = self.inner.lock();
+    //     vm_inner.pa_region[idx].pa_length
+    // }
 
-    pub fn mem_region_num(&self) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.pa_region.len()
-    }
+    // #[deprecated]
+    // pub fn pa_offset(&self, idx: usize) -> usize {
+    //     let vm_inner = self.inner.lock();
+    //     vm_inner.pa_region[idx].offset as usize
+    // }
 
     pub fn vgic(&self) -> Arc<Vgic> {
         let vm_inner = self.inner.lock();
@@ -821,21 +831,21 @@ impl Vm {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioBlk(VirtioMmioData::default());
                             if let EmuDevData::VirtioBlk(mmio_data) = &mut vm_data.emu_devs[idx] {
                                 // println!("vm[{}] save virtio blk", inner.id);
-                                mmio.save_mmio_data(mmio_data, &inner.pa_region);
+                                mmio.save_mmio_data(mmio_data);
                             }
                         }
                         EmuDevs::VirtioNet(mmio) => {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioNet(VirtioMmioData::default());
                             if let EmuDevData::VirtioNet(mmio_data) = &mut vm_data.emu_devs[idx] {
                                 // println!("vm[{}] save virtio net", inner.id);
-                                mmio.save_mmio_data(mmio_data, &inner.pa_region);
+                                mmio.save_mmio_data(mmio_data);
                             }
                         }
                         EmuDevs::VirtioConsole(mmio) => {
                             vm_data.emu_devs[idx] = EmuDevData::VirtioConsole(VirtioMmioData::default());
                             if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
                                 // println!("vm[{}] save virtio console", inner.id);
-                                mmio.save_mmio_data(mmio_data, &inner.pa_region);
+                                mmio.save_mmio_data(mmio_data);
                             }
                         }
                         EmuDevs::None => {}
@@ -934,21 +944,40 @@ impl Vm {
     }
 }
 
+#[derive(Default)]
+struct VmColorPaInfo {
+    pub color_pa_region: Vec<ColorMemRegion>,
+}
+
+impl VmColorPaInfo {
+    pub fn reset(&self) {
+        for region in self.color_pa_region.iter() {
+            region.zero();
+        }
+    }
+}
+
+impl Drop for VmColorPaInfo {
+    fn drop(&mut self) {
+        mem_vm_color_region_free(&self.color_pa_region);
+    }
+}
+
 #[repr(align(4096))]
-pub struct VmInner {
+struct VmInner {
     pub id: usize,
     pub ready: bool,
     pub config: Option<VmConfigEntry>,
     pub dtb: Option<usize>,
     // memory config
     pub pt: Option<PageTable>,
-    pub pa_region: Vec<VmPa>, // Option<[VmPa; VM_MEM_REGION_MAX]>,
+    // pub pa_region: Vec<VmPa>, // Option<[VmPa; VM_MEM_REGION_MAX]>,
+    pub color_pa_info: VmColorPaInfo,
 
     // image config
     pub entry_point: usize,
 
     // vcpu config
-    pub has_master: bool,
     pub vcpu_list: Vec<Vcpu>,
     pub cpu_num: usize,
     pub ncpu: usize,
@@ -984,10 +1013,10 @@ impl VmInner {
             config: None,
             dtb: None,
             pt: None,
-            pa_region: Vec::new(),
+            // pa_region: Vec::new(),
+            color_pa_info: VmColorPaInfo::default(),
             entry_point: 0,
 
-            has_master: false,
             vcpu_list: Vec::new(),
             cpu_num: 0,
             ncpu: 0,
@@ -1055,57 +1084,57 @@ pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
     }
 }
 
-#[deprecated]
-pub fn vm_pa2ipa(vm: Vm, pa: usize) -> usize {
-    if pa == 0 {
-        println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
-        return 0;
-    }
+// #[deprecated]
+// pub fn vm_pa2ipa(vm: Vm, pa: usize) -> usize {
+//     if pa == 0 {
+//         println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
+//         return 0;
+//     }
 
-    for i in 0..vm.mem_region_num() {
-        if in_range(pa, vm.pa_start(i), vm.pa_length(i)) {
-            return (pa as isize + vm.pa_offset(i) as isize) as usize;
-        }
-    }
+//     for i in 0..vm.mem_region_num() {
+//         if in_range(pa, vm.pa_start(i), vm.pa_length(i)) {
+//             return (pa as isize + vm.pa_offset(i) as isize) as usize;
+//         }
+//     }
 
-    println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
-    0
-}
+//     println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
+//     0
+// }
 
-#[deprecated]
-pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
-    if pa == 0 {
-        println!("pa2ipa: access invalid pa {:x}", pa);
-        return 0;
-    }
+// #[deprecated]
+// pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
+//     if pa == 0 {
+//         println!("pa2ipa: access invalid pa {:x}", pa);
+//         return 0;
+//     }
 
-    for region in pa_region.iter() {
-        if in_range(pa, region.pa_start, region.pa_length) {
-            return (pa as isize + region.offset) as usize;
-        }
-    }
+//     for region in pa_region.iter() {
+//         if in_range(pa, region.pa_start, region.pa_length) {
+//             return (pa as isize + region.offset) as usize;
+//         }
+//     }
 
-    println!("pa2ipa: access invalid pa {:x}", pa);
-    0
-}
+//     println!("pa2ipa: access invalid pa {:x}", pa);
+//     0
+// }
 
-#[deprecated]
-pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
-    if ipa == 0 {
-        // println!("ipa2pa: access invalid ipa {:x}", ipa);
-        return 0;
-    }
+// #[deprecated]
+// pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
+//     if ipa == 0 {
+//         // println!("ipa2pa: access invalid ipa {:x}", ipa);
+//         return 0;
+//     }
 
-    for region in pa_region.iter() {
-        if in_range(
-            (ipa as isize - region.offset) as usize,
-            region.pa_start,
-            region.pa_length,
-        ) {
-            return (ipa as isize - region.offset) as usize;
-        }
-    }
+//     for region in pa_region.iter() {
+//         if in_range(
+//             (ipa as isize - region.offset) as usize,
+//             region.pa_start,
+//             region.pa_length,
+//         ) {
+//             return (ipa as isize - region.offset) as usize;
+//         }
+//     }
 
-    // println!("ipa2pa: access invalid ipa {:x}", ipa);
-    0
-}
+//     // println!("ipa2pa: access invalid ipa {:x}", ipa);
+//     0
+// }

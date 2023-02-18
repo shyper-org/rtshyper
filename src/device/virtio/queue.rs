@@ -1,5 +1,4 @@
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::slice;
 
 use spin::Mutex;
@@ -7,7 +6,7 @@ use spin::Mutex;
 use crate::arch::PageTable;
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2pa, VmPa};
+use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2pa};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -419,7 +418,7 @@ impl Virtq {
     }
 
     // use for migration
-    pub fn save_vq_data(&self, data: &mut VirtqData, _pa_region: &Vec<VmPa>) {
+    pub fn save_vq_data(&self, data: &mut VirtqData) {
         let inner = self.inner.lock();
         data.ready = inner.ready;
         data.vq_index = inner.vq_index;

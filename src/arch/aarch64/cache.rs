@@ -10,14 +10,12 @@ use crate::sysreg_encode_addr;
 use alloc::vec::Vec;
 use cache::CpuCacheInfo;
 use cortex_a::registers::{CLIDR_EL1, CCSIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};
-use spin::{Mutex, Once};
+use spin::Once;
 use tock_registers::interfaces::{Readable, Writeable};
 
 use super::PAGE_SIZE;
 
-// pub static LAST_LEVEL_CACHE: Once<Mutex<Aarch64CacheInfo>> = Once::new();
-
-pub static CPU_CACHE: Once<Mutex<CpuCacheInfo<Aarch64CacheInfo>>> = Once::new();
+pub static CPU_CACHE: Once<CpuCacheInfo<Aarch64CacheInfo>> = Once::new();
 
 #[derive(Copy, Clone)]
 pub struct Aarch64CacheInfo {
@@ -228,13 +226,11 @@ pub fn cache_init() {
         println!("{}", cache_info);
     }
 
-    CPU_CACHE.call_once(|| {
-        Mutex::new(CpuCacheInfo {
-            info_list,
-            min_share_level,
-            num_levels,
-            _num_leaves,
-        })
+    CPU_CACHE.call_once(|| CpuCacheInfo {
+        info_list,
+        min_share_level,
+        num_levels,
+        _num_leaves,
     });
 
     // registration
@@ -256,7 +252,7 @@ pub fn vcache_ccsidr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
             false
         }
         false => {
-            let last_level = CPU_CACHE.get().unwrap().lock().min_share_level as u64;
+            let last_level = CPU_CACHE.get().unwrap().min_share_level as u64;
 
             let val = if Aarch64CacheInfo::get_cache_level() != last_level {
                 CCSIDR_EL1.get()

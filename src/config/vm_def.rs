@@ -72,7 +72,6 @@ pub fn init_tmp_config_for_bma1() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
@@ -152,7 +151,6 @@ pub fn init_tmp_config_for_bma2() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
@@ -295,7 +293,6 @@ pub fn init_tmp_config_for_vm1() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: Some("Image_vanilla"),
             kernel_load_ipa: 0x80080000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
@@ -427,7 +424,6 @@ pub fn init_tmp_config_for_vm2() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: Some("Image_vanilla"),
             kernel_load_ipa: 0x80080000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,

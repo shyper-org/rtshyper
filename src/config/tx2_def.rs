@@ -229,7 +229,6 @@ pub fn mvm_config_init() {
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: Some("L4T"),
             kernel_load_ipa: 0xa0080000,
-            kernel_load_pa: 0,
             kernel_entry_point: 0xa0080000,
             device_tree_load_ipa: 0xa0000000,
             ramdisk_load_ipa: 0,
@@ -237,6 +236,7 @@ pub fn mvm_config_init() {
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
+            colors: (0..16).step_by(2).collect(),
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
