@@ -37,10 +37,58 @@ fn exception_hpfar() -> usize {
     hpfar as usize
 }
 
-// addr be ipa or pa
+#[allow(non_upper_case_globals)]
+const ESR_ELx_S1PTW_SHIFT: usize = 7;
+#[allow(non_upper_case_globals)]
+const ESR_ELx_S1PTW: usize = 1 << ESR_ELx_S1PTW_SHIFT;
+
+macro_rules! arm_at {
+    ($at_op:expr, $addr:expr) => {
+        unsafe {
+            core::arch::asm!(concat!("AT ", $at_op, ", {0}"), in(reg) $addr, options(nomem, nostack));
+            core::arch::asm!("isb");
+        }
+    };
+}
+
+fn translate_far_to_hpfar(far: usize) -> Result<usize, ()> {
+    /*
+     * We have
+     *	PAR[PA_Shift - 1 : 12] = PA[PA_Shift - 1 : 12]
+     *	HPFAR[PA_Shift - 9 : 4]  = FIPA[PA_Shift - 1 : 12]
+     */
+    // #define PAR_TO_HPFAR(par) (((par) & GENMASK_ULL(PHYS_MASK_SHIFT - 1, 12)) >> 8)
+    fn par_to_far(par: u64) -> u64 {
+        let mask = ((1 << (52 - 12)) - 1) << 12;
+        (par & mask) >> 8
+    }
+
+    use cortex_a::registers::PAR_EL1;
+
+    let par = PAR_EL1.get();
+    arm_at!("s1e1r", far);
+    let tmp = PAR_EL1.get();
+    PAR_EL1.set(par);
+    if (tmp & PAR_EL1::F::TranslationAborted.value) != 0 {
+        Err(())
+    } else {
+        Ok(par_to_far(tmp) as usize)
+    }
+}
+
+// addr be ipa
 #[inline(always)]
 pub fn exception_fault_addr() -> usize {
-    (exception_far() & 0xfff) | (exception_hpfar() << 8)
+    let far = exception_far();
+    let hpfar = if (exception_esr() & ESR_ELx_S1PTW) == 0 && exception_data_abort_is_permission_fault() {
+        translate_far_to_hpfar(far).unwrap_or_else(|_| {
+            println!("error happen in translate_far_to_hpfar");
+            0
+        })
+    } else {
+        exception_hpfar()
+    };
+    (far & 0xfff) | (hpfar << 8)
 }
 
 /// \return 1 means 32-bit instruction, 0 means 16-bit instruction

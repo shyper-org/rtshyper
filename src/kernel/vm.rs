@@ -145,11 +145,6 @@ pub fn vm_if_set_mem_map_bit(vm: &Vm, ipa: usize) {
     error!("vm_if_set_mem_map_bit: illegal ipa 0x{:#x}", ipa);
 }
 
-pub fn vm_if_set_mem_map(vm_id: usize, bit: usize, len: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.mem_map.as_mut().unwrap().set_bits(bit, len, true);
-}
-
 pub fn vm_if_clear_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.mem_map.as_mut().unwrap().clear();
@@ -499,25 +494,16 @@ impl Vm {
     }
 
     // ap: access permission
-    pub fn pt_set_access_permission(&self, _pa: usize, _ap: usize) -> (usize, usize) {
-        todo!()
-        // let vm_inner = self.inner.lock();
-        // match &vm_inner.pt {
-        //     Some(pt) => {
-        //         for i in 0..vm_inner.pa_region.len() {
-        //             let start = vm_inner.pa_region[i].pa_start;
-        //             let end = start + vm_inner.pa_region[i].pa_length;
-        //             if pa >= start && pa < end {
-        //                 let ipa_start = (pa as isize + vm_inner.pa_region[i].offset) as usize;
-        //                 return pt.access_permission(ipa_start, PAGE_SIZE, ap);
-        //             }
-        //         }
-        //         panic!("pt_set_access_permission illegal pa 0x{:x}", pa);
-        //     }
-        //     None => {
-        //         panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
-        //     }
-        // }
+    pub fn pt_set_access_permission(&self, ipa: usize, ap: usize) -> (usize, usize) {
+        let vm_inner = self.inner.lock();
+        match &vm_inner.pt {
+            Some(pt) => {
+                return pt.access_permission(ipa, PAGE_SIZE, ap);
+            }
+            None => {
+                panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
+            }
+        }
     }
 
     pub fn pt_read_only(&self) {

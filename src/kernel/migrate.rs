@@ -1,6 +1,6 @@
 use crate::arch::{
     Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, GicContext, IrqState,
-    PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_NORMAL, PTE_S2_RO, Sgis, VmContext,
+    PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_RO, Sgis, VmContext,
 };
 use crate::arch::tlb_invalidate_guest_all;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
@@ -8,7 +8,7 @@ use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs}
 use crate::kernel::{
     active_vm, get_share_mem, hvc_send_msg_to_vm, HVC_VMM, HVC_VMM_MIGRATE_START, HvcGuestMsg, HvcMigrateMsg,
     mem_pages_alloc, MIGRATE_BITMAP, MIGRATE_COPY, MIGRATE_FINISH, MIGRATE_SEND, vm, Vm, vm_if_copy_mem_map,
-    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map, vm_if_set_mem_map_cache,
+    vm_if_mem_map_cache, vm_if_mem_map_page_num, vm_if_set_mem_map_bit, vm_if_set_mem_map_cache,
 };
 
 pub struct VMData {
@@ -315,40 +315,21 @@ pub fn migrate_finish_ipi_handler(vm_id: usize) {
     );
 }
 
-pub fn migrate_data_abort_handler(_emu_ctx: &EmuContext) {
-    todo!()
-    // if emu_ctx.write {
-    //     // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
-    //     let vm = active_vm().unwrap();
-    //     // vm.show_pagetable(emu_ctx.address);
-    //     let vm_id = vm.id();
+pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
+    if emu_ctx.write {
+        // ptr_read_write(emu_ctx.address, emu_ctx.width, val, false);
+        let vm = active_vm().unwrap();
+        // vm.show_pagetable(emu_ctx.address);
 
-    //     // emu_ctx.address here is pa, not ipa
-    //     let (pa, len) = vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
-    //     // println!(
-    //     //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
-    //     //     emu_ctx.address, pa, len
-    //     // );
-    //     let mut bit = 0;
-    //     for i in 0..vm.region_num() {
-    //         let start = vm.pa_start(i);
-    //         let end = start + vm.pa_length(i);
-    //         if pa >= start && pa < end {
-    //             bit += (pa - active_vm().unwrap().pa_start(i)) / PAGE_SIZE;
-    //             vm_if_set_mem_map(vm_id, bit, len / PAGE_SIZE);
-    //             break;
-    //         }
-    //         bit += vm.pa_length(i) / PAGE_SIZE;
-    //         if i + 1 == vm.region_num() {
-    //             panic!(
-    //                 "migrate_data_abort_handler: can not found addr 0x{:x} in vm{} pa region",
-    //                 pa, vm_id
-    //             );
-    //         }
-    //     }
-    //     // flush tlb for updating page table
-    //     tlb_invalidate_guest_all();
-    // } else {
-    //     panic!("migrate_data_abort_handler: permission should be read only");
-    // }
+        vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
+        // println!(
+        //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
+        //     emu_ctx.address, pa, len
+        // );
+        vm_if_set_mem_map_bit(&vm, emu_ctx.address);
+        // flush tlb for updating page table
+        tlb_invalidate_guest_all();
+    } else {
+        panic!("migrate_data_abort_handler: permission should be read only");
+    }
 }
