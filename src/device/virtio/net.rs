@@ -10,13 +10,15 @@ use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit,
-    vm_ipa2pa, VM_LIST, VM_STATE_FLAG,
+    vm_ipa2hva, VM_LIST,
 };
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::{round_down, trace};
+
+pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 
 const VIRTIO_NET_OK: u8 = 0;
 const VIRTIO_NET_ERR: u8 = 1;
@@ -201,7 +203,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         in_iov.clear();
 
         loop {
-            let addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(idx));
+            let addr = vm_ipa2hva(&active_vm().unwrap(), vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_handle_ctrl: failed to desc addr");
                 return false;
@@ -285,7 +287,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         tx_iov.clear();
 
         loop {
-            let addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(idx));
+            let addr = vm_ipa2hva(&active_vm().unwrap(), vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_notify_handler: failed to desc addr");
                 return false;
@@ -541,7 +543,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let mut rx_len = 0;
 
     loop {
-        let dst = vm_ipa2pa(vm.clone(), rx_vq.desc_addr(desc_idx));
+        let dst = vm_ipa2hva(&vm, rx_vq.desc_addr(desc_idx));
         if dst == 0 {
             println!(
                 "rx_vq desc base table addr 0x{:x}, idx {}, avail table addr 0x{:x}, avail last idx {}",

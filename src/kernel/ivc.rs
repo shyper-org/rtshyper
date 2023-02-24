@@ -3,7 +3,7 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::arch::PTE_S2_NORMAL;
 use crate::kernel::{
-    active_vm, current_cpu, mem_pages_alloc, Vm, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2pa, VM_NUM_MAX,
+    active_vm, current_cpu, mem_pages_alloc, Vm, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr, vm_ipa2hva, VM_NUM_MAX,
 };
 use crate::mm::PageFrame;
 
@@ -14,8 +14,8 @@ pub const SHARED_MEM_SIZE_MAX: usize = 0x200000;
 pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
     let vm = active_vm().unwrap();
     let vm_id = vm.id();
-    let receive_pa = vm_ipa2pa(vm.clone(), receive_ipa);
-    let cfg_pa = vm_ipa2pa(vm, cfg_ipa);
+    let receive_pa = vm_ipa2hva(&vm, receive_ipa);
+    let cfg_pa = vm_ipa2hva(&vm, cfg_ipa);
 
     if receive_pa == 0 {
         println!("ivc_update_mq: invalid receive_pa");

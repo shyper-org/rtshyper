@@ -7,7 +7,7 @@ use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map_bit, vm_ipa2pa};
+use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map_bit, vm_ipa2hva};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::lib::{round_down, trace};
@@ -168,7 +168,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         tx_iov.clear();
 
         loop {
-            let addr = vm_ipa2pa(active_vm().unwrap(), vq.desc_addr(idx));
+            let addr = vm_ipa2hva(&active_vm().unwrap(), vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_console_notify_handler: failed to desc addr");
                 return false;
@@ -261,7 +261,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     let rx_iov = VirtioIov::default();
     let mut rx_len = 0;
     loop {
-        let dst = vm_ipa2pa(trgt_vm.clone(), rx_vq.desc_addr(desc_idx));
+        let dst = vm_ipa2hva(&trgt_vm, rx_vq.desc_addr(desc_idx));
         if dst == 0 {
             println!(
                 "virtio_console_recv: failed to get dst, desc_idx {}, avail idx {}",

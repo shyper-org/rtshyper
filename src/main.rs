@@ -13,6 +13,8 @@ extern crate fdt;
 #[macro_use]
 // extern crate lazy_static;
 extern crate log;
+#[macro_use]
+extern crate static_assertions;
 
 // extern crate rlibc;
 

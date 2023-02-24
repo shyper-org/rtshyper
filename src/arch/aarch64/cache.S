@@ -1,3 +1,5 @@
+.section .text
+
 // void cache_invalidate_d(u64 start, u64 length);
 .global cache_invalidate_d
 cache_invalidate_d:

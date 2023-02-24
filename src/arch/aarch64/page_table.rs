@@ -1,7 +1,6 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-// use rlibc::{memcpy, memset};
 use spin::Mutex;
 
 use crate::arch::ArchPageTableEntryTrait;
@@ -70,7 +69,7 @@ pub const PTE_S2_RO: usize = PTE_S2_FIELD_MEM_ATTR_NORMAL_INNER_WRITE_BACK_CACHE
     | PTE_S2_FIELD_SH_OUTER_SHAREABLE
     | PTE_S2_FIELD_AF;
 
-pub const CPU_BANKED_ADDRESS: usize = 0x400000000;
+const CPU_BANKED_ADDRESS: usize = 0x400000000;
 
 pub const fn pte_s1_field_attr_indx(idx: usize) -> usize {
     idx << 2
@@ -98,6 +97,8 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     memcpy_safe(&(cpu.cpu_pt.lvl1) as *const _ as *mut u8, addr as *mut u8, PAGE_SIZE);
     memset_safe(&(cpu.cpu_pt.lvl2) as *const _ as *mut u8, 0, PAGE_SIZE);
     memset_safe(&(cpu.cpu_pt.lvl3) as *const _ as *mut u8, 0, PAGE_SIZE);
+
+    const_assert!(core::mem::size_of::<Cpu>() <= (1 << LVL2_SHIFT));
 
     let cpu_addr = cpu as *const _ as usize;
     let lvl2_addr = &(cpu.cpu_pt.lvl2) as *const _ as usize;
@@ -246,7 +247,7 @@ impl PageTable {
         None
     }
 
-    pub fn map_2mb(&self, ipa: usize, pa: usize, pte: usize) {
+    fn map_2mb(&self, ipa: usize, pa: usize, pte: usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));
         if !l1e.valid() {
@@ -270,7 +271,7 @@ impl PageTable {
         }
     }
 
-    pub fn unmap_2mb(&self, ipa: usize) {
+    fn unmap_2mb(&self, ipa: usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let l1e = directory.entry(pt_lvl1_idx(ipa));
         if l1e.valid() {
@@ -287,7 +288,7 @@ impl PageTable {
         }
     }
 
-    pub fn map(&self, ipa: usize, pa: usize, pte: usize) {
+    fn map(&self, ipa: usize, pa: usize, pte: usize) {
         // if ipa >= 0x4_0000_0000 {
         //     println!("map ipa 0x{:x} to pa 0x{:x}", ipa, pa);
         // }
@@ -338,7 +339,7 @@ impl PageTable {
         // }
     }
 
-    pub fn unmap(&self, ipa: usize) {
+    fn unmap(&self, ipa: usize) {
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let l1e = directory.entry(pt_lvl1_idx(ipa));
         if l1e.valid() {
@@ -365,7 +366,7 @@ impl PageTable {
         }
     }
 
-    pub fn map_range_2mb(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
+    fn map_range_2mb(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
         let size_2mb = 1 << LVL2_SHIFT;
         let page_num = round_up(len, size_2mb) / size_2mb;
 
@@ -374,7 +375,7 @@ impl PageTable {
         }
     }
 
-    pub fn unmap_range_2mb(&self, ipa: usize, len: usize) {
+    fn unmap_range_2mb(&self, ipa: usize, len: usize) {
         let size_2mb = 1 << LVL2_SHIFT;
         let page_num = round_up(len, size_2mb) / size_2mb;
 
@@ -383,20 +384,14 @@ impl PageTable {
         }
     }
 
-    pub fn map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
+    fn map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize) {
         let page_num = round_up(len, PAGE_SIZE) / PAGE_SIZE;
-        // if ipa == 0x8010000 {
-        //     println!(
-        //         "map_range: ipa {:x}, len {:x}, pa {:x}, pte 0b{:b}, page_num {:x}",
-        //         ipa, len, pa, pte, page_num,
-        //     );
-        // }
         for i in 0..page_num {
             self.map(ipa + i * PAGE_SIZE, pa + i * PAGE_SIZE, pte);
         }
     }
 
-    pub fn unmap_range(&self, ipa: usize, len: usize) {
+    fn unmap_range(&self, ipa: usize, len: usize) {
         let page_num = round_up(len, PAGE_SIZE) / PAGE_SIZE;
         for i in 0..page_num {
             self.unmap(ipa + i * PAGE_SIZE);

@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::arch::{
     ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext, GICD,
-    GICH, VmContext, timer_arch_get_counter,
+    GICH, VmContext, timer_arch_get_counter, VM_IPA_SIZE, DEVICE_BASE,
 };
 use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
@@ -118,9 +118,9 @@ impl Vcpu {
             inner.gic_ctx.add_irq(irq as u64);
         }
         inner.gic_ctx.add_irq(25);
-        let gicv_ctlr = unsafe { &*((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32) };
+        let gicv_ctlr = unsafe { &*((PLATFORM_GICV_BASE + DEVICE_BASE) as *const u32) };
         inner.gic_ctx.set_gicv_ctlr(*gicv_ctlr);
-        let gicv_pmr = unsafe { &*((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32) };
+        let gicv_pmr = unsafe { &*((PLATFORM_GICV_BASE + DEVICE_BASE + 0x4) as *const u32) };
         inner.gic_ctx.set_gicv_pmr(*gicv_pmr);
     }
 
@@ -135,10 +135,10 @@ impl Vcpu {
             }
         }
 
-        let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *mut u32) };
+        let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x4) as *mut u32) };
         *gicv_pmr = inner.gic_ctx.gicv_pmr();
         // println!("Core[{}] save gic context", current_cpu().id);
-        let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *mut u32) };
+        let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + DEVICE_BASE) as *mut u32) };
         *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
         // show_vcpu_reg_context();
     }
@@ -358,7 +358,7 @@ impl VcpuInner {
         self.vm_ctx.sctlr_el1 = 0x30C50830;
         self.vm_ctx.cntkctl_el1 = 0;
         self.vm_ctx.pmcr_el0 = 0;
-        self.vm_ctx.vtcr_el2 = 0x8001355c;
+        self.vm_ctx.vtcr_el2 = 0x80013540 + ((64 - VM_IPA_SIZE) & ((1 << 6) - 1));
         // }
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
@@ -572,25 +572,25 @@ pub fn show_vcpu_reg_context() {
 
     println!("GICH_MISR {:x}", GICH.misr());
     println!("GICV_CTLR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + 0x8_0000_0000) as *const u32)
+        *((PLATFORM_GICV_BASE + DEVICE_BASE) as *const u32)
     });
     println!("GICV_PMR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x4) as *const u32)
+        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x4) as *const u32)
     });
     println!("GICV_BPR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x8) as *const u32)
+        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x8) as *const u32)
     });
     println!("GICV_ABPR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x1c) as *const u32)
+        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x1c) as *const u32)
     });
     println!("GICV_STATUSR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0x2c) as *const u32)
+        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x2c) as *const u32)
     });
     println!(
         "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd0) as *const u32) },
-        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd4) as *const u32) },
-        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xd8) as *const u32) },
-        unsafe { *((PLATFORM_GICV_BASE + 0x8_0000_0000 + 0xdc) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xd0) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xd4) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xd8) as *const u32) },
+        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xdc) as *const u32) },
     );
 }

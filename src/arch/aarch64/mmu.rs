@@ -2,9 +2,9 @@ use core::arch::global_asm;
 use tock_registers::*;
 use tock_registers::interfaces::*;
 
-use crate::arch::pt_lvl2_idx;
+use crate::arch::{pt_lvl1_idx, pt_lvl2_idx};
+use crate::arch::{LVL1_SHIFT, LVL2_SHIFT};
 use crate::board::PLAT_DESC;
-use crate::lib::memset_safe;
 
 use super::interface::*;
 
@@ -22,19 +22,8 @@ global_asm!(include_str!("start_qemu.S"));
 // const PAGE_SHIFT: usize = 12;
 // const ENTRY_PER_PAGE: usize = PAGE_SIZE / 8;
 
-register_bitfields! {u64,
-    pub TableDescriptor [
-        NEXT_LEVEL_TABLE_PPN OFFSET(12) NUMBITS(36) [], // [47:12]
-        TYPE  OFFSET(1) NUMBITS(1) [
-            Block = 0,
-            Table = 1
-        ],
-        VALID OFFSET(0) NUMBITS(1) [
-            False = 0,
-            True = 1
-        ]
-    ]
-}
+pub const DEVICE_BASE: usize = 0x6_0000_0000;
+const_assert!(DEVICE_BASE < 1 << VM_IPA_SIZE); // if not, the device va will ocuppy the ipa2hva space, which is very dangerous
 
 register_bitfields! {u64,
     pub PageDescriptorS1 [
@@ -117,18 +106,13 @@ pub struct PageTables {
     lvl1: [BlockDescriptor; ENTRY_PER_PAGE],
 }
 
-const LVL1_SHIFT: usize = 30;
-const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
-
 #[no_mangle]
 // #[link_section = ".text.boot"]
 pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
-    let lvl1_base = lvl1_pt as *const _ as usize;
     let lvl2_base = lvl2_pt as *const _ as usize;
-    memset_safe(lvl1_base as *mut u8, 0, PAGE_SIZE);
-    memset_safe(lvl2_base as *mut u8, 0, PAGE_SIZE);
 
     if cfg!(feature = "tx2") {
+        const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
         for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let output_addr = i << LVL1_SHIFT;
             lvl1_pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
@@ -142,7 +126,7 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         // }
 
         // map the devices to HIGH 32GB, whose offset is 2^35 = 0x8_0000_0000
-        lvl1_pt.lvl1[32] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE)] = BlockDescriptor::table(lvl2_base);
         // 0x200000 ~ 2MB
         // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
         // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
@@ -153,39 +137,37 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
         // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
         lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
-        for i in 0..(0x100_0000 / 0x200000) {
-            let addr = 0x12000000 + i * 0x200000;
+        for addr in (0x12000000..0x13000000).step_by(1 << LVL2_SHIFT) {
             lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
         }
     } else if cfg!(feature = "pi4") {
-        use crate::arch::LVL2_SHIFT;
-        // crate::driver::putc('o' as u8);
-        // crate::driver::putc('r' as u8);
-        // crate::driver::putc('e' as u8);
-        // println!("pt");
         // 0x0_0000_0000 ~ 0x0_c000_0000 --> normal memory (3GB)
-        lvl1_pt.lvl1[0] = BlockDescriptor::new(0, false);
-        lvl1_pt.lvl1[1] = BlockDescriptor::new(0x40000000, false);
-        lvl1_pt.lvl1[2] = BlockDescriptor::new(0x80000000, false);
-        lvl1_pt.lvl1[3] = BlockDescriptor::table(lvl2_base);
+        let normal_memory_0 = 0x0_0000_0000..0x0_c000_0000;
+        for (i, pa) in normal_memory_0.step_by(1 << LVL1_SHIFT).enumerate() {
+            lvl1_pt.lvl1[i] = BlockDescriptor::new(pa, false);
+        }
         // 0x0_c000_0000 ~ 0x0_fc00_0000 --> normal memory (960MB)
-        for i in 0..480 {
-            lvl2_pt.lvl1[i] = BlockDescriptor::new(0x0c0000000 + (i << LVL2_SHIFT), false);
+        let normal_memory_1 = 0x0_c000_0000..0x0_fc00_0000;
+        lvl1_pt.lvl1[pt_lvl1_idx(normal_memory_1.start)] = BlockDescriptor::table(lvl2_base);
+        for (i, pa) in normal_memory_1.step_by(1 << LVL2_SHIFT).enumerate() {
+            lvl2_pt.lvl1[i] = BlockDescriptor::new(pa, false);
         }
         // 0x0_fc00_0000 ~ 0x1_0000_0000 --> device memory (64MB)
-        for i in 480..512 {
-            lvl2_pt.lvl1[i] = BlockDescriptor::new(0x0c0000000 + (i << LVL2_SHIFT), true);
+        let device_memory = 0x0_fc00_0000..0x1_0000_0000;
+        let device_region_start = device_memory.start;
+        for (i, pa) in device_memory.step_by(1 << LVL2_SHIFT).enumerate() {
+            lvl2_pt.lvl1[i] = BlockDescriptor::new(pa, true);
         }
         // 0x1_0000_0000 ~ 0x2_0000_0000 --> normal memory (4GB)
-        lvl1_pt.lvl1[4] = BlockDescriptor::new(0x100000000, false);
-        lvl1_pt.lvl1[5] = BlockDescriptor::new(0x140000000, false);
-        lvl1_pt.lvl1[6] = BlockDescriptor::new(0x180000000, false);
-        lvl1_pt.lvl1[7] = BlockDescriptor::new(0x1c0000000, false);
-        for i in 8..512 {
+        let normal_memory_2 = 0x1_0000_0000..0x2_0000_0000;
+        for (i, pa) in normal_memory_2.clone().step_by(1 << LVL1_SHIFT).enumerate() {
+            lvl1_pt.lvl1[i] = BlockDescriptor::new(pa, false);
+        }
+        for i in pt_lvl1_idx(normal_memory_2.end)..512 {
             lvl1_pt.lvl1[i] = BlockDescriptor::invalid();
         }
         // 0x8_0000_0000 + 0x0_c000_0000
-        lvl1_pt.lvl1[32 + 3] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE + device_region_start)] = BlockDescriptor::table(lvl2_base);
     } else if cfg!(feature = "qemu") {
         todo!()
     }
@@ -210,7 +192,7 @@ pub extern "C" fn mmu_init(pt: &PageTables) {
             + TCR_EL2::TG0::KiB_4
             + TCR_EL2::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
             + TCR_EL2::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
-            + TCR_EL2::T0SZ.val(64 - 39),
+            + TCR_EL2::T0SZ.val(64 - HYP_VA_SIZE),
     );
 
     // barrier::isb(barrier::SY);

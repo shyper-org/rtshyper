@@ -131,6 +131,8 @@ boot_stack:
     .space 4096 * 8
 boot_stack_top:
 
+.section .bss
+
 .align 12
 .global lvl1_page_table
 lvl1_page_table:
@@ -140,7 +142,3 @@ lvl1_page_table:
 .global lvl2_page_table
 lvl2_page_table:
     .space 4096
-
-.align 3
-_barrier:
-    .quad 0

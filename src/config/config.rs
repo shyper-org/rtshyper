@@ -8,7 +8,7 @@ use spin::Mutex;
 
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
-use crate::kernel::{active_vm, vm, Vm, vm_ipa2pa, VM_NUM_MAX, VmType};
+use crate::kernel::{active_vm, vm, Vm, vm_ipa2hva, VM_NUM_MAX, VmType};
 use crate::lib::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
 use crate::kernel::access::{copy_segment_to_vm, copy_segment_from_vm};
@@ -590,7 +590,7 @@ fn parse_cstr_error(error: core::str::Utf8Error) -> &'static str {
 
 /* Generate a new VM Config Entry, set basic value */
 pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
-    let config_pa = vm_ipa2pa(active_vm().unwrap(), config_ipa);
+    let config_pa = vm_ipa2hva(&active_vm().unwrap(), config_ipa);
     let (
         vm_name_ipa,
         _vm_name_length,
@@ -604,7 +604,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
     println!("\n\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.
-    let vm_name_pa = vm_ipa2pa(active_vm().unwrap(), vm_name_ipa);
+    let vm_name_pa = vm_ipa2hva(&active_vm().unwrap(), vm_name_ipa);
     if vm_name_pa == 0 {
         println!("illegal vm_name_ipa {:x}", vm_name_ipa);
         return Err(());
@@ -615,7 +615,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
         .to_string();
 
     // Copy VM cmdline from user ipa.
-    let cmdline_pa = vm_ipa2pa(active_vm().unwrap(), cmdline_ipa);
+    let cmdline_pa = vm_ipa2hva(&active_vm().unwrap(), cmdline_ipa);
     if cmdline_pa == 0 {
         println!("illegal cmdline_ipa {:x}", cmdline_ipa);
         return Err(());
@@ -699,7 +699,7 @@ pub fn vm_cfg_add_emu_dev(
     let emu_cfg_list = vm_cfg.emulated_device_list();
 
     // Copy emu device name from user ipa.
-    let name_pa = vm_ipa2pa(active_vm().unwrap(), name_ipa);
+    let name_pa = vm_ipa2hva(&active_vm().unwrap(), name_ipa);
     if name_pa == 0 {
         println!("illegal emulated device name_ipa {:x}", name_ipa);
         return Err(());
@@ -856,7 +856,7 @@ pub fn vm_cfg_add_dtb_dev(
     );
 
     // Copy DTB device name from user ipa.
-    let name_pa = vm_ipa2pa(active_vm().unwrap(), name_ipa);
+    let name_pa = vm_ipa2hva(&active_vm().unwrap(), name_ipa);
     if name_pa == 0 {
         println!("illegal dtb_dev name ipa {:x}", name_ipa);
         return Err(());

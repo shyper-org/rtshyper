@@ -52,11 +52,8 @@ _start:
 
     mov sp, x1
 
+    // if core_id is not zero, skip bss clearing and pt_populate
     cbnz x0, 5f
-
-    adrp x0, lvl1_page_table
-    adrp x1, lvl2_page_table
-    bl  pt_populate
 
     ldr x0, =_bss_begin
     ldr x1, =_bss_end
@@ -64,6 +61,9 @@ _start:
     mov x1, xzr
     bl  memset
 
+    adrp x0, lvl1_page_table
+    adrp x1, lvl2_page_table
+    bl  pt_populate
 5:
     // Trap nothing from EL1 to El2
     mov x3, xzr
@@ -143,6 +143,8 @@ boot_stack:
     .space 4096 * 16
 boot_stack_top:
 
+.section .bss
+
 .align 12
 .global lvl1_page_table
 lvl1_page_table:
@@ -152,7 +154,3 @@ lvl1_page_table:
 .global lvl2_page_table
 lvl2_page_table:
     .space 4096
-
-.align 3
-_barrier:
-    .quad 0

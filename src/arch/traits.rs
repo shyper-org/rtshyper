@@ -28,4 +28,5 @@ pub trait ArchTrait {
     fn nop();
     fn fault_address() -> usize;
     fn install_vm_page_table(base: usize, vmid: usize);
+    fn install_self_page_table(base: usize);
 }

@@ -20,6 +20,7 @@ use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::VM_NUM_MAX;
 use crate::kernel::access::copy_segment_to_vm;
+use crate::vmm::address::vmm_setup_ipa2hva;
 
 #[cfg(feature = "ramdisk")]
 pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.cpio");
@@ -77,6 +78,7 @@ fn vmm_init_memory(vm: &Vm) -> bool {
             }
         }
     }
+    vmm_setup_ipa2hva(&vm);
     vm_if_init_mem_map(vm_id, (vm_mem_size + PAGE_SIZE - 1) / PAGE_SIZE);
 
     true

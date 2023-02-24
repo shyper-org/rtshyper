@@ -196,7 +196,7 @@ pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result
             if color_bitmap & (1 << color) != 0 {
                 let color_free = region_list
                     .iter()
-                    .take_while(|region| region.is_available())
+                    .filter(|region| region.is_available())
                     .map(|region| region.count)
                     .sum();
                 free_pages += color_free;

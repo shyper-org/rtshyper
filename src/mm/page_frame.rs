@@ -38,6 +38,10 @@ impl PageFrame {
         self.pa
     }
 
+    pub fn hva(&self) -> usize {
+        self.pa
+    }
+
     pub fn zero(&self) {
         memset_safe(self.pa as *mut u8, 0, PAGE_SIZE);
     }

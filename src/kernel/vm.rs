@@ -6,7 +6,9 @@ use core::mem::size_of;
 
 use spin::Mutex;
 
-use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO, timer_arch_get_counter};
+use crate::arch::{
+    PAGE_SIZE, PTE_S2_FIELD_AP_RO, PTE_S2_NORMAL, PTE_S2_RO, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE,
+};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
@@ -25,16 +27,10 @@ use super::vcpu::Vcpu;
 
 pub const DIRTY_MEM_THRESHOLD: usize = 0x2000;
 pub const VM_NUM_MAX: usize = 8;
-pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-    Mutex::new(VmInterface::default()),
-];
+// make sure that the VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
+const_assert!(VM_NUM_MAX <= (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
+const VM_INTERFACE_DEFAULT: Mutex<VmInterface> = Mutex::new(VmInterface::default());
+pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [VM_INTERFACE_DEFAULT; VM_NUM_MAX];
 
 pub fn vm_if_reset(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
@@ -509,9 +505,8 @@ impl Vm {
     pub fn pt_read_only(&self) {
         let config = self.config();
         let vm_inner = self.inner.lock();
-        match vm_inner.pt.clone() {
+        match &vm_inner.pt {
             Some(pt) => {
-                drop(vm_inner);
                 for region in config.memory_region().iter() {
                     pt.access_permission(region.ipa_start, region.length, PTE_S2_FIELD_AP_RO);
                 }
@@ -754,9 +749,9 @@ impl Vm {
         vm_inner.ready
     }
 
-    pub fn set_ready(&self, _ready: bool) {
+    pub fn set_ready(&self, ready: bool) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.ready = _ready;
+        vm_inner.ready = ready;
     }
 
     // init for migrate restore
@@ -1051,23 +1046,16 @@ pub fn vm(id: usize) -> Option<Vm> {
     vm_list.iter().find(|&x| x.id() == id).cloned()
 }
 
-pub fn vm_list_size() -> usize {
-    let vm_list = VM_LIST.lock();
-    vm_list.len()
-}
-
-pub fn vm_ipa2pa(vm: Vm, ipa: usize) -> usize {
-    if ipa == 0 {
-        println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
+// TODO: rename the function
+pub fn vm_ipa2hva(vm: &Vm, ipa: usize) -> usize {
+    let mask = (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1;
+    let prefix = mask << VM_IPA_SIZE;
+    if ipa == 0 || ipa & prefix != 0 {
+        println!("vm_ipa2hva: VM {} access invalid ipa {:x}", vm.id(), ipa);
         return 0;
     }
-    match vm.ipa2pa(ipa) {
-        Some(host_pa) => host_pa,
-        None => {
-            println!("vm_ipa2pa: VM {} access invalid ipa {:x}", vm.id(), ipa);
-            0
-        }
-    }
+    let prefix = prefix - ((vm.id() & mask) << VM_IPA_SIZE);
+    prefix | ipa
 }
 
 // #[deprecated]

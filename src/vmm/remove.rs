@@ -3,10 +3,11 @@ use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_async_used_info, remove_vm,
-    remove_vm_async_task, Vm, Scheduler, cpu_idle,
+    remove_vm_async_task, Vm, Scheduler, cpu_idle, vm,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
+use crate::vmm::address::vmm_unmap_ipa2hva;
 
 pub fn vmm_remove_vm(vm_id: usize) {
     if vm_id == 0 {
@@ -15,8 +16,10 @@ pub fn vmm_remove_vm(vm_id: usize) {
     }
 
     // remove vm: page table / mmio / vgic will be removed when vm drop
-    let vm = remove_vm(vm_id);
+    let vm = vm(vm_id).unwrap();
 
+    // unmap ipa(hva) percore
+    vmm_unmap_ipa2hva(&vm);
     // vcpu
     vmm_remove_vcpu(&vm);
     // reset vm interface
@@ -32,6 +35,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     // remove vm cfg
     vm_cfg_remove_vm_entry(vm_id);
     // remove vm unilib
+    remove_vm(vm_id);
     crate::lib::unilib::unilib_fs_remove(vm_id);
     info!("remove vm[{}] successfully", vm_id);
 }

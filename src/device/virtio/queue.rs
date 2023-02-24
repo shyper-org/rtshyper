@@ -1,4 +1,5 @@
 use alloc::sync::Arc;
+use core::mem::size_of;
 use core::slice;
 
 use spin::Mutex;
@@ -6,7 +7,7 @@ use spin::Mutex;
 use crate::arch::PageTable;
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2pa};
+use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2hva};
 use crate::lib::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -21,7 +22,7 @@ pub const DESC_QUEUE_SIZE: usize = 512;
 #[derive(Copy, Clone)]
 struct VringDesc {
     /*Address (guest-physical)*/
-    pub addr: usize,
+    addr: u64,
     /* Length */
     len: u32,
     /* The flags as indicated above */
@@ -41,13 +42,13 @@ struct VringAvail {
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VringUsedElem {
-    pub id: u32,
-    pub len: u32,
+    id: u32,
+    len: u32,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct VringUsed {
+struct VringUsed {
     flags: u16,
     idx: u16,
     ring: [VringUsedElem; 512],
@@ -173,8 +174,6 @@ impl Virtq {
         match inner.notify_handler {
             Some(handler) => {
                 drop(inner);
-                // println!("call_notify_handler");
-                // println!("handler addr {:x}", unsafe { *(&handler as *const _ as *const usize) });
                 handler(self.clone(), mmio, active_vm().unwrap())
             }
             None => {
@@ -189,7 +188,7 @@ impl Virtq {
         let desc = inner.desc_table.as_ref().unwrap();
         println!("[*desc_ring*]");
         for i in 0..size {
-            let desc_addr = vm_ipa2pa(vm.clone(), desc[i].addr);
+            let desc_addr = vm_ipa2hva(&vm, desc[i].addr as usize);
             println!(
                 "index {}   desc_addr_ipa 0x{:x}   desc_addr_pa 0x{:x}   len 0x{:x}   flags {}  next {}",
                 i, desc[i].addr, desc_addr, desc[i].len, desc[i].flags, desc[i].next
@@ -261,7 +260,9 @@ impl Virtq {
         if trace() && addr < 0x1000 {
             panic!("illegal desc ring addr {:x}", addr);
         }
-        inner.desc_table = Some(unsafe { slice::from_raw_parts_mut(addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
+        inner.desc_table = Some(unsafe {
+            slice::from_raw_parts_mut(addr as *mut VringDesc, size_of::<VringDesc>() * DESC_QUEUE_SIZE)
+        });
     }
 
     pub fn set_avail(&self, addr: usize) {
@@ -342,7 +343,7 @@ impl Virtq {
     pub fn desc_addr(&self, idx: usize) -> usize {
         let inner = self.inner.lock();
         let desc_table = inner.desc_table.as_ref().unwrap();
-        desc_table[idx].addr
+        desc_table[idx].addr as usize
     }
 
     pub fn desc_flags(&self, idx: usize) -> u16 {
@@ -398,6 +399,7 @@ impl Virtq {
         inner.desc_table_addr = data.desc_table_ipa;
         inner.avail_addr = data.avail_ipa;
         inner.used_addr = data.used_ipa;
+        // FIXME: it should be ipa2hva
         let desc_table_addr = pt.ipa2pa(data.desc_table_ipa).unwrap_or(0);
         let avail_addr = pt.ipa2pa(data.avail_ipa).unwrap_or(0);
         let used_addr = pt.ipa2pa(data.used_ipa).unwrap_or(0);
@@ -480,7 +482,8 @@ impl Virtq {
     }
 }
 
-pub struct VirtqInner<'a> {
+#[derive(Default)]
+struct VirtqInner<'a> {
     ready: usize,
     vq_index: usize,
     num: usize,
@@ -499,26 +502,6 @@ pub struct VirtqInner<'a> {
 }
 
 impl VirtqInner<'_> {
-    pub fn default() -> Self {
-        VirtqInner {
-            ready: 0,
-            vq_index: 0,
-            num: 0,
-            desc_table: None,
-            avail: None,
-            used: None,
-            last_avail_idx: 0,
-            last_used_idx: 0,
-            used_flags: 0,
-
-            desc_table_addr: 0,
-            avail_addr: 0,
-            used_addr: 0,
-
-            notify_handler: None,
-        }
-    }
-
     // virtio_queue_reset
     pub fn reset(&mut self, index: usize) {
         self.ready = 0;

@@ -1,17 +1,20 @@
 use alloc::vec::Vec;
+use alloc::collections::LinkedList;
 
 use spin::Mutex;
+use spin::once::Once;
 
 use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE};
 use crate::arch::ArchTrait;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 // use core::ops::{Deref, DerefMut};
-use crate::arch::cpu_interrupt_unmask;
+use crate::arch::{cpu_interrupt_unmask, PageTable};
 use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{SchedType, Vcpu, VcpuArray, VcpuState, Vm, Scheduler};
+use crate::kernel::{SchedType, Vcpu, VcpuArray, VcpuState, Vm, Scheduler, mem_page_alloc};
 use crate::kernel::IpiMessage;
 use crate::lib::trace;
+use crate::lib::memcpy_safe;
 
 pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
@@ -19,47 +22,32 @@ pub const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C)]
 #[repr(align(4096))]
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug)]
 pub struct CpuPt {
     pub lvl1: [usize; PTE_PER_PAGE],
     pub lvl2: [usize; PTE_PER_PAGE],
     pub lvl3: [usize; PTE_PER_PAGE],
 }
 
-impl PartialEq for CpuPt {
-    fn eq(&self, other: &Self) -> bool {
-        self.lvl1 == other.lvl1 && self.lvl2 == other.lvl2 && self.lvl3 == other.lvl3
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CpuState {
     CpuInv = 0,
     CpuIdle = 1,
     CpuRun = 2,
 }
 
-impl PartialEq for CpuState {
-    fn eq(&self, other: &Self) -> bool {
-        *self as usize == *other as usize
-    }
-}
-
+#[derive(Default)]
 pub struct CpuIf {
-    pub msg_queue: Vec<IpiMessage>,
+    msg_queue: LinkedList<IpiMessage>,
 }
 
 impl CpuIf {
-    pub fn default() -> CpuIf {
-        CpuIf { msg_queue: Vec::new() }
-    }
-
     pub fn push(&mut self, ipi_msg: IpiMessage) {
-        self.msg_queue.push(ipi_msg);
+        self.msg_queue.push_back(ipi_msg);
     }
 
     pub fn pop(&mut self) -> Option<IpiMessage> {
-        self.msg_queue.pop()
+        self.msg_queue.pop_front()
     }
 }
 
@@ -74,7 +62,6 @@ fn cpu_if_init() {
 
 #[repr(C)]
 #[repr(align(4096))]
-// #[derive(Clone)]
 pub struct Cpu {
     pub id: usize,
     pub cpu_state: CpuState,
@@ -86,6 +73,7 @@ pub struct Cpu {
     pub current_irq: usize,
     pub cpu_pt: CpuPt,
     pub stack: [u8; CPU_STACK_SIZE],
+    global_pt: Once<PageTable>,
 }
 
 impl Cpu {
@@ -104,6 +92,7 @@ impl Cpu {
                 lvl3: [0; PTE_PER_PAGE],
             },
             stack: [0; CPU_STACK_SIZE],
+            global_pt: Once::new(),
         }
     }
 
@@ -230,6 +219,10 @@ impl Cpu {
     pub fn assigned(&self) -> bool {
         self.vcpu_array.vcpu_num() != 0
     }
+
+    pub fn global_pt(&self) -> &PageTable {
+        self.global_pt.get().unwrap()
+    }
 }
 
 #[no_mangle]
@@ -248,6 +241,7 @@ pub static mut CPU: Cpu = Cpu {
         lvl3: [0; PTE_PER_PAGE],
     },
     stack: [0; CPU_STACK_SIZE],
+    global_pt: Once::new(),
 };
 
 pub fn current_cpu() -> &'static mut Cpu {
@@ -278,6 +272,21 @@ pub fn active_vm_ncpu() -> usize {
     }
 }
 
+fn cpu_init_global_pt() {
+    let cpu = current_cpu();
+    let pt = if let Ok(dir) = mem_page_alloc() {
+        // NOTE: no need to copy lvl2
+        // cpu_pt.lvl2 is only used for mapping struct Cpu with lvl3
+        // the device lvl2 (defined in start.S) is also available here because we copy the lvl1
+        memcpy_safe(dir.hva() as *const _, cpu.cpu_pt.lvl1.as_ptr() as *const _, PAGE_SIZE);
+        PageTable::new(dir)
+    } else {
+        panic!("From<CpuPt> to PageTable failed");
+    };
+    crate::arch::Arch::install_self_page_table(pt.base_pa());
+    cpu.global_pt.call_once(|| pt);
+}
+
 pub fn cpu_init() {
     let cpu_id = current_cpu().id;
     if cpu_id == 0 {
@@ -288,6 +297,7 @@ pub fn cpu_init() {
         cpu_if_init();
     }
 
+    cpu_init_global_pt();
     let state = CpuState::CpuIdle;
     current_cpu().cpu_state = state;
     let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;
@@ -313,16 +323,8 @@ pub fn cpu_idle() -> ! {
     }
 }
 
-pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [
-    Cpu::default(),
-    Cpu::default(),
-    Cpu::default(),
-    Cpu::default(),
-    Cpu::default(),
-    Cpu::default(),
-    Cpu::default(),
-    Cpu::default(),
-];
+const CPU_DEFAULT: Cpu = Cpu::default();
+pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [CPU_DEFAULT; PLATFORM_CPU_NUM_MAX];
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
