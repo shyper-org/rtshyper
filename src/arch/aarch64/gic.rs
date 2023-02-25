@@ -69,29 +69,29 @@ pub fn show_en_interrupt() {
 
 #[derive(Copy, Clone, Debug)]
 pub enum IrqState {
-    IrqSInactive,
-    IrqSPend,
-    IrqSActive,
-    IrqSPendActive,
+    Inactive,
+    Pend,
+    Active,
+    PendActive,
 }
 
 impl IrqState {
     pub fn num_to_state(num: usize) -> IrqState {
         match num {
-            0 => IrqState::IrqSInactive,
-            1 => IrqState::IrqSPend,
-            2 => IrqState::IrqSActive,
-            3 => IrqState::IrqSPendActive,
+            0 => IrqState::Inactive,
+            1 => IrqState::Pend,
+            2 => IrqState::Active,
+            3 => IrqState::PendActive,
             _ => panic!("num_to_state: illegal irq state"),
         }
     }
 
     pub fn to_num(&self) -> usize {
         match self {
-            IrqState::IrqSInactive => 0,
-            IrqState::IrqSPend => 1,
-            IrqState::IrqSActive => 2,
-            IrqState::IrqSPendActive => 3,
+            IrqState::Inactive => 0,
+            IrqState::Pend => 1,
+            IrqState::Active => 2,
+            IrqState::PendActive => 3,
         }
     }
 }
@@ -304,7 +304,7 @@ impl GicDistributor {
             }
         } else {
             let reg_ind = int_id / 32;
-            let mask = 1 << int_id % 32;
+            let mask = 1 << (int_id % 32);
             if pend {
                 self.ISPENDR[reg_ind].set(mask);
             } else {
@@ -317,7 +317,7 @@ impl GicDistributor {
 
     pub fn set_act(&self, int_id: usize, act: bool) {
         let reg_ind = int_id / 32;
-        let mask = 1 << int_id % 32;
+        let mask = 1 << (int_id % 32);
 
         let lock = GICD_LOCK.lock();
         if act {
@@ -354,7 +354,7 @@ impl GicDistributor {
 
     pub fn state(&self, int_id: usize) -> usize {
         let reg_ind = int_id / 32;
-        let mask = 1 << int_id % 32;
+        let mask = 1 << (int_id % 32);
 
         let lock = GICD_LOCK.lock();
         let pend = if (self.ISPENDR[reg_ind].get() & mask) != 0 {

@@ -36,13 +36,12 @@ impl Scheduler for SchedulerRR {
         for i in 1..=len {
             let idx = (self.active_idx + i) % len;
             match queue.get(idx) {
-                Some(vcpu) => match vcpu.state() {
-                    VcpuState::VcpuInv => {}
-                    _ => {
+                Some(vcpu) => {
+                    if vcpu.state() != VcpuState::Inv {
                         self.active_idx = idx;
                         return Some(vcpu.clone());
                     }
-                },
+                }
                 None => panic!("len != 0 but front is None"),
             }
         }
@@ -64,20 +63,17 @@ impl Scheduler for SchedulerRR {
         let mut need_schedule = false;
         {
             let queue = &mut self.queue;
-            match queue.iter().position(|x| x.vm_id() == vcpu.vm_id()) {
-                Some(idx) => {
-                    queue.remove(idx);
-                    if idx < self.active_idx {
-                        self.active_idx -= 1;
-                    } else if idx == self.active_idx {
-                        // cpu.active_vcpu need remove
-                        current_cpu().set_active_vcpu(None);
-                        if !queue.is_empty() {
-                            need_schedule = true;
-                        }
+            if let Some(idx) = queue.iter().position(|x| x.vm_id() == vcpu.vm_id()) {
+                queue.remove(idx);
+                if idx < self.active_idx {
+                    self.active_idx -= 1;
+                } else if idx == self.active_idx {
+                    // cpu.active_vcpu need remove
+                    current_cpu().set_active_vcpu(None);
+                    if !queue.is_empty() {
+                        need_schedule = true;
                     }
                 }
-                None => {}
             }
         }
         if self.queue.len() <= 1 {
@@ -90,7 +86,7 @@ impl Scheduler for SchedulerRR {
 
     fn wakeup(&mut self, vcpu: Vcpu) {
         let queue = &mut self.queue;
-        vcpu.set_state(VcpuState::VcpuPend);
+        vcpu.set_state(VcpuState::Pend);
         queue.push(vcpu);
         if queue.len() > 1 {
             timer_enable(true);

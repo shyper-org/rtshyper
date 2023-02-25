@@ -20,17 +20,17 @@ const EMULATED_DEV_MAX_NUM: usize = 16;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DtbDevType {
-    DevSerial = 0,
-    DevGicd = 1,
-    DevGicc = 2,
+    Serial = 0,
+    Gicd = 1,
+    Gicc = 2,
 }
 
 impl DtbDevType {
     pub fn from_usize(value: usize) -> DtbDevType {
         match value {
-            0 => DtbDevType::DevSerial,
-            1 => DtbDevType::DevGicd,
-            2 => DtbDevType::DevGicc,
+            0 => DtbDevType::Serial,
+            1 => DtbDevType::Gicd,
+            2 => DtbDevType::Gicc,
             _ => panic!("Unknown DtbDevType value: {}", value),
         }
     }
@@ -430,11 +430,8 @@ impl VmConfigEntry {
     pub fn gicc_addr(&self) -> usize {
         let dtb_devs = self.vm_dtb_devs.lock();
         for dev in &dtb_devs.dtb_device_list {
-            match dev.dev_type {
-                DtbDevType::DevGicc => {
-                    return dev.addr_region.ipa;
-                }
-                _ => {}
+            if dev.dev_type == DtbDevType::Gicc {
+                return dev.addr_region.ipa;
             }
         }
         0
@@ -443,11 +440,8 @@ impl VmConfigEntry {
     pub fn gicd_addr(&self) -> usize {
         let dtb_devs = self.vm_dtb_devs.lock();
         for dev in &dtb_devs.dtb_device_list {
-            match dev.dev_type {
-                DtbDevType::DevGicd => {
-                    return dev.addr_region.ipa;
-                }
-                _ => {}
+            if dev.dev_type == DtbDevType::Gicd {
+                return dev.addr_region.ipa;
             }
         }
         0
@@ -876,8 +870,8 @@ pub fn vm_cfg_add_dtb_dev(
     if irq_list_length > 0 {
         let mut tmp_dtb_irq_list = vec![0_usize; irq_list_length];
         copy_segment_from_vm(&active_vm().unwrap(), tmp_dtb_irq_list.as_mut_slice(), irq_list_ipa);
-        for i in 0..irq_list_length {
-            dtb_irq_list.push(tmp_dtb_irq_list[i]);
+        for irq in tmp_dtb_irq_list.into_iter().take(irq_list_length) {
+            dtb_irq_list.push(irq);
         }
     }
     println!("      get dtb dev dtb_irq_list {:?}", dtb_irq_list);
@@ -913,14 +907,13 @@ fn vm_cfg_finish_configuration(vmid: usize, _img_size: usize) -> Vm {
     vmm_init_gvm(vmid);
 
     // Get VM structure.
-    let vm = match vm(vmid) {
+
+    match vm(vmid) {
         None => {
             panic!("vm_cfg_upload_kernel_image:failed to init VM[{}]", vmid);
         }
         Some(vm) => vm,
-    };
-
-    vm
+    }
 }
 
 /**

@@ -214,19 +214,16 @@ fn create_cpu_node(fdt: &mut FdtWriter, config: &VmConfigEntry) -> FdtWriterResu
 
 fn create_serial_node(fdt: &mut FdtWriter, devs_config: &Vec<VmDtbDevConfig>) -> FdtWriterResult<()> {
     for dev in devs_config {
-        match dev.dev_type {
-            DtbDevType::DevSerial => {
-                let serial_name = format!("serial@{:x}", dev.addr_region.ipa);
-                let serial = fdt.begin_node(&serial_name)?;
-                fdt.property_string("compatible", "ns16550")?;
-                fdt.property_array_u64("reg", &[dev.addr_region.ipa as u64, 0x1000])?;
-                fdt.property_u32("reg-shift", 0x2)?;
-                fdt.property_array_u32("interrupts", &[0x0, (dev.irqs[0] - 32) as u32, 0x4])?;
-                fdt.property_u32("clock-frequency", 408000000)?;
-                // fdt.property_string("status", "disabled")?;
-                fdt.end_node(serial)?;
-            }
-            _ => {}
+        if dev.dev_type == DtbDevType::Serial {
+            let serial_name = format!("serial@{:x}", dev.addr_region.ipa);
+            let serial = fdt.begin_node(&serial_name)?;
+            fdt.property_string("compatible", "ns16550")?;
+            fdt.property_array_u64("reg", &[dev.addr_region.ipa as u64, 0x1000])?;
+            fdt.property_u32("reg-shift", 0x2)?;
+            fdt.property_array_u32("interrupts", &[0x0, (dev.irqs[0] - 32) as u32, 0x4])?;
+            fdt.property_u32("clock-frequency", 408000000)?;
+            // fdt.property_string("status", "disabled")?;
+            fdt.end_node(serial)?;
         }
     }
 

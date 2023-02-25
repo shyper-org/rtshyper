@@ -1,11 +1,13 @@
 use alloc::vec::Vec;
+use alloc::collections::LinkedList;
 
 use spin::Mutex;
 
 use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
+use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::device::{VirtioMmio, Virtq};
-use crate::kernel::{CPU_IF_LIST, current_cpu, interrupt_cpu_ipi_send};
+use crate::kernel::{current_cpu, interrupt_cpu_ipi_send};
 use crate::vmm::VmmEvent;
 
 use super::Vm;
@@ -142,17 +144,39 @@ impl IpiHandler {
     }
 }
 
-pub static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
+static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
+
+struct CpuIf {
+    msg_queue: LinkedList<IpiMessage>,
+}
+
+impl CpuIf {
+    const fn default() -> Self {
+        Self {
+            msg_queue: LinkedList::new(),
+        }
+    }
+
+    fn push(&mut self, ipi_msg: IpiMessage) {
+        self.msg_queue.push_back(ipi_msg);
+    }
+
+    fn pop(&mut self) -> Option<IpiMessage> {
+        self.msg_queue.pop_front()
+    }
+}
+
+static CPU_IF_LIST: [Mutex<CpuIf>; PLATFORM_CPU_NUM_MAX] =
+    [const { Mutex::new(CpuIf::default()) }; PLATFORM_CPU_NUM_MAX];
 
 pub fn ipi_irq_handler() {
     // println!("ipi handler");
     let cpu_id = current_cpu().id;
-    let mut cpu_if_list = CPU_IF_LIST.lock();
-    let mut msg: Option<IpiMessage> = cpu_if_list[cpu_id].pop();
-    drop(cpu_if_list);
+    let mut cpu_if = CPU_IF_LIST[cpu_id].lock();
+    let mut msg = cpu_if.pop();
+    drop(cpu_if);
 
-    while msg.is_some() {
-        let ipi_msg = msg.unwrap();
+    while let Some(ipi_msg) = msg {
         let ipi_type = ipi_msg.ipi_type as usize;
 
         let ipi_handler_list = IPI_HANDLER_LIST.lock();
@@ -160,14 +184,14 @@ pub fn ipi_irq_handler() {
         let handler = ipi_handler_list[ipi_type].handler;
         drop(ipi_handler_list);
 
+        // drop all locks before handler
         if len <= ipi_type {
             println!("illegal ipi type {}", ipi_type)
         } else {
             // println!("ipi type is {:#?}", ipi_msg.ipi_type);
             handler(&ipi_msg);
         }
-        let mut cpu_if_list = CPU_IF_LIST.lock();
-        msg = cpu_if_list[cpu_id].pop();
+        msg = CPU_IF_LIST[cpu_id].lock().pop();
     }
 }
 
@@ -195,8 +219,7 @@ fn ipi_send(target_id: usize, msg: IpiMessage) -> bool {
         return false;
     }
 
-    let mut cpu_if_list = CPU_IF_LIST.lock();
-    cpu_if_list[target_id].push(msg);
+    CPU_IF_LIST[target_id].lock().push(msg);
     interrupt_cpu_ipi_send(target_id, INTERRUPT_IRQ_IPI);
 
     true

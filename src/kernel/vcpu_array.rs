@@ -9,9 +9,8 @@ pub struct VcpuArray {
 
 impl VcpuArray {
     pub const fn new() -> Self {
-        const VCPU_NONE: Option<Vcpu> = None;
         Self {
-            array: [VCPU_NONE; VM_NUM_MAX],
+            array: [const { None }; VM_NUM_MAX],
             len: 0,
         }
     }

@@ -212,7 +212,7 @@ pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result
             return Err(());
         }
 
-        fn sort_color_list(color2pages: &mut Vec<ColorMemRegion>) {
+        fn sort_color_list(color2pages: &mut [ColorMemRegion]) {
             // free pages ascending order (small->large)
             // if equals, color ascending order
             color2pages.sort_by(|a, b| {

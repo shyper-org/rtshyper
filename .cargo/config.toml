@@ -3,4 +3,5 @@ target = "aarch64.json"
 rustflags = ["-C", "llvm-args=-global-isel=false"]
 
 [unstable]
+build-std = ["core", "alloc"]
 build-std-features = ["compiler-builtins-mem"]

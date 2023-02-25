@@ -114,7 +114,7 @@ impl VgicIntData {
             in_lr: false,
             lr: 0,
             enabled: false,
-            state: IrqState::IrqSInactive,
+            state: IrqState::Inactive,
             prio: 0,
             targets: 0,
             cfg: 0,

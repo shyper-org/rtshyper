@@ -151,13 +151,10 @@ pub fn unilib_fs_init() -> Result<usize, ()> {
     // Enter a loop, wait for VM0 to setup the unilib fs config struct.
     loop {
         let lock = UNILIB_FS_LIST.lock();
-        match lock.get(&vm_id) {
-            Some(_) => {
-                println!("unilib_fs_init, fs append success, return");
-                drop(lock);
-                return Ok(0);
-            }
-            _ => {}
+        if lock.get(&vm_id).is_some() {
+            println!("unilib_fs_init, fs append success, return");
+            drop(lock);
+            return Ok(0);
         }
         drop(lock);
         sleep(5);

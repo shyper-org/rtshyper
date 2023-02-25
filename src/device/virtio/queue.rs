@@ -1,10 +1,8 @@
 use alloc::sync::Arc;
-use core::mem::size_of;
 use core::slice;
 
 use spin::Mutex;
 
-use crate::arch::PageTable;
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
 use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2hva};
@@ -260,9 +258,7 @@ impl Virtq {
         if trace() && addr < 0x1000 {
             panic!("illegal desc ring addr {:x}", addr);
         }
-        inner.desc_table = Some(unsafe {
-            slice::from_raw_parts_mut(addr as *mut VringDesc, size_of::<VringDesc>() * DESC_QUEUE_SIZE)
-        });
+        inner.desc_table = Some(unsafe { slice::from_raw_parts_mut(addr as *mut VringDesc, DESC_QUEUE_SIZE) });
     }
 
     pub fn set_avail(&self, addr: usize) {
@@ -388,7 +384,7 @@ impl Virtq {
     }
 
     // use for migration
-    pub fn restore_vq_data(&self, data: &VirtqData, pt: &PageTable) {
+    pub fn restore_vq_data(&self, data: &VirtqData) {
         let mut inner = self.inner.lock();
         inner.ready = data.ready;
         inner.vq_index = data.vq_index;
@@ -399,24 +395,6 @@ impl Virtq {
         inner.desc_table_addr = data.desc_table_ipa;
         inner.avail_addr = data.avail_ipa;
         inner.used_addr = data.used_ipa;
-        // FIXME: it should be ipa2hva
-        let desc_table_addr = pt.ipa2pa(data.desc_table_ipa).unwrap_or(0);
-        let avail_addr = pt.ipa2pa(data.avail_ipa).unwrap_or(0);
-        let used_addr = pt.ipa2pa(data.used_ipa).unwrap_or(0);
-        // println!("restore_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}, desc_table_pa {:x}, avail_pa {:x}, used_pa {:x}",
-        //          data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa, desc_table_addr, avail_addr, used_addr);
-        if desc_table_addr != 0 {
-            inner.desc_table =
-                Some(unsafe { slice::from_raw_parts_mut(desc_table_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) });
-        }
-        if avail_addr != 0 {
-            inner.avail = Some(unsafe { &mut *(avail_addr as *mut VringAvail) });
-            // println!("restore_vq_data: avail idx {}", inner.avail.as_ref().unwrap().idx);
-        }
-        if used_addr != 0 {
-            inner.used = Some(unsafe { &mut *(used_addr as *mut VringUsed) });
-            // println!("restore_vq_data: used idx {}", inner.used.as_ref().unwrap().idx);
-        }
     }
 
     // use for migration
@@ -454,7 +432,7 @@ impl Virtq {
             None => None,
             Some(desc_table) => {
                 let desc_addr = &desc_table[0] as *const _ as usize;
-                Some(unsafe { slice::from_raw_parts_mut(desc_addr as *mut VringDesc, 16 * DESC_QUEUE_SIZE) })
+                Some(unsafe { slice::from_raw_parts_mut(desc_addr as *mut VringDesc, DESC_QUEUE_SIZE) })
             }
         };
         dst_inner.avail = match &src_inner.avail {

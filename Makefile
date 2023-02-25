@@ -1,9 +1,8 @@
 # Path
-DISK = /home/ohmr/work/hypervisor/disk-img/disk.img
+DISK = 
 
 # Compile
 ARCH ?= aarch64
-BUILD_STD = core,alloc
 PROFILE ?= release
 # features, seperate with comma `,`
 FEATURES =
@@ -25,19 +24,28 @@ else
 CARGO_FLAGS := ${CARGO_FLAGS} --no-default-features
 endif
 
+.PHONY: qemu, tx2, pi4, clippy, fmt, run, debug, clean 
+
 qemu:
-	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
+	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
 tx2:
-	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@,${FEATURES}
+	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@,${FEATURES}
 	bash upload ${PROFILE}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
 
 pi4:
-	cargo build --target ${ARCH}.json -Z build-std=${BUILD_STD} ${CARGO_FLAGS} --features $@
+	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@
 	bash pi4_upload ${PROFILE}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
+
+clippy:
+	cargo clippy --target ${ARCH}.json ${CARGO_FLAGS} --features tx2
+	cargo fmt
+
+fmt:
+	cargo fmt
 
 QEMU_OPTIONS = -machine virt,virtualization=on,gic-version=2\
 		-drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
@@ -57,7 +65,6 @@ run:
 debug:
 	${QEMU} ${QEMU_OPTIONS}\
 		-s -S
-
 
 gdb:
 	${GDB} -x gdb/aarch64.gdb

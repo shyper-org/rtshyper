@@ -28,9 +28,8 @@ use super::vcpu::Vcpu;
 pub const DIRTY_MEM_THRESHOLD: usize = 0x2000;
 pub const VM_NUM_MAX: usize = 8;
 // make sure that the VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
-const_assert!(VM_NUM_MAX <= (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
-const VM_INTERFACE_DEFAULT: Mutex<VmInterface> = Mutex::new(VmInterface::default());
-pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [VM_INTERFACE_DEFAULT; VM_NUM_MAX];
+const_assert!(VM_NUM_MAX < (1 << (HYP_VA_SIZE - VM_IPA_SIZE)));
+pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [const { Mutex::new(VmInterface::default()) }; VM_NUM_MAX];
 
 pub fn vm_if_reset(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
@@ -73,12 +72,7 @@ pub fn vm_if_get_cpu_id(vm_id: usize) -> Option<usize> {
 
 pub fn vm_if_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
     let vm_if = VM_IF_LIST[vm_id].lock();
-    for i in 0..6 {
-        if vm_if.mac[i] != frame[i] {
-            return false;
-        }
-    }
-    true
+    vm_if.mac == frame[0..6]
 }
 
 pub fn vm_if_set_ivc_arg(vm_id: usize, ivc_arg: usize) {
@@ -181,9 +175,9 @@ pub fn vm_if_mem_map_dirty_sum(vm_id: usize) -> usize {
 
 #[derive(Clone, Copy)]
 pub enum VmState {
-    VmInv = 0,
-    VmPending = 1,
-    VmActive = 2,
+    Inv = 0,
+    Pending = 1,
+    Active = 2,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -217,7 +211,7 @@ impl VmInterface {
     const fn default() -> VmInterface {
         VmInterface {
             master_cpu_id: Once::new(),
-            state: VmState::VmPending,
+            state: VmState::Pending,
             vm_type: VmType::VmTBma,
             mac: [0; 6],
             ivc_arg: 0,
@@ -229,7 +223,7 @@ impl VmInterface {
 
     fn reset(&mut self) {
         self.master_cpu_id = Once::new();
-        self.state = VmState::VmPending;
+        self.state = VmState::Pending;
         self.vm_type = VmType::VmTBma;
         self.mac = [0; 6];
         self.ivc_arg = 0;
@@ -493,9 +487,7 @@ impl Vm {
     pub fn pt_set_access_permission(&self, ipa: usize, ap: usize) -> (usize, usize) {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
-            Some(pt) => {
-                return pt.access_permission(ipa, PAGE_SIZE, ap);
-            }
+            Some(pt) => pt.access_permission(ipa, PAGE_SIZE, ap),
             None => {
                 panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
             }
@@ -635,15 +627,12 @@ impl Vm {
         let vm_inner = self.inner.lock();
         let mut dev_num = 0;
 
-        for i in 0..vm_inner.emu_devs.len() {
-            match vm_inner.emu_devs[i] {
-                EmuDevs::VirtioNet(_) => {
-                    if dev_num == id {
-                        return vm_inner.emu_devs[i].clone();
-                    }
-                    dev_num += 1;
+        for dev in vm_inner.emu_devs.iter() {
+            if let EmuDevs::VirtioNet(_) = dev {
+                if dev_num == id {
+                    return dev.clone();
                 }
-                _ => {}
+                dev_num += 1;
             }
         }
         EmuDevs::None
@@ -844,39 +833,54 @@ impl Vm {
         for vcpu_id in 0..self.cpu_num() {
             vcpuid_map.insert(vcpu_id, self.vcpuid_to_pcpuid(vcpu_id).unwrap());
         }
-        let inner = self.inner.lock();
-        let pa = inner.migrate_restore_pf[0].pa();
-        let vm_data = unsafe { &mut *(pa as *mut VMData) };
+        let vm_data = {
+            let inner = self.inner.lock();
+            let pa = inner.migrate_restore_pf[0].pa();
+            unsafe { &*(pa as *mut VMData) }
+        };
         // migrate emu dev
-        for (idx, emu) in inner.emu_devs.iter().enumerate() {
-            match emu {
-                EmuDevs::Vgic(vgic) => {
-                    vgic.restore_vgic_data(&vm_data.vgic_ctx, &inner.vcpu_list, &vcpuid_map);
-                }
+        for (idx, emu_dev_data) in vm_data.emu_devs.iter().enumerate() {
+            let (mmio, mmio_data) = match self.emu_dev(idx) {
+                // restore virtio
                 EmuDevs::VirtioBlk(mmio) => {
-                    if let EmuDevData::VirtioBlk(mmio_data) = &vm_data.emu_devs[idx] {
-                        let pt = inner.pt.as_ref().unwrap();
-                        mmio.restore_mmio_data(mmio_data, pt);
+                    if let EmuDevData::VirtioBlk(mmio_data) = emu_dev_data {
+                        (mmio, mmio_data)
+                    } else {
+                        continue;
                     }
                 }
                 EmuDevs::VirtioNet(mmio) => {
                     // println!("context_vm_migrate_restore: net");
-                    if let EmuDevData::VirtioNet(mmio_data) = &vm_data.emu_devs[idx] {
-                        let pt = inner.pt.as_ref().unwrap();
-                        mmio.restore_mmio_data(mmio_data, pt);
+                    if let EmuDevData::VirtioNet(mmio_data) = emu_dev_data {
+                        (mmio, mmio_data)
+                    } else {
+                        continue;
                     }
                 }
                 EmuDevs::VirtioConsole(mmio) => {
                     // println!("context_vm_migrate_restore: console");
-                    if let EmuDevData::VirtioConsole(mmio_data) = &mut vm_data.emu_devs[idx] {
-                        let pt = inner.pt.as_ref().unwrap();
-                        mmio.restore_mmio_data(mmio_data, pt);
+                    if let EmuDevData::VirtioConsole(mmio_data) = emu_dev_data {
+                        (mmio, mmio_data)
+                    } else {
+                        continue;
                     }
                 }
-                EmuDevs::None => {}
+                _ => continue,
+            };
+            mmio.restore_mmio_data(mmio_data);
+            for q_sel in 0..mmio.vq_num() {
+                let dst_vq = mmio.vq(q_sel).unwrap();
+                let src_vq_data = mmio_data.vq[q_sel];
+                dst_vq.set_desc_table(vm_ipa2hva(self, src_vq_data.desc_table_ipa));
+                dst_vq.set_avail(vm_ipa2hva(self, src_vq_data.avail_ipa));
+                dst_vq.set_used(vm_ipa2hva(self, src_vq_data.used_ipa));
             }
         }
-        drop(inner);
+        {
+            // restore vgic
+            let vgic = self.vgic();
+            vgic.restore_vgic_data(&vm_data.vgic_ctx, &self.inner.lock().vcpu_list, &vcpuid_map);
+        }
         for vcpu_id in 0..self.cpu_num() {
             let vcpu = self.vcpu(vcpu_id).unwrap();
             vcpu.migrate_vm_ctx_restore(&vm_data.vm_ctx[vcpu_id] as *const _ as usize);
@@ -1057,58 +1061,3 @@ pub fn vm_ipa2hva(vm: &Vm, ipa: usize) -> usize {
     let prefix = prefix - ((vm.id() & mask) << VM_IPA_SIZE);
     prefix | ipa
 }
-
-// #[deprecated]
-// pub fn vm_pa2ipa(vm: Vm, pa: usize) -> usize {
-//     if pa == 0 {
-//         println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
-//         return 0;
-//     }
-
-//     for i in 0..vm.mem_region_num() {
-//         if in_range(pa, vm.pa_start(i), vm.pa_length(i)) {
-//             return (pa as isize + vm.pa_offset(i) as isize) as usize;
-//         }
-//     }
-
-//     println!("vm_pa2ipa: VM {} access invalid pa {:x}", vm.id(), pa);
-//     0
-// }
-
-// #[deprecated]
-// pub fn pa2ipa(pa_region: &Vec<VmPa>, pa: usize) -> usize {
-//     if pa == 0 {
-//         println!("pa2ipa: access invalid pa {:x}", pa);
-//         return 0;
-//     }
-
-//     for region in pa_region.iter() {
-//         if in_range(pa, region.pa_start, region.pa_length) {
-//             return (pa as isize + region.offset) as usize;
-//         }
-//     }
-
-//     println!("pa2ipa: access invalid pa {:x}", pa);
-//     0
-// }
-
-// #[deprecated]
-// pub fn ipa2pa(pa_region: &Vec<VmPa>, ipa: usize) -> usize {
-//     if ipa == 0 {
-//         // println!("ipa2pa: access invalid ipa {:x}", ipa);
-//         return 0;
-//     }
-
-//     for region in pa_region.iter() {
-//         if in_range(
-//             (ipa as isize - region.offset) as usize,
-//             region.pa_start,
-//             region.pa_length,
-//         ) {
-//             return (ipa as isize - region.offset) as usize;
-//         }
-//     }
-
-//     // println!("ipa2pa: access invalid ipa {:x}", ipa);
-//     0
-// }

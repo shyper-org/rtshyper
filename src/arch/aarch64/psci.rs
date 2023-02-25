@@ -47,9 +47,9 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     // println!("power_arch_cpu_on, {:x}, {:x}, {:x}", PSCI_CPU_ON_AARCH64, mpidr, entry);
-    let r = smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0;
+
     // println!("smc return val is {}", r);
-    r
+    smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0
 }
 
 pub fn power_arch_cpu_shutdown() {
@@ -137,7 +137,7 @@ fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
             current_cpu().id
         );
     }
-    current_cpu().cpu_state = CpuState::CpuRun;
+    current_cpu().cpu_state = CpuState::Run;
     // let vcpu = current_cpu().active_vcpu.clone().unwrap();
     vcpu.reset_context();
     vcpu.set_gpr(0, ctx);
@@ -166,7 +166,7 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
             };
             match power_msg.event {
                 PowerEvent::PsciIpiCpuOn => {
-                    if trgt_vcpu.state() as usize != VcpuState::VcpuInv as usize {
+                    if trgt_vcpu.state() != VcpuState::Inv {
                         warn!(
                             "psci_ipi_handler: target VCPU {} in VM {} is already running",
                             trgt_vcpu.id(),

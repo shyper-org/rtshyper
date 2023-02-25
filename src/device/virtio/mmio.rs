@@ -2,7 +2,6 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::arch::PageTable;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{
     EmuContext, virtio_blk_notify_handler, virtio_console_notify_handler, virtio_mediated_blk_notify_handler,
@@ -360,7 +359,7 @@ impl VirtioMmio {
     }
 
     // use for migration restore
-    pub fn restore_mmio_data(&self, mmio_data: &VirtioMmioData, pt: &PageTable) {
+    pub fn restore_mmio_data(&self, mmio_data: &VirtioMmioData) {
         let mut inner = self.inner.lock();
         // inner.id = mmio_data.id;
         inner.driver_features = mmio_data.driver_features;
@@ -368,7 +367,7 @@ impl VirtioMmio {
         inner.regs = mmio_data.regs;
         inner.dev.restore_virt_dev_data(&mmio_data.dev);
         for (idx, vq) in inner.vq.iter().enumerate() {
-            vq.restore_vq_data(&mmio_data.vq[idx], pt);
+            vq.restore_vq_data(&mmio_data.vq[idx]);
         }
     }
 
@@ -395,6 +394,10 @@ impl VirtioMmio {
         //         console_mmio.dev().save_virt_dev_data(&mut mmio_data.oppo_dev);
         //     }
         // }
+    }
+
+    pub fn vq_num(&self) -> usize {
+        self.inner.lock().vq.len()
     }
 
     // use for live update

@@ -162,12 +162,9 @@ impl<T: TaskOwner> FairQueue<T> {
     }
 
     pub fn remove(&mut self, owner: usize) {
-        match self.map.remove(&owner) {
-            Some(sub_queue) => {
-                self.len -= sub_queue.len();
-                self.queue = self.queue.drain_filter(|x| *x == owner).collect();
-            }
-            None => {}
+        if let Some(sub_queue) = self.map.remove(&owner) {
+            self.len -= sub_queue.len();
+            self.queue = self.queue.drain_filter(|x| *x == owner).collect();
         }
     }
 }
@@ -181,9 +178,9 @@ impl<T: TaskOwner> Iterator for FairQueue<T> {
 
 #[derive(Clone)]
 pub enum AsyncTaskData {
-    AsyncIpiTask(IpiMediatedMsg),
-    AsyncIoTask(IoAsyncMsg),
-    AsyncNoneTask(IoIdAsyncMsg),
+    Ipi(IpiMediatedMsg),
+    Io(IoAsyncMsg),
+    NoneTask(IoIdAsyncMsg),
 }
 
 fn async_exe_status() -> AsyncExeStatus {
@@ -265,17 +262,14 @@ pub fn async_ipi_req() {
     }
     let task = ipi_list.front().unwrap().clone();
     drop(ipi_list);
-    match task.task_data {
-        AsyncTaskData::AsyncIpiTask(msg) => {
-            if active_vm_id() == 0 {
-                virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
-            } else {
-                // add_task_ipi_count();
-                // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
-                ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
-            }
+    if let AsyncTaskData::Ipi(msg) = task.task_data {
+        if active_vm_id() == 0 {
+            virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
+        } else {
+            // add_task_ipi_count();
+            // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
+            ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
         }
-        _ => {}
     }
 }
 
@@ -289,8 +283,8 @@ pub fn async_blk_io_req() {
     }
     let task = io_list.front().unwrap().clone();
     drop(io_list);
-    match task.task_data {
-        AsyncTaskData::AsyncIoTask(msg) => match msg.io_type {
+    if let AsyncTaskData::Io(msg) = task.task_data {
+        match msg.io_type {
             VIRTIO_BLK_T_IN => {
                 mediated_blk_read(msg.blk_id, msg.sector, msg.count);
             }
@@ -311,8 +305,7 @@ pub fn async_blk_io_req() {
             _ => {
                 panic!("illegal mediated blk req type {}", msg.io_type);
             }
-        },
-        _ => {}
+        }
     }
 }
 // end async req function
@@ -432,7 +425,7 @@ pub fn finish_async_task(ipi: bool) {
     drop(io_list);
     drop(ipi_list);
     match task.task_data {
-        AsyncTaskData::AsyncIoTask(args) => {
+        AsyncTaskData::Io(args) => {
             match args.io_type {
                 VIRTIO_BLK_T_IN => {
                     // let mut sum = 0;
@@ -456,8 +449,8 @@ pub fn finish_async_task(ipi: bool) {
             let src_vm = vm(task.src_vmid).unwrap();
             args.dev.notify(src_vm);
         }
-        AsyncTaskData::AsyncIpiTask(_) => {}
-        AsyncTaskData::AsyncNoneTask(args) => {
+        AsyncTaskData::Ipi(_) => {}
+        AsyncTaskData::NoneTask(args) => {
             update_used_info(&args.vq, task.src_vmid);
             let src_vm = vm(task.src_vmid).unwrap();
             args.dev.notify(src_vm);

@@ -108,8 +108,8 @@ impl BlkDesc {
         if trace() && start_addr + offset < 0x1000 {
             panic!("illegal addr {:x}", start_addr + offset);
         }
-        let value = unsafe { *((start_addr + offset) as *const u32) };
-        value
+
+        unsafe { *((start_addr + offset) as *const u32) }
     }
 }
 
@@ -378,7 +378,7 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
                 if req.mediated() {
                     // mediated blk read
                     let task = AsyncTask::new(
-                        AsyncTaskData::AsyncIoTask(IoAsyncMsg {
+                        AsyncTaskData::Io(IoAsyncMsg {
                             src_vmid: vm.id(),
                             vq: vq.clone(),
                             dev: dev.clone(),
@@ -432,7 +432,7 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
                 if req.mediated() {
                     // mediated blk write
                     let task = AsyncTask::new(
-                        AsyncTaskData::AsyncIoTask(IoAsyncMsg {
+                        AsyncTaskData::Io(IoAsyncMsg {
                             src_vmid: vm.id(),
                             vq: vq.clone(),
                             dev: dev.clone(),
@@ -462,7 +462,7 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
                 }
                 memcpy_safe(data_bg as *mut u8, name, 20);
                 let task = AsyncTask::new(
-                    AsyncTaskData::AsyncNoneTask(IoIdAsyncMsg {
+                    AsyncTaskData::NoneTask(IoIdAsyncMsg {
                         vq: vq.clone(),
                         dev: dev.clone(),
                     }),
@@ -495,10 +495,10 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     //     add_task_count();
     let task = AsyncTask::new(
-        AsyncTaskData::AsyncIpiTask(IpiMediatedMsg {
+        AsyncTaskData::Ipi(IpiMediatedMsg {
             src_id: vm.id(),
-            vq: vq,
-            blk: blk,
+            vq,
+            blk,
         }),
         vm.id(),
         async_ipi_req,

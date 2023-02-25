@@ -1,4 +1,3 @@
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use spin::Mutex;
@@ -161,17 +160,16 @@ impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
     }
 }
 
-#[derive(Clone)]
 pub struct PageTable {
-    pub directory: Arc<PageFrame>,
-    pub pages: Arc<Mutex<Vec<PageFrame>>>,
+    directory: PageFrame,
+    pages: Mutex<Vec<PageFrame>>,
 }
 
 impl PageTable {
     pub fn new(directory: PageFrame) -> PageTable {
         PageTable {
-            directory: Arc::new(directory),
-            pages: Arc::new(Mutex::new(Vec::new())),
+            directory,
+            pages: Mutex::new(Vec::new()),
         }
     }
 

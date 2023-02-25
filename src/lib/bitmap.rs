@@ -103,11 +103,11 @@ impl BitAlloc for BitAlloc16 {
     const DEFAULT: Self = BitAlloc16(0);
 
     fn set(&mut self, idx: usize) {
-        self.0 = self.0 | (1 << idx);
+        self.0 |= 1 << idx;
     }
 
     fn clear(&mut self, idx: usize) {
-        self.0 = self.0 & (!(1 << idx) & 0xffff);
+        self.0 &= !(1 << idx);
     }
 
     fn get(&self, idx: usize) -> usize {
@@ -207,7 +207,7 @@ impl FlexBitmap {
             } else {
                 let mut tmp = *val;
                 while (tmp & 1) == 0 {
-                    tmp = tmp >> 1;
+                    tmp >>= 1;
                     first += 1;
                 }
                 return first;

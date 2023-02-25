@@ -1,7 +1,3 @@
-use alloc::vec::Vec;
-use alloc::collections::LinkedList;
-
-use spin::Mutex;
 use spin::once::Once;
 
 use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE};
@@ -12,7 +8,6 @@ use crate::arch::ContextFrameTrait;
 use crate::arch::{cpu_interrupt_unmask, PageTable};
 use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::kernel::{SchedType, Vcpu, VcpuArray, VcpuState, Vm, Scheduler, mem_page_alloc};
-use crate::kernel::IpiMessage;
 use crate::lib::trace;
 use crate::lib::memcpy_safe;
 
@@ -31,33 +26,9 @@ pub struct CpuPt {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CpuState {
-    CpuInv = 0,
-    CpuIdle = 1,
-    CpuRun = 2,
-}
-
-#[derive(Default)]
-pub struct CpuIf {
-    msg_queue: LinkedList<IpiMessage>,
-}
-
-impl CpuIf {
-    pub fn push(&mut self, ipi_msg: IpiMessage) {
-        self.msg_queue.push_back(ipi_msg);
-    }
-
-    pub fn pop(&mut self) -> Option<IpiMessage> {
-        self.msg_queue.pop_front()
-    }
-}
-
-pub static CPU_IF_LIST: Mutex<Vec<CpuIf>> = Mutex::new(Vec::new());
-
-fn cpu_if_init() {
-    let mut cpu_if_list = CPU_IF_LIST.lock();
-    for _ in 0..PLATFORM_CPU_NUM_MAX {
-        cpu_if_list.push(CpuIf::default());
-    }
+    Inv = 0,
+    Idle = 1,
+    Run = 2,
 }
 
 #[repr(C)]
@@ -80,7 +51,7 @@ impl Cpu {
     const fn default() -> Cpu {
         Cpu {
             id: 0,
-            cpu_state: CpuState::CpuInv,
+            cpu_state: CpuState::Inv,
             active_vcpu: None,
             ctx: None,
             sched: SchedType::None,
@@ -108,17 +79,14 @@ impl Cpu {
         if idx >= CONTEXT_GPR_NUM {
             return;
         }
-        match self.ctx {
-            Some(ctx_addr) => {
-                if trace() && ctx_addr < 0x1000 {
-                    panic!("illegal ctx addr {:x}", ctx_addr);
-                }
-                let ctx = ctx_addr as *mut ContextFrame;
-                unsafe {
-                    (*ctx).set_gpr(idx, val);
-                }
+        if let Some(ctx_addr) = self.ctx {
+            if trace() && ctx_addr < 0x1000 {
+                panic!("illegal ctx addr {:x}", ctx_addr);
             }
-            None => {}
+            let ctx = ctx_addr as *mut ContextFrame;
+            unsafe {
+                (*ctx).set_gpr(idx, val);
+            }
         }
     }
 
@@ -165,25 +133,19 @@ impl Cpu {
     }
 
     pub fn set_elr(&self, val: usize) {
-        match self.ctx {
-            Some(ctx_addr) => {
-                if trace() && ctx_addr < 0x1000 {
-                    panic!("illegal ctx addr {:x}", ctx_addr);
-                }
-                let ctx = ctx_addr as *mut ContextFrame;
-                unsafe { (*ctx).set_exception_pc(val) }
+        if let Some(ctx_addr) = self.ctx {
+            if trace() && ctx_addr < 0x1000 {
+                panic!("illegal ctx addr {:x}", ctx_addr);
             }
-            None => {}
+            let ctx = ctx_addr as *mut ContextFrame;
+            unsafe { (*ctx).set_exception_pc(val) }
         }
     }
 
     pub fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
         self.active_vcpu = active_vcpu;
-        match &self.active_vcpu {
-            None => {}
-            Some(vcpu) => {
-                vcpu.set_state(VcpuState::VcpuAct);
-            }
+        if let Some(vcpu) = &self.active_vcpu {
+            vcpu.set_state(VcpuState::Active);
         }
     }
 
@@ -197,7 +159,7 @@ impl Cpu {
                 //     prev_vcpu.vm_id(),
                 //     prev_vcpu.id()
                 // );
-                prev_vcpu.set_state(VcpuState::VcpuPend);
+                prev_vcpu.set_state(VcpuState::Pend);
                 prev_vcpu.context_vm_store();
             }
         }
@@ -229,7 +191,7 @@ impl Cpu {
 #[link_section = ".cpu_private"]
 pub static mut CPU: Cpu = Cpu {
     id: 0,
-    cpu_state: CpuState::CpuInv,
+    cpu_state: CpuState::Inv,
     active_vcpu: None,
     ctx: None,
     vcpu_array: VcpuArray::new(),
@@ -294,11 +256,10 @@ pub fn cpu_init() {
         use crate::board::platform_power_on_secondary_cores;
         platform_power_on_secondary_cores();
         power_arch_init();
-        cpu_if_init();
     }
 
     cpu_init_global_pt();
-    let state = CpuState::CpuIdle;
+    let state = CpuState::Idle;
     current_cpu().cpu_state = state;
     let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;
     let size = core::mem::size_of::<ContextFrame>();
@@ -315,7 +276,7 @@ pub fn cpu_init() {
 }
 
 pub fn cpu_idle() -> ! {
-    let state = CpuState::CpuIdle;
+    let state = CpuState::Idle;
     current_cpu().cpu_state = state;
     cpu_interrupt_unmask();
     loop {
@@ -323,8 +284,7 @@ pub fn cpu_idle() -> ! {
     }
 }
 
-const CPU_DEFAULT: Cpu = Cpu::default();
-pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [CPU_DEFAULT; PLATFORM_CPU_NUM_MAX];
+pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
@@ -332,7 +292,5 @@ pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
     let mut cpu = unsafe { &mut CPU_LIST[cpu_id] };
     cpu.id = cpu_id;
 
-    let lvl1_addr = pt_map_banked_cpu(cpu);
-
-    lvl1_addr
+    pt_map_banked_cpu(cpu)
 }

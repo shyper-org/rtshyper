@@ -122,8 +122,8 @@ impl NetDesc {
         if trace() && start_addr + offset < 0x1000 {
             println!("value addr is {}", start_addr + offset);
         }
-        let value = unsafe { *((start_addr + offset) as *const u32) };
-        value
+
+        unsafe { *((start_addr + offset) as *const u32) }
     }
 
     // use for migration
@@ -245,10 +245,6 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
 
         // update ctrl queue used ring
         if vm.id() != 0 {
-            // let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
-            // if *VM_STATE_FLAG.lock() == 1 {
-            //     println!("vm1 virtio net ctrl write memory in 0x{:x}", used_addr);
-            // }
             vm_if_set_mem_map_bit(&vm, vq.used_addr());
 
             for idx in 0..in_iov.num() {
@@ -307,10 +303,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
 
         if vm.id() != 0 {
-            // let used_addr = vm_ipa2pa(vm.clone(), vq.used_addr());
-            // if *VM_STATE_FLAG.lock() == 1 {
-            //     println!("vm1 virtio net write memory in 0x{:x}", used_addr);
-            // }
             vm_if_set_mem_map_bit(&vm, vq.used_addr());
             vm_if_set_mem_map_bit(&vm, vq.used_addr() + PAGE_SIZE);
         }
@@ -383,7 +375,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
 
         trgt_vmid += 1;
-        vms_to_notify = vms_to_notify >> 1;
+        vms_to_notify >>= 1;
     }
     true
 }
@@ -601,10 +593,6 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     }
 
     if vmid != 0 {
-        // let used_addr = vm_ipa2pa(vm.clone(), rx_vq.used_addr());
-        // if *VM_STATE_FLAG.lock() == 1 {
-        //     println!("B: vm0 virtio net write vm1 memory in 0x{:x}", used_addr);
-        // }
         vm_if_set_mem_map_bit(&vm, rx_vq.used_addr());
         vm_if_set_mem_map_bit(&vm, rx_vq.used_addr() + PAGE_SIZE);
     }

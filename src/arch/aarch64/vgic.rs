@@ -375,7 +375,7 @@ impl VgicIntInner {
             in_lr: false,
             lr: 0,
             enabled: false,
-            state: IrqState::IrqSInactive,
+            state: IrqState::Inactive,
             prio: 0xff,
             targets: 0,
             cfg: 0,
@@ -392,7 +392,7 @@ impl VgicIntInner {
             in_lr: false,
             lr: 0,
             enabled,
-            state: IrqState::IrqSInactive,
+            state: IrqState::Inactive,
             prio: 0xff,
             targets: targets as u8,
             cfg: 0,
@@ -1007,7 +1007,7 @@ impl Vgic {
             lr |= (state & 0b11) << 28;
         }
 
-        interrupt.set_state(IrqState::IrqSInactive);
+        interrupt.set_state(IrqState::Inactive);
         interrupt.set_in_lr(true);
         interrupt.set_lr(lr_ind as u16);
         self.set_cpu_priv_curr_lrs(vcpu_id, lr_ind, int_id as u16);
@@ -1022,7 +1022,7 @@ impl Vgic {
 
     fn route(&self, vcpu: &Vcpu, interrupt: &VgicInt) {
         let cpu_id = current_cpu().id;
-        if let IrqState::IrqSInactive = interrupt.state() {
+        if let IrqState::Inactive = interrupt.state() {
             return;
         }
 
@@ -1283,7 +1283,7 @@ impl Vgic {
 
                 // println!("state {}", interrupt.state().to_num());
                 match interrupt.state() {
-                    IrqState::IrqSInactive => {
+                    IrqState::Inactive => {
                         println!("inactive");
                     }
                     _ => {
@@ -1405,7 +1405,7 @@ impl Vgic {
             if interrupt.hw() {
                 let interrupt_lock = interrupt.lock.lock();
                 interrupt.set_owner(vcpu.clone());
-                interrupt.set_state(IrqState::IrqSPend);
+                interrupt.set_state(IrqState::Pend);
                 self.update_int_list(vcpu, interrupt.clone());
                 interrupt.set_in_lr(false);
                 self.route(vcpu, &interrupt);

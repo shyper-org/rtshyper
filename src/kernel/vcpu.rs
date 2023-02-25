@@ -16,9 +16,9 @@ use super::{CpuState, Vm, VmType, WeakVm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VcpuState {
-    VcpuInv = 0,
-    VcpuPend = 1,
-    VcpuAct = 2,
+    Inv = 0,
+    Pend = 1,
+    Active = 2,
 }
 
 #[derive(Clone)]
@@ -113,7 +113,6 @@ impl Vcpu {
     pub fn context_gic_irqs_store(&self) {
         let mut inner = self.inner.lock();
         let vm = inner.vm.get_vm().unwrap();
-        inner.gic_ctx;
         for irq in vm.config().passthrough_device_irqs() {
             inner.gic_ctx.add_irq(irq as u64);
         }
@@ -334,7 +333,7 @@ impl VcpuInner {
         Self {
             id,
             phys_id: 0,
-            state: VcpuState::VcpuInv,
+            state: VcpuState::Inv,
             vm,
             int_list: vec![],
             vcpu_ctx: ContextFrame::default(),
@@ -399,13 +398,10 @@ impl VcpuInner {
         self.gic_ctx_reset();
         // }
         use crate::kernel::vm_if_get_type;
-        match vm_if_get_type(self.vm_id()) {
-            VmType::VmTBma => {
-                println!("vm {} bma ctx restore", self.vm_id());
-                self.reset_vm_ctx();
-                self.context_ext_regs_store();
-            }
-            _ => {}
+        if vm_if_get_type(self.vm_id()) == VmType::VmTBma {
+            println!("vm {} bma ctx restore", self.vm_id());
+            self.reset_vm_ctx();
+            self.context_ext_regs_store();
         }
     }
 
@@ -460,17 +456,17 @@ pub fn vcpu_run(announce: bool) {
         let vcpu = current_cpu().active_vcpu.clone().unwrap();
         let vm = vcpu.vm().unwrap();
 
-        vm_if_set_state(active_vm_id(), super::VmState::VmActive);
+        vm_if_set_state(active_vm_id(), super::VmState::Active);
 
         if announce {
             crate::device::virtio_net_announce(vm);
         }
         // if the cpu is already running (a vcpu in scheduling queue),
         // just return, no `context_vm_entry` required
-        if current_cpu().cpu_state == CpuState::CpuRun {
+        if current_cpu().cpu_state == CpuState::Run {
             return;
         }
-        current_cpu().cpu_state = CpuState::CpuRun;
+        current_cpu().cpu_state = CpuState::Run;
         // tlb_invalidate_guest_all();
         // for i in 0..vm.mem_region_num() {
         //     unsafe {

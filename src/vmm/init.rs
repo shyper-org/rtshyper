@@ -78,7 +78,7 @@ fn vmm_init_memory(vm: &Vm) -> bool {
             }
         }
     }
-    vmm_setup_ipa2hva(&vm);
+    vmm_setup_ipa2hva(vm);
     vm_if_init_mem_map(vm_id, (vm_mem_size + PAGE_SIZE - 1) / PAGE_SIZE);
 
     true

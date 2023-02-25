@@ -192,7 +192,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
     for vcpu in current_cpu().vcpu_array.iter().flatten() {
         if let Some(vm) = vcpu.vm() {
             if vm.has_interrupt(int_id) {
-                if vcpu.state() == VcpuState::VcpuInv {
+                if vcpu.state() == VcpuState::Inv {
                     return true;
                 }
                 interrupt_vm_inject(&vm, vcpu, int_id, src);
