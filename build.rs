@@ -1,7 +1,13 @@
 use std::env::var;
+use cmake::Config;
 
 fn main() {
-    println!("cargo:rustc-link-search=native={}/lib", var("PWD").unwrap());
+    let dst = Config::new("libfdt-binding")
+        .profile("release")
+        .build_target("all")
+        .build()
+        .join("build");
+    println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=static=fdt-binding");
 
     let build_time = chrono::offset::Local::now().format("%Y-%m-%d %H:%M:%S %Z");

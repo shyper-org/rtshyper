@@ -8,7 +8,7 @@ use spin::Mutex;
 
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
-use crate::kernel::{active_vm, vm, Vm, vm_ipa2hva, VM_NUM_MAX, VmType};
+use crate::kernel::{active_vm, vm, Vm, vm_ipa2hva, VmType, CONFIG_VM_NUM_MAX};
 use crate::lib::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
 use crate::kernel::access::{copy_segment_to_vm, copy_segment_from_vm};
@@ -467,7 +467,7 @@ impl VmConfigTable {
     }
 
     pub fn generate_vm_id(&mut self) -> Result<usize, ()> {
-        for i in 0..VM_NUM_MAX {
+        for i in 0..CONFIG_VM_NUM_MAX {
             if self.vm_bitmap.get(i) == 0 {
                 self.vm_bitmap.set(i);
                 return Ok(i);
@@ -477,7 +477,7 @@ impl VmConfigTable {
     }
 
     pub fn remove_vm_id(&mut self, vm_id: usize) {
-        if vm_id >= VM_NUM_MAX || self.vm_bitmap.get(vm_id) == 0 {
+        if vm_id >= CONFIG_VM_NUM_MAX || self.vm_bitmap.get(vm_id) == 0 {
             println!("illegal vm id {}", vm_id);
         }
         self.vm_bitmap.clear(vm_id);

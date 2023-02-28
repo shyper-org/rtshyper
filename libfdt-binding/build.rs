@@ -5,6 +5,10 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper.c");
+    println!("cargo:rerun-if-changed=mystr.c");
+    println!("cargo:rerun-if-changed=../deps/libfdt");
+    println!("cargo:rerun-if-changed=build.rs");
 
     let bindings = bindgen::Builder::default()
         .use_core()

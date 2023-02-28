@@ -18,7 +18,7 @@ use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
-use crate::kernel::VM_NUM_MAX;
+use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::access::copy_segment_to_vm;
 use crate::vmm::address::vmm_setup_ipa2hva;
 
@@ -423,7 +423,7 @@ pub fn vmm_setup_config(vm_id: usize) {
         current_cpu().id
     );
 
-    if vm_id >= VM_NUM_MAX {
+    if vm_id >= CONFIG_VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
     }
     if !vmm_init_memory(&vm) {

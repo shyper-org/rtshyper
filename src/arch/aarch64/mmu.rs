@@ -133,6 +133,7 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
         // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
         // SMMU ~ 0x12000000 - 0x13000000
+        // 0x0_0000_0000 – 0x0_1FFF_FFFF
         lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
         lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
         // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);

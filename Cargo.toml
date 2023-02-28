@@ -17,6 +17,7 @@ debug = true
 
 [build-dependencies]
 chrono = "0.4.23"
+cmake = "0.1"
 
 [dependencies]
 shyper = { path = "libshyper" }

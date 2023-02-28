@@ -1,16 +1,16 @@
 use alloc::slice::{Iter, IterMut};
 use crate::board::{PLAT_DESC, SchedRule};
-use crate::kernel::{current_cpu, SchedType, SchedulerRR, Vcpu, VM_NUM_MAX, interrupt_cpu_enable};
+use crate::kernel::{current_cpu, SchedType, SchedulerRR, Vcpu, interrupt_cpu_enable, CONFIG_VM_NUM_MAX};
 
 pub struct VcpuArray {
-    array: [Option<Vcpu>; VM_NUM_MAX],
+    array: [Option<Vcpu>; CONFIG_VM_NUM_MAX],
     len: usize,
 }
 
 impl VcpuArray {
     pub const fn new() -> Self {
         Self {
-            array: [const { None }; VM_NUM_MAX],
+            array: [const { None }; CONFIG_VM_NUM_MAX],
             len: 0,
         }
     }

@@ -26,10 +26,19 @@ use super::ColorMemRegion;
 use super::vcpu::Vcpu;
 
 pub const DIRTY_MEM_THRESHOLD: usize = 0x2000;
-pub const VM_NUM_MAX: usize = 8;
-// make sure that the VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
-const_assert!(VM_NUM_MAX < (1 << (HYP_VA_SIZE - VM_IPA_SIZE)));
-pub static VM_IF_LIST: [Mutex<VmInterface>; VM_NUM_MAX] = [const { Mutex::new(VmInterface::default()) }; VM_NUM_MAX];
+macro_rules! min {
+    ($a: expr, $b: expr) => {
+        if $a < $b {
+            $a
+        } else {
+            $b
+        }
+    };
+}
+// make sure that the CONFIG_VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
+pub const CONFIG_VM_NUM_MAX: usize = min!(shyper::VM_NUM_MAX, (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
+pub static VM_IF_LIST: [Mutex<VmInterface>; CONFIG_VM_NUM_MAX] =
+    [const { Mutex::new(VmInterface::default()) }; CONFIG_VM_NUM_MAX];
 
 pub fn vm_if_reset(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();

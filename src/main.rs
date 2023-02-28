@@ -17,8 +17,6 @@ extern crate log;
 #[macro_use]
 extern crate static_assertions;
 
-// extern crate rlibc;
-
 use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;

@@ -12,11 +12,13 @@ use crate::kernel::{
     IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, migrate_finish_ipi_handler,
     migrate_ready, Scheduler, send_migrate_memcpy_msg, unmap_migrate_vm_mem, vcpu_idle, vm, vm_if_copy_mem_map,
     vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum,
-    vm_if_mem_map_page_num, vm_if_set_ivc_arg_ptr, VM_NUM_MAX, VMData,
+    vm_if_mem_map_page_num, vm_if_set_ivc_arg_ptr, VMData,
 };
 use crate::lib::{func_barrier, memcpy_safe, round_up, set_barrier_num, trace};
 use crate::lib::unilib::*;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_migrate_boot, vmm_reboot_vm, vmm_remove_vm};
+
+use shyper::VM_NUM_MAX;
 
 pub static VM_STATE_FLAG: Mutex<usize> = Mutex::new(0);
 

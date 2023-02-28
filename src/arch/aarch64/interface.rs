@@ -14,7 +14,7 @@ pub const PTE_PER_PAGE: usize = PAGE_SIZE / WORD_SIZE;
 pub const HYP_VA_SIZE: u64 = 39;
 // The size offset of the memory region addressed by VTTBR_EL2
 // see VTCR_EL2::T0SZ
-pub const VM_IPA_SIZE: u64 = 35;
+pub const VM_IPA_SIZE: u64 = 36;
 
 pub type Arch = Aarch64Arch;
 

@@ -1,13 +1,15 @@
 #ifndef SHYPER_H
 #define SHYPER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+const size_t VM_NUM_MAX = 8;
 
 const size_t NAME_MAX_LEN = 32;
 
