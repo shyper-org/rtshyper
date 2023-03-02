@@ -3,8 +3,8 @@ use core::ptr;
 pub fn putc(byte: u8) {
     #[cfg(feature = "qemu")]
     unsafe {
-        use crate::board::UART_1_ADDR;
-        ptr::write_volatile(UART_1_ADDR as *mut u8, byte);
+        use crate::board::UART_0_ADDR;
+        ptr::write_volatile(UART_0_ADDR as *mut u8, byte);
     }
     // ns16550
     #[cfg(feature = "tx2")]

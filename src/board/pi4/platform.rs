@@ -6,8 +6,6 @@ use crate::device::ARM_CORTEX_A57;
 #[allow(unused_imports)]
 use crate::device::ARM_NVIDIA_DENVER;
 
-pub const KERNEL_ENTRY: usize = 0xF0080000;
-
 // pub const TIMER_FREQUENCY: usize = 62500000;
 
 pub const UART_0_ADDR: usize = 0xFE201000;
@@ -134,8 +132,11 @@ pub fn platform_cpu_shutdown() {
 }
 
 pub fn platform_power_on_secondary_cores() {
+    extern "C" {
+        fn _image_start();
+    }
     for i in 1..PLAT_DESC.cpu_desc.num {
-        platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], KERNEL_ENTRY, 0);
+        platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], _image_start as usize, 0);
     }
 }
 

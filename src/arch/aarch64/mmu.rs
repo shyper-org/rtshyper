@@ -170,7 +170,19 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         // 0x8_0000_0000 + 0x0_c000_0000
         lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE + device_region_start)] = BlockDescriptor::table(lvl2_base);
     } else if cfg!(feature = "qemu") {
-        todo!()
+        const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
+        for index in 0..PLATFORM_PHYSICAL_LIMIT_GB {
+            let pa = index << LVL1_SHIFT;
+            lvl1_pt.lvl1[index] = BlockDescriptor::new(pa, pa < PLAT_DESC.mem_desc.base);
+        }
+        lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE)] = BlockDescriptor::table(lvl2_base);
+        for (index, pa) in (0..PLAT_DESC.mem_desc.base)
+            .step_by(1 << LVL2_SHIFT)
+            .take(PTE_PER_PAGE)
+            .enumerate()
+        {
+            lvl2_pt.lvl1[index] = BlockDescriptor::new(pa, true);
+        }
     }
 }
 

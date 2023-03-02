@@ -85,6 +85,64 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         let slice = core::slice::from_raw_parts(pi_fdt as *const u8, len as usize);
         SYSTEM_FDT.call_once(|| slice.to_vec());
     }
+    #[cfg(feature = "qemu")]
+    unsafe {
+        use fdt::*;
+        println!("fdt orignal size {}, ptr {dtb:#p}", fdt_size(dtb));
+        fdt_pack(dtb);
+        fdt_enlarge(dtb);
+        fdt_clear_initrd(dtb);
+        assert_eq!(fdt_disable_node(dtb, "/platform@c000000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/fw-cfg@9020000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/memory@40000000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000200\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000400\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000600\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000800\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000a00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000c00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a000e00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001200\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001400\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001600\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001800\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001a00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001c00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a001e00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002200\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002400\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002600\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002800\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002a00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002c00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a002e00\0".as_ptr()), 0);
+        // keep a003000 & a003200 for passthrough blk/net
+        // assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003000\0".as_ptr()), 0);
+        // assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003200\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003400\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003600\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003800\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003a00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003c00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/virtio_mmio@a003e00\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/gpio-keys\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/pl061@9030000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/pcie@10000000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/pl031@9010000\0".as_ptr()), 0);
+        // pass through the only one uart on qemu-system-aarch64
+        // assert_eq!(fdt_remove_node(dtb, "/pl011@9000000\0".as_ptr()), 0);
+
+        assert_eq!(fdt_remove_node(dtb, "/intc@8000000/v2m@8020000\0".as_ptr()), 0);
+        assert_eq!(fdt_remove_node(dtb, "/flash@0\0".as_ptr()), 0);
+
+        let len = fdt_size(dtb) as usize;
+        println!("fdt patched size {}", len);
+        let slice = core::slice::from_raw_parts(dtb as *const u8, len);
+        SYSTEM_FDT.call_once(|| slice.to_vec());
+    }
 }
 
 // create vm1 fdt demo

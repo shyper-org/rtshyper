@@ -13,3 +13,6 @@ run*
 /.vscode
 .idea
 build/
+*.img
+*.dts
+*.dtb

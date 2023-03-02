@@ -119,11 +119,19 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
                     warn!("Image {} is not supported", name);
                 }
                 #[cfg(feature = "pi4")]
-                vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
+                if name.is_empty() {
+                    panic!("kernel image name empty")
+                } else {
+                    vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
+                }
                 // vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.78"));
                 // vmm_load_image(vm, include_bytes!("../../image/Image_pi4"));
                 #[cfg(feature = "qemu")]
-                vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
+                if name.is_empty() {
+                    panic!("kernel image name empty")
+                } else {
+                    vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
+                }
             }
             None => {
                 info!("VM[{}] is a dynamic configuration", vm_id);
@@ -334,6 +342,8 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
     fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
     #[cfg(feature = "pi4")]
     fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@200000\0".as_ptr());
+    #[cfg(feature = "qemu")]
+    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@50000000\0".as_ptr());
     // FDT+TIMER
     fdt_add_timer(dtb, 0x8);
     // FDT+BOOTCMD
@@ -347,7 +357,7 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
         for emu_cfg in config.emulated_device_list() {
             match emu_cfg.emu_type {
                 EmuDeviceTGicd => {
-                    #[cfg(feature = "tx2")]
+                    #[cfg(any(feature = "tx2", feature = "qemu"))]
                     fdt_setup_gic(
                         dtb,
                         PLATFORM_GICD_BASE as u64,
@@ -363,7 +373,7 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
                     );
                 }
                 EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
-                    #[cfg(feature = "tx2")]
+                    #[cfg(any(feature = "tx2", feature = "qemu"))]
                     fdt_add_virtio(
                         dtb,
                         emu_cfg.name.unwrap().as_ptr(),
@@ -372,7 +382,7 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
                     );
                 }
                 EmuDeviceTShyper => {
-                    #[cfg(feature = "tx2")]
+                    #[cfg(any(feature = "tx2", feature = "qemu"))]
                     fdt_add_vm_service(
                         dtb,
                         emu_cfg.irq_id as u32 - 0x20,
