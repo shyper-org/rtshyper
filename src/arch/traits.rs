@@ -23,10 +23,16 @@ pub trait ArchPageTableEntryTrait {
 
 pub trait ArchTrait {
     fn exception_init();
-    fn invalidate_tlb();
     fn wait_for_interrupt();
     fn nop();
     fn fault_address() -> usize;
     fn install_vm_page_table(base: usize, vmid: usize);
     fn install_self_page_table(base: usize);
+}
+
+pub trait TlbInvalidate {
+    fn invalid_hypervisor_va(va: usize);
+    fn invalid_hypervisor_all();
+    fn invalid_guest_ipa(ipa: usize);
+    fn invalid_guest_all();
 }

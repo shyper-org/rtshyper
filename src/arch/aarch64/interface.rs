@@ -7,6 +7,7 @@ pub const ENTRY_PER_PAGE: usize = PAGE_SIZE / 8;
 pub type ContextFrame = super::context_frame::Aarch64ContextFrame;
 
 pub const WORD_SIZE: usize = core::mem::size_of::<usize>();
+const_assert_eq!(WORD_SIZE, 8);
 pub const PTE_PER_PAGE: usize = PAGE_SIZE / WORD_SIZE;
 
 // The size offset of the memory region addressed by TTBR0_EL2
@@ -22,10 +23,6 @@ pub struct Aarch64Arch;
 
 impl ArchTrait for Aarch64Arch {
     fn exception_init() {
-        todo!()
-    }
-
-    fn invalidate_tlb() {
         todo!()
     }
 
@@ -53,5 +50,8 @@ impl ArchTrait for Aarch64Arch {
 
     fn install_self_page_table(base: usize) {
         cortex_a::registers::TTBR0_EL2.set_baddr(base as u64);
+        unsafe {
+            core::arch::asm!("isb");
+        }
     }
 }

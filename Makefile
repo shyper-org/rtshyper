@@ -24,7 +24,7 @@ else
 CARGO_FLAGS := ${CARGO_FLAGS} --no-default-features
 endif
 
-.PHONY: qemu, tx2, pi4, clippy, fmt, run, debug, clean 
+.PHONY: qemu tx2 pi4 clippy fmt run debug clean gdb
 
 qemu:
 	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@

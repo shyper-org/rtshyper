@@ -3,7 +3,6 @@ use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PageTable};
 use crate::board::*;
-use crate::kernel::mem_shared_mem_init;
 use crate::lib::memset_safe;
 use crate::mm::PageFrame;
 
@@ -12,7 +11,6 @@ use super::mem_region::*;
 pub fn mem_init() {
     cache_init();
     // mem_vm_region_init();
-    mem_shared_mem_init();
     mem_vm_region_init_by_colors();
     println!("Mem init ok");
 }

@@ -169,14 +169,18 @@ impl CpuIf {
 static CPU_IF_LIST: [Mutex<CpuIf>; PLATFORM_CPU_NUM_MAX] =
     [const { Mutex::new(CpuIf::default()) }; PLATFORM_CPU_NUM_MAX];
 
-pub fn ipi_irq_handler() {
-    // println!("ipi handler");
-    let cpu_id = current_cpu().id;
+fn ipi_pop_message(cpu_id: usize) -> Option<IpiMessage> {
     let mut cpu_if = CPU_IF_LIST[cpu_id].lock();
-    let mut msg = cpu_if.pop();
+    let msg = cpu_if.pop();
+    // drop the lock manully
     drop(cpu_if);
+    msg
+}
 
-    while let Some(ipi_msg) = msg {
+pub fn ipi_irq_handler() {
+    let cpu_id = current_cpu().id;
+
+    while let Some(ipi_msg) = ipi_pop_message(cpu_id) {
         let ipi_type = ipi_msg.ipi_type as usize;
 
         let ipi_handler_list = IPI_HANDLER_LIST.lock();
@@ -191,7 +195,6 @@ pub fn ipi_irq_handler() {
             // println!("ipi type is {:#?}", ipi_msg.ipi_type);
             handler(&ipi_msg);
         }
-        msg = CPU_IF_LIST[cpu_id].lock().pop();
     }
 }
 

@@ -26,7 +26,7 @@ static mut CPU_FUNC_SYNC: CpuSyncToken = CpuSyncToken {
 #[inline(never)]
 pub fn barrier() {
     unsafe {
-        let ori = CPU_GLB_SYNC.count.fetch_add(1, Ordering::Relaxed);
+        let ori = CPU_GLB_SYNC.count.fetch_add(1, Ordering::Release);
         let next_count = round_up(ori + 1, CPU_GLB_SYNC.n);
         while CPU_GLB_SYNC.count.load(Ordering::Acquire) < next_count {
             core::hint::spin_loop();
@@ -37,7 +37,7 @@ pub fn barrier() {
 #[inline(never)]
 pub fn func_barrier() {
     unsafe {
-        let ori = CPU_FUNC_SYNC.count.fetch_add(1, Ordering::Relaxed);
+        let ori = CPU_FUNC_SYNC.count.fetch_add(1, Ordering::Release);
         let next_count = round_up(ori + 1, CPU_FUNC_SYNC.n);
         while CPU_FUNC_SYNC.count.load(Ordering::Acquire) < next_count {
             core::hint::spin_loop();

@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::ArchPageTableEntryTrait;
+use crate::arch::TlbInvalidate;
 use crate::arch::WORD_SIZE;
 use crate::kernel::Cpu;
 use crate::lib::{memcpy_safe, memset_safe};
@@ -116,7 +117,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     // println!("cpu addr {:x}", cpu_addr);
     // println!("lvl2 addr {:x}", lvl2_addr);
     // println!("lvl3 addr {:x}", lvl3_addr);
-
+    crate::arch::Arch::invalid_hypervisor_all();
     &(cpu.cpu_pt.lvl1) as *const _ as usize
 }
 
@@ -160,15 +161,22 @@ impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
     }
 }
 
+enum MmuStage {
+    S1,
+    S2,
+}
+
 pub struct PageTable {
     directory: PageFrame,
+    stage: MmuStage,
     pages: Mutex<Vec<PageFrame>>,
 }
 
 impl PageTable {
-    pub fn new(directory: PageFrame) -> PageTable {
+    pub fn new(directory: PageFrame, is_stage2: bool) -> PageTable {
         PageTable {
             directory,
+            stage: if is_stage2 { MmuStage::S2 } else { MmuStage::S1 },
             pages: Mutex::new(Vec::new()),
         }
     }
@@ -287,14 +295,8 @@ impl PageTable {
     }
 
     fn map(&self, ipa: usize, pa: usize, pte: usize) {
-        // if ipa >= 0x4_0000_0000 {
-        //     println!("map ipa 0x{:x} to pa 0x{:x}", ipa, pa);
-        // }
         let directory = Aarch64PageTableEntry::from_pa(self.directory.pa());
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));
-        // if ipa >= 0x4_0000_0000 {
-        //     println!("l1e {:x}", l1e.0);
-        // }
         if !l1e.valid() {
             let result = crate::kernel::mem_page_alloc();
             if let Ok(frame) = result {
@@ -323,18 +325,12 @@ impl PageTable {
         } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
             println!("map lvl 2 already mapped with 2mb 0x{:x}", l2e.to_pte());
         }
-        // if ipa >= 0x4_0000_0000 {
-        //     println!("l2e {:x}", l2e.0);
-        // }
         let l3e = l2e.entry(pt_lvl3_idx(ipa));
         if l3e.valid() {
             println!("map lvl 3 already mapped with 0x{:x}", l3e.to_pte());
         } else {
-            l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pa | PTE_TABLE | pte));
+            l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pa | PTE_PAGE | pte));
         }
-        // if ipa >= 0x4_0000_0000 {
-        //     println!("l3e {:x}", l3e.0);
-        // }
     }
 
     fn unmap(&self, ipa: usize) {
@@ -346,6 +342,11 @@ impl PageTable {
                 let l3e = l2e.entry(pt_lvl3_idx(ipa));
                 if l3e.valid() {
                     l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(0));
+                    // invalidate tlbs
+                    match self.stage {
+                        MmuStage::S1 => crate::arch::Arch::invalid_hypervisor_va(ipa),
+                        MmuStage::S2 => crate::arch::Arch::invalid_guest_ipa(ipa),
+                    }
                     // check l2e
                     if empty_page(l2e.to_pa()) {
                         let l2e_pa = l2e.to_pa();

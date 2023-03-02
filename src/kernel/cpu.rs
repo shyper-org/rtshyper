@@ -1,6 +1,6 @@
 use spin::once::Once;
 
-use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE};
+use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE, TlbInvalidate};
 use crate::arch::ArchTrait;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
@@ -241,10 +241,11 @@ fn cpu_init_global_pt() {
         // cpu_pt.lvl2 is only used for mapping struct Cpu with lvl3
         // the device lvl2 (defined in start.S) is also available here because we copy the lvl1
         memcpy_safe(dir.hva() as *const _, cpu.cpu_pt.lvl1.as_ptr() as *const _, PAGE_SIZE);
-        PageTable::new(dir)
+        PageTable::new(dir, false)
     } else {
         panic!("From<CpuPt> to PageTable failed");
     };
+    crate::arch::Arch::invalid_hypervisor_all();
     crate::arch::Arch::install_self_page_table(pt.base_pa());
     cpu.global_pt.call_once(|| pt);
 }

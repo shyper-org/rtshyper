@@ -520,7 +520,7 @@ impl Vm {
 
     pub fn set_pt(&self, pt_dir_frame: PageFrame) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.pt = Some(PageTable::new(pt_dir_frame))
+        vm_inner.pt = Some(PageTable::new(pt_dir_frame, true))
     }
 
     pub fn pt_dir(&self) -> usize {

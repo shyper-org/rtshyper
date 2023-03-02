@@ -12,7 +12,6 @@ pub use self::smc::*;
 pub use self::smmu::*;
 pub use self::sync::*;
 pub use self::timer::*;
-pub use self::tlb::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 pub use self::cache::*;

@@ -2,7 +2,7 @@ use crate::arch::{
     Aarch64ContextFrame, GIC_LIST_REGS_NUM, GIC_PRIVINT_NUM, GIC_SGIS_NUM, GIC_SPI_MAX, GicContext, IrqState,
     PAGE_SIZE, PTE_S2_FIELD_AP_RW, PTE_S2_RO, Sgis, VmContext,
 };
-use crate::arch::tlb_invalidate_guest_all;
+use crate::arch::TlbInvalidate;
 use crate::board::PLATFORM_VCPU_NUM_MAX;
 use crate::device::{EMU_DEV_NUM_MAX, EmuContext, VirtioDeviceType, VirtMmioRegs};
 use crate::kernel::{
@@ -328,7 +328,7 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
         // );
         vm_if_set_mem_map_bit(&vm, emu_ctx.address);
         // flush tlb for updating page table
-        tlb_invalidate_guest_all();
+        crate::arch::Arch::invalid_guest_all();
     } else {
         panic!("migrate_data_abort_handler: permission should be read only");
     }
