@@ -6,8 +6,7 @@ use spin::Mutex;
 
 use crate::{arch::GICH, kernel::IpiInitcMessage};
 use crate::arch::DEVICE_BASE;
-use crate::board::{PLATFORM_CPU_NUM_MAX, platform_cpuid_to_cpuif};
-use crate::board::PLATFORM_GICD_BASE;
+use crate::board::{PLATFORM_CPU_NUM_MAX, PlatOperation, Platform};
 use crate::device::EmuContext;
 use crate::device::EmuDevs;
 use crate::kernel::{
@@ -1358,7 +1357,7 @@ impl Vgic {
                     let mut ptrgt = 0;
                     for cpuid in 0..8 {
                         if bit_get(trgt as usize, cpuid) != 0 {
-                            ptrgt = bit_set(ptrgt, platform_cpuid_to_cpuif(cpuid))
+                            ptrgt = bit_set(ptrgt, Platform::cpuid_to_cpuif(cpuid))
                         }
                     }
                     if interrupt.hw() {
@@ -1740,7 +1739,7 @@ impl Vgic {
             }
         };
 
-        if bit_extract(emu_ctx.address, 0, 12) == bit_extract(PLATFORM_GICD_BASE + 0x0f00, 0, 12) {
+        if bit_extract(emu_ctx.address, 0, 12) == bit_extract(Platform::GICD_BASE + 0x0f00, 0, 12) {
             if emu_ctx.write {
                 let sgir_trglstflt = bit_extract(val, 24, 2);
                 let mut trgtlist = 0;
@@ -2332,9 +2331,9 @@ pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext
     if emu_ctx.write {
         // todo: add offset match
         let val = current_cpu().get_gpr(emu_ctx.reg);
-        ptr_read_write(PLATFORM_GICD_BASE + DEVICE_BASE + offset, emu_ctx.width, val, false);
+        ptr_read_write(Platform::GICD_BASE + DEVICE_BASE + offset, emu_ctx.width, val, false);
     } else {
-        let res = ptr_read_write(PLATFORM_GICD_BASE + DEVICE_BASE + offset, emu_ctx.width, 0, true);
+        let res = ptr_read_write(Platform::GICD_BASE + DEVICE_BASE + offset, emu_ctx.width, 0, true);
         current_cpu().set_gpr(emu_ctx.reg, res);
     }
 

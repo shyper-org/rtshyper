@@ -259,7 +259,8 @@ pub fn vmm_reboot() {
     // If running MVM, reboot the whole system.
     if vm.id() == 0 {
         vmm_shutdown_secondary_vm();
-        crate::board::platform_sys_reboot();
+        use crate::board::{PlatOperation, Platform};
+        Platform::sys_reboot();
     }
 
     // Reset GVM.

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
-use crate::board::*;
+use crate::board::{PlatOperation, Platform};
 // self.mem_map_cache = None;
 use crate::config::vm_cfg_add_vm_entry;
 use crate::device::EmuDeviceType;
@@ -25,7 +25,7 @@ pub fn mvm_config_init() {
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some(String::from("interrupt-controller@3881000")),
-        base_ipa: PLATFORM_GICD_BASE,
+        base_ipa: Platform::GICD_BASE,
         length: 0x1000,
         irq_id: 0,
         cfg_list: Vec::new(),
@@ -138,7 +138,7 @@ pub fn mvm_config_init() {
         PassthroughRegion { ipa: 0x03ad0000, pa: 0x03ad0000, length: 0x20000, dev_property: true },
         // PassthroughRegion { ipa: 0x03b41000, pa: 0x03b41000, length: 0x1000 },
         PassthroughRegion { ipa: 0x03c00000, pa: 0x03c00000, length: 0xa0000, dev_property: true },
-        PassthroughRegion { ipa: PLATFORM_GICC_BASE, pa: PLATFORM_GICV_BASE, length: 0x2000, dev_property: true },
+        PassthroughRegion { ipa: Platform::GICC_BASE, pa: Platform::GICV_BASE, length: 0x2000, dev_property: true },
         PassthroughRegion { ipa: 0x8010000, pa: 0x8010000, length: 0x1000, dev_property: true },
         PassthroughRegion { ipa: 0x08030000, pa: 0x08030000, length: 0x1000, dev_property: true },
         PassthroughRegion { ipa: 0x08050000, pa: 0x08050000, length: 0x1000, dev_property: true },
@@ -194,7 +194,7 @@ pub fn mvm_config_init() {
         INTERRUPT_IRQ_GUEST_TIMER, 32, 33, 34, 35, 36, 37, 38, 39, 40, 48, 49, 56, 57, 58, 59, 60, 62, 63, 64, 65, 67, 68,
         69, 70, 71, 72, 74, 76, 79, 82, 85, 88, 91, 92, 94, 95, 96, 97, 102, 103, 104, 105, 107,
         108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
-        126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, UART_0_INT, 151, 152,
+        126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, Platform::UART_0_INT, 151, 152,
         153, 154, 155, 156, 157, 158, 159, 165, 166, 167, 168, 173, 174, 175, 176, 177, 178, 179,
         185, 186, 187, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 208,
         212, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 229, 230, 233, 234, 235, 237, 238,

@@ -7,7 +7,7 @@ use crate::arch::{
     ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext, GICD,
     GICH, VmContext, timer_arch_get_counter, VM_IPA_SIZE, DEVICE_BASE,
 };
-use crate::board::{platform_cpuid_to_cpuif, PLATFORM_GICV_BASE};
+use crate::board::{PlatOperation, Platform};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id};
 use crate::lib::memcpy_safe;
@@ -43,7 +43,7 @@ impl Vcpu {
             active_vm_id(),
             active_vcpu_id()
         );
-        crate::board::platform_cpu_shutdown();
+        Platform::cpu_shutdown();
     }
 
     pub fn migrate_vm_ctx_save(&self, cache_pa: usize) {
@@ -117,9 +117,9 @@ impl Vcpu {
             inner.gic_ctx.add_irq(irq as u64);
         }
         inner.gic_ctx.add_irq(25);
-        let gicv_ctlr = unsafe { &*((PLATFORM_GICV_BASE + DEVICE_BASE) as *const u32) };
+        let gicv_ctlr = unsafe { &*((Platform::GICV_BASE + DEVICE_BASE) as *const u32) };
         inner.gic_ctx.set_gicv_ctlr(*gicv_ctlr);
-        let gicv_pmr = unsafe { &*((PLATFORM_GICV_BASE + DEVICE_BASE + 0x4) as *const u32) };
+        let gicv_pmr = unsafe { &*((Platform::GICV_BASE + DEVICE_BASE + 0x4) as *const u32) };
         inner.gic_ctx.set_gicv_pmr(*gicv_pmr);
     }
 
@@ -130,14 +130,14 @@ impl Vcpu {
             if irq_state.id != 0 {
                 GICD.set_enable(irq_state.id as usize, irq_state.enable != 0);
                 GICD.set_prio(irq_state.id as usize, irq_state.priority);
-                GICD.set_trgt(irq_state.id as usize, 1 << platform_cpuid_to_cpuif(current_cpu().id));
+                GICD.set_trgt(irq_state.id as usize, 1 << Platform::cpuid_to_cpuif(current_cpu().id));
             }
         }
 
-        let gicv_pmr = unsafe { &mut *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x4) as *mut u32) };
+        let gicv_pmr = unsafe { &mut *((Platform::GICV_BASE + DEVICE_BASE + 0x4) as *mut u32) };
         *gicv_pmr = inner.gic_ctx.gicv_pmr();
         // println!("Core[{}] save gic context", current_cpu().id);
-        let gicv_ctlr = unsafe { &mut *((PLATFORM_GICV_BASE + DEVICE_BASE) as *mut u32) };
+        let gicv_ctlr = unsafe { &mut *((Platform::GICV_BASE + DEVICE_BASE) as *mut u32) };
         *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
         // show_vcpu_reg_context();
     }
@@ -568,25 +568,25 @@ pub fn show_vcpu_reg_context() {
 
     println!("GICH_MISR {:x}", GICH.misr());
     println!("GICV_CTLR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + DEVICE_BASE) as *const u32)
+        *((Platform::GICV_BASE + DEVICE_BASE) as *const u32)
     });
     println!("GICV_PMR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x4) as *const u32)
+        *((Platform::GICV_BASE + DEVICE_BASE + 0x4) as *const u32)
     });
     println!("GICV_BPR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x8) as *const u32)
+        *((Platform::GICV_BASE + DEVICE_BASE + 0x8) as *const u32)
     });
     println!("GICV_ABPR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x1c) as *const u32)
+        *((Platform::GICV_BASE + DEVICE_BASE + 0x1c) as *const u32)
     });
     println!("GICV_STATUSR {:x}", unsafe {
-        *((PLATFORM_GICV_BASE + DEVICE_BASE + 0x2c) as *const u32)
+        *((Platform::GICV_BASE + DEVICE_BASE + 0x2c) as *const u32)
     });
     println!(
         "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xd0) as *const u32) },
-        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xd4) as *const u32) },
-        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xd8) as *const u32) },
-        unsafe { *((PLATFORM_GICV_BASE + DEVICE_BASE + 0xdc) as *const u32) },
+        unsafe { *((Platform::GICV_BASE + DEVICE_BASE + 0xd0) as *const u32) },
+        unsafe { *((Platform::GICV_BASE + DEVICE_BASE + 0xd4) as *const u32) },
+        unsafe { *((Platform::GICV_BASE + DEVICE_BASE + 0xd8) as *const u32) },
+        unsafe { *((Platform::GICV_BASE + DEVICE_BASE + 0xdc) as *const u32) },
     );
 }

@@ -78,7 +78,7 @@ pub fn mvm_config_init() {
         // fb
         PassthroughRegion { ipa: 0x3e000000, pa: 0x3e000000, length: 0x40000000 - 0x3e000000, dev_property: false },
         // gicv
-        PassthroughRegion { ipa: PLATFORM_GICC_BASE + 0xF_0000_0000, pa: PLATFORM_GICV_BASE, length: 0x2000, dev_property: true },
+        PassthroughRegion { ipa: Platform::GICC_BASE + 0xF_0000_0000, pa: Platform::GICV_BASE, length: 0x2000, dev_property: true },
     ];
     // 146 is UART_INT
     pt_dev_config.irqs = vec![

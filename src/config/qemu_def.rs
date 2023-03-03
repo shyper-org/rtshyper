@@ -22,7 +22,7 @@ pub fn mvm_config_init() {
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
         name: Some(String::from("vgicd")),
-        base_ipa: PLATFORM_GICD_BASE,
+        base_ipa: Platform::GICD_BASE,
         length: 0x1000,
         irq_id: 0,
         cfg_list: Vec::new(),
@@ -60,8 +60,8 @@ pub fn mvm_config_init() {
     // vm0 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
     pt_dev_config.regions = vec![
-        PassthroughRegion { ipa: UART_0_ADDR, pa: UART_0_ADDR, length: 0x1000, dev_property: true },
-        PassthroughRegion { ipa: PLATFORM_GICC_BASE, pa: PLATFORM_GICV_BASE, length: 0x2000, dev_property: true },
+        PassthroughRegion { ipa: Platform::UART_0_ADDR, pa: Platform::UART_0_ADDR, length: 0x1000, dev_property: true },
+        PassthroughRegion { ipa: Platform::GICC_BASE, pa: Platform::GICV_BASE, length: 0x2000, dev_property: true },
         // pass-througn virtio blk/net
         PassthroughRegion { ipa: 0x0a003000, pa: 0x0a003000, length: 0x1000, dev_property: true },
     ];
@@ -77,7 +77,7 @@ pub fn mvm_config_init() {
     // });
     // pt_dev_config.push(VmPassthroughDeviceConfig {
     //     name: Some(String::from("gicc")),
-    //     base_pa: PLATFORM_GICV_BASE,
+    //     base_pa: Platform::GICV_BASE,
     //     base_ipa: 0x8010000,
     //     length: 0x2000,
     //     // dma: false,
@@ -166,7 +166,7 @@ pub fn mvm_config_init() {
 //     // });
 //     // pt_dev_config.push(VmPassthroughDeviceConfig {
 //     //     name: Some(String::from("gicc")),
-//     //     base_pa: PLATFORM_GICV_BASE,
+//     //     base_pa: Platform::GICV_BASE,
 //     //     base_ipa: 0x8010000,
 //     //     length: 0x2000,
 //     //     // dma: false,
@@ -239,7 +239,7 @@ pub fn mvm_config_init() {
 //     });
 //     pt_dev_config.push(VmPassthroughDeviceConfig {
 //         name: Some(String::from("gicc")),
-//         base_pa: PLATFORM_GICV_BASE,
+//         base_pa: Platform::GICV_BASE,
 //         base_ipa: 0x8010000,
 //         length: 0x2000,
 //         // dma: false,

@@ -1,36 +1,58 @@
 // TODO: move these core name to device
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
+use crate::board::{PlatOperation, Platform};
 use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
 use crate::board::SchedRule::{self, RoundRobin};
 use crate::device::ARM_CORTEX_A57;
 use crate::driver::{read, write};
 
-// pub const TIMER_FREQUENCY: usize = 62500000;
+pub struct QemuPlatform;
 
-pub const UART_0_ADDR: usize = 0x9000000;
-pub const UART_1_ADDR: usize = 0x9100000;
-pub const UART_2_ADDR: usize = 0x9110000;
+impl PlatOperation for QemuPlatform {
+    const UART_0_ADDR: usize = 0x9000000;
+    const UART_1_ADDR: usize = 0x9100000;
+    const UART_2_ADDR: usize = 0x9110000;
 
-pub const UART_1_INT: usize = 42;
-pub const UART_2_INT: usize = 43;
+    const UART_0_INT: usize = 32 + 0x70;
+    const UART_1_INT: usize = 32 + 0x72;
 
-// Hardcode
-pub const SHARE_MEM_BASE: usize = 0x7_0000_0000;
+    const GICD_BASE: usize = 0x08000000;
+    const GICC_BASE: usize = 0x08010000;
+    const GICH_BASE: usize = 0x08030000;
+    const GICV_BASE: usize = 0x08040000;
 
-pub const PLATFORM_GICD_BASE: usize = 0x08000000;
-pub const PLATFORM_GICC_BASE: usize = 0x08010000;
-pub const PLATFORM_GICH_BASE: usize = 0x08030000;
-pub const PLATFORM_GICV_BASE: usize = 0x08040000;
+    const SHARE_MEM_BASE: usize = 0x7_0000_0000;
 
-pub const DISK_PARTITION_0_START: usize = 0;
-pub const DISK_PARTITION_1_START: usize = 2097152;
-pub const DISK_PARTITION_2_START: usize = 10289152;
+    const DISK_PARTITION_0_START: usize = 0;
+    const DISK_PARTITION_1_START: usize = 2097152;
+    const DISK_PARTITION_2_START: usize = 10289152;
 
-pub const DISK_PARTITION_TOTAL_SIZE: usize = 18481152;
-pub const DISK_PARTITION_0_SIZE: usize = 524288;
-pub const DISK_PARTITION_1_SIZE: usize = 8192000;
-pub const DISK_PARTITION_2_SIZE: usize = 8192000;
+    const DISK_PARTITION_TOTAL_SIZE: usize = 18481152;
+    const DISK_PARTITION_0_SIZE: usize = 524288;
+    const DISK_PARTITION_1_SIZE: usize = 8192000;
+    const DISK_PARTITION_2_SIZE: usize = 8192000;
+
+    fn cpuid_to_cpuif(cpuid: usize) -> usize {
+        cpuid
+    }
+
+    fn cpuif_to_cpuid(cpuif: usize) -> usize {
+        cpuif
+    }
+
+    fn blk_init() {
+        todo!()
+    }
+
+    fn blk_read(sector: usize, count: usize, buf: usize) {
+        read(sector, count, buf);
+    }
+
+    fn blk_write(sector: usize, count: usize, buf: usize) {
+        write(sector, count, buf);
+    }
+}
 
 // holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
@@ -78,13 +100,13 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         ],
         base: 0x40000000,
     },
-    uart_base: UART_0_ADDR,
+    uart_base: Platform::UART_0_ADDR,
     arch_desc: ArchDesc {
         gic_desc: GicDesc {
-            gicd_addr: PLATFORM_GICD_BASE,
-            gicc_addr: PLATFORM_GICC_BASE,
-            gich_addr: PLATFORM_GICH_BASE,
-            gicv_addr: PLATFORM_GICV_BASE,
+            gicd_addr: Platform::GICD_BASE,
+            gicc_addr: Platform::GICC_BASE,
+            gich_addr: Platform::GICH_BASE,
+            gicv_addr: Platform::GICV_BASE,
             maintenance_int_id: 25,
         },
         smmu_desc: SmmuDesc {
@@ -94,49 +116,3 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         },
     },
 };
-
-fn platform_cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
-    use crate::arch::power_arch_cpu_on;
-    power_arch_cpu_on(arch_core_id, entry, ctx);
-}
-
-pub fn platform_cpu_shutdown() {
-    crate::arch::power_arch_cpu_shutdown();
-}
-
-pub fn platform_power_on_secondary_cores() {
-    extern "C" {
-        fn _image_start();
-    }
-    for i in 1..PLAT_DESC.cpu_desc.num {
-        platform_cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], _image_start as usize, 0);
-    }
-}
-
-pub fn platform_sys_reboot() {
-    println!("Hypervisor reset...");
-    // mem_heap_reset();
-    crate::arch::power_arch_sys_reset();
-    loop {}
-}
-
-pub fn platform_blk_init() {
-    println!("Platform block driver init ok");
-    crate::driver::virtio_blk_init();
-}
-
-pub fn platform_blk_read(sector: usize, count: usize, buf: usize) {
-    read(sector, count, buf);
-}
-
-pub fn platform_blk_write(sector: usize, count: usize, buf: usize) {
-    write(sector, count, buf);
-}
-
-pub fn platform_cpuid_to_cpuif(cpuid: usize) -> usize {
-    cpuid
-}
-
-pub fn platform_cpuif_to_cpuid(cpuif: usize) -> usize {
-    cpuif
-}

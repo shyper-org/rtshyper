@@ -1,5 +1,5 @@
 use crate::arch::{gic_cpu_reset, gicc_clear_current_irq};
-use crate::board::platform_cpuid_to_cpuif;
+use crate::board::{PlatOperation, Platform};
 use crate::kernel::{current_cpu, Vcpu, Vm};
 
 use super::GIC_SGIS_NUM;
@@ -31,7 +31,7 @@ pub fn interrupt_arch_enable(int_id: usize, en: bool) {
     let cpu_id = current_cpu().id;
     if en {
         GICD.set_prio(int_id, 0x7f);
-        GICD.set_trgt(int_id, 1 << platform_cpuid_to_cpuif(cpu_id));
+        GICD.set_trgt(int_id, 1 << Platform::cpuid_to_cpuif(cpu_id));
 
         GICD.set_enable(int_id, en);
     } else {
@@ -41,7 +41,7 @@ pub fn interrupt_arch_enable(int_id: usize, en: bool) {
 
 pub fn interrupt_arch_ipi_send(cpu_id: usize, ipi_id: usize) {
     if ipi_id < GIC_SGIS_NUM {
-        GICD.send_sgi(platform_cpuid_to_cpuif(cpu_id), ipi_id);
+        GICD.send_sgi(Platform::cpuid_to_cpuif(cpu_id), ipi_id);
     }
 }
 

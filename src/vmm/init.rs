@@ -5,7 +5,7 @@ use crate::arch::{
 };
 use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
-use crate::board::*;
+use crate::board::{PlatOperation, Platform};
 use crate::config::vm_cfg_entry;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
@@ -360,15 +360,15 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
                     #[cfg(any(feature = "tx2", feature = "qemu"))]
                     fdt_setup_gic(
                         dtb,
-                        PLATFORM_GICD_BASE as u64,
-                        PLATFORM_GICC_BASE as u64,
+                        Platform::GICD_BASE as u64,
+                        Platform::GICC_BASE as u64,
                         emu_cfg.name.unwrap().as_ptr(),
                     );
                     #[cfg(feature = "pi4")]
                     fdt_setup_gic(
                         dtb,
-                        (PLATFORM_GICD_BASE | 0xF_0000_0000) as u64,
-                        (PLATFORM_GICC_BASE | 0xF_0000_0000) as u64,
+                        (Platform::GICD_BASE | 0xF_0000_0000) as u64,
+                        (Platform::GICC_BASE | 0xF_0000_0000) as u64,
                         emu_cfg.name.unwrap().as_ptr(),
                     );
                 }
