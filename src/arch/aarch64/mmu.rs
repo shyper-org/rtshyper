@@ -1,4 +1,3 @@
-use core::arch::global_asm;
 use tock_registers::*;
 use tock_registers::interfaces::*;
 
@@ -8,19 +7,7 @@ use crate::board::PLAT_DESC;
 
 use super::interface::*;
 
-#[cfg(feature = "tx2")]
-global_asm!(include_str!("start.S"));
-
-#[cfg(feature = "pi4")]
-global_asm!(include_str!("start_pi4.S"));
-
-#[cfg(feature = "qemu")]
-global_asm!(include_str!("start_qemu.S"));
-
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
-// const PAGE_SIZE: usize = 4096;
-// const PAGE_SHIFT: usize = 12;
-// const ENTRY_PER_PAGE: usize = PAGE_SIZE / 8;
 
 pub const DEVICE_BASE: usize = 0x6_0000_0000;
 const_assert!(DEVICE_BASE < 1 << VM_IPA_SIZE); // if not, the device va will ocuppy the ipa2hva space, which is very dangerous

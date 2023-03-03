@@ -2,8 +2,8 @@
 
 .global _start
 _start:
-    mov x20, x0
-// #ifdef PLATFORM_TX2
+    mov x20, x0 // save fdt pointer to x20
+#ifdef PLATFORM_TX2
     mrs x0, mpidr_el1
     and x1, x0, #0x100
     cbz x1, 1f
@@ -12,11 +12,11 @@ _start:
 1:  wfe
     b   1b
 
-// #endif
-// #ifdef PLATFORM_QEMU
-//    mrs x0, mpidr_el1
-//    and x0, x0, #7
-// #endif
+#endif
+#if defined(PLATFORM_QEMU) || defined(PLATFORM_PI4)
+    mrs x0, mpidr_el1
+    and x0, x0, #7
+#endif
 
 2:  /*
      * only cluster 1 cpu 0,1,2,3 reach here
