@@ -29,6 +29,7 @@ use shyper::VM_NUM_MAX;
 pub enum VmmEvent {
     VmmBoot,
     VmmReboot,
+    #[allow(dead_code)]
     VmmShutdown,
     VmmAssignCpu,
     VmmRemoveCpu,
@@ -81,7 +82,7 @@ pub fn vmm_alloc_vcpu(vm_id: usize) {
     }
 
     println!(
-        "VM {} init cpu: cores=<{}>, allocat_bits=<0b{:b}>",
+        "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
         vm.id(),
         vm.config().cpu_num(),
         vm.config().cpu_allocated_bitmap()

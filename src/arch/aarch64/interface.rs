@@ -54,4 +54,17 @@ impl ArchTrait for Aarch64Arch {
             core::arch::asm!("isb");
         }
     }
+
+    fn disable_prefetch() {
+        let mut cpu_extended_control: u64;
+        mrs!(cpu_extended_control, S3_1_c15_c2_1);
+        debug!("disable_prefetch: ori {:#x}", cpu_extended_control);
+        cpu_extended_control &= !((0b11) << 32);
+        cpu_extended_control &= !((0b11) << 35);
+        debug!("disable_prefetch: new {:#x}", cpu_extended_control);
+        msr!(S3_1_c15_c2_1, cpu_extended_control);
+        let tmp: u64;
+        mrs!(tmp, S3_1_c15_c2_1);
+        debug!("disable_prefetch: test {:#x}", tmp);
+    }
 }

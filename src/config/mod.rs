@@ -16,4 +16,5 @@ mod qemu_def;
 #[cfg(feature = "tx2")]
 mod tx2_def;
 #[cfg(feature = "static-config")]
+#[allow(dead_code)]
 mod vm_def;

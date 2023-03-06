@@ -188,7 +188,7 @@ impl Virtq {
         for i in 0..size {
             let desc_addr = vm_ipa2hva(&vm, desc[i].addr as usize);
             println!(
-                "index {}   desc_addr_ipa 0x{:x}   desc_addr_pa 0x{:x}   len 0x{:x}   flags {}  next {}",
+                "index {}   desc_addr_ipa {:#x}   desc_addr_pa {:#x}   len {:#x}   flags {}  next {}",
                 i, desc[i].addr, desc_addr, desc[i].len, desc[i].flags, desc[i].next
             );
         }

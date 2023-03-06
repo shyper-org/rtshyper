@@ -175,7 +175,7 @@ pub fn unilib_fs_append(mmio_ipa: usize) -> Result<usize, ()> {
     let unilib_fs = UnilibFS { base_addr: mmio_pa };
     let buf_pa = vm_ipa2hva(&vm, unilib_fs.buf_ipa());
     println!(
-        "unilib_fs_append: VM[{}] fs_mmio_ipa 0x{:x}, buf ipa 0x{:x}, buf_pa 0x{:x}",
+        "unilib_fs_append: VM[{}] fs_mmio_ipa {:#x}, buf ipa {:#x}, buf_pa {:#x}",
         unilib_fs.vm_id(),
         mmio_ipa,
         unilib_fs.buf_ipa(),

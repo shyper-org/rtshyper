@@ -29,7 +29,7 @@ pub fn heap_init() {
     memset_safe(base as *mut u8, 0, size);
 
     println!(
-        "Memory Heap: base 0x{:x}, size {} MB / {} pages",
+        "Memory Heap: base {:#x}, size {} MB / {} pages",
         base,
         size >> 20,
         size / PAGE_SIZE

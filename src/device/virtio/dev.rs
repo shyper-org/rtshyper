@@ -164,7 +164,7 @@ impl VirtDev {
     pub fn restore_virt_dev_data(&self, dev_data: &VirtDevData) {
         let mut inner = self.inner.lock();
         // println!(
-        //     "activated {}, type {:#?}, features 0x{:x}, generation {}, int id {}",
+        //     "activated {}, type {:#?}, features {:#x}, generation {}, int id {}",
         //     dev_data.activated, dev_data.dev_type, dev_data.features, dev_data.generation, dev_data.int_id
         // );
         inner.activated = dev_data.activated;

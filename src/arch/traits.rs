@@ -28,6 +28,7 @@ pub trait ArchTrait {
     fn fault_address() -> usize;
     fn install_vm_page_table(base: usize, vmid: usize);
     fn install_self_page_table(base: usize);
+    fn disable_prefetch();
 }
 
 pub trait TlbInvalidate {

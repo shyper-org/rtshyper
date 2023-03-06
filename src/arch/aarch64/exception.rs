@@ -216,7 +216,7 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
                 (*ctx).gpr(29)
             );
             panic!(
-                "core {} vm {}: handler not presents for EC_{} @ipa 0x{:x}, @pc 0x{:x}",
+                "core {} vm {}: handler not presents for EC_{} @ipa {:#x}, @pc {:#x}",
                 current_cpu().id,
                 active_vm_id(),
                 exception_class(),
@@ -234,7 +234,7 @@ extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     let (id, src) = gicc_get_current_irq();
     // if current_cpu().id == 2 {
     //     println!(
-    //         "Core[{}] lower_aarch64_irq {} 0x{:x}  x30 {:x} x19 {:x} x0 {:x}",
+    //         "Core[{}] lower_aarch64_irq {} {:#x}  x30 {:x} x19 {:x} x0 {:x}",
     //         current_cpu().id,
     //         id,
     //         current_cpu().get_elr(),

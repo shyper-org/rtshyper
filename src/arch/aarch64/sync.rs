@@ -25,7 +25,7 @@ pub fn data_abort_handler() {
 
     if !exception_data_abort_handleable() {
         panic!(
-            "Core {} data abort not handleable 0x{:x}, esr 0x{:x}",
+            "Core {} data abort not handleable {:#x}, esr {:#x}",
             current_cpu().id,
             exception_fault_addr(),
             exception_esr()
@@ -35,7 +35,7 @@ pub fn data_abort_handler() {
     if !exception_data_abort_is_translate_fault() {
         if exception_data_abort_is_permission_fault() {
             // println!(
-            //     "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}, esr 0x{:x}",
+            //     "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val {:#x}, esr {:#x}",
             //     exception_data_abort_access_is_write(),
             //     emu_ctx.width,
             //     emu_ctx.reg_width,
@@ -53,7 +53,7 @@ pub fn data_abort_handler() {
             return;
         } else {
             panic!(
-                "Core {} data abort is not translate fault 0x{:x}",
+                "Core {} data abort is not translate fault {:#x}",
                 current_cpu().id,
                 exception_fault_addr(),
             );
@@ -62,7 +62,7 @@ pub fn data_abort_handler() {
     if !emu_handler(&emu_ctx) {
         active_vm().unwrap().show_pagetable(emu_ctx.address);
         println!(
-            "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val 0x{:x}, esr 0x{:x}",
+            "write {}, width {}, reg width {}, addr {:x}, iss {:x}, reg idx {}, reg val {:#x}, esr {:#x}",
             exception_data_abort_access_is_write(),
             emu_ctx.width,
             emu_ctx.reg_width,
@@ -73,7 +73,7 @@ pub fn data_abort_handler() {
             exception_esr()
         );
         panic!(
-            "data_abort_handler: Failed to handler emul device request, ipa 0x{:x} elr 0x{:x}",
+            "data_abort_handler: Failed to handler emul device request, ipa {:#x} elr {:#x}",
             emu_ctx.address, elr
         );
     }
@@ -88,7 +88,7 @@ pub fn smc_handler() {
     let x3 = current_cpu().get_gpr(3);
 
     if !smc_guest_handler(fid, x1, x2, x3) {
-        warn!("smc_handler: unknown fid 0x{:x}", fid);
+        warn!("smc_handler: unknown fid {:#x}", fid);
         current_cpu().set_gpr(0, 0);
     }
 
@@ -116,13 +116,13 @@ pub fn hvc_handler() {
             current_cpu().set_gpr(HVC_RETURN_REG, val);
         }
         Err(_) => {
-            warn!("Failed to handle hvc request fid 0x{:x} event 0x{:x}", hvc_type, event);
+            warn!("Failed to handle hvc request fid {:#x} event {:#x}", hvc_type, event);
             current_cpu().set_gpr(HVC_RETURN_REG, usize::MAX);
         }
     }
     // let time_end = timer_arch_get_counter();
     // println!(
-    //     "hvc fid 0x{:x} event 0x{:x} counter {}, freq {:x}",
+    //     "hvc fid {:#x} event {:#x} counter {}, freq {:x}",
     //     hvc_type,
     //     event,
     //     time_end - time_start,

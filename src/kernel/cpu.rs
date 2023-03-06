@@ -258,7 +258,7 @@ pub fn cpu_init() {
         Platform::power_on_secondary_cores();
         power_arch_init();
     }
-
+    // crate::arch::Arch::disable_prefetch();
     cpu_init_global_pt();
     let state = CpuState::Idle;
     current_cpu().cpu_state = state;

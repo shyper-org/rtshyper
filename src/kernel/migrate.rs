@@ -323,7 +323,7 @@ pub fn migrate_data_abort_handler(emu_ctx: &EmuContext) {
 
         vm.pt_set_access_permission(emu_ctx.address, PTE_S2_FIELD_AP_RW);
         // println!(
-        //     "migrate_data_abort_handler: emu_ctx addr 0x{:x}, write pa {:x}, len 0x{:x}",
+        //     "migrate_data_abort_handler: emu_ctx addr {:#x}, write pa {:x}, len {:#x}",
         //     emu_ctx.address, pa, len
         // );
         vm_if_set_mem_map_bit(&vm, emu_ctx.address);

@@ -14,9 +14,9 @@ use crate::vmm::vmm_init_gvm;
 use crate::kernel::access::{copy_segment_to_vm, copy_segment_from_vm};
 
 const CFG_MAX_NUM: usize = 0x10;
-const IRQ_MAX_NUM: usize = 0x40;
-const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
-const EMULATED_DEV_MAX_NUM: usize = 16;
+// const IRQ_MAX_NUM: usize = 0x40;
+// const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
+// const EMULATED_DEV_MAX_NUM: usize = 16;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DtbDevType {
@@ -90,28 +90,15 @@ impl VmPassthroughDeviceConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VmRegion {
     pub ipa_start: usize,
     pub length: usize,
 }
 
 impl VmRegion {
-    pub const fn default() -> VmRegion {
-        VmRegion {
-            ipa_start: 0,
-            length: 0,
-        }
-    }
-
     pub fn as_range(&self) -> Range<usize> {
         self.ipa_start..(self.ipa_start + self.length)
-    }
-}
-
-impl PartialEq for VmRegion {
-    fn eq(&self, other: &Self) -> bool {
-        self.ipa_start == other.ipa_start && self.length == other.length
     }
 }
 
@@ -143,18 +130,6 @@ pub struct VmImageConfig {
 }
 
 impl VmImageConfig {
-    pub const fn default() -> VmImageConfig {
-        VmImageConfig {
-            kernel_img_name: None,
-            kernel_load_ipa: 0,
-            kernel_entry_point: 0,
-            // device_tree_filename: None,
-            device_tree_load_ipa: 0,
-            // ramdisk_filename: None,
-            ramdisk_load_ipa: 0,
-            mediated_block_index: None,
-        }
-    }
     pub fn new(kernel_load_ipa: usize, device_tree_load_ipa: usize, ramdisk_load_ipa: usize) -> VmImageConfig {
         VmImageConfig {
             kernel_img_name: None,
@@ -231,23 +206,6 @@ pub struct VmConfigEntry {
 }
 
 impl VmConfigEntry {
-    pub fn default() -> VmConfigEntry {
-        VmConfigEntry {
-            id: 0,
-            name: Some(String::from("unknown")),
-            os_type: VmType::VmTBma,
-
-            cmdline: String::from("root=/dev/vda rw audit=0"),
-
-            image: Arc::new(Mutex::new(VmImageConfig::default())),
-            memory: Arc::new(Mutex::new(VmMemoryConfig::default())),
-            cpu: Arc::new(Mutex::new(VmCpuConfig::default())),
-            vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList::default())),
-            vm_pt_dev_confg: Arc::new(Mutex::new(VmPassthroughDeviceConfig::default())),
-            vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
-        }
-    }
-
     pub fn new(
         name: String,
         cmdline: String,
@@ -631,7 +589,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
 
     println!("      VM name is [{:?}]", new_vm_cfg.name.clone().unwrap());
     println!("      cmdline is [{:?}]", new_vm_cfg.cmdline);
-    println!("      ramdisk is [0x{:x}]", new_vm_cfg.ramdisk_load_ipa());
+    println!("      ramdisk is [{:#x}]", new_vm_cfg.ramdisk_load_ipa());
     vm_cfg_add_vm_entry(new_vm_cfg)
 }
 

@@ -133,7 +133,7 @@ pub fn vm_if_set_mem_map_bit(vm: &Vm, ipa: usize) {
         if range.contains(&ipa) {
             bit += (ipa - range.start) / PAGE_SIZE;
             // if vm_if.mem_map.as_mut().unwrap().get(bit) == 0 {
-            //     println!("vm_if_set_mem_map_bit: set pa 0x{:x}", pa);
+            //     println!("vm_if_set_mem_map_bit: set pa {:#x}", pa);
             // }
             vm_if.mem_map.as_mut().unwrap().set(bit, true);
             return;
@@ -141,7 +141,7 @@ pub fn vm_if_set_mem_map_bit(vm: &Vm, ipa: usize) {
             bit += range.len() / PAGE_SIZE;
         }
     }
-    error!("vm_if_set_mem_map_bit: illegal ipa 0x{:#x}", ipa);
+    error!("vm_if_set_mem_map_bit: illegal ipa {:#x}", ipa);
 }
 
 pub fn vm_if_clear_mem_map(vm_id: usize) {
@@ -156,7 +156,7 @@ pub fn vm_if_copy_mem_map(vm_id: usize) {
     // map.set(0x15, true);
     // TODO: hard code for offset 0x15000
     // println!(
-    //     "vm_if_copy_mem_map: dirty mem page num {}, first dirty page 0x{:x}, bitmap len {:x}",
+    //     "vm_if_copy_mem_map: dirty mem page num {}, first dirty page {:#x}, bitmap len {:x}",
     //     map.sum(),
     //     map.first(),
     //     size_of::<u64>() * map.vec_len()
@@ -352,16 +352,6 @@ impl Vm {
         //     }
         //     Some(idx) => idx,
         // }
-    }
-
-    pub fn dtb(&self) -> Option<*mut fdt::myctypes::c_void> {
-        let vm_inner = self.inner.lock();
-        vm_inner.dtb.map(|x| x as *mut fdt::myctypes::c_void)
-    }
-
-    pub fn set_dtb(&self, val: *mut fdt::myctypes::c_void) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.dtb = Some(val as usize);
     }
 
     pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
@@ -571,36 +561,6 @@ impl Vm {
         vm_inner.color_pa_info.color_pa_region.append(&mut regions);
     }
 
-    // #[deprecated]
-    // pub fn add_region(&self, region: VmPa) {
-    //     let mut vm_inner = self.inner.lock();
-    //     vm_inner.pa_region.push(region);
-    // }
-
-    // #[deprecated]
-    // pub fn region_num(&self) -> usize {
-    //     let vm_inner = self.inner.lock();
-    //     vm_inner.pa_region.len()
-    // }
-
-    // #[deprecated]
-    // pub fn pa_start(&self, idx: usize) -> usize {
-    //     let vm_inner = self.inner.lock();
-    //     vm_inner.pa_region[idx].pa_start
-    // }
-
-    // #[deprecated]
-    // pub fn pa_length(&self, idx: usize) -> usize {
-    //     let vm_inner = self.inner.lock();
-    //     vm_inner.pa_region[idx].pa_length
-    // }
-
-    // #[deprecated]
-    // pub fn pa_offset(&self, idx: usize) -> usize {
-    //     let vm_inner = self.inner.lock();
-    //     vm_inner.pa_region[idx].offset as usize
-    // }
-
     pub fn vgic(&self) -> Arc<Vgic> {
         let vm_inner = self.inner.lock();
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
@@ -665,7 +625,7 @@ impl Vm {
         }
         // println!("emu_console_dev ipa {:x}", ipa);
         // for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
-        //     println!("emu dev[{}], ipa 0x{:x}", idx, emu_dev_cfg.base_ipa);
+        //     println!("emu dev[{}], ipa {:#x}", idx, emu_dev_cfg.base_ipa);
         // }
         EmuDevs::None
     }
@@ -757,7 +717,7 @@ impl Vm {
         let mvm = vm(0).unwrap();
         // for i in 0..self.ncpu() {
         let size = size_of::<VMData>();
-        // println!("context_vm_migrate_init: VM Data size 0x{:x}", size);
+        // println!("context_vm_migrate_init: VM Data size {:#x}", size);
         match mem_pages_alloc(round_up(size, PAGE_SIZE) / PAGE_SIZE) {
             Ok(pf) => {
                 mvm.pt_map_range(
@@ -784,7 +744,7 @@ impl Vm {
             Ok(pf) => {
                 let mut vm_data = unsafe { &mut *(pf.pa as *mut VMData) };
                 let base = get_share_mem(VM_CONTEXT_SEND);
-                // println!("pt map base 0x{:x} size 0x{:x}", base, size);
+                // println!("pt map base {:#x} size {:#x}", base, size);
                 mvm.pt_map_range(base, round_up(size, PAGE_SIZE), pf.pa(), PTE_S2_RO, true);
 
                 // key: pcpuid, val: vcpuid
@@ -957,12 +917,10 @@ impl Drop for VmColorPaInfo {
     }
 }
 
-#[repr(align(4096))]
 struct VmInner {
     pub id: usize,
     pub ready: bool,
     pub config: Option<VmConfigEntry>,
-    pub dtb: Option<usize>,
     // memory config
     pub pt: Option<PageTable>,
     // pub pa_region: Vec<VmPa>, // Option<[VmPa; VM_MEM_REGION_MAX]>,
@@ -991,7 +949,6 @@ struct VmInner {
 
     // emul devs
     pub emu_devs: Vec<EmuDevs>,
-    pub med_blk_id: Option<usize>,
 
     // VM timer
     running: usize,
@@ -1005,7 +962,6 @@ impl VmInner {
             id,
             ready: false,
             config: None,
-            dtb: None,
             pt: None,
             // pa_region: Vec::new(),
             color_pa_info: VmColorPaInfo::default(),
@@ -1023,7 +979,6 @@ impl VmInner {
             migrate_restore_pf: vec![],
             iommu_ctx_id: None,
             emu_devs: Vec::new(),
-            med_blk_id: None,
             running: 0,
             vtimer_offset: 0,
             vtimer: 0,

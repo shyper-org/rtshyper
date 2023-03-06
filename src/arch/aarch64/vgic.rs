@@ -1012,7 +1012,7 @@ impl Vgic {
         self.set_cpu_priv_curr_lrs(vcpu_id, lr_ind, int_id as u16);
 
         // if current_cpu().id == 1 {
-        //     println!("Core1 write lr[{}] 0x{:x}", lr_ind, lr);
+        //     println!("Core1 write lr[{}] {:#x}", lr_ind, lr);
         // }
         GICH.set_lr(lr_ind, lr as u32);
 
@@ -1862,11 +1862,11 @@ impl Vgic {
     fn handle_trapped_eoir(&self, vcpu: &Vcpu) {
         // if current_cpu().id == 2 {
         //     for i in 0..4 {
-        //         println!("gich.LR[{}] 0x{:x}", i, GICH.lr(i));
+        //         println!("gich.LR[{}] {:#x}", i, GICH.lr(i));
         //     }
         //     println!("elrsr[0] {:x}", GICH.elrsr(0));
         //     println!("eisr[0] {:x}", GICH.eisr(0));
-        //     println!("hcr 0x{:x}", GICH.hcr());
+        //     println!("hcr {:#x}", GICH.hcr());
         // }
         let gic_lrs = gic_lrs();
         let mut lr_idx_opt = bitmap_find_nth(
@@ -2217,7 +2217,7 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     let vgicd_offset_prefix = (offset & 0xf80) >> 7;
     // if current_cpu().id == 2 {
     //     println!(
-    //         "emu_intc_handler: vgicd_offset_prefix 0x{:x}, offset 0x{:x}",
+    //         "emu_intc_handler: vgicd_offset_prefix {:#x}, offset {:#x}",
     //         vgicd_offset_prefix, offset
     //     );
     // }
@@ -2325,7 +2325,7 @@ pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext
     }
     let offset = emu_ctx.address & 0xfff;
     // println!(
-    //     "partial_passthrough_intc_handler: {} offset_prefix 0x{:x}, offset 0x{:x}",
+    //     "partial_passthrough_intc_handler: {} offset_prefix {:#x}, offset {:#x}",
     //     if emu_ctx.write { "write" } else { "read" }, offset_prefix, offset
     // );
     if emu_ctx.write {
@@ -2378,7 +2378,7 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
     }
     if let IpiInnerMsg::Initc(intc) = &msg.ipi_message {
         // println!(
-        //     "vgic_ipi_handler: core {} receive vgic_ipi, event {:?}, vm_id {}, int_id {}, val 0x{:x}",
+        //     "vgic_ipi_handler: core {} receive vgic_ipi, event {:?}, vm_id {}, int_id {}, val {:#x}",
         //     current_cpu().id,
         //     intc.event,
         //     vm_id,

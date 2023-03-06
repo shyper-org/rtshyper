@@ -280,7 +280,7 @@ fn vmm_init_emulated_device(vm: &Vm) -> bool {
             }
         }
         info!(
-            "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
+            "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<{:#x}>",
             vm.id(),
             idx,
             emu_dev.emu_type,
@@ -300,7 +300,7 @@ fn vmm_init_passthrough_device(vm: &Vm) -> bool {
         }
 
         debug!(
-            "VM {} registers passthrough device: ipa=<0x{:x}>, pa=<0x{:x}>, size=<0x{:x}>, {}",
+            "VM {} registers passthrough device: ipa=<{:#x}>, pa=<{:#x}>, size=<{:#x}>, {}",
             vm.id(),
             region.ipa,
             region.pa,

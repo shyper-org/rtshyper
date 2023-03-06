@@ -538,7 +538,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         let dst = vm_ipa2hva(&vm, rx_vq.desc_addr(desc_idx));
         if dst == 0 {
             println!(
-                "rx_vq desc base table addr 0x{:x}, idx {}, avail table addr 0x{:x}, avail last idx {}",
+                "rx_vq desc base table addr {:#x}, idx {}, avail table addr {:#x}, avail last idx {}",
                 rx_vq.desc_table_addr(),
                 desc_idx,
                 rx_vq.avail_addr(),
@@ -552,7 +552,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         if vmid != 0 {
             let mut ipa_addr = round_down(rx_vq.desc_addr(desc_idx), PAGE_SIZE);
             // if *VM_STATE_FLAG.lock() == 1 {
-            //     println!("A: vm0 virtio net write vm1 memory in 0x{:x}", addr);
+            //     println!("A: vm0 virtio net write vm1 memory in {:#x}", addr);
             // }
             while ipa_addr <= round_down(rx_vq.desc_addr(desc_idx) + desc_len, PAGE_SIZE) {
                 vm_if_set_mem_map_bit(&vm, ipa_addr);

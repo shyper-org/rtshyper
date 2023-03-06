@@ -74,7 +74,7 @@ fn psci_guest_sys_reset() {
 #[inline(never)]
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     debug!(
-        "smc_guest_handler: fid 0x{:x}, x1 0x{:x}, x2 0x{:x}, x3 0x{:x}",
+        "smc_guest_handler: fid {:#x}, x1 {:#x}, x2 {:#x}, x3 {:#x}",
         fid, x1, x2, x3
     );
     let r;
@@ -99,9 +99,9 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
         TEGRA_SIP_GET_ACTMON_CLK_COUNTERS => {
             let result = smc_call(fid, x1, x2, x3);
             r = result.0;
-            // println!("x1 0x{:x}, x2 0x{:x}, x3 0x{:x}", x1, x2, x3);
+            // println!("x1 {:#x}, x2 {:#x}, x3 {:#x}", x1, x2, x3);
             // println!(
-            //     "result.0 0x{:x}, result.1 0x{:x}, result.2 0x{:x}",
+            //     "result.0 {:#x}, result.1 {:#x}, result.2 {:#x}",
             //     result.0, result.1, result.2
             // );
             current_cpu().set_gpr(1, result.1);

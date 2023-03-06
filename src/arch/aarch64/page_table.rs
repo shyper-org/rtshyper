@@ -271,7 +271,7 @@ impl PageTable {
 
         let l2e = l1e.entry(pt_lvl2_idx(ipa));
         if l2e.valid() {
-            println!("map_2mb lvl 2 already mapped with 0x{:x}", l2e.to_pte());
+            println!("map_2mb lvl 2 already mapped with {:#x}", l2e.to_pte());
         } else {
             l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pa | pte | PTE_BLOCK));
         }
@@ -323,11 +323,11 @@ impl PageTable {
                 return;
             }
         } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
-            println!("map lvl 2 already mapped with 2mb 0x{:x}", l2e.to_pte());
+            println!("map lvl 2 already mapped with 2mb {:#x}", l2e.to_pte());
         }
         let l3e = l2e.entry(pt_lvl3_idx(ipa));
         if l3e.valid() {
-            println!("map lvl 3 already mapped with 0x{:x}", l3e.to_pte());
+            println!("map lvl 3 already mapped with {:#x}", l3e.to_pte());
         } else {
             l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pa | PTE_PAGE | pte));
         }

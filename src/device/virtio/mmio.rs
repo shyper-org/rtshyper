@@ -479,7 +479,7 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
                 value = mmio.dev_stat();
             }
             _ => {
-                println!("virtio_be_init_handler wrong reg_read, address=0x{:x}", emu_ctx.address);
+                println!("virtio_be_init_handler wrong reg_read, address={:#x}", emu_ctx.address);
                 return;
             }
         }
@@ -515,7 +515,7 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
                 }
             }
             _ => {
-                println!("virtio_mmio_prologue_access: wrong reg write 0x{:x}", emu_ctx.address);
+                println!("virtio_mmio_prologue_access: wrong reg write {:#x}", emu_ctx.address);
             }
         }
     }
@@ -683,7 +683,7 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                 }
             },
             _ => {
-                println!("virtio_mmio_queue_access: wrong reg write 0x{:x}", emu_ctx.address);
+                println!("virtio_mmio_queue_access: wrong reg write {:#x}", emu_ctx.address);
             }
         }
     }
@@ -708,7 +708,7 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
                 }
             },
             _ => {
-                println!("virtio_mmio_cfg_access: wrong reg write 0x{:x}", emu_ctx.address);
+                println!("virtio_mmio_cfg_access: wrong reg write {:#x}", emu_ctx.address);
                 return;
             }
         }
@@ -716,7 +716,7 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
         let val = value as usize;
         current_cpu().set_gpr(idx, val);
     } else {
-        println!("virtio_mmio_cfg_access: wrong reg write 0x{:x}", emu_ctx.address);
+        println!("virtio_mmio_cfg_access: wrong reg write {:#x}", emu_ctx.address);
     }
 }
 
@@ -810,7 +810,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
         virtio_mmio_cfg_access(mmio, emu_ctx, offset, write);
     } else {
         println!(
-            "emu_virtio_mmio_handler: regs wrong {}, address 0x{:x}, offset 0x{:x}",
+            "emu_virtio_mmio_handler: regs wrong {}, address {:#x}, offset {:#x}",
             if write { "write" } else { "read" },
             addr,
             offset

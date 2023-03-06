@@ -24,22 +24,12 @@ use vmm::{vm_init, vmm_boot_vm};
 
 use crate::kernel::{cpu_sched_init, hvc_init, iommu_init};
 
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::lib::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
+#[macro_use]
+mod macros;
 
 #[allow(dead_code)]
 mod arch;
-#[allow(dead_code)]
 mod board;
-#[allow(dead_code)]
 mod config;
 #[allow(dead_code)]
 mod device;
@@ -49,21 +39,12 @@ mod driver;
 mod kernel;
 #[allow(dead_code)]
 mod lib;
-#[allow(dead_code)]
 mod mm;
-#[allow(dead_code)]
 mod panic;
-#[allow(dead_code)]
 mod vmm;
 
 #[no_mangle]
 pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) -> ! {
-    // const UART0: *mut u8 = 0x0900_0000 as *mut u8;
-    // let out_str = b"AArch64 Bare Metal";
-    // for byte in out_str {
-    //     crate::driver::uart::putc(*byte);
-    // }
-    // tegra_emmc_blk_read(0, 0, 0 as *mut _);
     if cpu_id == 0 {
         println!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
         println!("Built At {}", env!("BUILD_TIME"));

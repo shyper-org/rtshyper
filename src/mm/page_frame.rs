@@ -12,6 +12,7 @@ pub struct PageFrame {
     pub page_num: usize,
 }
 
+#[allow(dead_code)]
 impl PageFrame {
     pub fn new(pa: usize, page_num: usize) -> Self {
         assert_eq!(pa % PAGE_SIZE, 0);

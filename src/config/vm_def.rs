@@ -68,7 +68,10 @@ pub fn init_tmp_config_for_bma1() {
         id: 0,
         name: Some(String::from("guest-bma-0")),
         os_type: VmType::VmTBma,
-        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
+        memory: Arc::new(Mutex::new(VmMemoryConfig {
+            region: vm_region,
+            colors: vec![],
+        })),
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
@@ -147,7 +150,10 @@ pub fn init_tmp_config_for_bma2() {
         id: 0,
         name: Some(String::from("guest-bma-1")),
         os_type: VmType::VmTBma,
-        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
+        memory: Arc::new(Mutex::new(VmMemoryConfig {
+            region: vm_region,
+            colors: vec![],
+        })),
         image: Arc::new(Mutex::new(VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
@@ -298,7 +304,10 @@ pub fn init_tmp_config_for_vm1() {
             ramdisk_load_ipa: 0, //0x83000000,
             mediated_block_index: Some(0),
         })),
-        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
+        memory: Arc::new(Mutex::new(VmMemoryConfig {
+            region: vm_region,
+            colors: vec![],
+        })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
@@ -429,7 +438,10 @@ pub fn init_tmp_config_for_vm2() {
             ramdisk_load_ipa: 0, //0x83000000,
             mediated_block_index: Some(1),
         })),
-        memory: Arc::new(Mutex::new(VmMemoryConfig { region: vm_region })),
+        memory: Arc::new(Mutex::new(VmMemoryConfig {
+            region: vm_region,
+            colors: vec![],
+        })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0100,

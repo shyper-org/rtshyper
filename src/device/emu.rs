@@ -164,7 +164,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
         }
     }
     println!(
-        "emu_handler: no emul handler for Core {} data abort ipa 0x{:x}",
+        "emu_handler: no emul handler for Core {} data abort ipa {:#x}",
         current_cpu().id,
         ipa
     );
@@ -189,7 +189,7 @@ pub fn emu_register_dev(
             continue;
         }
         if in_range(address, emu_dev.ipa, emu_dev.size - 1) || in_range(emu_dev.ipa, address, size - 1) {
-            panic!("emu_register_dev: duplicated emul address region: prev address 0x{:x} size 0x{:x}, next address 0x{:x} size 0x{:x}", emu_dev.ipa, emu_dev.size, address, size);
+            panic!("emu_register_dev: duplicated emul address region: prev address {:#x} size {:#x}, next address {:#x} size {:#x}", emu_dev.ipa, emu_dev.size, address, size);
         }
     }
 
@@ -212,7 +212,7 @@ pub fn emu_remove_dev(vm_id: usize, dev_id: usize, address: usize, size: usize) 
         }
     }
     panic!(
-        "emu_remove_dev: emu dev not exist address 0x{:x} size 0x{:x}",
+        "emu_remove_dev: emu dev not exist address {:#x} size {:#x}",
         address, size
     );
 }

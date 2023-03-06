@@ -79,7 +79,7 @@ fn vmm_remove_emulated_device(vm: &Vm) {
         }
         emu_remove_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length);
         // println!(
-        //     "VM[{}] removes emulated device: id=<{}>, name=\"{}\", ipa=<0x{:x}>",
+        //     "VM[{}] removes emulated device: id=<{}>, name=\"{}\", ipa=<{:#x}>",
         //     vm.id(),
         //     idx,
         //     emu_dev.emu_type,
