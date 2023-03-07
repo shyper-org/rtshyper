@@ -1,18 +1,14 @@
 #![no_std]
 #![no_main]
-#![feature(default_alloc_error_handler)]
 #![feature(alloc_error_handler)]
 #![feature(const_btree_new)]
 #![feature(drain_filter)]
 #![feature(inline_const)]
 #![allow(unused_doc_comments)]
-#![allow(special_module_name)]
 
 #[macro_use]
 extern crate alloc;
-extern crate fdt;
 #[macro_use]
-// extern crate lazy_static;
 extern crate log;
 #[macro_use]
 extern crate static_assertions;
@@ -22,7 +18,7 @@ use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
 use mm::heap_init;
 use vmm::{vm_init, vmm_boot_vm};
 
-use crate::kernel::{cpu_sched_init, hvc_init, iommu_init};
+use crate::kernel::{hvc_init, iommu_init};
 
 #[macro_use]
 mod macros;
@@ -37,10 +33,10 @@ mod device;
 mod driver;
 #[allow(dead_code)]
 mod kernel;
-#[allow(dead_code)]
-mod lib;
 mod mm;
 mod panic;
+#[allow(dead_code)]
+mod util;
 mod vmm;
 
 #[no_mangle]
@@ -65,11 +61,10 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) -> ! {
     cpu_init();
     interrupt_init();
     timer_init();
-    cpu_sched_init();
     if cpu_id == 0 {
         mediated_dev_init();
     }
-    crate::lib::barrier();
+    crate::util::barrier();
     if cpu_id != 0 {
         crate::kernel::cpu_idle();
     }

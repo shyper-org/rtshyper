@@ -2,7 +2,7 @@ use core::alloc::{GlobalAlloc, Layout};
 
 use crate::arch::PAGE_SIZE;
 use crate::kernel::AllocError;
-use crate::lib::{memset_safe, trace};
+use crate::util::{memset_safe, trace};
 
 use super::HEAP_ALLOCATOR;
 

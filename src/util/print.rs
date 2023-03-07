@@ -2,7 +2,7 @@ use core::fmt::{Arguments, Write};
 
 use spin::Mutex;
 
-pub struct Writer;
+struct Writer;
 
 static WRITER: Mutex<Writer> = Mutex::new(Writer);
 

@@ -6,13 +6,6 @@ pub use self::sched_rr::SchedulerRR;
 
 use crate::kernel::Vcpu;
 
-// Must Implement SchedulerTrait for inner struct(the real scheduler object)
-pub enum SchedType {
-    SchedRR(SchedulerRR),
-    // SchedRT(SchedulerRT),
-    None,
-}
-
 pub trait Scheduler {
     fn init(&mut self);
     /* pick the next vcpu object */

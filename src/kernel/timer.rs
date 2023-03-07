@@ -1,6 +1,6 @@
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
 // use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{current_cpu, InterruptHandler, Scheduler};
+use crate::kernel::{current_cpu, InterruptHandler};
 
 // #[derive(Copy, Clone)]
 // struct Timer(bool);
@@ -22,7 +22,7 @@ pub fn timer_init() {
     crate::arch::timer_arch_init();
     timer_enable(false);
 
-    crate::lib::barrier();
+    crate::util::barrier();
     if current_cpu().id == 0 {
         crate::kernel::interrupt_reserve_int(
             INTERRUPT_IRQ_HYPERVISOR_TIMER,

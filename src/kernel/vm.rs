@@ -19,7 +19,7 @@ use crate::kernel::{
     EmuDevData, get_share_mem, mem_pages_alloc, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND, VMData,
     mem_vm_color_region_free,
 };
-use crate::lib::*;
+use crate::util::*;
 use crate::mm::PageFrame;
 
 use super::ColorMemRegion;
@@ -242,23 +242,6 @@ impl VmInterface {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct VmPa {
-    pub pa_start: usize,
-    pub pa_length: usize,
-    pub offset: isize,
-}
-
-impl VmPa {
-    pub fn default() -> VmPa {
-        VmPa {
-            pa_start: 0,
-            pa_length: 0,
-            offset: 0,
-        }
-    }
-}
-
 /* HCR_EL2 init value
  *  - VM
  *  - RW
@@ -334,24 +317,12 @@ impl Vm {
 
     pub fn med_blk_id(&self) -> usize {
         let vm_inner = self.inner.lock();
-        // match self.config().mediated_block_index() {
-        //     None => {
-        //         panic!("vm {} do not have mediated blk", vm_inner.id);
-        //     }
-        //     Some(idx) => idx,
-        // }
         match vm_inner.config.as_ref().unwrap().mediated_block_index() {
             None => {
                 panic!("vm {} do not have mediated blk", vm_inner.id);
             }
             Some(idx) => idx,
         }
-        // match vm_inner.med_blk_id {
-        //     None => {
-        //         panic!("vm {} do not have mediated blk", vm_inner.id);
-        //     }
-        //     Some(idx) => idx,
-        // }
     }
 
     pub fn vcpu(&self, index: usize) -> Option<Vcpu> {

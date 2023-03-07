@@ -8,7 +8,7 @@ use crate::kernel::{
     IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, VM_LIST,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
-use crate::lib::trace;
+use crate::util::trace;
 use shyper::MediatedBlkContent;
 
 pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());

@@ -1,7 +1,7 @@
 use crate::arch::{PAGE_SIZE, PTE_S1_NORMAL};
 use crate::kernel::{vm, current_cpu, IpiVmmMsg, vm_ipa2hva, Vm, IpiInnerMsg, ipi_send_msg, IpiType};
 use crate::board::PLAT_DESC;
-use crate::lib::barrier;
+use crate::util::barrier;
 
 use super::VmmEvent;
 

@@ -3,7 +3,7 @@ use crate::config::vm_cfg_remove_vm_entry;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_async_used_info, remove_vm,
-    remove_vm_async_task, Vm, Scheduler, cpu_idle, vm,
+    remove_vm_async_task, Vm, cpu_idle, vm,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
@@ -36,7 +36,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vm_cfg_remove_vm_entry(vm_id);
     // remove vm unilib
     remove_vm(vm_id);
-    crate::lib::unilib::unilib_fs_remove(vm_id);
+    crate::util::unilib::unilib_fs_remove(vm_id);
     info!("remove vm[{}] successfully", vm_id);
 }
 

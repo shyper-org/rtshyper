@@ -10,12 +10,12 @@ use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
     active_vm, active_vm_id, current_cpu, DIRTY_MEM_THRESHOLD, interrupt_vm_inject, ipi_register, ipi_send_msg,
     IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType, ivc_update_mq, map_migrate_vm_mem, migrate_finish_ipi_handler,
-    migrate_ready, Scheduler, send_migrate_memcpy_msg, unmap_migrate_vm_mem, vcpu_idle, vm, vm_if_copy_mem_map,
+    migrate_ready, send_migrate_memcpy_msg, unmap_migrate_vm_mem, vcpu_idle, vm, vm_if_copy_mem_map,
     vm_if_dirty_mem_map, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_mem_map_dirty_sum,
     vm_if_mem_map_page_num, vm_if_set_ivc_arg_ptr, VMData,
 };
-use crate::lib::{func_barrier, memcpy_safe, round_up, set_barrier_num, trace};
-use crate::lib::unilib::*;
+use crate::util::{func_barrier, memcpy_safe, round_up, set_barrier_num, trace};
+use crate::util::unilib::*;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_migrate_boot, vmm_reboot_vm, vmm_remove_vm};
 
 use shyper::VM_NUM_MAX;

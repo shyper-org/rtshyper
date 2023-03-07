@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use spin::once::Once;
 
 use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE, TlbInvalidate};
@@ -6,10 +7,10 @@ use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 // use core::ops::{Deref, DerefMut};
 use crate::arch::{cpu_interrupt_unmask, PageTable};
-use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{SchedType, Vcpu, VcpuArray, VcpuState, Vm, Scheduler, mem_page_alloc};
-use crate::lib::trace;
-use crate::lib::memcpy_safe;
+use crate::board::{PLATFORM_CPU_NUM_MAX, SchedRule, PLAT_DESC};
+use crate::kernel::{Vcpu, VcpuArray, VcpuState, Vm, Scheduler, mem_page_alloc, SchedulerRR};
+use crate::util::trace;
+use crate::util::memcpy_safe;
 
 pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
@@ -39,11 +40,11 @@ pub struct Cpu {
     pub active_vcpu: Option<Vcpu>,
     pub ctx: Option<usize>,
 
-    pub sched: SchedType,
+    sched: Once<Box<dyn Scheduler>>,
     pub vcpu_array: VcpuArray,
     pub current_irq: usize,
     pub cpu_pt: CpuPt,
-    pub stack: [u8; CPU_STACK_SIZE],
+    stack: [u8; CPU_STACK_SIZE],
     global_pt: Once<PageTable>,
 }
 
@@ -54,7 +55,7 @@ impl Cpu {
             cpu_state: CpuState::Inv,
             active_vcpu: None,
             ctx: None,
-            sched: SchedType::None,
+            sched: Once::new(),
             vcpu_array: VcpuArray::new(),
             current_irq: 0,
             cpu_pt: CpuPt {
@@ -171,10 +172,10 @@ impl Cpu {
         crate::arch::Arch::install_vm_page_table(next_vcpu.vm_pt_dir(), next_vcpu.vm_id());
     }
 
-    pub fn scheduler(&mut self) -> &mut impl Scheduler {
-        match &mut self.sched {
-            SchedType::None => panic!("scheduler is None"),
-            SchedType::SchedRR(rr) => rr,
+    pub fn scheduler(&mut self) -> &mut dyn Scheduler {
+        match self.sched.get_mut() {
+            Some(scheduler) => scheduler.as_mut(),
+            None => panic!("scheduler is None"),
         }
     }
 
@@ -189,22 +190,7 @@ impl Cpu {
 
 #[no_mangle]
 #[link_section = ".cpu_private"]
-pub static mut CPU: Cpu = Cpu {
-    id: 0,
-    cpu_state: CpuState::Inv,
-    active_vcpu: None,
-    ctx: None,
-    vcpu_array: VcpuArray::new(),
-    sched: SchedType::None,
-    current_irq: 0,
-    cpu_pt: CpuPt {
-        lvl1: [0; PTE_PER_PAGE],
-        lvl2: [0; PTE_PER_PAGE],
-        lvl3: [0; PTE_PER_PAGE],
-    },
-    stack: [0; CPU_STACK_SIZE],
-    global_pt: Once::new(),
-};
+pub static mut CPU: Cpu = Cpu::default();
 
 pub fn current_cpu() -> &'static mut Cpu {
     unsafe { &mut CPU }
@@ -250,6 +236,19 @@ fn cpu_init_global_pt() {
     cpu.global_pt.call_once(|| pt);
 }
 
+// Todo: add config for base slice
+fn cpu_sched_init() {
+    match PLAT_DESC.cpu_desc.sched_list[current_cpu().id] {
+        SchedRule::RoundRobin => {
+            info!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
+            current_cpu().sched.call_once(|| Box::new(SchedulerRR::new(1)));
+        }
+        _ => {
+            todo!();
+        }
+    }
+}
+
 pub fn cpu_init() {
     let cpu_id = current_cpu().id;
     if cpu_id == 0 {
@@ -260,16 +259,14 @@ pub fn cpu_init() {
     }
     // crate::arch::Arch::disable_prefetch();
     cpu_init_global_pt();
-    let state = CpuState::Idle;
-    current_cpu().cpu_state = state;
+    cpu_sched_init();
+    current_cpu().cpu_state = CpuState::Idle;
     let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;
     let size = core::mem::size_of::<ContextFrame>();
     current_cpu().set_ctx((sp - size) as *mut _);
     println!("Core {} init ok", cpu_id);
 
-    crate::lib::barrier();
-    // println!("after barrier cpu init");
-    use crate::board::PLAT_DESC;
+    crate::util::barrier();
     if cpu_id == 0 {
         println!("Bring up {} cores", PLAT_DESC.cpu_desc.num);
         println!("Cpu init ok");
@@ -277,8 +274,7 @@ pub fn cpu_init() {
 }
 
 pub fn cpu_idle() -> ! {
-    let state = CpuState::Idle;
-    current_cpu().cpu_state = state;
+    current_cpu().cpu_state = CpuState::Idle;
     cpu_interrupt_unmask();
     loop {
         crate::arch::Arch::wait_for_interrupt();

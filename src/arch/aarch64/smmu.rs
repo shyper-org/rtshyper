@@ -13,7 +13,7 @@ use crate::device::EmuContext;
 use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::Vm;
 use crate::kernel::{active_vm, active_vm_id, current_cpu};
-use crate::lib::{bit_extract, FlexBitmap};
+use crate::util::{bit_extract, FlexBitmap};
 
 pub struct SmmuDesc {
     pub base: usize,

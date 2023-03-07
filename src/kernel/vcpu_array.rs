@@ -1,6 +1,5 @@
 use alloc::slice::{Iter, IterMut};
-use crate::board::{PLAT_DESC, SchedRule};
-use crate::kernel::{current_cpu, SchedType, SchedulerRR, Vcpu, interrupt_cpu_enable, CONFIG_VM_NUM_MAX};
+use crate::kernel::{current_cpu, Vcpu, interrupt_cpu_enable, CONFIG_VM_NUM_MAX};
 
 pub struct VcpuArray {
     array: [Option<Vcpu>; CONFIG_VM_NUM_MAX],
@@ -78,19 +77,6 @@ impl VcpuArray {
 
     pub fn iter_mut(&mut self) -> IterMut<'_, Option<Vcpu>> {
         self.array.iter_mut()
-    }
-}
-
-// Todo: add config for base slice
-pub fn cpu_sched_init() {
-    match PLAT_DESC.cpu_desc.sched_list[current_cpu().id] {
-        SchedRule::RoundRobin => {
-            info!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
-            current_cpu().sched = SchedType::SchedRR(SchedulerRR::new(1));
-        }
-        _ => {
-            todo!();
-        }
     }
 }
 

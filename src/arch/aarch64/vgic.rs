@@ -15,7 +15,7 @@ use crate::kernel::{
 use crate::kernel::{active_vm, active_vm_id, active_vm_ncpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType};
 use crate::kernel::{InitcEvent, Vcpu, Vm, vm};
-use crate::lib::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
+use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
 
 use super::gic::*;
 

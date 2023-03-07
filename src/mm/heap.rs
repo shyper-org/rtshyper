@@ -2,7 +2,7 @@ use buddy_system_allocator::LockedHeap;
 
 // rCore buddy system allocator
 use crate::arch::PAGE_SIZE;
-use crate::lib::{memset_safe, round_up, round_down};
+use crate::util::{memset_safe, round_up, round_down};
 use crate::board::PLAT_DESC;
 
 #[global_allocator]

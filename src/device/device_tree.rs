@@ -77,7 +77,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
     #[cfg(feature = "pi4")]
     unsafe {
         use fdt::*;
-        use crate::lib::round_up;
+        use crate::util::round_up;
         use crate::arch::PAGE_SIZE;
         let pi_fdt = PI4_DTB_ADDR as *mut fdt::myctypes::c_void;
         let len = round_up(fdt_size(pi_fdt) as usize, PAGE_SIZE) + PAGE_SIZE;

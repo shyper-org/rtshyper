@@ -10,7 +10,7 @@ use crate::device::VirtioIov;
 use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map_bit, vm_ipa2hva};
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::lib::{round_down, trace};
+use crate::util::{round_down, trace};
 
 pub const VIRTQUEUE_CONSOLE_MAX_SIZE: usize = 64;
 

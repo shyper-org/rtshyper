@@ -3,7 +3,7 @@ use core::slice;
 
 use super::Vm;
 use crate::arch::PAGE_SIZE;
-use crate::lib::{round_down, memcpy_safe};
+use crate::util::{round_down, memcpy_safe};
 
 pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
     let bin = unsafe { slice::from_raw_parts(bin.as_ptr() as *const u8, bin.len() * size_of::<T>()) };

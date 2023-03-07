@@ -26,9 +26,11 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tsrc/linkers/{}", linker_ld);
 
     // compile the startup file into a static library
+    let start_file = format!("src/arch/{}/start.S", arch);
+    println!("cargo:rerun-if-changed={}", start_file);
     cc::Build::new()
         .compiler("aarch64-none-elf-gcc")
-        .file(format!("src/arch/{}/start.S", arch))
+        .file(start_file)
         .define(&format!("PLATFORM_{}", platform.to_uppercase()), None)
         .compile("start");
 

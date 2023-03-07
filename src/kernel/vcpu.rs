@@ -10,7 +10,7 @@ use crate::arch::{
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id};
-use crate::lib::memcpy_safe;
+use crate::util::memcpy_safe;
 
 use super::{CpuState, Vm, VmType, WeakVm};
 

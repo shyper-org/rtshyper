@@ -10,7 +10,7 @@ use crate::config::vm_cfg_entry;
 use crate::config::vm_type;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
-    vm_ipa2hva, Scheduler, Vcpu,
+    vm_ipa2hva, Vcpu,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -19,8 +19,8 @@ use crate::kernel::HVC_CONFIG;
 use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
-use crate::lib::sleep;
-use crate::lib::bit_extract;
+use crate::util::sleep;
+use crate::util::bit_extract;
 use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
 use shyper::VM_NUM_MAX;

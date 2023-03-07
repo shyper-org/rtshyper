@@ -1,5 +1,5 @@
 use crate::arch::{gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, Scheduler, timer_enable, Vcpu, VcpuState, Vm};
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vcpu, VcpuState, Vm};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;

@@ -16,7 +16,7 @@ use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::lib::{round_down, trace};
+use crate::util::{round_down, trace};
 
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 

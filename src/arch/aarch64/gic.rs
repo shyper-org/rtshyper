@@ -9,7 +9,7 @@ use crate::arch::DEVICE_BASE;
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::current_cpu;
 use crate::kernel::INTERRUPT_NUM_MAX;
-use crate::lib::{bit_extract, trace};
+use crate::util::{bit_extract, trace};
 
 // GICD BITS
 const GICD_CTLR_EN_BIT: usize = 0x1;

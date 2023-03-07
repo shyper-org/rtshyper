@@ -9,7 +9,7 @@ use spin::Mutex;
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm, Vm, vm_ipa2hva, VmType, CONFIG_VM_NUM_MAX};
-use crate::lib::{BitAlloc, BitAlloc16};
+use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
 use crate::kernel::access::{copy_segment_to_vm, copy_segment_from_vm};
 

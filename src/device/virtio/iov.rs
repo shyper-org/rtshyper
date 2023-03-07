@@ -4,7 +4,7 @@ use core::slice::from_raw_parts;
 
 use spin::Mutex;
 
-use crate::lib::{memcpy_safe, trace};
+use crate::util::{memcpy_safe, trace};
 
 #[derive(Clone)]
 pub struct VirtioIov {

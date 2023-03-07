@@ -6,7 +6,7 @@ use spin::Mutex;
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
 use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2hva};
-use crate::lib::trace;
+use crate::util::trace;
 
 pub const VIRTQ_READY: usize = 1;
 pub const VIRTQ_DESC_F_NEXT: u16 = 1;

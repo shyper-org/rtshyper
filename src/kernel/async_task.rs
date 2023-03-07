@@ -9,7 +9,7 @@ use crate::device::{
     VirtioMmio, Virtq,
 };
 use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
-use crate::lib::{memcpy_safe, sleep, trace};
+use crate::util::{memcpy_safe, sleep, trace};
 
 // use core::future::Future;
 // use core::pin::Pin;
