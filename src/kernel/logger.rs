@@ -3,6 +3,23 @@ use log::{LevelFilter, SetLoggerError};
 
 struct SimpleLogger;
 
+fn level2color(level: Level) -> u8 {
+    match level {
+        Level::Error => 31, // 31 Red
+        Level::Warn => 93,  // 93 BrightYellow
+        _ => 0,
+        // Level::Info => 34,   // 34 Blue
+        // Level::Debug => 32,  // 32 Green
+        // Level::Trace => 90,  // 90 BrightBlack
+    }
+}
+
+macro_rules! with_color {
+    ($color: expr, $($arg:tt)*) => {
+        format_args!("\u{1B}[{}m{}\u{1B}[0m", $color as u8, format_args!($($arg)*))
+    };
+}
+
 impl log::Log for SimpleLogger {
     fn enabled(&self, _metadata: &Metadata) -> bool {
         true
@@ -22,7 +39,16 @@ impl log::Log for SimpleLogger {
                 Level::Debug => "[D]",
                 Level::Trace => "[T]",
             };
-            println!("{}[{}] {}", level, record.target(), record.args());
+            println!(
+                "{}",
+                with_color!(
+                    level2color(record.level()),
+                    "{}[{}] {}",
+                    level,
+                    record.target(),
+                    record.args()
+                )
+            );
         }
     }
 
