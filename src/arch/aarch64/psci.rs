@@ -1,29 +1,30 @@
 use crate::arch::{gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vcpu, VcpuState, Vm};
+use crate::board::PlatOperation;
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vcpu, VcpuState, Vm, active_vm_id};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
-use crate::vmm::vmm_reboot;
+use crate::vmm::{vmm_reboot, vmm_remove_vm};
 
 use super::smc::smc_call;
 
-pub const PSCI_VERSION: usize = 0x84000000;
-pub const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
-pub const PSCI_FEATURES: usize = 0x8400000A;
-// pub const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
-// pub const PSCI_CPU_OFF: usize = 0xc4000002;
-pub const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
-pub const PSCI_AFFINITY_INFO_AARCH64: usize = 0xc4000004;
-pub const PSCI_SYSTEM_OFF: usize = 0x84000008;
-pub const PSCI_SYSTEM_RESET: usize = 0x84000009;
+const PSCI_VERSION: usize = 0x84000000;
+const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
+const PSCI_FEATURES: usize = 0x8400000A;
+// const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
+// const PSCI_CPU_OFF: usize = 0xc4000002;
+const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
+const PSCI_AFFINITY_INFO_AARCH64: usize = 0xc4000004;
+const PSCI_SYSTEM_OFF: usize = 0x84000008;
+const PSCI_SYSTEM_RESET: usize = 0x84000009;
 
-pub const PSCI_E_SUCCESS: usize = 0;
-pub const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
+const PSCI_E_SUCCESS: usize = 0;
+const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
 
 #[cfg(feature = "tx2")]
 const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
 
-pub const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
+const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
 pub fn power_arch_init() {
     use crate::kernel::ipi_register;
@@ -71,34 +72,36 @@ fn psci_guest_sys_reset() {
     vmm_reboot();
 }
 
+fn psci_guest_sys_off() {
+    if active_vm_id() == 0 {
+        crate::board::Platform::sys_shutdown();
+    } else {
+        vmm_remove_vm(active_vm_id());
+    }
+}
+
 #[inline(never)]
 pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     debug!(
         "smc_guest_handler: fid {:#x}, x1 {:#x}, x2 {:#x}, x3 {:#x}",
         fid, x1, x2, x3
     );
-    let r;
-    match fid {
-        PSCI_VERSION => {
-            r = smc_call(PSCI_VERSION, 0, 0, 0).0;
-        }
-        PSCI_MIG_INFO_TYPE => {
-            r = PSCI_TOS_NOT_PRESENT_MP;
-        }
-        PSCI_CPU_ON_AARCH64 => {
-            r = psci_guest_cpu_on(x1, x2, x3);
-        }
-        PSCI_AFFINITY_INFO_AARCH64 => {
-            r = 0;
-        }
+    let r = match fid {
+        PSCI_VERSION => smc_call(PSCI_VERSION, 0, 0, 0).0,
+        PSCI_MIG_INFO_TYPE => PSCI_TOS_NOT_PRESENT_MP,
+        PSCI_CPU_ON_AARCH64 => psci_guest_cpu_on(x1, x2, x3),
+        PSCI_AFFINITY_INFO_AARCH64 => 0,
         PSCI_SYSTEM_RESET => {
             psci_guest_sys_reset();
-            r = 0;
+            0
+        }
+        PSCI_SYSTEM_OFF => {
+            psci_guest_sys_off();
+            0
         }
         #[cfg(feature = "tx2")]
         TEGRA_SIP_GET_ACTMON_CLK_COUNTERS => {
             let result = smc_call(fid, x1, x2, x3);
-            r = result.0;
             // println!("x1 {:#x}, x2 {:#x}, x3 {:#x}", x1, x2, x3);
             // println!(
             //     "result.0 {:#x}, result.1 {:#x}, result.2 {:#x}",
@@ -106,24 +109,19 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             // );
             current_cpu().set_gpr(1, result.1);
             current_cpu().set_gpr(2, result.2);
+            result.0
         }
         PSCI_FEATURES => match x1 {
-            PSCI_VERSION | PSCI_CPU_ON_AARCH64 | PSCI_FEATURES => {
-                r = PSCI_E_SUCCESS;
-            }
-            _ => {
-                r = PSCI_E_NOT_SUPPORTED;
-            }
+            PSCI_VERSION | PSCI_CPU_ON_AARCH64 | PSCI_FEATURES => PSCI_E_SUCCESS,
+            _ => PSCI_E_NOT_SUPPORTED,
         },
         _ => {
             // unimplemented!();
             return false;
         }
-    }
+    };
 
-    let idx = 0;
-    let val = r;
-    current_cpu().set_gpr(idx, val);
+    current_cpu().set_gpr(0, r);
 
     true
 }
@@ -202,7 +200,7 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
     }
 }
 
-pub fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
+fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let vcpu_id = mpidr & 0xff;
     let vm = active_vm().unwrap();
     let physical_linear_id = vm.vcpuid_to_pcpuid(vcpu_id);

@@ -86,16 +86,14 @@ pub trait PlatOperation {
     }
 
     fn power_on_secondary_cores() {
-        extern "C" {
-            fn _image_start();
-        }
         use super::PLAT_DESC;
+        use crate::mm::_image_start;
         for i in 1..PLAT_DESC.cpu_desc.num {
             Self::cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], _image_start as usize, 0);
         }
     }
 
-    fn sys_reboot() {
+    fn sys_reboot() -> ! {
         println!("Hypervisor reset...");
         crate::arch::power_arch_sys_reset();
         loop {
@@ -103,7 +101,7 @@ pub trait PlatOperation {
         }
     }
 
-    fn sys_shutdown() {
+    fn sys_shutdown() -> ! {
         println!("Hypervisor shutdown...");
         crate::arch::power_arch_sys_shutdown();
         loop {
