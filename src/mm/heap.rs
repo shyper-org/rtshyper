@@ -1,47 +1,32 @@
+use core::ops::Range;
 use buddy_system_allocator::LockedHeap;
-
-// rCore buddy system allocator
-use crate::arch::PAGE_SIZE;
-use crate::util::{memset_safe, round_up, round_down};
-use crate::board::PLAT_DESC;
 
 #[global_allocator]
 pub static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::empty();
 
 pub fn heap_init() {
+    #[repr(align(4096))]
+    struct HeapRegion([u8; HEAP_SIZE]);
+    const HEAP_SIZE: usize = (1 << 20) * 40;
+    static mut HEAP_REGION: HeapRegion = HeapRegion([0; HEAP_SIZE]);
+
     println!("init buddy system");
-    extern "C" {
-        // Note: link-time label, see aarch64.lds
-        fn _image_end();
-    }
-
-    if PLAT_DESC.mem_desc.region_num == 0 {
-        println!("Platform has no memory region!");
-    }
-
-    let base = round_up(_image_end as usize, PAGE_SIZE);
-    let size = round_down(
-        PLAT_DESC.mem_desc.regions[0].size as usize - (base - PLAT_DESC.mem_desc.base as usize),
-        PAGE_SIZE,
-    );
-
-    println!("init memory, please waiting...");
-    memset_safe(base as *mut u8, 0, size);
-
-    println!(
-        "Memory Heap: base {:#x}, size {} MB / {} pages",
-        base,
-        size >> 20,
-        size / PAGE_SIZE
-    );
-    println!("Memory Heap init ok");
     unsafe {
-        HEAP_ALLOCATOR.lock().init(base, size);
+        HEAP_ALLOCATOR.lock().init(HEAP_REGION.0.as_ptr() as usize, HEAP_SIZE);
+    }
+}
+
+// make sure that the va ranges has corresponding physical pages
+pub fn heap_expansion(va_regions: &[Range<usize>]) {
+    for region in va_regions {
+        info!("heap_expansion: {:?}", region);
+        unsafe {
+            HEAP_ALLOCATOR.lock().add_to_heap(region.start, region.end);
+        }
     }
 }
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
-    println!("Heap allocation error, layout = {:?}", layout);
-    panic!("alloc_error_handler: heap Out Of Memory");
+    panic!("Out Of Memory: Heap allocation error, layout = {:?}", layout);
 }

@@ -32,6 +32,11 @@ cortex-a = "7.4.0"
 buddy_system_allocator = "0.9.0"
 static_assertions = "1.1.0"
 
+[dependencies.memoffset]
+version = "0.8"
+default-features = false
+features = ["unstable_const"]
+
 [dependencies.tock-registers]
 version = "0.7.0"
 default-features = false

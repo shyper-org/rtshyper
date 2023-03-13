@@ -16,8 +16,7 @@ pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
 pub const CONTEXT_GPR_NUM: usize = 31;
 
-#[repr(C)]
-#[repr(align(4096))]
+#[repr(C, align(4096))]
 #[derive(Copy, Clone, Debug)]
 pub struct CpuPt {
     pub lvl1: [usize; PTE_PER_PAGE],
@@ -32,8 +31,7 @@ pub enum CpuState {
     Run = 2,
 }
 
-#[repr(C)]
-#[repr(align(4096))]
+#[repr(C, align(4096))]
 pub struct Cpu {
     pub id: usize,
     pub cpu_state: CpuState,
@@ -47,6 +45,9 @@ pub struct Cpu {
     stack: [u8; CPU_STACK_SIZE],
     global_pt: Once<PageTable>,
 }
+
+// see start.S
+const_assert_eq!(offset_of!(Cpu, stack), 0x4000);
 
 impl Cpu {
     const fn default() -> Cpu {

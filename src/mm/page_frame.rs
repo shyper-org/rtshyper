@@ -6,6 +6,7 @@ use crate::util::{memset_safe, trace};
 
 use super::HEAP_ALLOCATOR;
 
+// TODO: wrap pa with NonNull<u8>
 #[derive(Debug)]
 pub struct PageFrame {
     pub pa: usize,
@@ -20,9 +21,15 @@ impl PageFrame {
     }
 
     pub fn alloc_pages(page_num: usize) -> Result<Self, AllocError> {
+        if page_num == 0 {
+            return Err(AllocError::AllocZeroPage);
+        }
         match Layout::from_size_align(page_num * PAGE_SIZE, PAGE_SIZE) {
             Ok(layout) => {
                 let pa = unsafe { HEAP_ALLOCATOR.alloc(layout) };
+                if pa.is_null() {
+                    panic!("OOM: alloc_pages: get null ptr, layout = {:?}", layout);
+                }
                 memset_safe(pa, 0, PAGE_SIZE);
                 let pa = pa as usize;
                 // println!(">>> alloc page frame {:#x}, {}", pa, page_num);

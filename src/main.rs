@@ -4,6 +4,7 @@
 #![feature(const_btree_new)]
 #![feature(drain_filter)]
 #![feature(inline_const)]
+#![feature(const_refs_to_cell)]
 #![allow(unused_doc_comments)]
 
 #[macro_use]
@@ -12,6 +13,8 @@ extern crate alloc;
 extern crate log;
 #[macro_use]
 extern crate static_assertions;
+#[macro_use]
+extern crate memoffset;
 
 use device::{init_vm0_dtb, mediated_dev_init};
 use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
@@ -65,6 +68,7 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) -> ! {
         mediated_dev_init();
     }
     crate::util::barrier();
+    crate::kernel::hypervisor_self_coloring();
     if cpu_id != 0 {
         crate::kernel::cpu_idle();
     }
