@@ -71,7 +71,7 @@ pub fn vmm_map_ipa_percore(vm_id: usize) {
             let hva = vm_ipa2hva(&vm, ipa);
             let pa = vm.ipa2pa(ipa).unwrap();
             current_cpu()
-                .global_pt()
+                .pt()
                 .pt_map_range(hva, PAGE_SIZE, pa, PTE_S1_NORMAL, false);
         }
     }
@@ -94,7 +94,7 @@ pub fn vmm_unmap_ipa_percore(vm_id: usize) {
     for region in config.memory_region().iter() {
         for ipa in region.as_range().step_by(PAGE_SIZE) {
             let hva = vm_ipa2hva(&vm, ipa);
-            current_cpu().global_pt().pt_unmap_range(hva, PAGE_SIZE, false);
+            current_cpu().pt().pt_unmap_range(hva, PAGE_SIZE, false);
         }
     }
     barrier();

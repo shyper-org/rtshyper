@@ -3,6 +3,7 @@ use core::slice;
 
 use super::Vm;
 use crate::arch::PAGE_SIZE;
+use crate::kernel::vm_ipa2hva;
 use crate::util::{round_down, memcpy_safe};
 
 pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
@@ -15,9 +16,9 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
             PAGE_SIZE,
             bin.len()
         );
-        let pa = vm.ipa2pa(load_ipa).unwrap() as *mut u8;
+        let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
         let size = usize::min(bin.len(), PAGE_SIZE - offset);
-        memcpy_safe(pa as *mut _, bin[0..].as_ptr() as *const _, size);
+        memcpy_safe(hva as *mut _, bin[0..].as_ptr() as *const _, size);
         // let dst = unsafe { slice::from_raw_parts_mut(pa, size) };
         // dst.copy_from_slice(&bin[0..size]);
         size
@@ -25,9 +26,9 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
         0
     };
     for i in (start..bin.len()).step_by(PAGE_SIZE) {
-        let pa = vm.ipa2pa(load_ipa + i).unwrap() as *mut u8;
+        let hva = vm_ipa2hva(vm, load_ipa + i) as *mut u8;
         let size = usize::min(bin.len() - i, PAGE_SIZE);
-        memcpy_safe(pa as *mut _, bin[i..].as_ptr() as *const _, size);
+        memcpy_safe(hva as *mut _, bin[i..].as_ptr() as *const _, size);
         // let dst = unsafe { slice::from_raw_parts_mut(pa, size) };
         // dst.copy_from_slice(&bin[i..i + size]);
     }
@@ -43,9 +44,9 @@ pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
             PAGE_SIZE,
             bin.len()
         );
-        let pa = vm.ipa2pa(load_ipa).unwrap() as *mut u8;
+        let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
         let size = usize::min(bin.len(), PAGE_SIZE - offset);
-        memcpy_safe(bin[0..].as_ptr() as *mut _, pa as *const _, size);
+        memcpy_safe(bin[0..].as_ptr() as *mut _, hva as *const _, size);
         // let src = unsafe { slice::from_raw_parts(pa, size) };
         // bin[0..size].clone_from_slice(src);
         size
@@ -53,9 +54,9 @@ pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
         0
     };
     for i in (start..bin.len()).step_by(PAGE_SIZE) {
-        let pa = vm.ipa2pa(load_ipa + i).unwrap() as *mut u8;
+        let hva = vm_ipa2hva(vm, load_ipa + i) as *mut u8;
         let size = usize::min(bin.len() - i, PAGE_SIZE);
-        memcpy_safe(bin[i..].as_ptr() as *mut _, pa as *const _, size);
+        memcpy_safe(bin[i..].as_ptr() as *mut _, hva as *const _, size);
         // let src = unsafe { slice::from_raw_parts(pa, size) };
         // bin[i..i + size].clone_from_slice(src);
     }

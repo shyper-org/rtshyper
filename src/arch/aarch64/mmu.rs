@@ -4,6 +4,8 @@ use tock_registers::interfaces::*;
 use crate::arch::{pt_lvl1_idx, pt_lvl2_idx};
 use crate::arch::{LVL1_SHIFT, LVL2_SHIFT};
 use crate::board::PLAT_DESC;
+use crate::mm::_image_end;
+use crate::util::round_up;
 
 use super::interface::*;
 
@@ -97,12 +99,19 @@ pub struct PageTables {
 // #[link_section = ".text.boot"]
 pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl2_base = lvl2_pt as *const _ as usize;
+    let image_end_align_gb = round_up(_image_end as usize, 1 << LVL1_SHIFT);
 
     if cfg!(feature = "tx2") {
+        // Name                         Address Range
+        // Always DRAM (2G – 16G)       0x0_8000_0000 – 0x3_FFFF_FFFF
+        // Reclaimable PCIe (1G – 2G)   0x0_4000_0000 – 0x7FFF_FFFF
+        // Always SysRAM (0.75G – 1.0G) 0x0_3000_0000 – 0x0_3FFF_FFFF
+        // RESERVED (0.5G – 0.75G)      0x0_2000_0000 – 0x0_2FFF_FFFF
+        // Always MMIO (0.0G – 0.5G)    0x0_0000_0000 – 0x1FFF_FFFF
         const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
         for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let output_addr = i << LVL1_SHIFT;
-            lvl1_pt.lvl1[i] = if output_addr >= PLAT_DESC.mem_desc.base {
+            lvl1_pt.lvl1[i] = if (PLAT_DESC.mem_desc.base..image_end_align_gb).contains(&output_addr) {
                 BlockDescriptor::new(output_addr, false)
             } else {
                 BlockDescriptor::invalid()
@@ -120,7 +129,6 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
         // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
         // SMMU ~ 0x12000000 - 0x13000000
-        // 0x0_0000_0000 – 0x0_1FFF_FFFF
         lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
         lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
         // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
@@ -129,6 +137,7 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
             lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
         }
     } else if cfg!(feature = "pi4") {
+        // TODO: image_end_align_gb to map va
         // 0x0_0000_0000 ~ 0x0_c000_0000 --> normal memory (3GB)
         let normal_memory_0 = 0x0_0000_0000..0x0_c000_0000;
         for (i, pa) in normal_memory_0.step_by(1 << LVL1_SHIFT).enumerate() {
@@ -160,7 +169,13 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
         const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
         for index in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let pa = index << LVL1_SHIFT;
-            lvl1_pt.lvl1[index] = BlockDescriptor::new(pa, pa < PLAT_DESC.mem_desc.base);
+            lvl1_pt.lvl1[index] = if pa < PLAT_DESC.mem_desc.base {
+                BlockDescriptor::new(pa, true)
+            } else if (PLAT_DESC.mem_desc.base..image_end_align_gb).contains(&pa) {
+                BlockDescriptor::new(pa, false)
+            } else {
+                BlockDescriptor::invalid()
+            };
         }
         lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE)] = BlockDescriptor::table(lvl2_base);
         for (index, pa) in (0..PLAT_DESC.mem_desc.base)

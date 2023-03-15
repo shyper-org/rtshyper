@@ -15,10 +15,11 @@ extern crate log;
 extern crate static_assertions;
 #[macro_use]
 extern crate memoffset;
+#[macro_use]
+extern crate derive_more;
 
 use device::{init_vm0_dtb, mediated_dev_init};
-use kernel::{cpu_init, interrupt_init, mem_init, timer_init};
-use mm::heap_init;
+use kernel::{cpu_init, interrupt_init, physical_mem_init, timer_init};
 use vmm::{vm_init, vmm_boot_vm};
 
 use crate::kernel::{hvc_init, iommu_init};
@@ -54,9 +55,9 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) -> ! {
             crate::driver::gpio_select_function(1, 4);
         }
 
-        heap_init();
         let _ = kernel::logger_init();
-        mem_init();
+        mm::init(); // including heap and hypervisor VA space
+        physical_mem_init();
         init_vm0_dtb(dtb);
         hvc_init();
         iommu_init();

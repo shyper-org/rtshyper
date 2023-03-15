@@ -122,7 +122,8 @@ pub fn mvm_config_init() {
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
-            colors: vec![],
+            colors: vec![], // TODO: add qemu smmu support
+            // colors: HYPERVISOR_COLORS.get().unwrap().clone(),
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList { emu_dev_list: emu_dev_config })),
         vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),

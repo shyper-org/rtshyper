@@ -53,7 +53,7 @@ QEMU_COMMON_OPTIONS = -machine virt,virtualization=on,gic-version=2 \
 	-m 8g -cpu cortex-a57 -smp 4 -display none -global virtio-mmio.force-legacy=false \
 	-kernel ${TARGET_DIR}/${IMAGE}.bin
 
-QEMU_SERIAL_OPTIONS = -serial stdio #\
+QEMU_SERIAL_OPTIONS = -serial mon:stdio #\
 	-serial telnet:localhost:12345,server
 
 QEMU_NETWORK_OPTIONS = -netdev user,id=n0,hostfwd=tcp::5555-:22 -device virtio-net-device,bus=virtio-mmio-bus.24,netdev=n0

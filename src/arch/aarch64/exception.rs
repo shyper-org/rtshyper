@@ -170,7 +170,8 @@ extern "C" fn current_el_sp0_serror() {
 
 #[no_mangle]
 #[inline(never)]
-extern "C" fn current_el_spx_synchronous() {
+extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
+    println!("{}", unsafe { *ctx });
     panic!(
         "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
         current_cpu().id,

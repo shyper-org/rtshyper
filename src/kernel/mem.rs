@@ -1,21 +1,29 @@
+use core::ops::RangeInclusive;
+
 use alloc::vec::Vec;
-use spin::Mutex;
+use spin::{Mutex, Once};
 
-use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PageTable};
+use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PageTable, PTE_S1_NORMAL};
 use crate::board::*;
-use crate::util::memset_safe;
-use crate::mm::PageFrame;
+use crate::kernel::Cpu;
+use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages};
+use crate::util::{memset_safe, round_up, memcpy_safe, barrier};
+use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
 
-pub fn mem_init() {
+use super::{current_cpu, CPU_MASTER};
+
+pub static HYPERVISOR_COLORS: Once<Vec<usize>> = Once::new();
+
+pub fn physical_mem_init() {
     cache_init();
-    mem_vm_region_init_by_colors();
-    println!("Mem init ok");
+    mem_region_init_by_colors();
+    info!("Mem init ok");
 }
 
 #[derive(Debug)]
 pub enum AllocError {
     AllocZeroPage,
-    OutOfFrame,
+    OutOfFrame(usize),
 }
 
 pub fn mem_page_alloc() -> Result<PageFrame, AllocError> {
@@ -65,12 +73,12 @@ impl ColorMemRegion {
     }
 }
 
-static VM_REGION_BY_COLOR: Mutex<Vec<Vec<ColorMemRegion>>> = Mutex::new(Vec::new());
+static MEM_REGION_BY_COLOR: Mutex<Vec<Vec<ColorMemRegion>>> = Mutex::new(Vec::new());
 
-pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result<Vec<ColorMemRegion>, ()> {
+pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<ColorMemRegion>, ()> {
     // hold the lock until return
-    let mut vm_region_by_color = VM_REGION_BY_COLOR.lock();
-    let color_bitmap = color_bitmap & ((1 << vm_region_by_color.len()) - 1);
+    let mut mem_region_by_color = MEM_REGION_BY_COLOR.lock();
+    let color_bitmap = color_bitmap & ((1 << mem_region_by_color.len()) - 1);
     info!("alloc {:#x}B in colors {:#x}", size, color_bitmap);
     let count = color_bitmap.count_ones() as usize;
     if count == 0 {
@@ -84,7 +92,7 @@ pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result
         let mut color2pages = vec![];
         // get the color list, sum free space in these colors
         let mut free_pages = 0;
-        for (color, region_list) in vm_region_by_color.iter().enumerate() {
+        for (color, region_list) in mem_region_by_color.iter().enumerate() {
             if color_bitmap & (1 << color) != 0 {
                 let color_free = region_list
                     .iter()
@@ -132,12 +140,12 @@ pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result
         sort_color_list(&mut color2pages);
         color2pages
     };
-    let mut vm_regions = vec![];
+    let mut vm_regions: Vec<ColorMemRegion> = vec![];
 
     for region in color2pages.iter() {
         let color = region.color;
         let size = region.count;
-        let color_region_list = vm_region_by_color.get_mut(color).unwrap();
+        let color_region_list = mem_region_by_color.get_mut(color).unwrap();
 
         let mut tmp = vec![];
         for exist_region in color_region_list.iter_mut() {
@@ -154,7 +162,6 @@ pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result
                     ));
                     exist_region.count = size;
                 }
-
                 vm_regions.push(exist_region.clone());
                 break;
             }
@@ -165,15 +172,15 @@ pub fn mem_vm_region_alloc_by_colors(size: usize, color_bitmap: usize) -> Result
     Ok(vm_regions)
 }
 
-fn mem_color_region_free(vm_region: &ColorMemRegion) {
+pub fn mem_color_region_free(vm_region: &ColorMemRegion) {
     info!(
         "free {:#x}b from {:#x} in color {:#04x}",
         vm_region.count * PAGE_SIZE,
         vm_region.base,
         vm_region.color,
     );
-    let mut vm_region_by_color = VM_REGION_BY_COLOR.lock();
-    let color_region_list = vm_region_by_color.get_mut(vm_region.color).unwrap();
+    let mut mem_region_by_color = MEM_REGION_BY_COLOR.lock();
+    let color_region_list = mem_region_by_color.get_mut(vm_region.color).unwrap();
     // free mem region
     let mut free_idx = None;
     for (idx, exist_region) in color_region_list.iter_mut().enumerate() {
@@ -207,15 +214,11 @@ fn mem_color_region_free(vm_region: &ColorMemRegion) {
     }
 }
 
-// TODO: get color region freeing information from pagetable or from self-defined structure?
-pub fn mem_vm_color_region_free(vm_regions: &Vec<ColorMemRegion>) {
-    for region in vm_regions.iter() {
-        region.zero();
-        mem_color_region_free(region);
-    }
+fn init_hypervisor_colors(colors: Vec<usize>) {
+    HYPERVISOR_COLORS.call_once(|| colors);
 }
 
-fn mem_vm_region_init_by_colors() {
+fn mem_region_init_by_colors() {
     if PLAT_DESC.mem_desc.region_num - 1 > TOTAL_MEM_REGION_MAX {
         panic!("Platform memory regions overrun!");
     } else if PLAT_DESC.mem_desc.region_num == 0 {
@@ -230,32 +233,49 @@ fn mem_vm_region_init_by_colors() {
     let last_level = cpu_cache_info.min_share_level;
     let num_colors = cpu_cache_info.info_list[last_level - 1].num_colors();
 
+    init_hypervisor_colors((0..(num_colors / 2)).collect());
+
     if num_colors > core::mem::size_of::<usize>() * 8 {
         panic!("Too many colors ({}) in L{}", last_level, num_colors);
     }
 
-    let mut vm_region_by_color = VM_REGION_BY_COLOR.lock();
+    let mut mem_region_by_color = MEM_REGION_BY_COLOR.lock();
     for _ in 0..num_colors {
-        vm_region_by_color.push(Vec::<ColorMemRegion>::new());
+        mem_region_by_color.push(Vec::<ColorMemRegion>::new());
     }
 
     let vm_region_num = PLAT_DESC.mem_desc.region_num;
 
     let step = num_colors * PAGE_SIZE;
-    // region[0] is used for hypervisor memory heap
-    for i in 1..vm_region_num {
-        let plat_mem_region_base = PLAT_DESC.mem_desc.regions[i].base;
-        let plat_mem_region_size = PLAT_DESC.mem_desc.regions[i].size;
+
+    for (i, region) in PLAT_DESC.mem_desc.regions.iter().enumerate().take(vm_region_num) {
+        let (plat_mem_region_base, plat_mem_region_size) = {
+            if (region.base..region.base + region.size).contains(&(_image_end as usize)) {
+                let start = round_up(_image_end as usize, PAGE_SIZE);
+                let size = region.base + region.size - start;
+                (start, size)
+            } else {
+                (region.base, region.size)
+            }
+        };
         if plat_mem_region_size == 0 {
             println!("PLAT_DESC.mem_desc.regions[{}] is empty.", i);
             continue;
         }
+        // NOTE: `plat_mem_region_base` might not align to `step`
+        let color_mask = (num_colors - 1) << PAGE_SHIFT;
+        let base_color = (plat_mem_region_base & color_mask) >> PAGE_SHIFT;
+        info!("region[{i}] {plat_mem_region_base:#x} base color {base_color:#x}");
         for color in 0..num_colors {
-            let base = plat_mem_region_base | (color << PAGE_SHIFT);
-            let count = plat_mem_region_size / step;
+            let base = if color >= base_color {
+                plat_mem_region_base & (!color_mask)
+            } else {
+                round_up(plat_mem_region_base, step)
+            } | (color << PAGE_SHIFT);
+            let count = (plat_mem_region_size - (base - plat_mem_region_base) + step - 1) / step;
             if count > 0 {
                 let region = ColorMemRegion::new(color, base, count, step);
-                vm_region_by_color.get_mut(color).unwrap().push(region);
+                mem_region_by_color.get_mut(color).unwrap().push(region);
             }
         }
     }
@@ -263,14 +283,8 @@ fn mem_vm_region_init_by_colors() {
     println!("mem_vm_region_init_by_colors:");
     // for (color, color_region_list) in vm_region_by_color.iter().enumerate() {
     for color in 0..num_colors {
-        let color_region_list = vm_region_by_color.get(color).unwrap();
-        let pages = color_region_list.iter().map(|x| x.count).sum::<usize>();
-        println!(
-            "  Color {:#04x}: {} regions, total {} pages",
-            color,
-            color_region_list.len(),
-            pages,
-        );
+        let color_region_list = mem_region_by_color.get(color).unwrap();
+        println!(" Color {:#04x}: {:x?}", color, color_region_list,);
     }
 }
 
@@ -294,4 +308,118 @@ impl AddrSpace {
             colors: 0,
         }
     }
+}
+
+pub fn count_missing_num(regions: &[ColorMemRegion]) -> Vec<usize> {
+    let mut list = vec![0; regions.first().unwrap().count];
+    // enumerate then skip the first one
+    for (i, region) in regions.iter().enumerate().skip(1) {
+        let prev_count = regions.get(i - 1).unwrap().count;
+        for _ in prev_count..region.count {
+            list.push(list.last().unwrap() + i);
+        }
+    }
+    list
+}
+
+fn cpu_map_va2color_regions(cpu: &Cpu, cpu_va_region: RangeInclusive<usize>, color_regions: &[ColorMemRegion]) {
+    let missing_list = count_missing_num(&color_regions);
+    for (i, region) in color_regions.iter().enumerate() {
+        for j in 0..region.count {
+            let missing_num = missing_list.get(j).unwrap();
+            let page_idx = i + j * color_regions.len() - missing_num;
+            let va = cpu_va_region.start() + page_idx * PAGE_SIZE;
+            let pa = region.base + j * region.step;
+            cpu.pt().pt_map_range(va, PAGE_SIZE, pa, PTE_S1_NORMAL, false);
+        }
+    }
+}
+
+fn space_remapping(src: *const u8, len: usize, color_bitmap: usize) {
+    let dest_va = {
+        // alloc mem pages
+        let color_regions =
+            mem_region_alloc_colors(len, color_bitmap).unwrap_or_else(|_| panic!("mem_region_alloc_colors() error"));
+        debug!("space_remapping: color_regions {:#x?}", color_regions);
+        // alloc va space
+        let va_pages = vpage_alloc(len, Some(1 << 20)).unwrap_or_else(|err| panic!("vpage_alloc: {err:?}"));
+        info!("space_remapping: va pages {:?}", va_pages);
+        let dest_va = va_pages.start().start_address().as_ptr();
+        let range = va_pages.as_range_incluesive();
+        // map va with pa
+        cpu_map_va2color_regions(current_cpu(), range, &color_regions);
+        dest_va
+        // auto drop heap values before copy
+    };
+    // copy src to va
+    memcpy_safe(dest_va, src, len);
+}
+
+// see bao: color_hypervisor
+pub fn hypervisor_self_coloring() {
+    let cpu_cache_info = CPU_CACHE.get().unwrap();
+    let last_level = cpu_cache_info.min_share_level;
+    let num_colors = cpu_cache_info.info_list[last_level - 1].num_colors();
+
+    let mut self_color_bitmap = 0;
+    for x in HYPERVISOR_COLORS.get().unwrap().iter() {
+        self_color_bitmap |= 1 << x;
+    }
+
+    if self_color_bitmap == 0 || ((self_color_bitmap & ((1 << num_colors) - 1)) == ((1 << num_colors) - 1)) {
+        return;
+    }
+
+    // // Copy the CPU space into a colored region
+    // let cpu = current_cpu();
+    // space_remapping(
+    //     cpu as *const _ as usize as *const _,
+    //     core::mem::size_of::<Cpu>(),
+    //     self_color_bitmap,
+    // );
+
+    let image_size = _image_end as usize - _image_start as usize;
+    // Copy the hypervisor image
+    if current_cpu().id == CPU_MASTER {
+        let image = unsafe { core::slice::from_raw_parts(_image_start as *const u8, image_size) };
+        space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
+    }
+
+    extern "C" {
+        fn relocate_space();
+    }
+    // unsafe {
+    //     relocate_space();
+    // }
+
+    // Core 0 apply for va and pa pages
+    static HEAP_COLOR_REGIONS: Once<Vec<ColorMemRegion>> = Once::new();
+    static HEAP_PAGES: Once<AllocatedPages> = Once::new();
+    const HEAP_SIZE: usize = 32 * (1 << 20); // 32 MB
+    if current_cpu().id == CPU_MASTER {
+        match vpage_alloc(HEAP_SIZE, Some(1 << 20)) {
+            Ok(pages) => HEAP_PAGES.call_once(|| pages),
+            Err(err) => panic!("vpage_alloc failed {err:?}"),
+        };
+        match mem_region_alloc_colors(HEAP_SIZE, self_color_bitmap) {
+            Ok(color_regions) => {
+                debug!("HEAP_COLOR_REGIONS: {color_regions:#x?}");
+                HEAP_COLOR_REGIONS.call_once(|| color_regions);
+            }
+            Err(_) => panic!("mem_region_alloc_colors failed"),
+        };
+    }
+    barrier();
+
+    // enlarge the heap
+    let heap_color_regions = HEAP_COLOR_REGIONS.get().unwrap();
+    let heap_pages = HEAP_PAGES.get().unwrap();
+    let heap_range = heap_pages.as_range_incluesive();
+    cpu_map_va2color_regions(current_cpu(), heap_range.clone(), heap_color_regions);
+    // let len = heap_range.end() + 1 - heap_range.start();
+    // memset_safe(*heap_range.start() as *mut _, 0, len);
+    if current_cpu().id == CPU_MASTER {
+        heap_expansion(&heap_range);
+    }
+    barrier();
 }

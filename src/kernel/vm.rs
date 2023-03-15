@@ -17,7 +17,7 @@ use crate::config::VmConfigEntry;
 use crate::device::EmuDevs;
 use crate::kernel::{
     EmuDevData, get_share_mem, mem_pages_alloc, VirtioMmioData, VM_CONTEXT_RECEIVE, VM_CONTEXT_SEND, VMData,
-    mem_vm_color_region_free,
+    mem_color_region_free,
 };
 use crate::util::*;
 use crate::mm::PageFrame;
@@ -884,7 +884,10 @@ impl VmColorPaInfo {
 
 impl Drop for VmColorPaInfo {
     fn drop(&mut self) {
-        mem_vm_color_region_free(&self.color_pa_region);
+        for region in self.color_pa_region.iter() {
+            region.zero();
+            mem_color_region_free(region);
+        }
     }
 }
 

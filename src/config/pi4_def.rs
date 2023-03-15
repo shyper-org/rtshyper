@@ -7,7 +7,7 @@ use spin::Mutex;
 use crate::board::*;
 use crate::config::vm_cfg_add_vm_entry;
 use crate::device::EmuDeviceType;
-use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType};
+use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType, HYPERVISOR_COLORS};
 
 use super::{
     PassthroughRegion, vm_cfg_set_config_name, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
@@ -175,7 +175,7 @@ pub fn mvm_config_init() {
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
-            colors: (0..16).step_by(2).collect(),
+            colors: HYPERVISOR_COLORS.get().unwrap().clone(),
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,

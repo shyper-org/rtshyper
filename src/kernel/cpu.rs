@@ -8,9 +8,8 @@ use crate::arch::ContextFrameTrait;
 // use core::ops::{Deref, DerefMut};
 use crate::arch::{cpu_interrupt_unmask, PageTable};
 use crate::board::{PLATFORM_CPU_NUM_MAX, SchedRule, PLAT_DESC};
-use crate::kernel::{Vcpu, VcpuArray, VcpuState, Vm, Scheduler, mem_page_alloc, SchedulerRR};
+use crate::kernel::{Vcpu, VcpuArray, VcpuState, Vm, Scheduler, SchedulerRR};
 use crate::util::trace;
-use crate::util::memcpy_safe;
 
 pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
@@ -184,7 +183,7 @@ impl Cpu {
         self.vcpu_array.vcpu_num() != 0
     }
 
-    pub fn global_pt(&self) -> &PageTable {
+    pub fn pt(&self) -> &PageTable {
         self.global_pt.get().unwrap()
     }
 }
@@ -221,20 +220,11 @@ pub fn active_vm_ncpu() -> usize {
     }
 }
 
-fn cpu_init_global_pt() {
+fn cpu_init_pt() {
     let cpu = current_cpu();
-    let pt = if let Ok(dir) = mem_page_alloc() {
-        // NOTE: no need to copy lvl2
-        // cpu_pt.lvl2 is only used for mapping struct Cpu with lvl3
-        // the device lvl2 (defined in start.S) is also available here because we copy the lvl1
-        memcpy_safe(dir.hva() as *const _, cpu.cpu_pt.lvl1.as_ptr() as *const _, PAGE_SIZE);
-        PageTable::new(dir, false)
-    } else {
-        panic!("From<CpuPt> to PageTable failed");
-    };
-    crate::arch::Arch::invalid_hypervisor_all();
-    crate::arch::Arch::install_self_page_table(pt.base_pa());
+    let pt = PageTable::from_pa(cpu.cpu_pt.lvl1.as_ptr() as usize, false);
     cpu.global_pt.call_once(|| pt);
+    crate::arch::Arch::invalid_hypervisor_all();
 }
 
 // Todo: add config for base slice
@@ -259,7 +249,7 @@ pub fn cpu_init() {
         power_arch_init();
     }
     // crate::arch::Arch::disable_prefetch();
-    cpu_init_global_pt();
+    cpu_init_pt();
     cpu_sched_init();
     current_cpu().cpu_state = CpuState::Idle;
     let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;

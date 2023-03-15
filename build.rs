@@ -27,7 +27,7 @@ fn main() {
 
     // compile the startup file into a static library
     let start_file = format!("src/arch/{}/start.S", arch);
-    println!("cargo:rerun-if-changed={}", start_file);
+    println!("cargo:rerun-if-changed=src/");
     cc::Build::new()
         .compiler("aarch64-none-elf-gcc")
         .file(start_file)

@@ -89,7 +89,6 @@ _start:
     ldr x1, =vectors
     msr vbar_el2, x1
 
- 
     mov x0, x19
     ldr x3, =init
 
@@ -103,7 +102,12 @@ _start:
 
     mov x1, x20
     br  x3
-    
+
+.global relocate_space
+.relocate_space:
+1:  wfi
+    b 1b
+
 /*
  * snipet from "Application Note Bare-metal Boot Code for ARMv8-A
  * Processors - Version 1.0"

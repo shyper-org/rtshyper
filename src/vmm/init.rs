@@ -6,13 +6,13 @@ use crate::arch::{
 use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
 use crate::board::{PlatOperation, Platform};
-use crate::config::vm_cfg_entry;
+use crate::config::{vm_cfg_entry, VmRegion};
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType,
-    iommu_add_device, mem_vm_region_alloc_by_colors, ColorMemRegion,
+    iommu_add_device, mem_region_alloc_colors, ColorMemRegion, count_missing_num,
 };
 use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
@@ -27,6 +27,20 @@ pub static CPIO_RAMDISK: &'static [u8] = include_bytes!("../../image/net_rootfs.
 #[cfg(not(feature = "ramdisk"))]
 pub static CPIO_RAMDISK: &[u8] = &[];
 
+fn vm_map_ipa2color_regions(vm: &Vm, vm_region: &VmRegion, color_regions: &[ColorMemRegion]) {
+    // NOTE: continuous ipa should across colors, and the color_regions must be sorted by count
+    let missing_list = count_missing_num(&color_regions);
+    for (i, region) in color_regions.iter().enumerate() {
+        for j in 0..region.count {
+            let missing_num = missing_list.get(j).unwrap();
+            let page_idx = i + j * color_regions.len() - missing_num;
+            let ipa = vm_region.ipa_start + page_idx * PAGE_SIZE;
+            let pa = region.base + j * region.step;
+            vm.pt_map_range(ipa, PAGE_SIZE, pa, PTE_S2_NORMAL, false);
+        }
+    }
+}
+
 fn vmm_init_memory(vm: &Vm) -> bool {
     let vm_id = vm.id();
     let config = vm.config();
@@ -38,34 +52,12 @@ fn vmm_init_memory(vm: &Vm) -> bool {
         return false;
     }
 
-    fn count_missing_num(regions: &[ColorMemRegion]) -> Vec<usize> {
-        let mut list = vec![0; regions.first().unwrap().count];
-        // enumerate then skip the first one
-        for (i, region) in regions.iter().enumerate().skip(1) {
-            let prev_count = regions.get(i - 1).unwrap().count;
-            for _ in prev_count..region.count {
-                list.push(list.last().unwrap() + i);
-            }
-        }
-        list
-    }
-
-    for vm_region in config.memory_region() {
-        match mem_vm_region_alloc_by_colors(vm_region.length, config.memory_color_bitmap()) {
+    for vm_region in config.memory_region().iter() {
+        match mem_region_alloc_colors(vm_region.length, config.memory_color_bitmap()) {
             Ok(vm_color_regions) => {
-                debug!("{:#?}", vm_color_regions);
+                debug!("{:#x?}", vm_color_regions);
                 assert!(!vm_color_regions.is_empty());
-                // NOTE: continuous ipa should across colors, and the vm_color_regions must be sorted by count
-                let missing_list = count_missing_num(&vm_color_regions);
-                for (i, region) in vm_color_regions.iter().enumerate() {
-                    for j in 0..region.count {
-                        let missing_num = missing_list.get(j).unwrap();
-                        let page_idx = i + j * vm_color_regions.len() - missing_num;
-                        let ipa = vm_region.ipa_start + page_idx * PAGE_SIZE;
-                        let pa = region.base + j * region.step;
-                        vm.pt_map_range(ipa, PAGE_SIZE, pa, PTE_S2_NORMAL, false);
-                    }
-                }
+                vm_map_ipa2color_regions(vm, vm_region, &vm_color_regions);
                 vm.append_color_regions(vm_color_regions);
             }
             Err(_) => {
