@@ -72,20 +72,14 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         ],
     },
     mem_desc: PlatMemoryConfig {
-        region_num: 3,
+        region_num: 1,
         regions: [
             PlatMemRegion {
-                base: 0x80000000,
-                size: 0x10000000,
+                base: 0x8000_0000,
+                size: 0x1_f000_0000,
             },
-            PlatMemRegion {
-                base: 0x90000000,
-                size: 0x60000000,
-            },
-            PlatMemRegion {
-                base: 0xf0200000,
-                size: 0x185600000,
-            },
+            PlatMemRegion { base: 0, size: 0 },
+            PlatMemRegion { base: 0, size: 0 },
             PlatMemRegion { base: 0, size: 0 },
             PlatMemRegion { base: 0, size: 0 },
             PlatMemRegion { base: 0, size: 0 },

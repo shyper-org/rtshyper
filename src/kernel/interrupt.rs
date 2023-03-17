@@ -28,17 +28,6 @@ pub enum InterruptHandler {
     None,
 }
 
-impl InterruptHandler {
-    pub fn call(&self, arg0: usize, _arg1: usize) {
-        match self {
-            InterruptHandler::IpiIrqHandler(irq_handler) => irq_handler(),
-            InterruptHandler::GicMaintenanceHandler(gic_handler) => gic_handler(arg0),
-            InterruptHandler::TimeIrqHandler(time_handler) => time_handler(arg0),
-            InterruptHandler::None => panic!("Call An Empty Interrupt Hanlder!"),
-        }
-    }
-}
-
 pub fn interrupt_cpu_ipi_send(target_cpu: usize, ipi_id: usize) {
     interrupt_arch_ipi_send(target_cpu, ipi_id);
 }
@@ -124,15 +113,6 @@ pub fn interrupt_vm_remove(_vm: &Vm, id: usize) {
 }
 
 pub fn interrupt_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize, _source: usize) {
-    // if vm.id() == 1 {
-    //     println!("inject int {} to vm1", int_id);
-    // }
-    // if current_cpu().id == 2 {
-    //     println!("inject int {} to core 2", int_id);
-    // }
-    // if current_cpu().id == 1 && int_id == 49 {
-    //     println!("inject int {} to core 1", int_id);
-    // }
     if vcpu.phys_id() != current_cpu().id {
         println!(
             "interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})",
@@ -173,14 +153,6 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
             if let Some(active_vm) = vcpu.vm() {
                 if active_vm.has_interrupt(int_id) {
                     interrupt_vm_inject(&active_vm, vcpu, int_id, src);
-                    // if current_cpu().id == 1 {
-                    //     println!("GICH_MISR {:x}", GICH.misr());
-                    //     println!("GICH_HCR {:x}", GICH.hcr());
-                    //     for i in 0..4 {
-                    //         println!("GICH_LR[{}] {:x}", i, GICH.lr(i));
-                    //     }
-                    //     println!("interrupt_handler, inject {} to core1", int_id);
-                    // }
                     return false;
                 } else {
                     return true;

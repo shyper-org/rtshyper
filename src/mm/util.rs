@@ -1,4 +1,4 @@
-#[allow(unused)]
+#[allow(dead_code)]
 pub mod static_array_rb_tree {
     use alloc::boxed::Box;
     use core::ops::{Deref, DerefMut};

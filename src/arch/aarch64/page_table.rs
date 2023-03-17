@@ -282,6 +282,7 @@ impl PageTable {
             println!("map_2mb lvl 2 already mapped with {:#x}", l2e.to_pte());
         } else {
             l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pa | pte | PTE_BLOCK));
+            // self.tlb_invalidate(ipa);
         }
     }
 
@@ -339,6 +340,7 @@ impl PageTable {
             println!("map lvl 3 already mapped with {:#x}", l3e.to_pte());
         } else {
             l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pa | PTE_PAGE | pte));
+            // self.tlb_invalidate(ipa);
         }
     }
 

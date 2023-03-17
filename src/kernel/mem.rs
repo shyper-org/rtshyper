@@ -225,10 +225,6 @@ fn mem_region_init_by_colors() {
         panic!("Platform Vm Memory Regions Overrun!");
     }
 
-    if PLAT_DESC.mem_desc.region_num <= 1 {
-        panic!("Platform has no VM memory region!");
-    }
-
     let cpu_cache_info = CPU_CACHE.get().unwrap();
     let last_level = cpu_cache_info.min_share_level;
     let num_colors = cpu_cache_info.info_list[last_level - 1].num_colors();

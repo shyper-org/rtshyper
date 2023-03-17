@@ -74,6 +74,10 @@ _start:
 
     mov x0, x19
     bl  cpu_map_self
+
+    //tlbi	alle2
+    //dsb	nsh
+    //isb
     msr ttbr0_el2, x0
 
     ldr x0, =(0x80080019)

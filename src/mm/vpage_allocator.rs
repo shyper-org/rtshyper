@@ -156,7 +156,7 @@ impl fmt::Debug for AllocatedPages {
     }
 }
 
-#[allow(unused)]
+#[allow(dead_code)]
 impl AllocatedPages {
     pub fn merge(&mut self, ap: AllocatedPages) -> Result<(), AllocatedPages> {
         // make sure the pages are contiguous

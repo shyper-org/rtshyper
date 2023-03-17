@@ -22,6 +22,7 @@ pub struct SmmuDesc {
 }
 
 const SMMUV2_CBAR_TYPE_S1_S2: usize = 0x3 << 16;
+const SMMUV2_CBAR_TYPE_S2: usize = 0x0 << 16;
 
 const SMMUV2_IDR0_S1TS_BIT: usize = 1 << 30;
 const SMMUV2_IDR0_S2TS_BIT: usize = 1 << 29;
@@ -304,8 +305,8 @@ impl SmmuContextBank {
 }
 
 struct SmmuV2 {
-    glb_rs0: Option<SmmuGlbRS0>,
-    glb_rs1: Option<SmmuGlbRS1>,
+    glb_rs0: SmmuGlbRS0,
+    glb_rs1: SmmuGlbRS1,
     context_bank: Vec<SmmuContextBank>,
 
     emu_rs0_idr1: u32,
@@ -320,8 +321,8 @@ struct SmmuV2 {
 impl SmmuV2 {
     const fn new() -> Self {
         Self {
-            glb_rs0: None,
-            glb_rs1: None,
+            glb_rs0: SmmuGlbRS0 { base_addr: 0 },
+            glb_rs1: SmmuGlbRS1 { base_addr: 0 },
             context_bank: vec![],
 
             emu_rs0_idr1: 0,
@@ -334,18 +335,18 @@ impl SmmuV2 {
     }
 
     fn rs_0(&self) -> &SmmuGlbRS0 {
-        self.glb_rs0.as_ref().unwrap()
+        &self.glb_rs0
     }
 
     fn rs_1(&self) -> &SmmuGlbRS1 {
-        self.glb_rs1.as_ref().unwrap()
+        &self.glb_rs1
     }
 
     fn init(&mut self) {
         let smmu_base_addr = PLAT_DESC.arch_desc.smmu_desc.base + DEVICE_BASE;
 
-        self.glb_rs0 = Some(SmmuGlbRS0::new(smmu_base_addr));
-        let rs0 = self.glb_rs0.as_ref().unwrap();
+        self.glb_rs0 = SmmuGlbRS0::new(smmu_base_addr);
+        let rs0 = &self.glb_rs0;
         /* IDR1 */
         let idr1 = rs0.IDR1.get() as usize;
         let page_size = if (idr1 & SMMUV2_IDR1_PAGESIZE_BIT) == 0 {
@@ -354,7 +355,7 @@ impl SmmuV2 {
             0x10000
         };
 
-        self.glb_rs1 = Some(SmmuGlbRS1::new(smmu_base_addr + page_size));
+        self.glb_rs1 = SmmuGlbRS1::new(smmu_base_addr + page_size);
         let num_pages = 1 << (1 + bit_extract(idr1, SMMUV2_IDR1_NUMPAGEDXB_OFF, SMMUV2_IDR1_NUMPAGEDXB_LEN));
         let context_bank_num = bit_extract(idr1, SMMUV2_IDR1_NUMCB_OFF, SMMUV2_IDR1_NUMCB_LEN);
         let context_base = smmu_base_addr + num_pages * page_size;
@@ -413,7 +414,7 @@ impl SmmuV2 {
     }
 
     fn check_features(&self) {
-        let glb_rs0 = self.glb_rs0.as_ref().unwrap();
+        let glb_rs0 = &self.glb_rs0;
         let version = bit_extract(glb_rs0.IDR7.get() as usize, 4, 4);
         if version != 2 {
             panic!("smmu unspoorted version: {}", version);
@@ -458,6 +459,8 @@ impl SmmuV2 {
         if (ipasize as isize) < (parange as isize) {
             panic!("smmuv2 does not support the full available ipa range")
         }
+        // let upstream_bus_size = bit_extract(glb_rs0.IDR2.get() as usize, 8, 4);
+        // info!("SmmuV2 IDR2 upstream_bus_size {upstream_bus_size:#b}");
     }
 
     #[inline]
@@ -467,26 +470,18 @@ impl SmmuV2 {
 
     #[inline]
     fn smr_get_context(&self, smr: usize) -> usize {
-        bit_extract(
-            self.glb_rs0.as_ref().unwrap().S2CR[smr].get() as usize,
-            S2CR_CBNDX_OFF,
-            S2CR_CBNDX_LEN,
-        )
+        bit_extract(self.glb_rs0.S2CR[smr].get() as usize, S2CR_CBNDX_OFF, S2CR_CBNDX_LEN)
     }
 
     #[inline]
     fn smr_get_id(&self, smr: usize) -> u16 {
-        bit_extract(
-            self.glb_rs0.as_ref().unwrap().SMR[smr].get() as usize,
-            SMMU_SMR_ID_OFF,
-            SMMU_SMR_ID_LEN,
-        ) as u16
+        bit_extract(self.glb_rs0.SMR[smr].get() as usize, SMMU_SMR_ID_OFF, SMMU_SMR_ID_LEN) as u16
     }
 
     #[inline]
     fn smr_get_mask(&self, smr: usize) -> u16 {
         bit_extract(
-            self.glb_rs0.as_ref().unwrap().SMR[smr].get() as usize,
+            self.glb_rs0.SMR[smr].get() as usize,
             SMMU_SMR_MASK_OFF,
             SMMU_SMR_MASK_LEN,
         ) as u16
@@ -532,7 +527,7 @@ impl SmmuV2 {
             let mut val: usize = (mask as usize) << SMMU_SMR_MASK_OFF;
             val |= (id & bit_mask!(SMMU_SMR_ID_OFF, SMMU_SMR_ID_LEN)) as usize;
             val |= SMMUV2_SMR_VALID;
-            self.glb_rs0.as_ref().unwrap().SMR[smr].set(val as u32);
+            self.glb_rs0.SMR[smr].set(val as u32);
             if group {
                 self.group_alloc_bitmap.as_mut().unwrap().set(smr, true);
             }
@@ -544,12 +539,12 @@ impl SmmuV2 {
         if self.smr_alloc_bitmap.as_ref().unwrap().get(smr) != 0 {
             panic!("smmu: trying to write unallocated s2c {}", smr);
         } else {
-            let mut s2cr: usize = self.glb_rs0.as_ref().unwrap().S2CR[smr].get() as usize;
+            let mut s2cr: usize = self.glb_rs0.S2CR[smr].get() as usize;
             s2cr &= bit_mask!(S2CR_IMPL_OFF, S2CR_IMPL_LEN);
             s2cr |= S2CR_DFLT;
             s2cr |= context_id & bit_mask!(S2CR_CBNDX_OFF, S2CR_CBNDX_LEN);
 
-            self.glb_rs0.as_ref().unwrap().S2CR[smr].set(s2cr as u32);
+            self.glb_rs0.S2CR[smr].set(s2cr as u32);
         }
     }
 
@@ -572,9 +567,10 @@ impl SmmuV2 {
         if self.context_alloc_bitmap.is_none() || self.context_alloc_bitmap.as_ref().unwrap().get(context_id) == 0 {
             panic!("smmu ctx {} not allocated", context_id);
         }
-        let rs1 = self.glb_rs1.as_ref().unwrap();
+        let rs1 = &self.glb_rs1;
         // Set type as stage 2 only.
-        rs1.CBAR[context_id].set((vm_id as u32) & 0xFF);
+        let cbar_val = (SMMUV2_CBAR_TYPE_S2 | (vm_id & 0xFF)) as u32;
+        rs1.CBAR[context_id].set(cbar_val);
         rs1.CBA2R[context_id].set(1); // CBA2R_RW64_64BIT
 
         let pa_size = 1; // PASize, 36-bit
@@ -607,6 +603,23 @@ impl SmmuV2 {
 }
 
 static SMMU_V2: Mutex<SmmuV2> = Mutex::new(SmmuV2::new());
+
+#[allow(dead_code)]
+pub fn smmu_global_fault_handler(int_id: usize) {
+    let smmu = SMMU_V2.lock();
+    error!("get smmu gloabl fault form irq {int_id}");
+    error!(
+        "GFSR {:#x} GFSYNR0 {:#x} GFSYNR1 {:#x} GFAR {:#x}",
+        smmu.rs_0().GFSR.get(),
+        smmu.rs_0().GFSYNR0.get(),
+        smmu.rs_0().GFSYNR1.get(),
+        smmu.rs_0().GFAR.get(),
+    );
+    for (i, cbar) in smmu.rs_1().CBAR.iter().take(64).enumerate() {
+        error!("CBAR[{i}] = {:#x}", cbar.get());
+    }
+    panic!("smmu_global_fault_handler");
+}
 
 pub fn smmu_init() {
     let mut smmu = SMMU_V2.lock();
@@ -651,13 +664,13 @@ pub fn smmu_add_device(context_id: usize, stream_id: usize) -> bool {
 // handler
 fn emu_smmu_revise_cbar(emu_ctx: &EmuContext) {
     let smmu_v2 = SMMU_V2.lock();
-
-    let cbar_addr = smmu_v2.glb_rs1.as_ref().unwrap().CBAR.as_ptr() as usize;
+    let vm = active_vm().unwrap();
+    let cbar_addr = smmu_v2.glb_rs1.CBAR.as_ptr() as usize;
     let context_id = (emu_ctx.address - (cbar_addr - DEVICE_BASE)) / size_of::<u32>();
-    let vm_context_id = active_vm().unwrap().iommu_ctx_id();
+    let vm_context_id = vm.iommu_ctx_id();
     info!(
         "emu_smmu_revise_cbar: vm {} access context id {}, vm context is {}",
-        active_vm_id(),
+        vm.id(),
         context_id,
         vm_context_id
     );
@@ -666,8 +679,8 @@ fn emu_smmu_revise_cbar(emu_ctx: &EmuContext) {
     // stage 2 context bank index
     // The SMMUv2 manual suggests that we should use identical VMID for both stages' CBAR
     cbar |= (vm_context_id & 0xFF) << 8;
-    cbar |= active_vm_id() & 0xFF;
-    smmu_v2.glb_rs1.as_ref().unwrap().CBAR[context_id].set(cbar as u32);
+    cbar |= vm.id() & 0xFF;
+    smmu_v2.glb_rs1.CBAR[context_id].set(cbar as u32);
 }
 
 pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
@@ -675,7 +688,7 @@ pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     let smmu_v2 = SMMU_V2.lock();
 
     let mut permit_write = true;
-    let cbar = &smmu_v2.glb_rs1.as_ref().unwrap().CBAR;
+    let cbar = &smmu_v2.glb_rs1.CBAR;
     if cbar.as_ptr_range().contains(&(address as *const _)) && emu_ctx.write {
         drop(smmu_v2);
         emu_smmu_revise_cbar(emu_ctx);
@@ -685,18 +698,7 @@ pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
         permit_write = false;
     }
 
-    if !emu_ctx.write {
-        let val = if address == &smmu_v2.glb_rs0.as_ref().unwrap().IDR1 as *const _ as usize {
-            smmu_v2.emu_rs0_idr1 as usize
-        } else {
-            if emu_ctx.width > 4 {
-                unsafe { ptr::read_volatile(address as *const usize) }
-            } else {
-                unsafe { ptr::read_volatile(address as *const u32) as usize }
-            }
-        };
-        current_cpu().set_gpr(emu_ctx.reg, val);
-    } else {
+    if emu_ctx.write {
         let val = current_cpu().get_gpr(emu_ctx.reg);
         if permit_write {
             if emu_ctx.width > 4 {
@@ -711,6 +713,17 @@ pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
                 (address - smmu_v2.context_bank.first().unwrap().base_addr as usize) / 0x10000,
             );
         }
+    } else {
+        let val = if address == &smmu_v2.glb_rs0.IDR1 as *const _ as usize {
+            smmu_v2.emu_rs0_idr1 as usize
+        } else {
+            if emu_ctx.width > 4 {
+                unsafe { ptr::read_volatile(address as *const usize) }
+            } else {
+                unsafe { ptr::read_volatile(address as *const u32) as usize }
+            }
+        };
+        current_cpu().set_gpr(emu_ctx.reg, val);
     }
 
     true
