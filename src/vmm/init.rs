@@ -89,8 +89,6 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
         return false;
     }
 
-    vm.set_entry_point(config.kernel_entry_point());
-
     // Only load MVM kernel image "L4T" from binding.
     // Load GVM kernel image from shyper-cli, you may check it for more information.
     if config.os_type == VmType::VmTOs {

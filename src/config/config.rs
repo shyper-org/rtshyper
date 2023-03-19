@@ -11,7 +11,7 @@ use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
 use crate::kernel::{active_vm, vm, Vm, vm_ipa2hva, VmType, CONFIG_VM_NUM_MAX};
 use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
-use crate::kernel::access::{copy_segment_to_vm, copy_segment_from_vm};
+use crate::kernel::access::{copy_segment_from_vm, copy_between_vm};
 
 const CFG_MAX_NUM: usize = 0x10;
 // const IRQ_MAX_NUM: usize = 0x40;
@@ -25,12 +25,12 @@ pub enum DtbDevType {
     Gicc = 2,
 }
 
-impl DtbDevType {
-    pub fn from_usize(value: usize) -> DtbDevType {
+impl From<usize> for DtbDevType {
+    fn from(value: usize) -> Self {
         match value {
-            0 => DtbDevType::Serial,
-            1 => DtbDevType::Gicd,
-            2 => DtbDevType::Gicc,
+            0 => Self::Serial,
+            1 => Self::Gicd,
+            2 => Self::Gicc,
             _ => panic!("Unknown DtbDevType value: {}", value),
         }
     }
@@ -217,7 +217,7 @@ impl VmConfigEntry {
         VmConfigEntry {
             id: 0,
             name: Some(name),
-            os_type: VmType::from_usize(vm_type),
+            os_type: VmType::from(vm_type),
             cmdline,
             image: Arc::new(Mutex::new(VmImageConfig::new(
                 kernel_load_ipa,
@@ -681,7 +681,7 @@ pub fn vm_cfg_add_emu_dev(
         emu_type
     );
 
-    let emu_dev_type = EmuDeviceType::from_usize(emu_type);
+    let emu_dev_type = EmuDeviceType::from(emu_type);
     let emu_dev_cfg = VmEmulatedDeviceConfig {
         name: Some(name_str.trim_end_matches(char::from(0)).to_string()),
         base_ipa,
@@ -693,7 +693,7 @@ pub fn vm_cfg_add_emu_dev(
             _ => emu_dev_type,
         },
         mediated: matches!(
-            EmuDeviceType::from_usize(emu_type),
+            EmuDeviceType::from(emu_type),
             EmuDeviceType::EmuDeviceTVirtioBlkMediated
         ),
     };
@@ -842,7 +842,7 @@ pub fn vm_cfg_add_dtb_dev(
     // Get DTB device config list.
     let vm_dtb_dev = VmDtbDevConfig {
         name: dtb_dev_name_str.trim_end_matches(char::from(0)).to_string(),
-        dev_type: DtbDevType::from_usize(dev_type),
+        dev_type: DtbDevType::from(dev_type),
         irqs: dtb_irq_list,
         addr_region: AddrRegions {
             ipa: addr_region_ipa,
@@ -903,12 +903,13 @@ pub fn vm_cfg_upload_kernel_image(
         "VM[{}] Upload kernel image. cache_ipa:{:x} load_offset:{:x} load_size:{:x}",
         vmid, cache_ipa, load_offset, load_size
     );
-    let mut bin = vec![0_u8; load_size];
-    let src = bin.as_mut_slice();
-    // TODO: a little slow because twice copy. Try to add copy_from_vm_to_vm
-    // Copy from VM0 address space first
-    copy_segment_from_vm(&active_vm().unwrap(), src, cache_ipa);
-    // then copy to another GVM address space
-    copy_segment_to_vm(&vm, config.kernel_load_ipa() + load_offset, src);
-    Ok(0)
+    if copy_between_vm(
+        (&vm, config.kernel_load_ipa() + load_offset),
+        (&active_vm().unwrap(), cache_ipa),
+        load_size,
+    ) {
+        Ok(0)
+    } else {
+        Err(())
+    }
 }

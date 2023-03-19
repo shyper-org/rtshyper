@@ -108,9 +108,8 @@ _start:
     br  x3
 
 .global relocate_space
-.relocate_space:
-1:  wfi
-    b 1b
+relocate_space:
+    ret
 
 /*
  * snipet from "Application Note Bare-metal Boot Code for ARMv8-A

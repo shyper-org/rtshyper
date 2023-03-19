@@ -127,8 +127,8 @@ impl EmuDeviceType {
     }
 }
 
-impl EmuDeviceType {
-    pub fn from_usize(value: usize) -> EmuDeviceType {
+impl From<usize> for EmuDeviceType {
+    fn from(value: usize) -> Self {
         match value {
             0 => EmuDeviceType::EmuDeviceTConsole,
             1 => EmuDeviceType::EmuDeviceTGicd,

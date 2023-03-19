@@ -195,11 +195,11 @@ pub enum VmType {
     VmTBma = 1,
 }
 
-impl VmType {
-    pub fn from_usize(value: usize) -> VmType {
+impl From<usize> for VmType {
+    fn from(value: usize) -> Self {
         match value {
-            0 => VmType::VmTOs,
-            1 => VmType::VmTBma,
+            0 => Self::VmTOs,
+            1 => Self::VmTBma,
             _ => panic!("Unknown VmType value: {}", value),
         }
     }
@@ -388,11 +388,6 @@ impl Vm {
         } else {
             None
         }
-    }
-
-    pub fn set_entry_point(&self, entry_point: usize) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.entry_point = entry_point;
     }
 
     pub fn set_emu_devs(&self, idx: usize, emu: EmuDevs) {
@@ -885,7 +880,6 @@ impl VmColorPaInfo {
 impl Drop for VmColorPaInfo {
     fn drop(&mut self) {
         for region in self.color_pa_region.iter() {
-            region.zero();
             mem_color_region_free(region);
         }
     }
@@ -897,11 +891,7 @@ struct VmInner {
     pub config: Option<VmConfigEntry>,
     // memory config
     pub pt: Option<PageTable>,
-    // pub pa_region: Vec<VmPa>, // Option<[VmPa; VM_MEM_REGION_MAX]>,
     pub color_pa_info: VmColorPaInfo,
-
-    // image config
-    pub entry_point: usize,
 
     // vcpu config
     pub vcpu_list: Vec<Vcpu>,
@@ -913,7 +903,6 @@ struct VmInner {
     pub int_bitmap: Option<BitMap<BitAlloc256>>,
 
     // migration
-    // pub migration_state: bool,
     pub share_mem_base: usize,
     pub migrate_save_pf: Vec<PageFrame>,
     pub migrate_restore_pf: Vec<PageFrame>,
@@ -939,7 +928,6 @@ impl VmInner {
             pt: None,
             // pa_region: Vec::new(),
             color_pa_info: VmColorPaInfo::default(),
-            entry_point: 0,
 
             vcpu_list: Vec::new(),
             cpu_num: 0,
@@ -947,7 +935,6 @@ impl VmInner {
 
             intc_dev_id: 0,
             int_bitmap: Some(BitAlloc4K::default()),
-            // migration_state: false,
             share_mem_base: Platform::SHARE_MEM_BASE, // hard code
             migrate_save_pf: vec![],
             migrate_restore_pf: vec![],

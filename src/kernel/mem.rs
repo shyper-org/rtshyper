@@ -85,7 +85,7 @@ pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<C
         error!("no cache color provided");
         return Err(());
     }
-    let page_num = size / PAGE_SIZE;
+    let page_num = round_up(size, PAGE_SIZE) / PAGE_SIZE;
 
     let color2pages = {
         // init a vec, contains color -> page_num, init value is the free page num
@@ -384,9 +384,9 @@ pub fn hypervisor_self_coloring() {
     extern "C" {
         fn relocate_space();
     }
-    // unsafe {
-    //     relocate_space();
-    // }
+    unsafe {
+        relocate_space();
+    }
 
     // Core 0 apply for va and pa pages
     static HEAP_COLOR_REGIONS: Once<Vec<ColorMemRegion>> = Once::new();

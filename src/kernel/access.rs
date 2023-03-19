@@ -34,6 +34,29 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
     }
 }
 
+pub fn copy_between_vm(dest: (&Vm, usize), src: (&Vm, usize), len: usize) -> bool {
+    let (src_vm, src_ipa) = src;
+    let src_hva = vm_ipa2hva(src_vm, src_ipa);
+    if src_hva == 0 {
+        error!("illegal ipa {:#x} from src VM {}", src_hva, src_vm.id());
+        return false;
+    }
+
+    let src_bin = unsafe { core::slice::from_raw_parts(src_hva as *const u8, len) };
+
+    let (dest_vm, dest_ipa) = dest;
+    let dest_hva = vm_ipa2hva(dest_vm, dest_ipa);
+    if dest_hva == 0 {
+        error!("illegal ipa {:#x} from dest VM {}", dest_ipa, dest_vm.id());
+        return false;
+    }
+
+    let dst_bin = unsafe { core::slice::from_raw_parts_mut(dest_hva as *mut u8, len) };
+
+    dst_bin.copy_from_slice(src_bin);
+    true
+}
+
 pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
     let bin = unsafe { slice::from_raw_parts_mut(bin.as_mut_ptr() as *mut u8, bin.len() * size_of::<T>()) };
     let offset = load_ipa - round_down(load_ipa, PAGE_SIZE);

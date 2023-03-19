@@ -18,8 +18,6 @@ pub fn vmm_remove_vm(vm_id: usize) {
     // remove vm: page table / mmio / vgic will be removed when vm drop
     let vm = vm(vm_id).unwrap();
 
-    // unmap ipa(hva) percore
-    vmm_unmap_ipa2hva(&vm);
     // vcpu
     vmm_remove_vcpu(&vm);
     // reset vm interface
@@ -35,8 +33,10 @@ pub fn vmm_remove_vm(vm_id: usize) {
     // remove vm cfg
     vm_cfg_remove_vm_entry(vm_id);
     // remove vm unilib
-    remove_vm(vm_id);
     crate::util::unilib::unilib_fs_remove(vm_id);
+    // unmap ipa(hva) percore at last
+    vmm_unmap_ipa2hva(&vm);
+    remove_vm(vm_id);
     info!("remove vm[{}] successfully", vm_id);
 }
 
