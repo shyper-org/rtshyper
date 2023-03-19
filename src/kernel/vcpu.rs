@@ -12,7 +12,7 @@ use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id};
 use crate::util::memcpy_safe;
 
-use super::{CpuState, Vm, VmType, WeakVm};
+use super::{CpuState, Vm, WeakVm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VcpuState {
@@ -392,17 +392,14 @@ impl VcpuInner {
     }
 
     fn reset_context(&mut self) {
-        // let migrate = self.vm.as_ref().unwrap().migration_state();
         self.arch_ctx_reset();
-        // if !migrate {
         self.gic_ctx_reset();
+        // use crate::kernel::vm_if_get_type;
+        // if vm_if_get_type(self.vm_id()) == VmType::VmTBma {
+        //     println!("vm {} bma ctx restore", self.vm_id());
+        //     self.reset_vm_ctx();
+        //     self.context_ext_regs_store(); // what the fuck ?? why store here ???
         // }
-        use crate::kernel::vm_if_get_type;
-        if vm_if_get_type(self.vm_id()) == VmType::VmTBma {
-            println!("vm {} bma ctx restore", self.vm_id());
-            self.reset_vm_ctx();
-            self.context_ext_regs_store();
-        }
     }
 
     fn gic_ctx_reset(&mut self) {
