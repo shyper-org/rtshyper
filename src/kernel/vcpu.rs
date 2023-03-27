@@ -26,6 +26,7 @@ pub struct Vcpu {
     pub inner: Arc<Mutex<VcpuInner>>,
 }
 
+#[allow(dead_code)]
 impl Vcpu {
     pub fn new(vm: &Vm, vcpu_id: usize) -> Self {
         let this = Self {
@@ -346,6 +347,7 @@ impl VcpuInner {
         &(self.vcpu_ctx) as *const _ as usize
     }
 
+    #[cfg(feature = "tx2")]
     fn vm_id(&self) -> usize {
         self.vm.get_vm().unwrap().id()
     }
@@ -414,10 +416,6 @@ impl VcpuInner {
         self.vm_ctx.ext_regs_store();
     }
 
-    fn reset_vm_ctx(&mut self) {
-        self.vm_ctx.reset();
-    }
-
     fn set_elr(&mut self, elr: usize) {
         self.vcpu_ctx.set_exception_pc(elr);
     }
@@ -479,7 +477,8 @@ pub fn vcpu_run(announce: bool) {
     }
 }
 
-pub fn show_vcpu_reg_context() {
+#[allow(dead_code)]
+fn show_vcpu_reg_context() {
     print!("#### GICD ISENABLER ####");
     for i in 0..GIC_INTS_MAX / 32 {
         if i % 8 == 0 {

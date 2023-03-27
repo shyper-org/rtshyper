@@ -5,10 +5,9 @@ use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
 
-use crate::arch::DEVICE_BASE;
+use crate::arch::{DEVICE_BASE, INTERRUPT_NUM_MAX};
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::current_cpu;
-use crate::kernel::INTERRUPT_NUM_MAX;
 use crate::util::{bit_extract, trace};
 
 // GICD BITS

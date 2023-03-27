@@ -4,10 +4,11 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
+use crate::arch::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::board::*;
 use crate::config::vm_cfg_add_vm_entry;
 use crate::device::EmuDeviceType;
-use crate::kernel::{HVC_IRQ, INTERRUPT_IRQ_GUEST_TIMER, VmType, HYPERVISOR_COLORS};
+use crate::kernel::{HVC_IRQ, VmType, HYPERVISOR_COLORS};
 
 use super::{
     PassthroughRegion, vm_cfg_set_config_name, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,

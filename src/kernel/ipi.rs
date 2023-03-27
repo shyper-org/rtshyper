@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use alloc::collections::LinkedList;
 
 use spin::Mutex;
+use spin::RwLock;
 
 use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
@@ -144,7 +145,7 @@ impl IpiHandler {
     }
 }
 
-static IPI_HANDLER_LIST: Mutex<Vec<IpiHandler>> = Mutex::new(Vec::new());
+static IPI_HANDLER_LIST: RwLock<Vec<IpiHandler>> = RwLock::new(Vec::new());
 
 struct CpuIf {
     msg_queue: LinkedList<IpiMessage>,
@@ -183,7 +184,7 @@ pub fn ipi_irq_handler() {
     while let Some(ipi_msg) = ipi_pop_message(cpu_id) {
         let ipi_type = ipi_msg.ipi_type as usize;
 
-        let ipi_handler_list = IPI_HANDLER_LIST.lock();
+        let ipi_handler_list = IPI_HANDLER_LIST.read();
         let len = ipi_handler_list.len();
         let handler = ipi_handler_list[ipi_type].handler;
         drop(ipi_handler_list);
@@ -200,7 +201,7 @@ pub fn ipi_irq_handler() {
 
 pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) -> bool {
     // check handler max
-    let mut ipi_handler_list = IPI_HANDLER_LIST.lock();
+    let mut ipi_handler_list = IPI_HANDLER_LIST.write();
     for i in 0..ipi_handler_list.len() {
         if ipi_type as usize == ipi_handler_list[i].ipi_type as usize {
             println!("ipi_register: try to cover exist ipi handler");

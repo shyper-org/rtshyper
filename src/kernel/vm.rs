@@ -60,10 +60,10 @@ pub fn vm_if_set_type(vm_id: usize, vm_type: VmType) {
     vm_if.vm_type = vm_type;
 }
 
-pub fn vm_if_get_type(vm_id: usize) -> VmType {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.vm_type
-}
+// pub fn vm_if_get_type(vm_id: usize) -> VmType {
+//     let vm_if = VM_IF_LIST[vm_id].lock();
+//     vm_if.vm_type
+// }
 
 fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let vm_if = VM_IF_LIST[vm_id].lock();
@@ -144,11 +144,6 @@ pub fn vm_if_set_mem_map_bit(vm: &Vm, ipa: usize) {
     error!("vm_if_set_mem_map_bit: illegal ipa {:#x}", ipa);
 }
 
-pub fn vm_if_clear_mem_map(vm_id: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.mem_map.as_mut().unwrap().clear();
-}
-
 pub fn vm_if_copy_mem_map(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
     let mem_map_cache = vm_if.mem_map_cache.clone();
@@ -182,6 +177,7 @@ pub fn vm_if_mem_map_dirty_sum(vm_id: usize) -> usize {
 }
 // End vm interface func implementation
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum VmState {
     Inv = 0,
@@ -267,6 +263,7 @@ impl WeakVm {
     }
 }
 
+#[allow(dead_code)]
 impl Vm {
     pub fn get_weak(&self) -> WeakVm {
         WeakVm {
@@ -517,9 +514,12 @@ impl Vm {
         }
     }
 
-    pub fn reset_color_regions(&self) {
-        let vm_inner = self.inner.lock();
-        vm_inner.color_pa_info.reset();
+    pub fn reset_mem_regions(&self) {
+        let config = self.config();
+        for region in config.memory_region().iter() {
+            let hva = vm_ipa2hva(self, region.ipa_start);
+            memset_safe(hva as *mut _, 0, region.length);
+        }
     }
 
     pub fn append_color_regions(&self, mut regions: Vec<ColorMemRegion>) {
@@ -867,14 +867,6 @@ impl Vm {
 #[derive(Default)]
 struct VmColorPaInfo {
     pub color_pa_region: Vec<ColorMemRegion>,
-}
-
-impl VmColorPaInfo {
-    pub fn reset(&self) {
-        for region in self.color_pa_region.iter() {
-            region.zero();
-        }
-    }
 }
 
 impl Drop for VmColorPaInfo {

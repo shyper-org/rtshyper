@@ -5,8 +5,10 @@ use crate::kernel::{current_cpu, Vcpu, Vm};
 use super::GIC_SGIS_NUM;
 use super::GICD;
 
+pub const INTERRUPT_NUM_MAX: usize = 1024;
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
 pub const INTERRUPT_IRQ_IPI: usize = 1;
+pub const INTERRUPT_IRQ_GUEST_TIMER: usize = 27;
 
 pub fn interrupt_arch_init() {
     use crate::arch::{gic_cpu_init, gic_glb_init, gic_maintenance_handler};

@@ -282,7 +282,7 @@ pub fn vmm_reboot() {
         vm.id(),
         active_vcpu_id(),
     );
-    vm.reset_color_regions();
+    vm.reset_mem_regions();
 
     // Reset image.
     if !vmm_init_image(&vm) {

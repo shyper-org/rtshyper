@@ -29,7 +29,7 @@ pub static CPIO_RAMDISK: &[u8] = &[];
 
 fn vm_map_ipa2color_regions(vm: &Vm, vm_region: &VmRegion, color_regions: &[ColorMemRegion]) {
     // NOTE: continuous ipa should across colors, and the color_regions must be sorted by count
-    let missing_list = count_missing_num(&color_regions);
+    let missing_list = count_missing_num(color_regions);
     for (i, region) in color_regions.iter().enumerate() {
         for j in 0..region.count {
             let missing_num = missing_list.get(j).unwrap();

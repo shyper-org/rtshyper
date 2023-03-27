@@ -85,10 +85,12 @@ pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
     }
 }
 
+#[allow(dead_code)]
 pub fn copy_to_vm<T: Sized>(vm: &Vm, to: *mut u8, from: &T) {
     copy_segment_to_vm(vm, to as usize, slice::from_ref(from));
 }
 
+#[allow(dead_code)]
 pub fn copy_from_vm<T: Sized>(vm: &Vm, to: &mut T, from: *const u8) {
     copy_segment_from_vm(vm, slice::from_mut(to), from as usize);
 }

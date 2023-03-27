@@ -32,7 +32,7 @@ pub fn vmm_setup_ipa2hva(vm: &Vm) {
 }
 
 pub fn vmm_unmap_ipa2hva(vm: &Vm) {
-    vm.reset_color_regions();
+    vm.reset_mem_regions();
     let mut flag = false;
     for target_cpu_id in 0..PLAT_DESC.cpu_desc.num {
         if target_cpu_id != current_cpu().id {

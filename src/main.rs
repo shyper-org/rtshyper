@@ -35,7 +35,6 @@ mod config;
 mod device;
 #[allow(dead_code)]
 mod driver;
-#[allow(dead_code)]
 mod kernel;
 mod mm;
 mod panic;

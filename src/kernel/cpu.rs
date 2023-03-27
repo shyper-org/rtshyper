@@ -12,8 +12,8 @@ use crate::kernel::{Vcpu, VcpuArray, VcpuState, Vm, Scheduler, SchedulerRR};
 use crate::util::trace;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
-pub const CONTEXT_GPR_NUM: usize = 31;
+const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
+const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C, align(4096))]
 #[derive(Copy, Clone, Debug)]
@@ -40,14 +40,15 @@ pub struct Cpu {
     sched: Once<Box<dyn Scheduler>>,
     pub vcpu_array: VcpuArray,
     pub current_irq: usize,
+    pub global_pt: Once<PageTable>,
     pub cpu_pt: CpuPt,
     stack: [u8; CPU_STACK_SIZE],
-    global_pt: Once<PageTable>,
 }
 
 // see start.S
 const_assert_eq!(offset_of!(Cpu, stack), 0x4000);
 
+#[allow(dead_code)]
 impl Cpu {
     const fn default() -> Cpu {
         Cpu {
@@ -273,6 +274,10 @@ pub fn cpu_idle() -> ! {
 }
 
 pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
+
+pub fn cpu_by_id(cpu_id: usize) -> &'static Cpu {
+    unsafe { &mut CPU_LIST[cpu_id] }
+}
 
 #[no_mangle]
 // #[link_section = ".text.boot"]

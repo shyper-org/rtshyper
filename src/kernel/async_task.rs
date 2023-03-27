@@ -17,32 +17,6 @@ use crate::util::{memcpy_safe, sleep, trace};
 
 // use woke::{waker_ref, Woke};
 
-pub static TASK_IPI_COUNT: Mutex<usize> = Mutex::new(0);
-pub static TASK_COUNT: Mutex<usize> = Mutex::new(0);
-
-pub fn add_task_ipi_count() {
-    let mut count = TASK_IPI_COUNT.lock();
-    *count += 1;
-}
-
-pub fn add_task_count() {
-    let mut count = TASK_COUNT.lock();
-    if *count % 100 == 0 {
-        println!("task count {}, ipi count {}", *count, get_task_ipi_count());
-    }
-    *count += 1;
-}
-
-pub fn get_task_ipi_count() -> usize {
-    let count = TASK_IPI_COUNT.lock();
-    *count
-}
-
-pub fn get_task_count() -> usize {
-    let count = TASK_COUNT.lock();
-    *count
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum AsyncTaskState {
     Pending,
@@ -101,6 +75,7 @@ pub struct FairQueue<T: TaskOwner> {
     queue: LinkedList<usize>,
 }
 
+#[allow(dead_code)]
 impl<T: TaskOwner> FairQueue<T> {
     pub const fn new() -> Self {
         Self {
@@ -266,7 +241,6 @@ pub fn async_ipi_req() {
         if active_vm_id() == 0 {
             virtio_blk_notify_handler(msg.vq.clone(), msg.blk.clone(), vm(msg.src_id).unwrap());
         } else {
-            // add_task_ipi_count();
             // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
             ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(msg));
         }

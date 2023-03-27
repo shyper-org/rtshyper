@@ -224,8 +224,8 @@ impl DeferredAllocAction {
         F2: Into<Option<Chunk>>,
     {
         // let free_list = &FREE_PAGE_LIST;
-        let free1 = free1.into().unwrap_or(Chunk::empty());
-        let free2 = free2.into().unwrap_or(Chunk::empty());
+        let free1 = free1.into().unwrap_or_else(Chunk::empty);
+        let free2 = free2.into().unwrap_or_else(Chunk::empty);
         DeferredAllocAction {
             // free_list,
             free1,
@@ -424,11 +424,11 @@ pub fn vpage_alloc(len: usize, align: Option<usize>) -> Result<AllocatedPages, A
     .map(|(ap, action)| {
         if action.free1.size_in_pages() > 0 {
             info!("DeferredAllocAction insert free1 {:?}", action.free1);
-            locked_list.insert(action.free1.clone()).unwrap();
+            locked_list.insert(action.free1).unwrap();
         }
         if action.free2.size_in_pages() > 0 {
             info!("DeferredAllocAction insert free2 {:?}", action.free2);
-            locked_list.insert(action.free2.clone()).unwrap();
+            locked_list.insert(action.free2).unwrap();
         }
         ap
     })

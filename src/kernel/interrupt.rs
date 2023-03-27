@@ -2,22 +2,15 @@ use alloc::collections::BTreeMap;
 
 use spin::Mutex;
 
-use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject};
+use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject, INTERRUPT_IRQ_IPI, INTERRUPT_NUM_MAX};
 use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
 use crate::kernel::{current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::util::{BitAlloc, BitAlloc256, BitAlloc4K, BitMap};
 use crate::vmm::vmm_ipi_handler;
 
-pub const INTERRUPT_NUM_MAX: usize = 1024;
-pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;
-pub const INTERRUPT_IRQ_GUEST_TIMER: usize = 27;
-pub const INTERRUPT_IRQ_IPI: usize = 1;
-
 pub static INTERRUPT_HYPER_BITMAP: Mutex<BitMap<BitAlloc256>> = Mutex::new(BitAlloc4K::default());
 pub static INTERRUPT_GLB_BITMAP: Mutex<BitMap<BitAlloc256>> = Mutex::new(BitAlloc4K::default());
-// pub static INTERRUPT_HANDLERS: Mutex<[InterruptHandler; INTERRUPT_NUM_MAX]> =
-//     Mutex::new([InterruptHandler::None; INTERRUPT_NUM_MAX]);
 pub static INTERRUPT_HANDLERS: Mutex<BTreeMap<usize, InterruptHandler>> = Mutex::new(BTreeMap::new());
 
 #[derive(Copy, Clone)]
@@ -25,7 +18,6 @@ pub enum InterruptHandler {
     IpiIrqHandler(fn()),
     GicMaintenanceHandler(fn(usize)),
     TimeIrqHandler(fn(usize)),
-    None,
 }
 
 pub fn interrupt_cpu_ipi_send(target_cpu: usize, ipi_id: usize) {
@@ -139,9 +131,6 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
             }
             InterruptHandler::TimeIrqHandler(timer_irq_handler) => {
                 timer_irq_handler(int_id);
-            }
-            InterruptHandler::None => {
-                unimplemented!();
             }
         }
         // drop(irq_handler);

@@ -91,13 +91,13 @@ impl BlockDescriptor {
 
 #[repr(C)]
 #[repr(align(4096))]
-pub struct PageTables {
+pub(super) struct PageTables {
     lvl1: [BlockDescriptor; ENTRY_PER_PAGE],
 }
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
-pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
+pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl2_base = lvl2_pt as *const _ as usize;
     let image_end_align_gb = round_up(_image_end as usize, 1 << LVL1_SHIFT);
 
@@ -190,7 +190,7 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
-pub extern "C" fn mmu_init(pt: &PageTables) {
+pub(super) extern "C" fn mmu_init(pt: &PageTables) {
     use cortex_a::registers::*;
     MAIR_EL2.write(
         MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck

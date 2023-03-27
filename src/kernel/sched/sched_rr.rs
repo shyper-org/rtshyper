@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 use crate::kernel::{Vcpu, Scheduler, current_cpu, VcpuState, timer_enable};
 
+#[allow(dead_code)]
 pub struct SchedulerRR {
     queue: Vec<Vcpu>,
     active_idx: usize,

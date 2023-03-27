@@ -1,19 +1,16 @@
 use core::ptr;
-
-use spin::Mutex;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::arch::PAGE_SIZE;
 
-pub static TRACE: Mutex<bool> = Mutex::new(true);
+static TRACE: AtomicBool = AtomicBool::new(true);
 
 pub fn set_trace(value: bool) {
-    let mut trace = TRACE.lock();
-    *trace = value;
+    TRACE.store(value, Ordering::Relaxed);
 }
 
 pub fn trace() -> bool {
-    let trace = TRACE.lock();
-    *trace
+    TRACE.load(Ordering::Relaxed)
 }
 
 #[inline(always)]

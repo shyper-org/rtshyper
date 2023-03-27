@@ -1,13 +1,14 @@
+use core::mem::size_of;
 use core::ops::RangeInclusive;
 
 use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
-use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PageTable, PTE_S1_NORMAL};
+use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PTE_S1_NORMAL};
 use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages};
-use crate::util::{memset_safe, round_up, memcpy_safe, barrier};
+use crate::util::{round_up, memcpy_safe, barrier};
 use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
 
 use super::{current_cpu, CPU_MASTER};
@@ -64,12 +65,6 @@ impl ColorMemRegion {
 
     fn mark_available(&mut self, state: bool) {
         self.available = state;
-    }
-
-    pub fn zero(&self) {
-        for pa in (self.base..).step_by(self.step).take(self.count) {
-            memset_safe(pa as *mut _, 0, PAGE_SIZE);
-        }
     }
 }
 
@@ -231,7 +226,7 @@ fn mem_region_init_by_colors() {
 
     init_hypervisor_colors((0..(num_colors / 2)).collect());
 
-    if num_colors > core::mem::size_of::<usize>() * 8 {
+    if num_colors > size_of::<usize>() * 8 {
         panic!("Too many colors ({}) in L{}", last_level, num_colors);
     }
 
@@ -284,27 +279,27 @@ fn mem_region_init_by_colors() {
     }
 }
 
-pub enum AddreSpaceType {
-    Hypervisor = 0,
-    VM = 1,
-    HypervisorCopy = 2,
-}
+// pub enum AddreSpaceType {
+//     Hypervisor = 0,
+//     VM = 1,
+//     HypervisorCopy = 2,
+// }
 
-pub struct AddrSpace {
-    pub pt: Option<PageTable>,
-    pub as_type: AddreSpaceType,
-    pub colors: usize,
-}
+// pub struct AddrSpace {
+//     pub pt: Option<PageTable>,
+//     pub as_type: AddreSpaceType,
+//     pub colors: usize,
+// }
 
-impl AddrSpace {
-    pub const fn new() -> Self {
-        Self {
-            pt: None,
-            as_type: AddreSpaceType::VM,
-            colors: 0,
-        }
-    }
-}
+// impl AddrSpace {
+//     pub const fn new() -> Self {
+//         Self {
+//             pt: None,
+//             as_type: AddreSpaceType::VM,
+//             colors: 0,
+//         }
+//     }
+// }
 
 pub fn count_missing_num(regions: &[ColorMemRegion]) -> Vec<usize> {
     let mut list = vec![0; regions.first().unwrap().count];
@@ -319,7 +314,7 @@ pub fn count_missing_num(regions: &[ColorMemRegion]) -> Vec<usize> {
 }
 
 fn cpu_map_va2color_regions(cpu: &Cpu, cpu_va_region: RangeInclusive<usize>, color_regions: &[ColorMemRegion]) {
-    let missing_list = count_missing_num(&color_regions);
+    let missing_list = count_missing_num(color_regions);
     for (i, region) in color_regions.iter().enumerate() {
         for j in 0..region.count {
             let missing_num = missing_list.get(j).unwrap();
@@ -331,7 +326,7 @@ fn cpu_map_va2color_regions(cpu: &Cpu, cpu_va_region: RangeInclusive<usize>, col
     }
 }
 
-fn space_remapping(src: *const u8, len: usize, color_bitmap: usize) {
+fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> &'static mut T {
     let dest_va = {
         // alloc mem pages
         let color_regions =
@@ -348,7 +343,8 @@ fn space_remapping(src: *const u8, len: usize, color_bitmap: usize) {
         // auto drop heap values before copy
     };
     // copy src to va
-    memcpy_safe(dest_va, src, len);
+    memcpy_safe(dest_va, src as *const u8, len);
+    unsafe { &mut *(dest_va as *mut T) }
 }
 
 // see bao: color_hypervisor
@@ -374,12 +370,15 @@ pub fn hypervisor_self_coloring() {
     //     self_color_bitmap,
     // );
 
+    static NEW_IMAGE_START: Once<usize> = Once::new();
     let image_size = _image_end as usize - _image_start as usize;
     // Copy the hypervisor image
     if current_cpu().id == CPU_MASTER {
         let image = unsafe { core::slice::from_raw_parts(_image_start as *const u8, image_size) };
-        space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
+        let new_start = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
+        NEW_IMAGE_START.call_once(|| new_start as *const _ as usize);
     }
+    barrier();
 
     extern "C" {
         fn relocate_space();
@@ -412,8 +411,6 @@ pub fn hypervisor_self_coloring() {
     let heap_pages = HEAP_PAGES.get().unwrap();
     let heap_range = heap_pages.as_range_incluesive();
     cpu_map_va2color_regions(current_cpu(), heap_range.clone(), heap_color_regions);
-    // let len = heap_range.end() + 1 - heap_range.start();
-    // memset_safe(*heap_range.start() as *mut _, 0, len);
     if current_cpu().id == CPU_MASTER {
         heap_expansion(&heap_range);
     }

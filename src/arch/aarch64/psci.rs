@@ -4,7 +4,7 @@ use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
-use crate::vmm::{vmm_reboot, vmm_remove_vm};
+use crate::vmm::vmm_reboot;
 
 use super::smc::smc_call;
 
@@ -76,7 +76,8 @@ fn psci_guest_sys_off() {
     if active_vm_id() == 0 {
         crate::board::Platform::sys_shutdown();
     } else {
-        vmm_remove_vm(active_vm_id());
+        info!("VM[{}] system off, please remove it on MVM", active_vm_id());
+        // vmm_remove_vm(active_vm_id());
     }
 }
 

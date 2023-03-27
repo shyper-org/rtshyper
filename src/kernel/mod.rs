@@ -17,13 +17,16 @@ pub use self::vm::*;
 pub mod access;
 mod async_task;
 mod cpu;
+#[allow(dead_code)]
 mod hvc;
 mod interrupt;
 mod iommu;
+#[allow(dead_code)]
 mod ipi;
 mod ivc;
 mod logger;
 mod mem;
+#[allow(dead_code)]
 mod migrate;
 mod sched;
 mod timer;

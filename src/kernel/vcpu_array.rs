@@ -6,17 +6,13 @@ pub struct VcpuArray {
     len: usize,
 }
 
+#[allow(dead_code)]
 impl VcpuArray {
     pub const fn new() -> Self {
         Self {
             array: [const { None }; CONFIG_VM_NUM_MAX],
             len: 0,
         }
-    }
-
-    #[deprecated]
-    pub const fn capacity(&self) -> usize {
-        self.array.len()
     }
 
     #[inline]

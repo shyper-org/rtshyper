@@ -111,12 +111,6 @@ impl From<usize> for VAddr {
     }
 }
 
-impl Into<usize> for VAddr {
-    fn into(self) -> usize {
-        self.0
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page {
     pub number: usize,
