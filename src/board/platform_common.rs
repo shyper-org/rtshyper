@@ -1,3 +1,5 @@
+use core::ops::Range;
+
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 
@@ -118,4 +120,6 @@ pub trait PlatOperation {
     fn blk_read(sector: usize, count: usize, buf: usize);
 
     fn blk_write(sector: usize, count: usize, buf: usize);
+
+    fn device_regions() -> &'static [Range<usize>];
 }

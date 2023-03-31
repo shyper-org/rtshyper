@@ -56,6 +56,11 @@ impl PlatOperation for Pi4Platform {
     fn blk_write(_sector: usize, _count: usize, _buf: usize) {
         todo!()
     }
+
+    fn device_regions() -> &'static [core::ops::Range<usize>] {
+        static DEVICES: &[core::ops::Range<usize>] = &[0x0_fc00_0000..0x1_0000_0000];
+        DEVICES
+    }
 }
 
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {

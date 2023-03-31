@@ -17,21 +17,21 @@ pub const LVL1_SHIFT: usize = 30;
 pub const LVL2_SHIFT: usize = 21;
 pub const LVL3_SHIFT: usize = 12;
 
-pub const PTE_TABLE: usize = 0b11;
-pub const PTE_PAGE: usize = 0b11;
-pub const PTE_BLOCK: usize = 0b01;
+const PTE_TABLE: usize = 0b11;
+const PTE_PAGE: usize = 0b11;
+const PTE_BLOCK: usize = 0b01;
 
-pub const PTE_S1_FIELD_AP_RW_EL0_NONE: usize = 0b00 << 6;
-pub const PTE_S1_FIELD_AP_RW_EL0_RW: usize = 0b01 << 6;
-pub const PTE_S1_FIELD_AP_R0_EL0_NONE: usize = 0b10 << 6;
-pub const PTE_S1_FIELD_AP_R0_EL0_RW: usize = 0b11 << 6;
+const PTE_S1_FIELD_AP_RW_EL0_NONE: usize = 0b00 << 6;
+const PTE_S1_FIELD_AP_RW_EL0_RW: usize = 0b01 << 6;
+const PTE_S1_FIELD_AP_R0_EL0_NONE: usize = 0b10 << 6;
+const PTE_S1_FIELD_AP_R0_EL0_RW: usize = 0b11 << 6;
 
-pub const PTE_S1_FIELD_SH_NON_SHAREABLE: usize = 0b00 << 8;
-pub const PTE_S1_FIELD_SH_RESERVED: usize = 0b01 << 8;
-pub const PTE_S1_FIELD_SH_OUTER_SHAREABLE: usize = 0b10 << 8;
-pub const PTE_S1_FIELD_SH_INNER_SHAREABLE: usize = 0b11 << 8;
+const PTE_S1_FIELD_SH_NON_SHAREABLE: usize = 0b00 << 8;
+const PTE_S1_FIELD_SH_RESERVED: usize = 0b01 << 8;
+const PTE_S1_FIELD_SH_OUTER_SHAREABLE: usize = 0b10 << 8;
+const PTE_S1_FIELD_SH_INNER_SHAREABLE: usize = 0b11 << 8;
 
-pub const PTE_S1_FIELD_AF: usize = 1 << 10;
+const PTE_S1_FIELD_AF: usize = 1 << 10;
 
 pub const PTE_S2_FIELD_MEM_ATTR_DEVICE_NGNRNE: usize = 0;
 
@@ -52,7 +52,10 @@ pub const PTE_S2_FIELD_SH_INNER_SHAREABLE: usize = 0b11 << 8;
 pub const PTE_S2_FIELD_AF: usize = 1 << 10;
 
 pub const PTE_S1_NORMAL: usize =
-    pte_s1_field_attr_indx(1) | PTE_S1_FIELD_AP_RW_EL0_NONE | PTE_S1_FIELD_SH_OUTER_SHAREABLE | PTE_S1_FIELD_AF;
+    pte_s1_field_attr_indx(1) | PTE_S1_FIELD_AP_RW_EL0_NONE | PTE_S1_FIELD_SH_INNER_SHAREABLE | PTE_S1_FIELD_AF;
+
+pub const PTE_S1_DEVICE: usize =
+    pte_s1_field_attr_indx(0) | PTE_S1_FIELD_AP_RW_EL0_NONE | PTE_S1_FIELD_SH_OUTER_SHAREABLE | PTE_S1_FIELD_AF;
 
 pub const PTE_S2_DEVICE: usize =
     PTE_S2_FIELD_MEM_ATTR_DEVICE_NGNRNE | PTE_S2_FIELD_AP_RW | PTE_S2_FIELD_SH_OUTER_SHAREABLE | PTE_S2_FIELD_AF;
@@ -109,7 +112,8 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     memset_safe(cpu.cpu_pt.lvl2.as_ptr() as *mut _, 0, PAGE_SIZE);
     memset_safe(cpu.cpu_pt.lvl3.as_ptr() as *mut _, 0, PAGE_SIZE);
 
-    const_assert!(core::mem::size_of::<Cpu>() <= (1 << LVL2_SHIFT));
+    use core::mem::size_of;
+    const_assert!(size_of::<Cpu>() <= (1 << LVL2_SHIFT));
 
     let cpu_addr = cpu as *const _ as usize;
     let lvl2_addr = cpu.cpu_pt.lvl2.as_ptr() as usize;
@@ -117,7 +121,6 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     cpu.cpu_pt.lvl1[pt_lvl1_idx(CPU_BANKED_ADDRESS)] = lvl2_addr | PTE_S1_NORMAL | PTE_TABLE;
     cpu.cpu_pt.lvl2[pt_lvl2_idx(CPU_BANKED_ADDRESS)] = lvl3_addr | PTE_S1_NORMAL | PTE_TABLE;
 
-    use core::mem::size_of;
     let page_num = round_up(size_of::<Cpu>(), PAGE_SIZE) / PAGE_SIZE;
 
     for i in 0..page_num {

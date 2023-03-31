@@ -53,6 +53,17 @@ impl PlatOperation for Tx2Platform {
     fn blk_write(_sector: usize, _count: usize, _buf: usize) {
         todo!()
     }
+
+    fn device_regions() -> &'static [core::ops::Range<usize>] {
+        static DEVICES: &[core::ops::Range<usize>] = &[
+            0x3000000..0x3200000,
+            0xc200000..0xc400000,
+            0x3400000..0x3600000,
+            0x3800000..0x3a00000,
+            0x12000000..0x13000000,
+        ];
+        DEVICES
+    }
 }
 
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {

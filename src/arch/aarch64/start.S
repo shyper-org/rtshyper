@@ -1,3 +1,6 @@
+.equ CPU_STACK_OFFSET, 0x4000
+.equ CPU_STACK_SIZE, (4096 * 128)
+
 .section .text.boot
 
 .global _start
@@ -86,7 +89,7 @@ _start:
     mov x1, 1
     msr spsel, x1
     ldr x1, =CPU
-    add x1, x1, #(0x4000 + (4096 * 128))
+    add x1, x1, #(CPU_STACK_OFFSET + CPU_STACK_SIZE)
     sub	x1, x1, #0x110
     mov sp, x1
 
@@ -107,8 +110,73 @@ _start:
     mov x1, x20
     br  x3
 
+/**
+ * Copy memory:
+ *      x2: data
+ *      x3: count
+ *      x5: size
+ *      x0: destination address
+ *      x7: source address
+ */
+memcpy_relocate:
+    mov x3, #0
+1:
+    /* Copy two words */
+    ldr x2, [x7]
+    str x2, [x0]
+
+    /* Increment addressess and count accordingly */
+    add x7, x7, 8
+    add x0, x0, 8
+    add x3, x3, 8
+
+    /* If count is less then size, repeat */
+    cmp x3, x5
+    b.lt 1b
+
+    /* Restore original addresses */
+    sub x7, x7, x3
+    sub x0, x0, x3
+    ret
+
+
+// x0: va of new cpu
+// x1: pa of new cpu page table directory
 .global relocate_space
 relocate_space:
+    // x7 is the current_cpu() stack top
+    ldr x7, =CPU
+    add x7, x7, #(CPU_STACK_OFFSET + CPU_STACK_SIZE)
+
+    // x5 is the length need to copy
+    mov x8, sp
+    sub x5, x7, x8
+
+    // x7 is current sp
+    mov x7, sp
+    // x0: dst sp
+    add x0, x0, #(CPU_STACK_OFFSET + CPU_STACK_SIZE)
+    sub x0, x0, x5
+
+    mov x8, x30
+    bl memcpy_relocate
+    mov x30, x8
+
+    // invalidate TLB
+    dsb ishst
+    tlbi alle2
+    dsb ish
+    isb
+
+    // Update value of ttbr0_el2
+    msr ttbr0_el2, x1
+    dsb ish
+    isb
+
+    tlbi alle2
+    dsb ish
+    isb
+
     ret
 
 /*

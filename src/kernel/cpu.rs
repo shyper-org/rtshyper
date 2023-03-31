@@ -187,6 +187,24 @@ impl Cpu {
     pub fn pt(&self) -> &PageTable {
         self.global_pt.get().unwrap()
     }
+
+    fn init_pt(&self, directory: usize) {
+        let pt = PageTable::from_pa(directory, false);
+        self.global_pt.call_once(|| pt);
+        crate::arch::Arch::invalid_hypervisor_all();
+    }
+
+    pub(super) unsafe fn reset_pt(&mut self, directory: usize) {
+        // reset global pt without calling the destructor of PageTable
+        let dst = core::ptr::addr_of_mut!(self.global_pt);
+        core::ptr::write(dst, Once::new());
+        assert!(self.global_pt.get().is_none());
+        self.init_pt(directory);
+    }
+
+    pub fn stack_top(&self) -> usize {
+        self.stack.as_ptr_range().end as usize
+    }
 }
 
 #[no_mangle]
@@ -223,9 +241,7 @@ pub fn active_vm_ncpu() -> usize {
 
 fn cpu_init_pt() {
     let cpu = current_cpu();
-    let pt = PageTable::from_pa(cpu.cpu_pt.lvl1.as_ptr() as usize, false);
-    cpu.global_pt.call_once(|| pt);
-    crate::arch::Arch::invalid_hypervisor_all();
+    cpu.init_pt(cpu.cpu_pt.lvl1.as_ptr() as usize);
 }
 
 // Todo: add config for base slice
@@ -274,10 +290,6 @@ pub fn cpu_idle() -> ! {
 }
 
 pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
-
-pub fn cpu_by_id(cpu_id: usize) -> &'static Cpu {
-    unsafe { &mut CPU_LIST[cpu_id] }
-}
 
 #[no_mangle]
 // #[link_section = ".text.boot"]

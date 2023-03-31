@@ -4,11 +4,11 @@ use core::ops::RangeInclusive;
 use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
-use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PTE_S1_NORMAL};
+use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PTE_S1_NORMAL, PTE_S1_DEVICE};
 use crate::board::*;
 use crate::kernel::Cpu;
-use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages};
-use crate::util::{round_up, memcpy_safe, barrier};
+use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
+use crate::util::{round_up, memcpy_safe, barrier, cache_invalidate_d};
 use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
 
 use super::{current_cpu, CPU_MASTER};
@@ -272,34 +272,11 @@ fn mem_region_init_by_colors() {
     }
 
     println!("mem_vm_region_init_by_colors:");
-    // for (color, color_region_list) in vm_region_by_color.iter().enumerate() {
     for color in 0..num_colors {
         let color_region_list = mem_region_by_color.get(color).unwrap();
         println!(" Color {:#04x}: {:x?}", color, color_region_list,);
     }
 }
-
-// pub enum AddreSpaceType {
-//     Hypervisor = 0,
-//     VM = 1,
-//     HypervisorCopy = 2,
-// }
-
-// pub struct AddrSpace {
-//     pub pt: Option<PageTable>,
-//     pub as_type: AddreSpaceType,
-//     pub colors: usize,
-// }
-
-// impl AddrSpace {
-//     pub const fn new() -> Self {
-//         Self {
-//             pt: None,
-//             as_type: AddreSpaceType::VM,
-//             colors: 0,
-//         }
-//     }
-// }
 
 pub fn count_missing_num(regions: &[ColorMemRegion]) -> Vec<usize> {
     let mut list = vec![0; regions.first().unwrap().count];
@@ -326,28 +303,65 @@ fn cpu_map_va2color_regions(cpu: &Cpu, cpu_va_region: RangeInclusive<usize>, col
     }
 }
 
-fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> &'static mut T {
-    let dest_va = {
-        // alloc mem pages
-        let color_regions =
-            mem_region_alloc_colors(len, color_bitmap).unwrap_or_else(|_| panic!("mem_region_alloc_colors() error"));
-        debug!("space_remapping: color_regions {:#x?}", color_regions);
-        // alloc va space
-        let va_pages = vpage_alloc(len, Some(1 << 20)).unwrap_or_else(|err| panic!("vpage_alloc: {err:?}"));
-        info!("space_remapping: va pages {:?}", va_pages);
-        let dest_va = va_pages.start().start_address().as_ptr();
-        let range = va_pages.as_range_incluesive();
-        // map va with pa
-        cpu_map_va2color_regions(current_cpu(), range, &color_regions);
-        dest_va
-        // auto drop heap values before copy
-    };
+fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> (&'static mut T, Vec<ColorMemRegion>) {
+    // alloc mem pages
+    let color_regions =
+        mem_region_alloc_colors(len, color_bitmap).unwrap_or_else(|_| panic!("mem_region_alloc_colors() error"));
+    info!("space_remapping: color_regions {:x?}", color_regions);
+    // alloc va space
+    let va_pages = vpage_alloc(len, None).unwrap_or_else(|err| panic!("vpage_alloc: {err:?}"));
+    info!("space_remapping: va pages {:?}", va_pages);
+    let dest_va = va_pages.start().start_address().as_ptr();
+    let range = va_pages.as_range_incluesive();
+    info!("space_remapping: dest va {:x?}", range);
+    // map va with pa
+    cpu_map_va2color_regions(current_cpu(), range, &color_regions);
     // copy src to va
     memcpy_safe(dest_va, src as *const u8, len);
-    unsafe { &mut *(dest_va as *mut T) }
+    (unsafe { &mut *(dest_va as *mut T) }, color_regions)
 }
 
-// see bao: color_hypervisor
+fn device_mapping(cpu: &Cpu) {
+    use crate::arch::DEVICE_BASE;
+    let device_regions = crate::board::Platform::device_regions();
+    for device in device_regions.iter() {
+        assert_eq!(device.start % 0x20_0000, 0);
+        assert_eq!(device.len() % 0x20_0000, 0);
+        cpu.pt().pt_map_range(
+            device.start | DEVICE_BASE,
+            device.len(),
+            device.start,
+            PTE_S1_DEVICE,
+            true,
+        );
+    }
+}
+
+#[inline]
+unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
+    use crate::arch::{ArchTrait, TlbInvalidate};
+    use tock_registers::interfaces::Readable;
+
+    let current_sp = if cfg!(target_arch = "aarch64") {
+        cortex_a::registers::SP.get() as usize
+    } else {
+        todo!()
+    };
+    let length = current_cpu().stack_top() - current_sp;
+
+    let dst_sp = cpu_new.stack_top() - length;
+    unsafe {
+        crate::util::memcpy(dst_sp as *const _, current_sp as *const _, length);
+    }
+    info!("copy stack from {current_sp:#x} to {dst_sp:#x}, length {length:#x}");
+
+    crate::arch::Arch::invalid_hypervisor_all();
+    info!("core {}: switch to page table {:#x}", cpu_new.id, root_pt);
+    // switch to page table
+    crate::arch::Arch::install_self_page_table(root_pt);
+    crate::arch::Arch::invalid_hypervisor_all();
+}
+
 pub fn hypervisor_self_coloring() {
     let cpu_cache_info = CPU_CACHE.get().unwrap();
     let last_level = cpu_cache_info.min_share_level;
@@ -362,29 +376,53 @@ pub fn hypervisor_self_coloring() {
         return;
     }
 
-    // // Copy the CPU space into a colored region
-    // let cpu = current_cpu();
-    // space_remapping(
-    //     cpu as *const _ as usize as *const _,
-    //     core::mem::size_of::<Cpu>(),
-    //     self_color_bitmap,
-    // );
+    // Copy the CPU space into a colored region
+    let cpu = current_cpu();
+    let (cpu_new, cpu_pa_regions) = space_remapping(cpu, size_of::<Cpu>(), self_color_bitmap);
+    // init the page table in cpu_new
+    cpu_new.cpu_pt.lvl1.fill(0);
+    cpu_new.cpu_pt.lvl2.fill(0);
+    cpu_new.cpu_pt.lvl3.fill(0);
+    match current_cpu().pt().ipa2pa(cpu_new.cpu_pt.lvl1.as_ptr() as usize) {
+        Some(directory) => unsafe { cpu_new.reset_pt(directory) },
+        None => panic!(
+            "Invalid va {:#x} when rewrite cpu_new page table",
+            cpu_new.cpu_pt.lvl1.as_ptr() as usize
+        ),
+    }
+    let cpu_va_range = CPU_BANKED_ADDRESS..=CPU_BANKED_ADDRESS + size_of::<Cpu>() - 1;
+    cpu_map_va2color_regions(cpu_new, cpu_va_range, &cpu_pa_regions);
+    device_mapping(cpu_new);
+    core::mem::forget(cpu_pa_regions);
+    info!("new cpu {} page table init OK", cpu_new.id);
 
-    static NEW_IMAGE_START: Once<usize> = Once::new();
+    static NEW_IMAGE_PA_REGIONS: Once<Vec<ColorMemRegion>> = Once::new();
     let image_size = _image_end as usize - _image_start as usize;
     // Copy the hypervisor image
     if current_cpu().id == CPU_MASTER {
+        info!("image size: {image_size:#x}");
         let image = unsafe { core::slice::from_raw_parts(_image_start as *const u8, image_size) };
-        let new_start = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
-        NEW_IMAGE_START.call_once(|| new_start as *const _ as usize);
+        let (_new_start, pa_regions) = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
+        NEW_IMAGE_PA_REGIONS.call_once(|| pa_regions);
+    } else {
+        // wait until master cpu finish image copy
+        NEW_IMAGE_PA_REGIONS.wait();
     }
+    let image_range = _image_start as usize..=_image_end as usize - 1;
+    info!("new cpu {} map image {:x?}", cpu_new.id, image_range);
+    cpu_map_va2color_regions(cpu_new, image_range, NEW_IMAGE_PA_REGIONS.get().unwrap());
     barrier();
 
-    extern "C" {
-        fn relocate_space();
-    }
+    // extern "C" {
+    //     fn relocate_space(cpu: *const u8, root_pt: usize);
+    // }
+    // unsafe {
+    //     relocate_space(cpu_new as *const _ as *const u8, cpu_new.pt().base_pa());
+    // }
+    info!("====== relocate_space() succeeded ======");
+    // cache invalidate
     unsafe {
-        relocate_space();
+        cache_invalidate_d(_image_start as usize, image_size);
     }
 
     // Core 0 apply for va and pa pages
@@ -403,8 +441,10 @@ pub fn hypervisor_self_coloring() {
             }
             Err(_) => panic!("mem_region_alloc_colors failed"),
         };
+    } else {
+        HEAP_PAGES.wait();
+        HEAP_COLOR_REGIONS.wait();
     }
-    barrier();
 
     // enlarge the heap
     let heap_color_regions = HEAP_COLOR_REGIONS.get().unwrap();
