@@ -4,13 +4,12 @@ use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 
 pub const PLATFORM_CPU_NUM_MAX: usize = 8;
-pub const TOTAL_MEM_REGION_MAX: usize = 16;
 pub const PLATFORM_VCPU_NUM_MAX: usize = 8;
 
 #[repr(C)]
 pub enum SchedRule {
     RoundRobin,
-    None,
+    // None,
 }
 
 #[repr(C)]
@@ -21,17 +20,20 @@ pub struct PlatMemRegion {
 
 #[repr(C)]
 pub struct PlatMemoryConfig {
-    pub region_num: usize,
     pub base: usize,
-    pub regions: [PlatMemRegion; TOTAL_MEM_REGION_MAX],
+    pub regions: &'static [PlatMemRegion],
+}
+
+pub struct PlatCpuCoreConfig {
+    pub name: u8,
+    pub mpidr: usize,
+    pub sched: SchedRule,
 }
 
 #[repr(C)]
 pub struct PlatCpuConfig {
     pub num: usize,
-    pub name: [u8; PLATFORM_CPU_NUM_MAX],
-    pub mpidr_list: [usize; PLATFORM_CPU_NUM_MAX],
-    pub sched_list: [SchedRule; PLATFORM_CPU_NUM_MAX],
+    pub core_list: &'static [PlatCpuCoreConfig],
 }
 
 #[repr(C)]
@@ -44,7 +46,6 @@ pub struct ArchDesc {
 pub struct PlatformConfig {
     pub cpu_desc: PlatCpuConfig,
     pub mem_desc: PlatMemoryConfig,
-    pub uart_base: usize,
     pub arch_desc: ArchDesc,
 }
 
@@ -53,6 +54,9 @@ pub trait PlatOperation {
     const UART_0_ADDR: usize;
     const UART_1_ADDR: usize;
     const UART_2_ADDR: usize = usize::MAX;
+
+    // must offer hypervisor used uart
+    const HYPERVISOR_UART_BASE: usize;
 
     const UART_0_INT: usize = usize::MAX;
     const UART_1_INT: usize = usize::MAX;
@@ -91,7 +95,7 @@ pub trait PlatOperation {
         use super::PLAT_DESC;
         use crate::mm::_image_start;
         for i in 1..PLAT_DESC.cpu_desc.num {
-            Self::cpu_on(PLAT_DESC.cpu_desc.mpidr_list[i], _image_start as usize, 0);
+            Self::cpu_on(PLAT_DESC.cpu_desc.core_list[i].mpidr, _image_start as usize, 0);
         }
     }
 

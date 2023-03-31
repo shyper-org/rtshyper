@@ -1,7 +1,9 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::{PlatOperation, Platform};
-use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion, SchedRule};
+use crate::board::{
+    PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
+    PlatMemRegion,
+};
 use crate::board::SchedRule::RoundRobin;
 use crate::device::ARM_CORTEX_A57;
 #[allow(unused_imports)]
@@ -15,6 +17,8 @@ impl PlatOperation for Tx2Platform {
 
     const UART_0_INT: usize = 32 + 0x70;
     const UART_1_INT: usize = 32 + 0x72;
+
+    const HYPERVISOR_UART_BASE: usize = Self::UART_1_ADDR;
 
     const GICD_BASE: usize = 0x3881000;
     const GICC_BASE: usize = 0x3882000;
@@ -69,45 +73,36 @@ impl PlatOperation for Tx2Platform {
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
         num: 4,
-        mpidr_list: [0x80000100, 0x80000101, 0x80000102, 0x80000103, 0, 0, 0, 0],
-        name: [ARM_CORTEX_A57; 8],
-        sched_list: [
-            RoundRobin,
-            RoundRobin,
-            RoundRobin,
-            RoundRobin,
-            SchedRule::None,
-            SchedRule::None,
-            SchedRule::None,
-            SchedRule::None,
+        core_list: &[
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000100,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000101,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000102,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000103,
+                sched: RoundRobin,
+            },
         ],
     },
     mem_desc: PlatMemoryConfig {
-        region_num: 1,
-        regions: [
-            PlatMemRegion {
-                base: 0x8000_0000,
-                size: 0x1_f000_0000,
-            },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-        ],
+        regions: &[PlatMemRegion {
+            base: 0x8000_0000,
+            size: 0x1_f000_0000,
+        }],
         base: 0x80000000,
     },
-    uart_base: Platform::UART_0_ADDR,
     arch_desc: ArchDesc {
         gic_desc: GicDesc {
             gicd_addr: Platform::GICD_BASE,

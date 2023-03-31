@@ -1,7 +1,9 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::{PlatOperation, Platform};
-use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion, SchedRule};
+use crate::board::{
+    PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
+    PlatMemRegion,
+};
 use crate::board::SchedRule::RoundRobin;
 use crate::device::ARM_CORTEX_A57;
 #[allow(unused_imports)]
@@ -15,6 +17,8 @@ impl PlatOperation for Pi4Platform {
 
     const UART_0_INT: usize = 32 + 0x79;
     const UART_1_INT: usize = 32 + 0x79;
+
+    const HYPERVISOR_UART_BASE: usize = Self::UART_0_ADDR;
 
     const GICD_BASE: usize = 0xFF841000;
     const GICC_BASE: usize = 0xFF842000;
@@ -66,22 +70,31 @@ impl PlatOperation for Pi4Platform {
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
         num: 4,
-        mpidr_list: [0x80000000, 0x80000001, 0x80000002, 0x80000003, 0, 0, 0, 0],
-        name: [ARM_CORTEX_A57; 8],
-        sched_list: [
-            RoundRobin,
-            RoundRobin,
-            RoundRobin,
-            RoundRobin,
-            SchedRule::None,
-            SchedRule::None,
-            SchedRule::None,
-            SchedRule::None,
+        core_list: &[
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000000,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000001,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000002,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0x80000003,
+                sched: RoundRobin,
+            },
         ],
     },
     mem_desc: PlatMemoryConfig {
-        region_num: 4,
-        regions: [
+        regions: &[
             PlatMemRegion {
                 base: 0xf0000000,
                 size: 0xc000000,
@@ -98,22 +111,9 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
                 base: 0x100000000,
                 size: 0x100000000,
             },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
         ],
         base: 0xf0000000,
     },
-    uart_base: Platform::UART_0_ADDR,
     arch_desc: ArchDesc {
         gic_desc: GicDesc {
             gicd_addr: Platform::GICD_BASE,

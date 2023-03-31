@@ -214,9 +214,7 @@ fn init_hypervisor_colors(colors: Vec<usize>) {
 }
 
 fn mem_region_init_by_colors() {
-    if PLAT_DESC.mem_desc.region_num - 1 > TOTAL_MEM_REGION_MAX {
-        panic!("Platform memory regions overrun!");
-    } else if PLAT_DESC.mem_desc.region_num == 0 {
+    if PLAT_DESC.mem_desc.regions.is_empty() {
         panic!("Platform Vm Memory Regions Overrun!");
     }
 
@@ -235,11 +233,9 @@ fn mem_region_init_by_colors() {
         mem_region_by_color.push(Vec::<ColorMemRegion>::new());
     }
 
-    let vm_region_num = PLAT_DESC.mem_desc.region_num;
-
     let step = num_colors * PAGE_SIZE;
 
-    for (i, region) in PLAT_DESC.mem_desc.regions.iter().enumerate().take(vm_region_num) {
+    for (i, region) in PLAT_DESC.mem_desc.regions.iter().enumerate() {
         let (plat_mem_region_base, plat_mem_region_size) = {
             if (region.base..region.base + region.size).contains(&(_image_end as usize)) {
                 let start = round_up(_image_end as usize, PAGE_SIZE);

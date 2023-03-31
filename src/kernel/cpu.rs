@@ -246,13 +246,10 @@ fn cpu_init_pt() {
 
 // Todo: add config for base slice
 fn cpu_sched_init() {
-    match PLAT_DESC.cpu_desc.sched_list[current_cpu().id] {
+    match PLAT_DESC.cpu_desc.core_list[current_cpu().id].sched {
         SchedRule::RoundRobin => {
             info!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
             current_cpu().sched.call_once(|| Box::new(SchedulerRR::new(1)));
-        }
-        _ => {
-            todo!();
         }
     }
 }

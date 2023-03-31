@@ -1,9 +1,11 @@
 // TODO: move these core name to device
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::{PlatOperation, Platform};
-use crate::board::{ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig, PlatMemRegion};
-use crate::board::SchedRule::{self, RoundRobin};
+use crate::board::{
+    PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
+    PlatMemRegion,
+};
+use crate::board::SchedRule::RoundRobin;
 use crate::device::ARM_CORTEX_A57;
 use crate::driver::{read, write};
 
@@ -16,6 +18,8 @@ impl PlatOperation for QemuPlatform {
 
     const UART_0_INT: usize = 32 + 0x70;
     const UART_1_INT: usize = 32 + 0x72;
+
+    const HYPERVISOR_UART_BASE: usize = Self::UART_0_ADDR;
 
     const GICD_BASE: usize = 0x08000000;
     const GICC_BASE: usize = 0x08010000;
@@ -64,22 +68,31 @@ impl PlatOperation for QemuPlatform {
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
         num: 4,
-        mpidr_list: [0, 1, 2, 3, 4, 5, 6, 7],
-        name: [ARM_CORTEX_A57; 8],
-        sched_list: [
-            RoundRobin,
-            RoundRobin,
-            RoundRobin,
-            RoundRobin,
-            SchedRule::None,
-            SchedRule::None,
-            SchedRule::None,
-            SchedRule::None,
+        core_list: &[
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 0,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 1,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 2,
+                sched: RoundRobin,
+            },
+            PlatCpuCoreConfig {
+                name: ARM_CORTEX_A57,
+                mpidr: 3,
+                sched: RoundRobin,
+            },
         ],
     },
     mem_desc: PlatMemoryConfig {
-        region_num: 2,
-        regions: [
+        regions: &[
             // reserve 0x48000000 ~ 0x48100000 for QEMU dtb
             PlatMemRegion {
                 base: 0x40000000,
@@ -89,24 +102,9 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
                 base: 0x50000000,
                 size: 0x1f0000000,
             },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
-            PlatMemRegion { base: 0, size: 0 },
         ],
         base: 0x40000000,
     },
-    uart_base: Platform::UART_0_ADDR,
     arch_desc: ArchDesc {
         gic_desc: GicDesc {
             gicd_addr: Platform::GICD_BASE,
