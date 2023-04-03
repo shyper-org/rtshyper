@@ -1,4 +1,3 @@
-use core::ptr;
 use core::sync::atomic::AtomicUsize;
 use core::sync::atomic::Ordering;
 
@@ -34,6 +33,14 @@ pub fn barrier() {
     }
 }
 
+pub fn reset_barrier() {
+    unsafe {
+        CPU_GLB_SYNC.n = PLAT_DESC.cpu_desc.num;
+        CPU_GLB_SYNC.count = AtomicUsize::new(0);
+        CPU_GLB_SYNC.ready = true;
+    }
+}
+
 #[inline(never)]
 pub fn func_barrier() {
     unsafe {
@@ -47,6 +54,6 @@ pub fn func_barrier() {
 
 pub fn set_barrier_num(num: usize) {
     unsafe {
-        ptr::write_volatile(&mut CPU_FUNC_SYNC.n, num);
+        CPU_FUNC_SYNC.n = num;
     }
 }

@@ -189,6 +189,7 @@ impl Cpu {
     }
 
     fn init_pt(&self, directory: usize) {
+        info!("cpu {} init_pt() pa {:#x}", self.id, directory);
         let pt = PageTable::from_pa(directory, false);
         self.global_pt.call_once(|| pt);
         crate::arch::Arch::invalid_hypervisor_all();
@@ -241,7 +242,8 @@ pub fn active_vm_ncpu() -> usize {
 
 fn cpu_init_pt() {
     let cpu = current_cpu();
-    cpu.init_pt(cpu.cpu_pt.lvl1.as_ptr() as usize);
+    let directory = crate::arch::Arch::mem_translate(cpu.cpu_pt.lvl1.as_ptr() as usize).unwrap();
+    cpu.init_pt(directory);
 }
 
 // Todo: add config for base slice

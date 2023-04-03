@@ -28,7 +28,6 @@ macro_rules! msr {
     };
 }
 
-#[macro_export]
 macro_rules! sysreg_encode_addr {
     ($op0:expr, $op1:expr, $crn:expr, $crm:expr, $op2:expr) => {
         // (Op0[21..20] + Op2[19..17] + Op1[16..14] + CRn[13..10]) + CRm[4..1]
@@ -37,5 +36,14 @@ macro_rules! sysreg_encode_addr {
             | (($op1 & 0b111) << 14)
             | (($crn & 0xf) << 10)
             | (($crm & 0xf) << 1))
+    };
+}
+
+macro_rules! arm_at {
+    ($at_op:expr, $addr:expr) => {
+        unsafe {
+            core::arch::asm!(concat!("AT ", $at_op, ", {0}"), in(reg) $addr, options(nomem, nostack));
+            core::arch::asm!("isb");
+        }
     };
 }

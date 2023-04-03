@@ -8,7 +8,7 @@ use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, 
 use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
-use crate::util::{round_up, memcpy_safe, barrier, cache_invalidate_d};
+use crate::util::{round_up, memcpy_safe, barrier, reset_barrier, cache_clean_invalidate_d};
 use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
 
 use super::{current_cpu, CPU_MASTER};
@@ -303,7 +303,7 @@ fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> 
     // alloc mem pages
     let color_regions =
         mem_region_alloc_colors(len, color_bitmap).unwrap_or_else(|_| panic!("mem_region_alloc_colors() error"));
-    info!("space_remapping: color_regions {:x?}", color_regions);
+    debug!("space_remapping: color_regions {:x?}", color_regions);
     // alloc va space
     let va_pages = vpage_alloc(len, None).unwrap_or_else(|err| panic!("vpage_alloc: {err:?}"));
     info!("space_remapping: va pages {:?}", va_pages);
@@ -331,28 +331,32 @@ fn device_mapping(cpu: &Cpu) {
             true,
         );
     }
+    for i in 0..crate::arch::PLATFORM_PHYSICAL_LIMIT_GB {
+        let pa = i << crate::arch::LVL1_SHIFT;
+        let hva = crate::arch::Address::pa2hva(pa);
+        cpu.pt()
+            .pt_map_range(hva, 1 << crate::arch::LVL1_SHIFT, pa, PTE_S1_NORMAL, true);
+    }
 }
 
 #[inline]
 unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
+    // NOTE: do nothing complex (means need stack or heap)
+    // for example, `println!()`, `info!()` is not recommended here
+    // because it may cause unpredictable problems
     use crate::arch::{ArchTrait, TlbInvalidate};
-    use tock_registers::interfaces::Readable;
 
-    let current_sp = if cfg!(target_arch = "aarch64") {
-        cortex_a::registers::SP.get() as usize
-    } else {
-        todo!()
-    };
+    // info!("core {}: switch to page table {:#x}", cpu_new.id, root_pt);
+    let current_sp = crate::arch::Arch::current_stack_pointer();
     let length = current_cpu().stack_top() - current_sp;
 
     let dst_sp = cpu_new.stack_top() - length;
     unsafe {
         crate::util::memcpy(dst_sp as *const _, current_sp as *const _, length);
     }
-    info!("copy stack from {current_sp:#x} to {dst_sp:#x}, length {length:#x}");
+    // info!("copy stack from {current_sp:#x} to {dst_sp:#x}, length {length:#x}");
 
     crate::arch::Arch::invalid_hypervisor_all();
-    info!("core {}: switch to page table {:#x}", cpu_new.id, root_pt);
     // switch to page table
     crate::arch::Arch::install_self_page_table(root_pt);
     crate::arch::Arch::invalid_hypervisor_all();
@@ -392,33 +396,57 @@ pub fn hypervisor_self_coloring() {
     core::mem::forget(cpu_pa_regions);
     info!("new cpu {} page table init OK", cpu_new.id);
 
+    static NEW_IMAGE_START: Once<usize> = Once::new();
     static NEW_IMAGE_PA_REGIONS: Once<Vec<ColorMemRegion>> = Once::new();
     let image_size = _image_end as usize - _image_start as usize;
     // Copy the hypervisor image
     if current_cpu().id == CPU_MASTER {
         info!("image size: {image_size:#x}");
         let image = unsafe { core::slice::from_raw_parts(_image_start as *const u8, image_size) };
-        let (_new_start, pa_regions) = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
+        let (new_start, pa_regions) = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
         NEW_IMAGE_PA_REGIONS.call_once(|| pa_regions);
+        NEW_IMAGE_START.call_once(|| new_start as *const _ as usize);
     } else {
         // wait until master cpu finish image copy
         NEW_IMAGE_PA_REGIONS.wait();
+        NEW_IMAGE_START.wait();
     }
     let image_range = _image_start as usize..=_image_end as usize - 1;
-    info!("new cpu {} map image {:x?}", cpu_new.id, image_range);
+    // info!("new cpu {} map image {:x?}", cpu_new.id, image_range);
     cpu_map_va2color_regions(cpu_new, image_range, NEW_IMAGE_PA_REGIONS.get().unwrap());
-    barrier();
 
-    // extern "C" {
-    //     fn relocate_space(cpu: *const u8, root_pt: usize);
-    // }
-    // unsafe {
-    //     relocate_space(cpu_new as *const _ as *const u8, cpu_new.pt().base_pa());
-    // }
-    info!("====== relocate_space() succeeded ======");
-    // cache invalidate
+    // copy again: for heap space in bss segment
+    if current_cpu().id == CPU_MASTER {
+        unsafe {
+            crate::util::memcpy(
+                *NEW_IMAGE_START.get().unwrap() as *const _,
+                _image_start as *const _,
+                image_size,
+            )
+        };
+    }
+    barrier();
+    // NOTE: Now, don't use heap or stack
+
     unsafe {
-        cache_invalidate_d(_image_start as usize, image_size);
+        relocate_space(cpu_new, cpu_new.pt().base_pa());
+        // cache invalidate
+        cache_clean_invalidate_d(_image_start as usize, image_size);
+        cache_clean_invalidate_d(CPU_BANKED_ADDRESS, size_of::<Cpu>());
+    }
+
+    /*
+        The barrier objects are in an inconsistent state,
+        and they need to be re-initialized before they get used again,
+        so CPUs need a way to communicate between themselves without
+        an explicit barrier. To accomplish this a static global variable is used.
+    */
+    static BARRIER_RESET: Once<()> = Once::new();
+    if current_cpu().id == CPU_MASTER {
+        reset_barrier();
+        BARRIER_RESET.call_once(|| ());
+    } else {
+        BARRIER_RESET.wait();
     }
 
     // Core 0 apply for va and pa pages
@@ -448,7 +476,8 @@ pub fn hypervisor_self_coloring() {
     let heap_range = heap_pages.as_range_incluesive();
     cpu_map_va2color_regions(current_cpu(), heap_range.clone(), heap_color_regions);
     if current_cpu().id == CPU_MASTER {
-        heap_expansion(&heap_range);
+        heap_expansion(heap_range);
     }
     barrier();
+    info!("=== core {} finish self_coloring ===", current_cpu().id);
 }

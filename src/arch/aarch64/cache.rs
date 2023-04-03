@@ -6,7 +6,6 @@ use crate::{
     kernel::current_cpu,
     arch::{CacheInfoTrait, CacheType, CacheIndexed, cache},
 };
-use crate::sysreg_encode_addr;
 use alloc::vec::Vec;
 use cache::CpuCacheInfo;
 use cortex_a::registers::{CLIDR_EL1, CCSIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};

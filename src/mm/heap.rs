@@ -25,7 +25,7 @@ pub fn heap_init() {
 }
 
 // make sure that the va ranges has corresponding physical pages
-pub fn heap_expansion(region: &RangeInclusive<usize>) {
+pub fn heap_expansion(region: RangeInclusive<usize>) {
     info!("heap_expansion: {:#x}..={:#x}", region.start(), region.end());
     unsafe {
         HEAP_ALLOCATOR.lock().add_to_heap(*region.start(), *region.end() + 1);
@@ -34,5 +34,5 @@ pub fn heap_expansion(region: &RangeInclusive<usize>) {
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
-    panic!("Out Of Memory: Heap allocation error, layout = {:?}", layout);
+    panic!("Out Of Memory: Heap allocation error, layout = {:x?}", layout);
 }

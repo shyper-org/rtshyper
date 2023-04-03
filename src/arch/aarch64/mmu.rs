@@ -1,7 +1,7 @@
 use tock_registers::*;
 use tock_registers::interfaces::*;
 
-use crate::arch::{pt_lvl1_idx, pt_lvl2_idx};
+use crate::arch::{pt_lvl1_idx, pt_lvl2_idx, Address};
 use crate::arch::{LVL1_SHIFT, LVL2_SHIFT};
 use crate::board::PLAT_DESC;
 use crate::mm::_image_end;
@@ -10,9 +10,11 @@ use crate::util::round_up;
 use super::interface::*;
 
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
+pub const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 
-pub const DEVICE_BASE: usize = 0x6_0000_0000;
+pub const DEVICE_BASE: usize = 0b10 << 34; // 34 is pa limit 16GB
 const_assert!(DEVICE_BASE < 1 << VM_IPA_SIZE); // if not, the device va will ocuppy the ipa2hva space, which is very dangerous
+const_assert_eq!(DEVICE_BASE, 0x8_0000_0000);
 
 register_bitfields! {u64,
     pub PageDescriptorS1 [
@@ -108,7 +110,6 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         // Always SysRAM (0.75G – 1.0G) 0x0_3000_0000 – 0x0_3FFF_FFFF
         // RESERVED (0.5G – 0.75G)      0x0_2000_0000 – 0x0_2FFF_FFFF
         // Always MMIO (0.0G – 0.5G)    0x0_0000_0000 – 0x1FFF_FFFF
-        const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
         for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let output_addr = i << LVL1_SHIFT;
             lvl1_pt.lvl1[i] = if (PLAT_DESC.mem_desc.base..image_end_align_gb).contains(&output_addr) {
@@ -166,7 +167,6 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         // 0x8_0000_0000 + 0x0_c000_0000
         lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE + device_region_start)] = BlockDescriptor::table(lvl2_base);
     } else if cfg!(feature = "qemu") {
-        const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
         for index in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let pa = index << LVL1_SHIFT;
             lvl1_pt.lvl1[index] = if pa < PLAT_DESC.mem_desc.base {
@@ -185,6 +185,12 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         {
             lvl2_pt.lvl1[index] = BlockDescriptor::new(pa, true);
         }
+    }
+
+    // map pa to hva
+    for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
+        let pa = i << LVL1_SHIFT;
+        lvl1_pt.lvl1[pt_lvl1_idx(pa.pa2hva())] = BlockDescriptor::new(pa, false);
     }
 }
 

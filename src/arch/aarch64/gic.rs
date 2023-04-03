@@ -8,7 +8,7 @@ use tock_registers::registers::*;
 use crate::arch::{DEVICE_BASE, INTERRUPT_NUM_MAX};
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::current_cpu;
-use crate::util::{bit_extract, trace};
+use crate::util::bit_extract;
 
 // GICD BITS
 const GICD_CTLR_EN_BIT: usize = 0x1;
@@ -138,20 +138,13 @@ pub struct GicDistributor {
 impl core::ops::Deref for GicDistributor {
     type Target = GicDistributorBlock;
     fn deref(&self) -> &Self::Target {
-        if self.base_addr < 0x1000 {
-            panic!("illegal gicd addr {}", self.base_addr);
-        }
-        unsafe { &*self.ptr() }
+        unsafe { &*(self.base_addr as *const Self::Target) }
     }
 }
 
 impl GicDistributor {
     const fn new(base_addr: usize) -> GicDistributor {
         GicDistributor { base_addr }
-    }
-
-    pub fn ptr(&self) -> *const GicDistributorBlock {
-        self.base_addr as *const GicDistributorBlock
     }
 
     pub fn is_enabler(&self, idx: usize) -> u32 {
@@ -404,20 +397,13 @@ pub struct GicCpuInterface {
 impl core::ops::Deref for GicCpuInterface {
     type Target = GicCpuInterfaceBlock;
     fn deref(&self) -> &Self::Target {
-        if self.base_addr < 0x1000 {
-            panic!("illegal gicc addr {}", self.base_addr);
-        }
-        unsafe { &*self.ptr() }
+        unsafe { &*(self.base_addr as *const Self::Target) }
     }
 }
 
 impl GicCpuInterface {
     pub const fn new(base_addr: usize) -> GicCpuInterface {
         GicCpuInterface { base_addr }
-    }
-
-    pub fn ptr(&self) -> *const GicCpuInterfaceBlock {
-        self.base_addr as *const GicCpuInterfaceBlock
     }
 
     fn init(&self) {
@@ -496,20 +482,13 @@ pub struct GicHypervisorInterface {
 impl core::ops::Deref for GicHypervisorInterface {
     type Target = GicHypervisorInterfaceBlock;
     fn deref(&self) -> &Self::Target {
-        if trace() && self.base_addr < 0x1000 {
-            panic!("");
-        }
-        unsafe { &*self.ptr() }
+        unsafe { &*(self.base_addr as *const Self::Target) }
     }
 }
 
 impl GicHypervisorInterface {
     const fn new(base_addr: usize) -> GicHypervisorInterface {
         GicHypervisorInterface { base_addr }
-    }
-
-    pub fn ptr(&self) -> *const GicHypervisorInterfaceBlock {
-        self.base_addr as *const GicHypervisorInterfaceBlock
     }
 
     pub fn hcr(&self) -> u32 {

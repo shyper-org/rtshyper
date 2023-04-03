@@ -42,15 +42,6 @@ const ESR_ELx_S1PTW_SHIFT: usize = 7;
 #[allow(non_upper_case_globals)]
 const ESR_ELx_S1PTW: usize = 1 << ESR_ELx_S1PTW_SHIFT;
 
-macro_rules! arm_at {
-    ($at_op:expr, $addr:expr) => {
-        unsafe {
-            core::arch::asm!(concat!("AT ", $at_op, ", {0}"), in(reg) $addr, options(nomem, nostack));
-            core::arch::asm!("isb");
-        }
-    };
-}
-
 fn translate_far_to_hpfar(far: usize) -> Result<usize, ()> {
     /*
      * We have

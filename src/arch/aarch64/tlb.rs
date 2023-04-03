@@ -19,6 +19,7 @@ impl TlbInvalidate for Aarch64Arch {
         }
     }
 
+    #[inline]
     fn invalid_hypervisor_all() {
         unsafe {
             asm!("dsb ish", "tlbi alle2is", "dsb ish", "isb", options(nostack));
@@ -38,6 +39,7 @@ impl TlbInvalidate for Aarch64Arch {
         }
     }
 
+    #[inline]
     fn invalid_guest_all() {
         unsafe {
             asm!("dsb ish", "tlbi vmalls12e1is", "dsb ish", "isb", options(nostack));

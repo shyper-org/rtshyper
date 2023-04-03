@@ -29,6 +29,8 @@ pub trait ArchTrait {
     fn install_vm_page_table(base: usize, vmid: usize);
     fn install_self_page_table(base: usize);
     fn disable_prefetch();
+    fn mem_translate(va: usize) -> Option<usize>;
+    fn current_stack_pointer() -> usize;
 }
 
 pub trait TlbInvalidate {
@@ -36,4 +38,8 @@ pub trait TlbInvalidate {
     fn invalid_hypervisor_all();
     fn invalid_guest_ipa(ipa: usize);
     fn invalid_guest_all();
+}
+
+pub trait Address {
+    fn pa2hva(self) -> usize;
 }

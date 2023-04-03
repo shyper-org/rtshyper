@@ -64,7 +64,6 @@ impl PlatOperation for QemuPlatform {
     }
 }
 
-// holy shit, need to recode later
 pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     cpu_desc: PlatCpuConfig {
         num: 4,

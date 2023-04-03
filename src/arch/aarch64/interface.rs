@@ -1,4 +1,6 @@
-use crate::arch::ArchTrait;
+use tock_registers::interfaces::*;
+
+use crate::arch::{ArchTrait, Address};
 
 pub const PAGE_SHIFT: usize = 12;
 pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;
@@ -26,10 +28,12 @@ impl ArchTrait for Aarch64Arch {
         todo!()
     }
 
+    #[inline]
     fn wait_for_interrupt() {
         cortex_a::asm::wfi();
     }
 
+    #[inline]
     fn nop() {
         cortex_a::asm::nop();
     }
@@ -48,6 +52,7 @@ impl ArchTrait for Aarch64Arch {
         }
     }
 
+    #[inline]
     fn install_self_page_table(base: usize) {
         cortex_a::registers::TTBR0_EL2.set_baddr(base as u64);
         unsafe {
@@ -66,5 +71,36 @@ impl ArchTrait for Aarch64Arch {
         let tmp: u64;
         mrs!(tmp, S3_1_c15_c2_1);
         debug!("disable_prefetch: test {:#x}", tmp);
+    }
+
+    fn mem_translate(va: usize) -> Option<usize> {
+        use cortex_a::registers::PAR_EL1;
+        const PAR_PA_MASK: u64 = ((1 << (48 - 12)) - 1) << 12; // 0xFFFF_FFFF_F000
+
+        let par = PAR_EL1.get();
+        arm_at!("s1e2r", va);
+        let tmp = PAR_EL1.get();
+        PAR_EL1.set(par);
+        if (tmp & PAR_EL1::F::TranslationAborted.value) != 0 {
+            None
+        } else {
+            let pa = (tmp & PAR_PA_MASK) as usize | (va & (PAGE_SIZE - 1));
+            Some(pa)
+        }
+    }
+
+    #[inline]
+    fn current_stack_pointer() -> usize {
+        cortex_a::registers::SP.get() as usize
+    }
+}
+
+const PA2HVA: usize = 0b11 << 34;
+
+impl Address for usize {
+    #[inline]
+    fn pa2hva(self) -> usize {
+        assert_eq!(self & PA2HVA, 0, "illegal pa {self:#x}");
+        self | PA2HVA
     }
 }
