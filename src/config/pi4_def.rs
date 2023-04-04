@@ -22,52 +22,53 @@ pub fn mvm_config_init() {
     vm_cfg_set_config_name("pi4-default");
 
     // vm0 emu
-    let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("interrupt-controller@fff841000")),
-        base_ipa: 0xFFF841000,
-        length: 0x1000,
-        irq_id: 0,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTGicd,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_net@fa000800")),
-        base_ipa: 0xfa000800,
-        length: 0x400,
-        irq_id: 32 + 0x17,
-        cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_console@fa000c00")),
-        base_ipa: 0xfa000c00,
-        length: 0x1000,
-        irq_id: 32 + 0x20,
-        cfg_list: vec![1, 0xa002000],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_console@fa002000")),
-        base_ipa: 0xfa002000,
-        length: 0x1000,
-        irq_id: 32 + 0x18,
-        cfg_list: vec![2, 0xa002000],
-        emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
-        mediated: false,
-    });
-    emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("vm_service")),
-        base_ipa: 0,
-        length: 0,
-        irq_id: HVC_IRQ,
-        cfg_list: Vec::new(),
-        emu_type: EmuDeviceType::EmuDeviceTShyper,
-        mediated: false,
-    });
+    let emu_dev_config = vec![
+        VmEmulatedDeviceConfig {
+            name: Some(String::from("interrupt-controller@fff841000")),
+            base_ipa: 0xFFF841000,
+            length: 0x1000,
+            irq_id: 0,
+            cfg_list: Vec::new(),
+            emu_type: EmuDeviceType::EmuDeviceTGicd,
+            mediated: false,
+        },
+        VmEmulatedDeviceConfig {
+            name: Some(String::from("virtio_net@fa000800")),
+            base_ipa: 0xfa000800,
+            length: 0x400,
+            irq_id: 32 + 0x17,
+            cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd0],
+            emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+            mediated: false,
+        },
+        VmEmulatedDeviceConfig {
+            name: Some(String::from("virtio_console@fa000c00")),
+            base_ipa: 0xfa000c00,
+            length: 0x1000,
+            irq_id: 32 + 0x20,
+            cfg_list: vec![1, 0xa002000],
+            emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+            mediated: false,
+        },
+        VmEmulatedDeviceConfig {
+            name: Some(String::from("virtio_console@fa002000")),
+            base_ipa: 0xfa002000,
+            length: 0x1000,
+            irq_id: 32 + 0x18,
+            cfg_list: vec![2, 0xa002000],
+            emu_type: EmuDeviceType::EmuDeviceTVirtioConsole,
+            mediated: false,
+        },
+        VmEmulatedDeviceConfig {
+            name: Some(String::from("vm_service")),
+            base_ipa: 0,
+            length: 0,
+            irq_id: HVC_IRQ,
+            cfg_list: Vec::new(),
+            emu_type: EmuDeviceType::EmuDeviceTShyper,
+            mediated: false,
+        }
+    ];
 
     // vm0 passthrough
     let mut pt_dev_config: VmPassthroughDeviceConfig = VmPassthroughDeviceConfig::default();
@@ -145,11 +146,12 @@ pub fn mvm_config_init() {
     pt_dev_config.streams_ids = vec![];
 
     // vm0 vm_region
-    let mut vm_region: Vec<VmRegion> = Vec::new();
-    vm_region.push(VmRegion {
-        ipa_start: 0x200000,
-        length: 0x3e000000 - 0x200000,
-    });
+    let vm_region = vec![
+        VmRegion {
+            ipa_start: 0x200000,
+            length: 0x3e000000 - 0x200000,
+        }
+    ];
     // vm_region.push(VmRegion {
     //     ipa_start: 0xf0200000,
     //     length: 0xc0000000,

@@ -4,7 +4,7 @@ use core::arch::asm;
 use crate::{
     device::{EmuContext, emu_register_reg, EmuRegType},
     kernel::current_cpu,
-    arch::{CacheInfoTrait, CacheType, CacheIndexed, cache},
+    arch::{CacheInfoTrait, CacheType, CacheIndexed, cache, CacheInvalidate},
 };
 use alloc::vec::Vec;
 use cache::CpuCacheInfo;
@@ -12,7 +12,7 @@ use cortex_a::registers::{CLIDR_EL1, CCSIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};
 use spin::Once;
 use tock_registers::interfaces::{Readable, Writeable};
 
-use super::PAGE_SIZE;
+use super::{PAGE_SIZE, Aarch64Arch};
 
 pub static CPU_CACHE: Once<CpuCacheInfo<Aarch64CacheInfo>> = Once::new();
 
@@ -379,3 +379,22 @@ pub fn vcache_ctr_el0_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
 //     CLIDR_EL1,
 //     CSSELR_EL1,
 // }
+
+core::arch::global_asm!(include_str!("./cache.S"));
+
+extern "C" {
+    fn cache_invalidate_d(start: usize, len: usize);
+    fn cache_clean_invalidate_d(start: usize, len: usize);
+}
+
+impl CacheInvalidate for Aarch64Arch {
+    #[inline]
+    fn dcache_flush(va: usize, len: usize) {
+        unsafe { cache_invalidate_d(va, len) };
+    }
+
+    #[inline]
+    fn dcache_clean_flush(va: usize, len: usize) {
+        unsafe { cache_clean_invalidate_d(va, len) };
+    }
+}

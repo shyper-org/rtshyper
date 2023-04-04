@@ -40,6 +40,11 @@ pub trait TlbInvalidate {
     fn invalid_guest_all();
 }
 
+pub trait CacheInvalidate {
+    fn dcache_flush(va: usize, len: usize);
+    fn dcache_clean_flush(va: usize, len: usize);
+}
+
 pub trait Address {
     fn pa2hva(self) -> usize;
 }

@@ -469,7 +469,7 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
 
     info!(
         "vmm_cpu_assign_vcpu: vm[{}] cpu {} cfg_master {} cfg_cpu_num {} cfg_cpu_allocate_bitmap {:#b}",
-        vm_id, cpu_id, cfg_master, cfg_cpu_num, cfg_cpu_allocate_bitmap
+        vm_id, cpu_id, cfg_master as isize, cfg_cpu_num, cfg_cpu_allocate_bitmap
     );
 
     // Judge if current cpu is allocated.

@@ -8,7 +8,7 @@ use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, 
 use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
-use crate::util::{round_up, memcpy_safe, barrier, reset_barrier, cache_clean_invalidate_d};
+use crate::util::{round_up, memcpy_safe, barrier, reset_barrier};
 use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
 
 use super::{current_cpu, CPU_MASTER};
@@ -222,7 +222,7 @@ fn mem_region_init_by_colors() {
     let last_level = cpu_cache_info.min_share_level;
     let num_colors = cpu_cache_info.info_list[last_level - 1].num_colors();
 
-    init_hypervisor_colors((0..(num_colors / 2)).collect());
+    init_hypervisor_colors((0..num_colors / 2).collect());
 
     if num_colors > usize::BITS as usize {
         panic!("Too many colors ({}) in L{}", last_level, num_colors);
@@ -238,7 +238,7 @@ fn mem_region_init_by_colors() {
     for (i, region) in PLAT_DESC.mem_desc.regions.iter().enumerate() {
         let (plat_mem_region_base, plat_mem_region_size) = {
             if (region.base..region.base + region.size).contains(&(_image_end as usize)) {
-                let start = round_up(_image_end as usize, PAGE_SIZE);
+                let start = round_up(_image_end as usize, step);
                 let size = region.base + region.size - start;
                 (start, size)
             } else {
@@ -365,6 +365,7 @@ pub fn hypervisor_self_coloring() {
     }
 
     if self_color_bitmap == 0 || ((self_color_bitmap & ((1 << num_colors) - 1)) == ((1 << num_colors) - 1)) {
+        enlarge_heap(self_color_bitmap);
         return;
     }
 
@@ -433,10 +434,11 @@ pub fn hypervisor_self_coloring() {
 
     unsafe {
         relocate_space(cpu_new, cpu_new.pt().base_pa());
-        // cache invalidate
-        cache_clean_invalidate_d(image_start, image_size);
-        cache_clean_invalidate_d(CPU_BANKED_ADDRESS, size_of::<Cpu>());
     }
+    // cache invalidate
+    use crate::arch::{Arch, CacheInvalidate};
+    Arch::dcache_clean_flush(image_start, image_size);
+    Arch::dcache_clean_flush(CPU_BANKED_ADDRESS, size_of::<Cpu>());
 
     /*
         The barrier object is in an inconsistent state, because we use barrier after image copy,
@@ -450,7 +452,11 @@ pub fn hypervisor_self_coloring() {
     } else {
         BARRIER_RESET.wait();
     }
+    enlarge_heap(self_color_bitmap);
+    info!("=== core {} finish self_coloring ===", current_cpu().id);
+}
 
+fn enlarge_heap(self_color_bitmap: usize) {
     // Core 0 apply for va and pa pages
     static HEAP_PAGES: Once<AllocatedPages> = Once::new();
     static HEAP_SHARED_PTE: Once<usize> = Once::new();
@@ -491,5 +497,4 @@ pub fn hypervisor_self_coloring() {
         );
     }
     barrier();
-    info!("=== core {} finish self_coloring ===", current_cpu().id);
 }
