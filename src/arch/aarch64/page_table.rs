@@ -483,6 +483,36 @@ impl PageTable {
             self.unmap_range(ipa, len);
         }
     }
+
+    pub fn get_pte(&self, va: usize, lvl: usize) -> Option<usize> {
+        if lvl == 1 {
+            let directory = Aarch64PageTableEntry::from_pa(self.directory_pa);
+            let l1e = directory.entry(pt_lvl1_idx(va));
+            if l1e.valid() {
+                Some(l1e.to_pte())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn set_pte(&self, va: usize, lvl: usize, pte: usize) {
+        if lvl == 1 {
+            let directory = Aarch64PageTableEntry::from_pa(self.directory_pa);
+            let l1e = directory.entry(pt_lvl1_idx(va));
+            if l1e.valid() {
+                panic!("set_pte: va {va:#x} is already mapped!");
+            } else {
+                let table = Aarch64PageTableEntry(pte);
+                assert!(table.valid());
+                directory.set_entry(pt_lvl1_idx(va), table);
+            }
+        } else {
+            panic!("set_pte: only support lvl 1")
+        }
+    }
 }
 
 fn empty_page(addr: usize) -> bool {

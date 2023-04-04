@@ -335,12 +335,11 @@ fn device_mapping(cpu: &Cpu) {
 
 #[inline]
 unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
-    // NOTE: do nothing complex (means need stack or heap)
-    // for example, `println!()`, `info!()` is not recommended here
+    // NOTE: do nothing complex (means need stack, heap or any global variables)
+    // for example, `println!()`, `info!()` is not allowed here
     // because it may cause unpredictable problems
     use crate::arch::{ArchTrait, TlbInvalidate};
 
-    // info!("core {}: switch to page table {:#x}", cpu_new.id, root_pt);
     let current_sp = crate::arch::Arch::current_stack_pointer();
     let length = current_cpu().stack_top() - current_sp;
 
@@ -348,7 +347,6 @@ unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
     unsafe {
         crate::util::memcpy(dst_sp as *const _, current_sp as *const _, length);
     }
-    // info!("copy stack from {current_sp:#x} to {dst_sp:#x}, length {length:#x}");
 
     crate::arch::Arch::invalid_hypervisor_all();
     // switch to page table
@@ -387,53 +385,63 @@ pub fn hypervisor_self_coloring() {
     let cpu_va_range = CPU_BANKED_ADDRESS..=CPU_BANKED_ADDRESS + size_of::<Cpu>() - 1;
     cpu_map_va2color_regions(cpu_new, cpu_va_range, &cpu_pa_regions);
     device_mapping(cpu_new);
+    // never drop the heap physical memory
     core::mem::forget(cpu_pa_regions);
     info!("new cpu {} page table init OK", cpu_new.id);
 
+    static NEW_IMAGE_SHARED_PTE: Once<usize> = Once::new();
     static NEW_IMAGE_START: Once<usize> = Once::new();
-    static NEW_IMAGE_PA_REGIONS: Once<Vec<ColorMemRegion>> = Once::new();
-    let image_size = _image_end as usize - _image_start as usize;
+    let image_start = _image_start as usize;
+    let image_size = _image_end as usize - image_start;
     // Copy the hypervisor image
     if current_cpu().id == CPU_MASTER {
         info!("image size: {image_size:#x}");
-        let image = unsafe { core::slice::from_raw_parts(_image_start as *const u8, image_size) };
+        let image = unsafe { core::slice::from_raw_parts(image_start as *const u8, image_size) };
         let (new_start, pa_regions) = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
-        NEW_IMAGE_PA_REGIONS.call_once(|| pa_regions);
         NEW_IMAGE_START.call_once(|| new_start as *const _ as usize);
+
+        let image_range = image_start..=image_start + image_size - 1;
+        cpu_map_va2color_regions(cpu_new, image_range, &pa_regions);
+        // never drop the physical memory
+        core::mem::forget(pa_regions);
+
+        match cpu_new.pt().get_pte(image_start, 1) {
+            Some(pte) => NEW_IMAGE_SHARED_PTE.call_once(|| pte),
+            None => panic!("core {} get pte error, va {:#x}", current_cpu().id, image_start),
+        };
     } else {
         // wait until master cpu finish image copy
-        NEW_IMAGE_PA_REGIONS.wait();
-        NEW_IMAGE_START.wait();
+        NEW_IMAGE_SHARED_PTE.wait();
+
+        let pte = *NEW_IMAGE_SHARED_PTE.get().unwrap();
+        cpu_new.pt().set_pte(image_start, 1, pte);
+        debug!("core {} set va {image_start:#x} pte {pte:#x}", current_cpu().id);
     }
-    let image_range = _image_start as usize..=_image_end as usize - 1;
-    // info!("new cpu {} map image {:x?}", cpu_new.id, image_range);
-    cpu_map_va2color_regions(cpu_new, image_range, NEW_IMAGE_PA_REGIONS.get().unwrap());
 
     // copy again: for heap space in bss segment
     if current_cpu().id == CPU_MASTER {
         unsafe {
             crate::util::memcpy(
                 *NEW_IMAGE_START.get().unwrap() as *const _,
-                _image_start as *const _,
+                image_start as *const _,
                 image_size,
             )
         };
     }
     barrier();
-    // NOTE: Now, don't use heap or stack
+    // NOTE: Now, don't use heap, stack or any global variables
 
     unsafe {
         relocate_space(cpu_new, cpu_new.pt().base_pa());
         // cache invalidate
-        cache_clean_invalidate_d(_image_start as usize, image_size);
+        cache_clean_invalidate_d(image_start, image_size);
         cache_clean_invalidate_d(CPU_BANKED_ADDRESS, size_of::<Cpu>());
     }
 
     /*
-        The barrier objects are in an inconsistent state,
+        The barrier object is in an inconsistent state, because we use barrier after image copy,
         and they need to be re-initialized before they get used again,
-        so CPUs need a way to communicate between themselves without
-        an explicit barrier. To accomplish this a static global variable is used.
+        so CPUs need a way to communicate between themselves without an explicit barrier.
     */
     static BARRIER_RESET: Once<()> = Once::new();
     if current_cpu().id == CPU_MASTER {
@@ -444,33 +452,43 @@ pub fn hypervisor_self_coloring() {
     }
 
     // Core 0 apply for va and pa pages
-    static HEAP_COLOR_REGIONS: Once<Vec<ColorMemRegion>> = Once::new();
     static HEAP_PAGES: Once<AllocatedPages> = Once::new();
+    static HEAP_SHARED_PTE: Once<usize> = Once::new();
     const HEAP_SIZE: usize = 32 * (1 << 20); // 32 MB
     if current_cpu().id == CPU_MASTER {
         match vpage_alloc(HEAP_SIZE, Some(1 << 20)) {
             Ok(pages) => HEAP_PAGES.call_once(|| pages),
             Err(err) => panic!("vpage_alloc failed {err:?}"),
         };
-        match mem_region_alloc_colors(HEAP_SIZE, self_color_bitmap) {
+        let heap_color_regions = match mem_region_alloc_colors(HEAP_SIZE, self_color_bitmap) {
             Ok(color_regions) => {
                 debug!("HEAP_COLOR_REGIONS: {color_regions:#x?}");
-                HEAP_COLOR_REGIONS.call_once(|| color_regions);
+                color_regions
             }
             Err(_) => panic!("mem_region_alloc_colors failed"),
         };
+        let heap_range = HEAP_PAGES.get().unwrap().as_range_incluesive();
+        cpu_map_va2color_regions(current_cpu(), heap_range.clone(), &heap_color_regions);
+        heap_expansion(heap_range.clone());
+        // never drop the heap physical memory
+        core::mem::forget(heap_color_regions);
+
+        match current_cpu().pt().get_pte(*heap_range.start(), 1) {
+            Some(pte) => HEAP_SHARED_PTE.call_once(|| pte),
+            None => panic!("core {} get pte error, va {:#x}", current_cpu().id, heap_range.start()),
+        };
     } else {
         HEAP_PAGES.wait();
-        HEAP_COLOR_REGIONS.wait();
-    }
+        HEAP_SHARED_PTE.wait();
 
-    // enlarge the heap
-    let heap_color_regions = HEAP_COLOR_REGIONS.get().unwrap();
-    let heap_pages = HEAP_PAGES.get().unwrap();
-    let heap_range = heap_pages.as_range_incluesive();
-    cpu_map_va2color_regions(current_cpu(), heap_range.clone(), heap_color_regions);
-    if current_cpu().id == CPU_MASTER {
-        heap_expansion(heap_range);
+        let pte = *HEAP_SHARED_PTE.get().unwrap();
+        let heap_range = HEAP_PAGES.get().unwrap().as_range_incluesive();
+        current_cpu().pt().set_pte(*heap_range.start(), 1, pte);
+        debug!(
+            "core {} set va {:#x} pte {pte:#x}",
+            current_cpu().id,
+            heap_range.start()
+        );
     }
     barrier();
     info!("=== core {} finish self_coloring ===", current_cpu().id);
