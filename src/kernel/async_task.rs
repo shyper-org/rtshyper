@@ -264,9 +264,9 @@ pub fn async_blk_io_req() {
             }
             VIRTIO_BLK_T_OUT => {
                 let mut cache_ptr = msg.cache;
-                for idx in 0..msg.iov_list.len() {
-                    let data_bg = msg.iov_list[idx].data_bg;
-                    let len = msg.iov_list[idx].len as usize;
+                for iov in msg.iov_list.iter() {
+                    let data_bg = iov.data_bg;
+                    let len = iov.len as usize;
 
                     if cache_ptr < 0x1000 || data_bg < 0x1000 {
                         panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
@@ -400,23 +400,20 @@ pub fn finish_async_task(ipi: bool) {
     drop(ipi_list);
     match task.task_data {
         AsyncTaskData::Io(args) => {
-            match args.io_type {
-                VIRTIO_BLK_T_IN => {
-                    // let mut sum = 0;
-                    let mut cache_ptr = args.cache;
-                    for idx in 0..args.iov_list.len() {
-                        let data_bg = args.iov_list[idx].data_bg;
-                        let len = args.iov_list[idx].len as usize;
-                        if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
-                            panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
-                        }
-                        memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
-                        // sum |= check_sum(data_bg, len);
-                        cache_ptr += len;
+            if args.io_type == VIRTIO_BLK_T_IN {
+                // let mut sum = 0;
+                let mut cache_ptr = args.cache;
+                for iov in args.iov_list.iter() {
+                    let data_bg = iov.data_bg;
+                    let len = iov.len as usize;
+                    if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
+                        panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
                     }
-                    // println!("read check_sum is {:x}", sum);
+                    memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                    // sum |= check_sum(data_bg, len);
+                    cache_ptr += len;
                 }
-                _ => {}
+                // println!("read check_sum is {:x}", sum);
             }
 
             update_used_info(&args.vq, task.src_vmid);

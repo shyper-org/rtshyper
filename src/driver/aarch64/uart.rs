@@ -3,7 +3,7 @@ use core::ptr;
 use crate::board::{Platform, PlatOperation};
 
 pub fn putc(byte: u8) {
-    const UART_BASE: usize = Platform::HYPERVISOR_UART_BASE + crate::arch::DEVICE_BASE;
+    const UART_BASE: usize = Platform::HYPERVISOR_UART_BASE;
     #[cfg(feature = "qemu")]
     unsafe {
         ptr::write_volatile(UART_BASE as *mut u8, byte);

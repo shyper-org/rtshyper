@@ -181,7 +181,7 @@ impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
 }
 
 impl Aarch64PageTableEntry {
-    fn to_hva(&self) -> usize {
+    fn to_hva(self) -> usize {
         self.to_pa().pa2hva()
     }
 }

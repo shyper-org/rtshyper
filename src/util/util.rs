@@ -60,7 +60,7 @@ pub fn bitmap_find_nth(bitmap: usize, start: usize, size: usize, nth: usize, set
         return None;
     }
     let mut count = 0;
-    let bit = if set { 1 } else { 0 };
+    let bit = usize::from(set);
     let end = start + size;
 
     for i in start..end {

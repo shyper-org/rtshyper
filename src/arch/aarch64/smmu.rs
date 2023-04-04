@@ -7,7 +7,6 @@ use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
 
-use crate::arch::DEVICE_BASE;
 use crate::board::PLAT_DESC;
 use crate::device::EmuContext;
 use crate::kernel::CONFIG_VM_NUM_MAX;
@@ -343,7 +342,7 @@ impl SmmuV2 {
     }
 
     fn init(&mut self) {
-        let smmu_base_addr = PLAT_DESC.arch_desc.smmu_desc.base + DEVICE_BASE;
+        let smmu_base_addr = PLAT_DESC.arch_desc.smmu_desc.base;
 
         self.glb_rs0 = SmmuGlbRS0::new(smmu_base_addr);
         let rs0 = &self.glb_rs0;
@@ -666,7 +665,7 @@ fn emu_smmu_revise_cbar(emu_ctx: &EmuContext) {
     let smmu_v2 = SMMU_V2.lock();
     let vm = active_vm().unwrap();
     let cbar_addr = smmu_v2.glb_rs1.CBAR.as_ptr() as usize;
-    let context_id = (emu_ctx.address - (cbar_addr - DEVICE_BASE)) / size_of::<u32>();
+    let context_id = (emu_ctx.address - cbar_addr) / size_of::<u32>();
     let vm_context_id = vm.iommu_ctx_id();
     info!(
         "emu_smmu_revise_cbar: vm {} access context id {}, vm context is {}",
@@ -684,7 +683,7 @@ fn emu_smmu_revise_cbar(emu_ctx: &EmuContext) {
 }
 
 pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
-    let address = emu_ctx.address + DEVICE_BASE;
+    let address = emu_ctx.address;
     let smmu_v2 = SMMU_V2.lock();
 
     let mut permit_write = true;

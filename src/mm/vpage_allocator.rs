@@ -287,8 +287,8 @@ fn adjust_chosen_chunk(
     ))
 }
 
-fn find_alignment_chunk<'list>(
-    list: &'list mut StaticArrayRBTree<Chunk>,
+fn find_alignment_chunk(
+    list: &mut StaticArrayRBTree<Chunk>,
     alignment: usize,
     num_pages: usize,
 ) -> Result<(AllocatedPages, DeferredAllocAction), AllocError> {
@@ -353,8 +353,8 @@ fn find_alignment_chunk<'list>(
     Err(AllocError::OutOfFrame(num_pages))
 }
 
-fn find_any_chunk<'a>(
-    list: &'a mut StaticArrayRBTree<Chunk>,
+fn find_any_chunk(
+    list: &mut StaticArrayRBTree<Chunk>,
     num_pages: usize,
 ) -> Result<(AllocatedPages, DeferredAllocAction), AllocError> {
     // trace!("find any chunk");
@@ -435,6 +435,6 @@ pub fn vpage_alloc(len: usize, align: Option<usize>) -> Result<AllocatedPages, A
 }
 
 #[allow(unused)]
-pub fn vpage_dealloc(page: AllocatedPages) -> () {
+pub fn vpage_dealloc(page: AllocatedPages) {
     todo!()
 }

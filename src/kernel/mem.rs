@@ -224,7 +224,7 @@ fn mem_region_init_by_colors() {
 
     init_hypervisor_colors((0..(num_colors / 2)).collect());
 
-    if num_colors > size_of::<usize>() * 8 {
+    if num_colors > usize::BITS as usize {
         panic!("Too many colors ({}) in L{}", last_level, num_colors);
     }
 
@@ -318,18 +318,12 @@ fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> 
 }
 
 fn device_mapping(cpu: &Cpu) {
-    use crate::arch::DEVICE_BASE;
     let device_regions = crate::board::Platform::device_regions();
     for device in device_regions.iter() {
         assert_eq!(device.start % 0x20_0000, 0);
         assert_eq!(device.len() % 0x20_0000, 0);
-        cpu.pt().pt_map_range(
-            device.start | DEVICE_BASE,
-            device.len(),
-            device.start,
-            PTE_S1_DEVICE,
-            true,
-        );
+        cpu.pt()
+            .pt_map_range(device.start, device.len(), device.start, PTE_S1_DEVICE, true);
     }
     for i in 0..crate::arch::PLATFORM_PHYSICAL_LIMIT_GB {
         let pa = i << crate::arch::LVL1_SHIFT;

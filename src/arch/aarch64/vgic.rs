@@ -5,7 +5,6 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::{arch::GICH, kernel::IpiInitcMessage};
-use crate::arch::DEVICE_BASE;
 use crate::board::{PLATFORM_CPU_NUM_MAX, PlatOperation, Platform};
 use crate::device::EmuContext;
 use crate::device::EmuDevs;
@@ -2331,9 +2330,9 @@ pub fn partial_passthrough_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext
     if emu_ctx.write {
         // todo: add offset match
         let val = current_cpu().get_gpr(emu_ctx.reg);
-        ptr_read_write(Platform::GICD_BASE + DEVICE_BASE + offset, emu_ctx.width, val, false);
+        ptr_read_write(Platform::GICD_BASE + offset, emu_ctx.width, val, false);
     } else {
-        let res = ptr_read_write(Platform::GICD_BASE + DEVICE_BASE + offset, emu_ctx.width, 0, true);
+        let res = ptr_read_write(Platform::GICD_BASE + offset, emu_ctx.width, 0, true);
         current_cpu().set_gpr(emu_ctx.reg, res);
     }
 

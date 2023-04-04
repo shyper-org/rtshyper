@@ -111,11 +111,7 @@ impl BitAlloc for BitAlloc16 {
     }
 
     fn get(&self, idx: usize) -> usize {
-        if self.0 & (1 << idx) != 0 {
-            1
-        } else {
-            0
-        }
+        usize::from(self.0 & (1 << idx) != 0)
     }
 }
 
@@ -133,15 +129,11 @@ impl FlexBitmap {
     }
 
     pub fn init_dirty(&mut self) {
-        for i in 0..self.map.len() {
-            self.map[i] = usize::MAX;
-        }
+        self.map.fill(usize::MAX);
     }
 
     pub fn clear(&mut self) {
-        for i in 0..self.map.len() {
-            self.map[i] = 0;
-        }
+        self.map.fill(0);
     }
 
     pub fn get(&self, idx: usize) -> usize {

@@ -12,10 +12,6 @@ use super::interface::*;
 // const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 pub const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 
-pub const DEVICE_BASE: usize = 0b10 << 34; // 34 is pa limit 16GB
-const_assert!(DEVICE_BASE < 1 << VM_IPA_SIZE); // if not, the device va will ocuppy the ipa2hva space, which is very dangerous
-const_assert_eq!(DEVICE_BASE, 0x8_0000_0000);
-
 register_bitfields! {u64,
     pub PageDescriptorS1 [
         UXN      OFFSET(54) NUMBITS(1) [
@@ -122,8 +118,7 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         //     pt.lvl1[i] = BlockDescriptor::invalid();
         // }
 
-        // map the devices to HIGH 32GB, whose offset is 2^35 = 0x8_0000_0000
-        lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE)] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.lvl1[pt_lvl1_idx(0)] = BlockDescriptor::table(lvl2_base);
         // 0x200000 ~ 2MB
         // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
         // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
@@ -152,7 +147,6 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         }
         // 0x0_fc00_0000 ~ 0x1_0000_0000 --> device memory (64MB)
         let device_memory = 0x0_fc00_0000..0x1_0000_0000;
-        let device_region_start = device_memory.start;
         for (i, pa) in device_memory.step_by(1 << LVL2_SHIFT).enumerate() {
             lvl2_pt.lvl1[i] = BlockDescriptor::new(pa, true);
         }
@@ -164,8 +158,6 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         for i in pt_lvl1_idx(normal_memory_2.end)..512 {
             lvl1_pt.lvl1[i] = BlockDescriptor::invalid();
         }
-        // 0x8_0000_0000 + 0x0_c000_0000
-        lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE + device_region_start)] = BlockDescriptor::table(lvl2_base);
     } else if cfg!(feature = "qemu") {
         for index in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let pa = index << LVL1_SHIFT;
@@ -177,7 +169,7 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
                 BlockDescriptor::invalid()
             };
         }
-        lvl1_pt.lvl1[pt_lvl1_idx(DEVICE_BASE)] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.lvl1[pt_lvl1_idx(0)] = BlockDescriptor::table(lvl2_base);
         for (index, pa) in (0..PLAT_DESC.mem_desc.base)
             .step_by(1 << LVL2_SHIFT)
             .take(PTE_PER_PAGE)

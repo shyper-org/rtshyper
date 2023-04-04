@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use crate::kernel::{Vcpu, Scheduler, current_cpu, VcpuState, timer_enable};
 
 #[allow(dead_code)]
+#[derive(Default)]
 pub struct SchedulerRR {
     queue: Vec<Vcpu>,
     active_idx: usize,
@@ -14,16 +15,6 @@ impl SchedulerRR {
             queue: Vec::new(),
             active_idx: 0,
             base_slice: slice,
-        }
-    }
-}
-
-impl Default for SchedulerRR {
-    fn default() -> Self {
-        Self {
-            queue: Default::default(),
-            active_idx: Default::default(),
-            base_slice: Default::default(),
         }
     }
 }

@@ -5,7 +5,7 @@ use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
 
-use crate::arch::{DEVICE_BASE, INTERRUPT_NUM_MAX};
+use crate::arch::INTERRUPT_NUM_MAX;
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::current_cpu;
 use crate::util::bit_extract;
@@ -593,9 +593,9 @@ impl GicState {
     }
 }
 
-pub static GICD: GicDistributor = GicDistributor::new(Platform::GICD_BASE + DEVICE_BASE);
-pub static GICC: GicCpuInterface = GicCpuInterface::new(Platform::GICC_BASE + DEVICE_BASE);
-pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(Platform::GICH_BASE + DEVICE_BASE);
+pub static GICD: GicDistributor = GicDistributor::new(Platform::GICD_BASE);
+pub static GICC: GicCpuInterface = GicCpuInterface::new(Platform::GICC_BASE);
+pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(Platform::GICH_BASE);
 
 #[inline(always)]
 pub fn gich_lrs_num() -> usize {

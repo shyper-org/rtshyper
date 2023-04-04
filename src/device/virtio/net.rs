@@ -1,5 +1,4 @@
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::mem::size_of;
 use spin::Mutex;
 
@@ -106,7 +105,7 @@ impl NetDesc {
         inner.status
     }
 
-    pub fn cfg_init(&self, mac: &Vec<usize>) {
+    pub fn cfg_init(&self, mac: &[usize]) {
         let mut inner = self.inner.lock();
         inner.mac[0] = mac[0] as u8;
         inner.mac[1] = mac[1] as u8;
