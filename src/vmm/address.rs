@@ -9,7 +9,7 @@ use super::VmmEvent;
 // using the higher bits as VMID to distinguish
 
 // convert ipa to pa and mapping the hva(from ipa) on current cpu()
-pub fn vmm_setup_ipa2hva(vm: &Vm) {
+pub(super) fn vmm_setup_ipa2hva(vm: &Vm) {
     let mut flag = false;
     for target_cpu_id in 0..PLAT_DESC.cpu_desc.num {
         if target_cpu_id != current_cpu().id {
@@ -31,7 +31,7 @@ pub fn vmm_setup_ipa2hva(vm: &Vm) {
     info!("vmm_setup_ipa2hva: VM[{}] is ok", vm.id());
 }
 
-pub fn vmm_unmap_ipa2hva(vm: &Vm) {
+pub(super) fn vmm_unmap_ipa2hva(vm: &Vm) {
     vm.reset_mem_regions();
     let mut flag = false;
     for target_cpu_id in 0..PLAT_DESC.cpu_desc.num {
@@ -54,7 +54,7 @@ pub fn vmm_unmap_ipa2hva(vm: &Vm) {
     info!("vmm_unmap_ipa2hva: VM[{}] is ok", vm.id());
 }
 
-pub fn vmm_map_ipa_percore(vm_id: usize) {
+pub(super) fn vmm_map_ipa_percore(vm_id: usize) {
     let vm = match vm(vm_id) {
         None => {
             panic!(
@@ -79,7 +79,7 @@ pub fn vmm_map_ipa_percore(vm_id: usize) {
     barrier();
 }
 
-pub fn vmm_unmap_ipa_percore(vm_id: usize) {
+pub(super) fn vmm_unmap_ipa_percore(vm_id: usize) {
     let vm = match vm(vm_id) {
         None => {
             panic!(

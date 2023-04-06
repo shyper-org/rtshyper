@@ -55,8 +55,8 @@ fn vmm_init_memory(vm: &Vm) -> bool {
     for vm_region in config.memory_region().iter() {
         match mem_region_alloc_colors(vm_region.length, config.memory_color_bitmap()) {
             Ok(vm_color_regions) => {
-                debug!("{:#x?}", vm_color_regions);
                 assert!(!vm_color_regions.is_empty());
+                info!("{:x?}", vm_color_regions);
                 vm_map_ipa2color_regions(vm, vm_region, &vm_color_regions);
                 vm.append_color_regions(vm_color_regions);
             }

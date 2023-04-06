@@ -97,10 +97,21 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         ],
     },
     mem_desc: PlatMemoryConfig {
-        regions: &[PlatMemRegion {
-            base: 0x8000_0000,
-            size: 0x1_f000_0000,
-        }],
+        /*
+            cboot told me that
+            [0003.848] I> added [base:0x80000000, size:0x70000000] to /memory
+            [0003.854] I> added [base:0xf0200000, size:0x185600000] to /memory
+        */
+        regions: &[
+            PlatMemRegion {
+                base: 0x8000_0000,
+                size: 0x7000_0000,
+            },
+            PlatMemRegion {
+                base: 0xf020_0000,
+                size: 0x1_8560_0000,
+            },
+        ],
         base: 0x80000000,
     },
     arch_desc: ArchDesc {

@@ -70,7 +70,7 @@ impl ColorMemRegion {
 
 static MEM_REGION_BY_COLOR: Mutex<Vec<Vec<ColorMemRegion>>> = Mutex::new(Vec::new());
 
-pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<ColorMemRegion>, ()> {
+pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<ColorMemRegion>, AllocError> {
     // hold the lock until return
     let mut mem_region_by_color = MEM_REGION_BY_COLOR.lock();
     let color_bitmap = color_bitmap & ((1 << mem_region_by_color.len()) - 1);
@@ -78,7 +78,7 @@ pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<C
     let count = color_bitmap.count_ones() as usize;
     if count == 0 {
         error!("no cache color provided");
-        return Err(());
+        return Err(AllocError::AllocZeroPage);
     }
     let page_num = round_up(size, PAGE_SIZE) / PAGE_SIZE;
 
@@ -104,7 +104,7 @@ pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<C
         // if free pages not satisfy, return error
         if free_pages < page_num {
             error!("free pages not satisfy");
-            return Err(());
+            return Err(AllocError::OutOfFrame(page_num));
         }
 
         fn sort_color_list(color2pages: &mut [ColorMemRegion]) {
@@ -125,10 +125,7 @@ pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<C
         let mut remaining_pages = page_num;
         for (i, region) in color2pages.iter_mut().enumerate() {
             let color_size = remaining_pages / (count - i);
-            let remainder = remaining_pages % (count - i);
-            if region.count > color_size {
-                region.count = usize::min(region.count, color_size + remainder);
-            }
+            region.count = usize::min(region.count, color_size);
             remaining_pages -= region.count;
         }
         assert_eq!(remaining_pages, 0);
@@ -222,7 +219,7 @@ fn mem_region_init_by_colors() {
     let last_level = cpu_cache_info.min_share_level;
     let num_colors = cpu_cache_info.info_list[last_level - 1].num_colors();
 
-    init_hypervisor_colors((0..num_colors / 2).collect());
+    init_hypervisor_colors((num_colors / 2..num_colors).collect());
 
     if num_colors > usize::BITS as usize {
         panic!("Too many colors ({}) in L{}", last_level, num_colors);
