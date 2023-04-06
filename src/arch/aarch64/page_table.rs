@@ -186,6 +186,7 @@ impl Aarch64PageTableEntry {
     }
 }
 
+#[derive(PartialEq, Eq)]
 enum MmuStage {
     S1,
     S2,
@@ -482,6 +483,9 @@ impl PageTable {
         } else {
             self.unmap_range(ipa, len);
         }
+        if self.stage == MmuStage::S1 {
+            Arch::invalid_hypervisor_all();
+        }
     }
 
     pub fn get_pte(&self, va: usize, lvl: usize) -> Option<usize> {
@@ -503,14 +507,14 @@ impl PageTable {
             let directory = Aarch64PageTableEntry::from_pa(self.directory_pa);
             let l1e = directory.entry(pt_lvl1_idx(va));
             if l1e.valid() {
-                panic!("set_pte: va {va:#x} is already mapped!");
+                panic!("set_pte: va {va:#x} is already mapped with {:#x}!", l1e.to_pte());
             } else {
                 let table = Aarch64PageTableEntry(pte);
                 assert!(table.valid());
                 directory.set_entry(pt_lvl1_idx(va), table);
             }
         } else {
-            panic!("set_pte: only support lvl 1")
+            panic!("set_pte: not support lvl {lvl}");
         }
     }
 }

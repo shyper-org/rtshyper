@@ -409,7 +409,7 @@ pub fn vmm_ipi_handler(msg: &IpiMessage) {
                     current_cpu().id,
                     vmm.vmid
                 );
-                super::address::vmm_map_ipa_percore(vmm.vmid);
+                super::address::vmm_map_ipa_percore(vmm.vmid, false);
             }
             VmmEvent::VmmUnmapIPA => {
                 debug!(

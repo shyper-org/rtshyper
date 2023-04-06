@@ -219,7 +219,7 @@ fn mem_region_init_by_colors() {
     let last_level = cpu_cache_info.min_share_level;
     let num_colors = cpu_cache_info.info_list[last_level - 1].num_colors();
 
-    init_hypervisor_colors((num_colors / 2..num_colors).collect());
+    init_hypervisor_colors((0..num_colors / 2).collect());
 
     if num_colors > usize::BITS as usize {
         panic!("Too many colors ({}) in L{}", last_level, num_colors);

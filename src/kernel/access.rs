@@ -2,7 +2,7 @@ use core::mem::size_of;
 use core::slice;
 
 use super::Vm;
-use crate::arch::PAGE_SIZE;
+use crate::arch::{PAGE_SIZE, CacheInvalidate};
 use crate::kernel::vm_ipa2hva;
 use crate::util::{round_down, memcpy_safe};
 
@@ -19,6 +19,7 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
         let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
         let size = usize::min(bin.len(), PAGE_SIZE - offset);
         memcpy_safe(hva as *mut _, bin[0..].as_ptr() as *const _, size);
+        crate::arch::Arch::dcache_flush(hva as usize, size);
         // let dst = unsafe { slice::from_raw_parts_mut(pa, size) };
         // dst.copy_from_slice(&bin[0..size]);
         size
@@ -29,6 +30,7 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
         let hva = vm_ipa2hva(vm, load_ipa + i) as *mut u8;
         let size = usize::min(bin.len() - i, PAGE_SIZE);
         memcpy_safe(hva as *mut _, bin[i..].as_ptr() as *const _, size);
+        crate::arch::Arch::dcache_flush(hva as usize, size);
         // let dst = unsafe { slice::from_raw_parts_mut(pa, size) };
         // dst.copy_from_slice(&bin[i..i + size]);
     }
@@ -54,6 +56,7 @@ pub fn copy_between_vm(dest: (&Vm, usize), src: (&Vm, usize), len: usize) -> boo
     let dst_bin = unsafe { core::slice::from_raw_parts_mut(dest_hva as *mut u8, len) };
 
     dst_bin.copy_from_slice(src_bin);
+    crate::arch::Arch::dcache_flush(dest_hva, len);
     true
 }
 

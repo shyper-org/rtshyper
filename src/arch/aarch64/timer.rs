@@ -1,15 +1,15 @@
-use spin::Mutex;
+use core::sync::atomic::{AtomicUsize, Ordering};
+
 use tock_registers::interfaces::*;
 
 const CTL_IMASK: usize = 1 << 1;
 
-pub static TIMER_FREQ: Mutex<usize> = Mutex::new(0);
-pub static TIMER_SLICE: Mutex<usize> = Mutex::new(0); // ms
+static TIMER_FREQ: AtomicUsize = AtomicUsize::new(0);
+static TIMER_SLICE: AtomicUsize = AtomicUsize::new(0); // ms
 
 pub fn timer_arch_set(num: usize) {
-    let slice_lock = TIMER_SLICE.lock();
-    let val = *slice_lock * num;
-    drop(slice_lock);
+    let slice = TIMER_SLICE.load(Ordering::Relaxed);
+    let val = slice * num;
     msr!(CNTHP_TVAL_EL2, val);
 }
 
@@ -32,13 +32,13 @@ pub fn timer_arch_get_frequency() -> usize {
 }
 
 pub fn timer_arch_init() {
-    let mut freq_lock = TIMER_FREQ.lock();
-    let mut slice_lock = TIMER_SLICE.lock();
-    *freq_lock = timer_arch_get_frequency();
-    *slice_lock = (*freq_lock) / 1000; // ms
+    let freq = timer_arch_get_frequency();
+    let slice = freq / 1000; // ms
+    TIMER_FREQ.store(freq, Ordering::Relaxed);
+    TIMER_SLICE.store(slice, Ordering::Relaxed);
 
     let ctl = 0x3 & (1 | !CTL_IMASK);
-    let tval = *slice_lock * 10;
+    let tval = slice * 10;
     msr!(CNTHP_CTL_EL2, ctl);
     msr!(CNTHP_TVAL_EL2, tval);
 }
