@@ -1,6 +1,11 @@
-// use alloc::boxed::Box;
+use core::future::Future;
+use core::pin::Pin;
+use core::task::Context;
+
+use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, LinkedList};
 use alloc::sync::Arc;
+use alloc::task::Wake;
 use alloc::vec::Vec;
 use spin::mutex::Mutex;
 
@@ -10,12 +15,6 @@ use crate::device::{
 };
 use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
 use crate::util::{memcpy_safe, sleep, trace};
-
-// use core::future::Future;
-// use core::pin::Pin;
-// use core::task::Context;
-
-// use woke::{waker_ref, Woke};
 
 #[derive(Clone, Copy, Debug)]
 pub enum AsyncTaskState {
@@ -171,8 +170,7 @@ pub struct AsyncTask {
     pub task_data: AsyncTaskData,
     pub src_vmid: usize,
     pub state: Arc<Mutex<AsyncTaskState>>,
-    // pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
-    pub task: fn(),
+    pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
 }
 
 impl TaskOwner for AsyncTask {
@@ -181,23 +179,23 @@ impl TaskOwner for AsyncTask {
     }
 }
 
-// impl Woke for AsyncTask {
-//     fn wake(self: Arc<Self>) {
-//         todo!()
-//     }
-
-//     fn wake_by_ref(_arc_self: &Arc<Self>) {
-//         todo!()
-//     }
-// }
+impl Wake for AsyncTask {
+    fn wake(self: Arc<Self>) {
+        todo!()
+    }
+}
 
 impl AsyncTask {
-    pub fn new(task_data: AsyncTaskData, src_vmid: usize, future: fn()) -> AsyncTask {
+    pub fn new(
+        task_data: AsyncTaskData,
+        src_vmid: usize,
+        future: impl Future<Output = ()> + 'static + Send + Sync,
+    ) -> AsyncTask {
         AsyncTask {
             task_data,
             src_vmid,
             state: Arc::new(Mutex::new(AsyncTaskState::Pending)),
-            task: future,
+            task: Arc::new(Mutex::new(Box::pin(future))),
         }
     }
 
@@ -215,11 +213,9 @@ impl AsyncTask {
             }
         }
         drop(state);
-        // let wake: Arc<AsyncTask> = unsafe { Arc::from_raw(self as *mut _) };
-        // let waker = waker_ref(&wake);
-        // let mut context = Context::from_waker(&*waker);
-        // self.task.lock().as_mut().poll(&mut context);
-        (self.task)();
+        let waker = Arc::new(self.clone()).into();
+        let mut context = Context::from_waker(&waker);
+        let _ = self.task.lock().as_mut().poll(&mut context);
         false
     }
 
@@ -230,7 +226,7 @@ impl AsyncTask {
 }
 
 // async req function
-pub fn async_ipi_req() {
+pub async fn async_ipi_req() {
     let ipi_list = ASYNC_IPI_TASK_LIST.lock();
     if ipi_list.is_empty() {
         panic!("ipi_list should not be empty");
@@ -247,10 +243,10 @@ pub fn async_ipi_req() {
     }
 }
 
-pub fn async_blk_id_req() {}
+pub async fn async_blk_id_req() {}
 
 // inject an interrupt to service VM
-pub fn async_blk_io_req() {
+pub async fn async_blk_io_req() {
     let io_list = ASYNC_IO_TASK_LIST.lock();
     if io_list.is_empty() {
         panic!("io_list should not be empty");

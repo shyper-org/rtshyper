@@ -23,8 +23,6 @@ cc = "1.0"
 [dependencies]
 shyper = { path = "libshyper" }
 vm-fdt = { git = "https://github.com/migu4917/vm-fdt", features = ["alloc"] }
-#nostd_async = "0.6.0"
-#woke = "0.0.2"
 fdt = { path = "libfdt-binding" }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 spin = { version = "0.9.4", features = ["use_ticket_mutex"] }
