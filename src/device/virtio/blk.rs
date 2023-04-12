@@ -1,3 +1,4 @@
+use alloc::ffi::CString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -5,8 +6,8 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
 use crate::kernel::{
-    active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskData,
-    AsyncTaskState, IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2hva,
+    active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskState,
+    IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2hva,
 };
 use crate::util::{memcpy_safe, trace};
 
@@ -304,7 +305,7 @@ impl VirtioBlkReqInner {
     }
 }
 
-pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usize, vm: &Vm) {
+fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usize, vm: &Vm) {
     let region_start = req.region_start();
     let region_size = req.region_size();
     let mut cache_ptr = cache;
@@ -327,7 +328,7 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
                 if req.mediated() {
                     // mediated blk read
                     let task = AsyncTask::new(
-                        AsyncTaskData::Io(IoAsyncMsg {
+                        IoAsyncMsg {
                             src_vmid: vm.id(),
                             vq: vq.clone(),
                             dev: dev.clone(),
@@ -337,51 +338,30 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
                             iov_list: Arc::new(req_node.iov.clone()),
-                        }),
+                        },
                         vm.id(),
                         async_blk_io_req(),
                     );
                     add_async_task(task, false);
                 } else {
-                    todo!();
-                }
-                for iov in req_node.iov.iter() {
-                    let data_bg = iov.data_bg;
-                    let len = iov.len as usize;
+                    for iov in req_node.iov.iter() {
+                        let data_bg = iov.data_bg;
+                        let len = iov.len as usize;
 
-                    if len < SECTOR_BSIZE {
-                        println!("blk_req_handler: read len < SECTOR_BSIZE");
-                        continue;
-                    }
-                    if !req.mediated() {
-                        if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
-                            panic!("illegal des addr {:x}, src addr {:x}", data_bg, cache_ptr);
+                        if len < SECTOR_BSIZE {
+                            println!("blk_req_handler: read len < SECTOR_BSIZE");
+                            continue;
                         }
                         memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
+                        cache_ptr += len;
                     }
-                    cache_ptr += len;
                 }
             }
             VIRTIO_BLK_T_OUT => {
-                for iov in req_node.iov.iter() {
-                    let data_bg = iov.data_bg;
-                    let len = iov.len as usize;
-                    if len < SECTOR_BSIZE {
-                        println!("blk_req_handler: read len < SECTOR_BSIZE");
-                        continue;
-                    }
-                    if !req.mediated() {
-                        if trace() && (data_bg < 0x1000 || cache_ptr < 0x1000) {
-                            panic!("illegal des addr {:x}, src addr {:x}", cache_ptr, data_bg);
-                        }
-                        memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
-                    }
-                    cache_ptr += len;
-                }
                 if req.mediated() {
                     // mediated blk write
                     let task = AsyncTask::new(
-                        AsyncTaskData::Io(IoAsyncMsg {
+                        IoAsyncMsg {
                             src_vmid: vm.id(),
                             vq: vq.clone(),
                             dev: dev.clone(),
@@ -391,30 +371,38 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
                             iov_list: Arc::new(req_node.iov.clone()),
-                        }),
+                        },
                         vm.id(),
                         async_blk_io_req(),
                     );
                     add_async_task(task, false);
                 } else {
-                    todo!();
+                    for iov in req_node.iov.iter() {
+                        let data_bg = iov.data_bg;
+                        let len = iov.len as usize;
+                        if len < SECTOR_BSIZE {
+                            println!("blk_req_handler: read len < SECTOR_BSIZE");
+                            continue;
+                        }
+                        memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
+                        cache_ptr += len;
+                    }
                 }
             }
             VIRTIO_BLK_T_FLUSH => {
                 todo!();
             }
             VIRTIO_BLK_T_GET_ID => {
-                let data_bg = req_node.iov[0].data_bg;
-                let name = "virtio-blk".as_ptr();
-                if trace() && (data_bg < 0x1000) {
-                    panic!("illegal des addr {:x}", cache_ptr);
-                }
-                memcpy_safe(data_bg as *mut u8, name, 20);
+                let name = CString::new("virtio-blk").unwrap();
+                let cstr = name.to_bytes_with_nul();
+                let data_bg =
+                    unsafe { core::slice::from_raw_parts_mut(req_node.iov[0].data_bg as *mut u8, cstr.len()) };
+                data_bg.copy_from_slice(cstr);
                 let task = AsyncTask::new(
-                    AsyncTaskData::NoneTask(IoIdAsyncMsg {
+                    IoIdAsyncMsg {
                         vq: vq.clone(),
                         dev: dev.clone(),
-                    }),
+                    },
                     vm.id(),
                     async_blk_id_req(),
                 );
@@ -444,11 +432,11 @@ pub fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache:
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     //     add_task_count();
     let task = AsyncTask::new(
-        AsyncTaskData::Ipi(IpiMediatedMsg {
+        IpiMediatedMsg {
             src_id: vm.id(),
             vq,
             blk,
-        }),
+        },
         vm.id(),
         async_ipi_req(),
     );
@@ -585,7 +573,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     }
 
     if !req.mediated() {
-        generate_blk_req(&req, &vq, &blk, dev.cache(), &vm);
+        // generate_blk_req(&req, &vq, &blk, dev.cache(), &vm);
+        unimplemented!("!req.mediated()");
     } else {
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         let cache = mediated_blk.cache_pa();

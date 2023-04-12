@@ -11,7 +11,7 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::device::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    add_async_used_info, cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType,
+    cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType,
     iommu_add_device, mem_region_alloc_colors, ColorMemRegion, count_missing_num,
 };
 use crate::kernel::mem_page_alloc;
@@ -444,7 +444,6 @@ pub fn vmm_setup_config(vm_id: usize) {
         panic!("vmm_setup_config: vmm_init_iommu_device failed");
     }
 
-    add_async_used_info(vm_id);
     info!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
 }
 

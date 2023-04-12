@@ -21,7 +21,7 @@ impl VcpuArray {
     }
 
     #[inline]
-    pub fn vcpu_num(&self) -> usize {
+    pub(super) fn vcpu_num(&self) -> usize {
         self.len
     }
 
