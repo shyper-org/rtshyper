@@ -27,13 +27,10 @@ use crate::kernel::{hvc_init, iommu_init};
 #[macro_use]
 mod macros;
 
-#[allow(dead_code)]
 mod arch;
 mod board;
 mod config;
-#[allow(dead_code)]
 mod device;
-#[allow(dead_code)]
 mod driver;
 mod kernel;
 mod mm;

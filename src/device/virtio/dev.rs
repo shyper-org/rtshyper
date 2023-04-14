@@ -8,9 +8,7 @@ use crate::device::{net_features, NetDesc};
 use crate::device::{console_features, ConsoleDesc};
 use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
 use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
-use crate::device::{BlkStat, NicStat};
-use crate::device::DevReq::BlkReq;
-use crate::kernel::{ConsoleDescData, DevDescData, mem_pages_alloc, NetDescData, VirtDevData};
+use crate::kernel::mem_pages_alloc;
 use crate::mm::PageFrame;
 
 #[derive(Copy, Clone, Debug)]
@@ -22,29 +20,6 @@ pub enum VirtioDeviceType {
 }
 
 #[derive(Clone)]
-pub enum DevStat {
-    BlkStat(BlkStat),
-    NicStat(NicStat),
-    None,
-}
-
-impl DevStat {
-    pub fn copy_from(&mut self, stat: DevStat) {
-        match stat {
-            DevStat::BlkStat(src_stat) => {
-                *self = DevStat::BlkStat(src_stat.back_up());
-            }
-            DevStat::NicStat(src_stat) => {
-                *self = DevStat::NicStat(src_stat.back_up());
-            }
-            DevStat::None => {
-                *self = DevStat::None;
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
 pub enum DevDesc {
     BlkDesc(BlkDesc),
     NetDesc(NetDesc),
@@ -52,40 +27,10 @@ pub enum DevDesc {
     None,
 }
 
-impl DevDesc {
-    pub fn copy_from(&mut self, desc: DevDesc) {
-        match desc {
-            DevDesc::BlkDesc(src_desc) => {
-                *self = DevDesc::BlkDesc(src_desc);
-            }
-            DevDesc::NetDesc(src_desc) => {
-                *self = DevDesc::NetDesc(src_desc.back_up());
-            }
-            DevDesc::ConsoleDesc(src_desc) => {
-                *self = DevDesc::ConsoleDesc(src_desc.back_up());
-            }
-            DevDesc::None => *self = DevDesc::None,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub enum DevReq {
     BlkReq(VirtioBlkReq),
     None,
-}
-
-impl DevReq {
-    pub fn copy_from(&mut self, src_req: DevReq) {
-        match src_req {
-            DevReq::BlkReq(req) => {
-                *self = BlkReq(req.back_up());
-            }
-            DevReq::None => {
-                *self = DevReq::None;
-            }
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -135,11 +80,6 @@ impl VirtDev {
         return inner.cache.as_ref().unwrap().pa();
     }
 
-    pub fn stat(&self) -> DevStat {
-        let inner = self.inner.lock();
-        inner.stat.clone()
-    }
-
     pub fn activated(&self) -> bool {
         let inner = self.inner.lock();
         inner.activated
@@ -159,92 +99,6 @@ impl VirtDev {
         let inner = self.inner.lock();
         matches!(&inner.desc, DevDesc::NetDesc(_))
     }
-
-    // use for migration save
-    pub fn restore_virt_dev_data(&self, dev_data: &VirtDevData) {
-        let mut inner = self.inner.lock();
-        // println!(
-        //     "activated {}, type {:#?}, features {:#x}, generation {}, int id {}",
-        //     dev_data.activated, dev_data.dev_type, dev_data.features, dev_data.generation, dev_data.int_id
-        // );
-        inner.activated = dev_data.activated;
-        inner.dev_type = dev_data.dev_type;
-        inner.features = dev_data.features;
-        inner.generation = dev_data.generation;
-        inner.int_id = dev_data.int_id;
-        match &inner.desc {
-            DevDesc::BlkDesc(_) => {
-                todo!("restore_virt_dev_data: Migrate vm use nfs");
-            }
-            DevDesc::NetDesc(net_desc) => {
-                if let DevDescData::NetDesc(desc_data) = &dev_data.desc {
-                    net_desc.restore_net_data(desc_data);
-                }
-            }
-            DevDesc::ConsoleDesc(console_desvc) => {
-                if let DevDescData::ConsoleDesc(desc_data) = &dev_data.desc {
-                    console_desvc.restore_console_data(desc_data);
-                }
-            }
-            DevDesc::None => {}
-        }
-    }
-
-    // use for migration save
-    pub fn save_virt_dev_data(&self, dev_data: &mut VirtDevData) {
-        let mut inner = self.inner.lock();
-        dev_data.activated = inner.activated;
-        dev_data.dev_type = inner.dev_type;
-        dev_data.features = inner.features;
-        dev_data.generation = inner.generation;
-        dev_data.int_id = inner.int_id;
-        match &inner.desc {
-            DevDesc::BlkDesc(_) => {
-                todo!("save_virt_dev_data: Migrate vm use nfs");
-            }
-            DevDesc::NetDesc(net_desc) => {
-                dev_data.desc = DevDescData::NetDesc(NetDescData { mac: [0; 6], status: 0 });
-                if let DevDescData::NetDesc(desc_data) = &mut dev_data.desc {
-                    net_desc.save_net_data(desc_data);
-                }
-            }
-            DevDesc::ConsoleDesc(console_desvc) => {
-                dev_data.desc = DevDescData::ConsoleDesc(ConsoleDescData {
-                    oppo_end_vmid: 0,
-                    oppo_end_ipa: 0,
-                    cols: 0,
-                    rows: 0,
-                    max_nr_ports: 0,
-                    emerg_wr: 0,
-                });
-                if let DevDescData::ConsoleDesc(desc_data) = &mut dev_data.desc {
-                    console_desvc.save_console_data(desc_data);
-                }
-            }
-            DevDesc::None => {}
-        }
-        // set activated to false
-        inner.activated = false;
-    }
-
-    // use for live update
-    pub fn save_virt_dev(&self, src_dev: VirtDev) {
-        let mut inner = self.inner.lock();
-        let src_dev_inner = src_dev.inner.lock();
-        inner.activated = src_dev_inner.activated;
-        inner.dev_type = src_dev_inner.dev_type;
-        inner.features = src_dev_inner.features;
-        inner.generation = src_dev_inner.generation;
-        inner.int_id = src_dev_inner.int_id;
-        inner.desc.copy_from(src_dev_inner.desc.clone());
-        inner.req.copy_from(src_dev_inner.req.clone());
-        // inner.cache is set by fn dev_init, no need to copy here
-        inner.cache = src_dev_inner
-            .cache
-            .as_ref()
-            .map(|page| PageFrame::new(page.pa, page.page_num));
-        inner.stat.copy_from(src_dev_inner.stat.clone());
-    }
 }
 
 pub struct VirtDevInner {
@@ -256,7 +110,6 @@ pub struct VirtDevInner {
     desc: DevDesc,
     req: DevReq,
     cache: Option<PageFrame>,
-    stat: DevStat,
 }
 
 impl VirtDevInner {
@@ -270,7 +123,6 @@ impl VirtDevInner {
             desc: DevDesc::None,
             req: DevReq::None,
             cache: None,
-            stat: DevStat::None,
         }
     }
 
@@ -315,8 +167,6 @@ impl VirtDevInner {
                         println!("VirtDevInner::init(): mem_pages_alloc failed");
                     }
                 }
-
-                self.stat = DevStat::BlkStat(BlkStat::default());
             }
             VirtioDeviceType::Net => {
                 let net_desc = NetDesc::default();
@@ -334,8 +184,6 @@ impl VirtDevInner {
                         println!("VirtDevInner::init(): mem_pages_alloc failed");
                     }
                 }
-
-                self.stat = DevStat::NicStat(NicStat::default());
             }
             VirtioDeviceType::Console => {
                 let console_desc = ConsoleDesc::default();

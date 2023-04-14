@@ -7,7 +7,7 @@ use crate::arch::{exception_esr, exception_fault_addr};
 use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, emu_reg_handler, EmuContext};
-use crate::kernel::{active_vm, current_cpu, hvc_guest_handler, migrate_data_abort_handler};
+use crate::kernel::{active_vm, current_cpu, hvc_guest_handler};
 
 pub const HVC_RETURN_REG: usize = 0;
 
@@ -45,7 +45,6 @@ pub fn data_abort_handler() {
             //     current_cpu().get_gpr(emu_ctx.reg),
             //     exception_esr()
             // );
-            migrate_data_abort_handler(&emu_ctx);
             // no need to rewrite elr
 
             // let time1 = time_current_us();

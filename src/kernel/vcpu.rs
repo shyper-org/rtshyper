@@ -437,6 +437,7 @@ impl VcpuInner {
     }
 }
 
+#[allow(dead_code)]
 pub fn vcpu_idle(_vcpu: Vcpu) -> ! {
     cpu_interrupt_unmask();
     loop {

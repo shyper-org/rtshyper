@@ -23,7 +23,6 @@ pub enum InitcEvent {
     VgicdSetTrgt,
     VgicdSetCfg,
     VgicdRoute,
-    None,
 }
 
 #[derive(Copy, Clone)]
@@ -122,15 +121,12 @@ pub enum IpiInnerMsg {
     HvcMsg(IpiHvcMsg),
     IntInjectMsg(IpiIntInjectMsg),
     HyperFreshMsg(),
-    None,
 }
 
 pub struct IpiMessage {
     pub ipi_type: IpiType,
     pub ipi_message: IpiInnerMsg,
 }
-
-const IPI_HANDLER_MAX: usize = 16;
 
 pub type IpiHandlerFunc = fn(&IpiMessage);
 

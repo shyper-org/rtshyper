@@ -518,12 +518,3 @@ pub fn vmm_boot() {
         cpu_idle();
     }
 }
-
-pub fn vmm_migrate_boot() {
-    let vcpu = current_cpu().active_vcpu.clone().unwrap();
-    vcpu.reset_vmpidr();
-    vcpu.reset_vtimer_offset();
-
-    // println!("Core[{}] start running", current_cpu().id);
-    vcpu_run(true);
-}

@@ -7,7 +7,7 @@ use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, ConsoleDescData, vm_if_set_mem_map_bit, vm_ipa2hva};
+use crate::kernel::{active_vm, vm_if_set_mem_map_bit, vm_ipa2hva};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::util::{round_down, trace};
@@ -43,21 +43,6 @@ impl ConsoleDesc {
         }
     }
 
-    pub fn back_up(&self) -> ConsoleDesc {
-        let current_inner = self.inner.lock();
-        let inner = ConsoleDescInner {
-            oppo_end_vmid: current_inner.oppo_end_vmid,
-            oppo_end_ipa: current_inner.oppo_end_ipa,
-            cols: current_inner.cols,
-            rows: current_inner.rows,
-            max_nr_ports: current_inner.max_nr_ports,
-            emerg_wr: current_inner.emerg_wr,
-        };
-        ConsoleDesc {
-            inner: Arc::new(Mutex::new(inner)),
-        }
-    }
-
     pub fn cfg_init(&self, oppo_end_vmid: u16, oppo_end_ipa: u64) {
         let mut inner = self.inner.lock();
         inner.oppo_end_vmid = oppo_end_vmid;
@@ -83,28 +68,6 @@ impl ConsoleDesc {
     pub fn target_console(&self) -> (u16, u64) {
         let inner = self.inner.lock();
         (inner.oppo_end_vmid, inner.oppo_end_ipa)
-    }
-
-    // use for migration restore
-    pub fn restore_console_data(&self, desc_data: &ConsoleDescData) {
-        let mut inner = self.inner.lock();
-        // inner.oppo_end_vmid = desc_data.oppo_end_vmid;
-        // inner.oppo_end_ipa = desc_data.oppo_end_ipa;
-        inner.cols = desc_data.cols;
-        inner.rows = desc_data.rows;
-        inner.max_nr_ports = desc_data.max_nr_ports;
-        inner.emerg_wr = desc_data.emerg_wr;
-    }
-
-    // use for migration save
-    pub fn save_console_data(&self, desc_data: &mut ConsoleDescData) {
-        let inner = self.inner.lock();
-        desc_data.oppo_end_vmid = inner.oppo_end_vmid;
-        desc_data.oppo_end_ipa = inner.oppo_end_ipa;
-        desc_data.cols = inner.cols;
-        desc_data.rows = inner.rows;
-        desc_data.max_nr_ports = inner.max_nr_ports;
-        desc_data.emerg_wr = inner.emerg_wr;
     }
 }
 

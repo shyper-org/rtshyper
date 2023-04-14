@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, VirtqData, Vm, vm_ipa2hva};
+use crate::kernel::{active_vm, Vm, vm_ipa2hva};
 use crate::util::trace;
 
 pub const VIRTQ_READY: usize = 1;
@@ -381,82 +381,6 @@ impl Virtq {
         let inner = self.inner.lock();
         let used = inner.used.as_ref().unwrap();
         used.idx
-    }
-
-    // use for migration
-    pub fn restore_vq_data(&self, data: &VirtqData) {
-        let mut inner = self.inner.lock();
-        inner.ready = data.ready;
-        inner.vq_index = data.vq_index;
-        inner.num = data.num;
-        inner.last_avail_idx = data.last_avail_idx;
-        inner.last_used_idx = data.last_used_idx;
-        inner.used_flags = data.used_flags;
-        inner.desc_table_addr = data.desc_table_ipa;
-        inner.avail_addr = data.avail_ipa;
-        inner.used_addr = data.used_ipa;
-    }
-
-    // use for migration
-    pub fn save_vq_data(&self, data: &mut VirtqData) {
-        let inner = self.inner.lock();
-        data.ready = inner.ready;
-        data.vq_index = inner.vq_index;
-        data.num = inner.num;
-        data.last_avail_idx = inner.last_avail_idx;
-        data.last_used_idx = inner.last_used_idx;
-        data.used_flags = inner.used_flags;
-        data.desc_table_ipa = inner.desc_table_addr;
-        data.avail_ipa = inner.avail_addr;
-        data.used_ipa = inner.used_addr;
-
-        // println!("save_vq_data: ready {}, vq idx {}, last_avail_idx {}, last_used_idx {}, desc_table_ipa {:x}, avail_ipa {:x}, used_ipa {:x}",
-        //          data.ready, data.vq_index, data.last_avail_idx, data.last_used_idx, data.desc_table_ipa, data.avail_ipa, data.used_ipa);
-        // if inner.avail.is_some() {
-        //     println!("save_vq_data: avail idx {}", inner.avail.as_ref().unwrap().idx);
-        // }
-        // if inner.used.is_some() {
-        //     println!("save_vq_data: used idx {}", inner.used.as_ref().unwrap().idx);
-        // }
-    }
-
-    // use for live update
-    pub fn save_vq(&self, vq: Virtq, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
-        let mut dst_inner = self.inner.lock();
-        let src_inner = vq.inner.lock();
-        dst_inner.ready = src_inner.ready;
-        dst_inner.vq_index = src_inner.vq_index;
-        dst_inner.num = src_inner.num;
-
-        dst_inner.desc_table = match &src_inner.desc_table {
-            None => None,
-            Some(desc_table) => {
-                let desc_addr = &desc_table[0] as *const _ as usize;
-                Some(unsafe { slice::from_raw_parts_mut(desc_addr as *mut VringDesc, DESC_QUEUE_SIZE) })
-            }
-        };
-        dst_inner.avail = match &src_inner.avail {
-            None => None,
-            Some(avail) => {
-                let avail_addr = *avail as *const _ as usize;
-                Some(unsafe { &mut *(avail_addr as *mut VringAvail) })
-            }
-        };
-        dst_inner.used = match &src_inner.used {
-            None => None,
-            Some(used) => {
-                let used_addr = *used as *const _ as usize;
-                Some(unsafe { &mut *(used_addr as *mut VringUsed) })
-            }
-        };
-
-        dst_inner.last_avail_idx = src_inner.last_avail_idx;
-        dst_inner.last_used_idx = src_inner.last_used_idx;
-        dst_inner.used_flags = src_inner.used_flags;
-        dst_inner.desc_table_addr = src_inner.desc_table_addr;
-        dst_inner.avail_addr = src_inner.avail_addr;
-        dst_inner.used_addr = src_inner.used_addr;
-        dst_inner.notify_handler = notify_handler;
     }
 }
 

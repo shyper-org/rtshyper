@@ -8,8 +8,7 @@ use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
-    active_vm, active_vm_id, current_cpu, NetDescData, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit,
-    vm_ipa2hva, VM_LIST,
+    active_vm, active_vm_id, current_cpu, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit, vm_ipa2hva, VM_LIST,
 };
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -83,18 +82,6 @@ impl NetDesc {
         }
     }
 
-    // use for live update
-    pub fn back_up(&self) -> NetDesc {
-        let current_inner = self.inner.lock();
-        let inner = NetDescInner {
-            mac: current_inner.mac,
-            status: current_inner.status,
-        };
-        NetDesc {
-            inner: Arc::new(Mutex::new(inner)),
-        }
-    }
-
     pub fn set_status(&self, status: u16) {
         let mut inner = self.inner.lock();
         inner.status = status;
@@ -123,20 +110,6 @@ impl NetDesc {
         }
 
         unsafe { *((start_addr + offset) as *const u32) }
-    }
-
-    // use for migration
-    pub fn restore_net_data(&self, desc_data: &NetDescData) {
-        let mut inner = self.inner.lock();
-        inner.mac = desc_data.mac;
-        inner.status = desc_data.status;
-    }
-
-    // use for migration
-    pub fn save_net_data(&self, desc_data: &mut NetDescData) {
-        let inner = self.inner.lock();
-        desc_data.mac = inner.mac;
-        desc_data.status = inner.status;
     }
 }
 
@@ -550,9 +523,6 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
 
         if vmid != 0 {
             let mut ipa_addr = round_down(rx_vq.desc_addr(desc_idx), PAGE_SIZE);
-            // if *VM_STATE_FLAG.lock() == 1 {
-            //     println!("A: vm0 virtio net write vm1 memory in {:#x}", addr);
-            // }
             while ipa_addr <= round_down(rx_vq.desc_addr(desc_idx) + desc_len, PAGE_SIZE) {
                 vm_if_set_mem_map_bit(&vm, ipa_addr);
                 ipa_addr += PAGE_SIZE;

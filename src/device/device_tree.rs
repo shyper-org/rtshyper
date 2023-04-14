@@ -7,8 +7,6 @@ use crate::config::VmConfigEntry;
 use crate::device::EmuDeviceType;
 use crate::vmm::CPIO_RAMDISK;
 
-const PI4_DTB_ADDR: usize = 0xf0000000;
-
 pub static SYSTEM_FDT: spin::Once<alloc::vec::Vec<u8>> = spin::Once::new();
 
 pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
@@ -76,6 +74,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
     }
     #[cfg(feature = "pi4")]
     unsafe {
+        const PI4_DTB_ADDR: usize = 0xf0000000;
         use fdt::*;
         use crate::util::round_up;
         use crate::arch::PAGE_SIZE;

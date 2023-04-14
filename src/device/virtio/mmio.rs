@@ -12,7 +12,7 @@ use crate::device::{VirtioQueue, Virtq};
 use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
 use crate::device::VirtDev;
 use crate::device::VIRTQ_READY;
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, VirtioMmioData, vm_ipa2hva};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, vm_ipa2hva};
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
 
@@ -358,69 +358,8 @@ impl VirtioMmio {
         vq.call_notify_handler(self.clone())
     }
 
-    // use for migration restore
-    pub fn restore_mmio_data(&self, mmio_data: &VirtioMmioData) {
-        let mut inner = self.inner.lock();
-        // inner.id = mmio_data.id;
-        inner.driver_features = mmio_data.driver_features;
-        inner.driver_status = mmio_data.driver_status;
-        inner.regs = mmio_data.regs;
-        inner.dev.restore_virt_dev_data(&mmio_data.dev);
-        for (idx, vq) in inner.vq.iter().enumerate() {
-            vq.restore_vq_data(&mmio_data.vq[idx]);
-        }
-    }
-
-    // use for migration save
-    pub fn save_mmio_data(&self, mmio_data: &mut VirtioMmioData) {
-        let inner = self.inner.lock();
-        mmio_data.id = inner.id;
-        mmio_data.driver_features = inner.driver_features;
-        mmio_data.driver_status = inner.driver_status;
-        mmio_data.regs = inner.regs;
-        inner.dev.save_virt_dev_data(&mut mmio_data.dev);
-        for (idx, vq) in inner.vq.iter().enumerate() {
-            vq.save_vq_data(&mut mmio_data.vq[idx]);
-        }
-
-        // if let DevDescData::ConsoleDesc(desc_data) = &mmio_data.dev.desc {
-        //     let oppo_vm_id = desc_data.oppo_end_vmid;
-        //     let oppo_vm_ipa = desc_data.oppo_end_ipa;
-        //     if oppo_vm_id != 0 {
-        //         return;
-        //     }
-        //     let vm = vm(oppo_vm_id as usize).unwrap();
-        //     if let EmuDevs::VirtioConsole(console_mmio) = vm.emu_console_dev(oppo_vm_ipa as usize) {
-        //         console_mmio.dev().save_virt_dev_data(&mut mmio_data.oppo_dev);
-        //     }
-        // }
-    }
-
     pub fn vq_num(&self) -> usize {
         self.inner.lock().vq.len()
-    }
-
-    // use for live update
-    pub fn save_mmio(&self, virtio_mmio: VirtioMmio, notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>) {
-        // println!("save mmio notify_handler addr {:x}", unsafe { *(&(notify_handler.unwrap()) as *const _ as *const usize) });
-        let mut dst_dev = self.inner.lock();
-        let src_dev = virtio_mmio.inner.lock();
-        let is_net = src_dev.dev.is_net();
-        dst_dev.id = src_dev.id;
-        dst_dev.driver_features = src_dev.driver_features;
-        dst_dev.driver_status = src_dev.driver_status;
-        dst_dev.regs.save_regs(&src_dev.regs);
-        dst_dev.dev.save_virt_dev(src_dev.dev.clone());
-        for (idx, vq) in src_dev.vq.iter().enumerate() {
-            let new_vq = Virtq::default();
-            if is_net && idx == src_dev.vq.len() - 1 && idx % 2 == 0 {
-                // control queue
-                new_vq.save_vq(vq.clone(), Some(virtio_net_handle_ctrl));
-            } else {
-                new_vq.save_vq(vq.clone(), notify_handler);
-            }
-            dst_dev.vq.push(new_vq);
-        }
     }
 }
 

@@ -1,12 +1,12 @@
 // TODO: move these core name to device
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
+use crate::board::ARM_CORTEX_A57;
 use crate::board::{
     PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
     PlatMemRegion,
 };
 use crate::board::SchedRule::RoundRobin;
-use crate::device::ARM_CORTEX_A57;
 use crate::driver::{read, write};
 
 pub struct QemuPlatform;
