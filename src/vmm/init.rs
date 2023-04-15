@@ -8,11 +8,11 @@ use crate::arch::PAGE_SIZE;
 use crate::board::{PlatOperation, Platform};
 use crate::config::{vm_cfg_entry, VmRegion};
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
-use crate::device::create_fdt;
+use crate::dtb::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType,
-    iommu_add_device, mem_region_alloc_colors, ColorMemRegion, count_missing_num,
+    cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType, iommu_add_device,
+    mem_region_alloc_colors, ColorMemRegion, count_missing_num,
 };
 use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
@@ -133,8 +133,7 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
         // Init dtb for Linux.
         if vm_id == 0 {
             // Init dtb for MVM.
-            use crate::device::SYSTEM_FDT;
-            let mut dtb = SYSTEM_FDT.get().unwrap().clone();
+            let mut dtb = crate::dtb::SYSTEM_FDT.get().unwrap().clone();
             // enlarge the size of dtb, because vmm_setup_fdt_vm0 will enlarge it unsafely!
             dtb.resize(dtb.len() << 1, 0);
             let size = unsafe { vmm_setup_fdt_vm0(vm, dtb.as_ptr() as *mut _) };
