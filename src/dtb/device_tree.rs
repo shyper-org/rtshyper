@@ -9,7 +9,7 @@ use crate::vmm::CPIO_RAMDISK;
 
 pub static SYSTEM_FDT: spin::Once<alloc::vec::Vec<u8>> = spin::Once::new();
 
-pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
+pub fn init_vm0_dtb(dtb: *mut core::ffi::c_void) {
     #[cfg(feature = "tx2")]
     unsafe {
         use fdt::*;
@@ -78,7 +78,7 @@ pub fn init_vm0_dtb(dtb: *mut fdt::myctypes::c_void) {
         use fdt::*;
         use crate::util::round_up;
         use crate::arch::PAGE_SIZE;
-        let pi_fdt = PI4_DTB_ADDR as *mut fdt::myctypes::c_void;
+        let pi_fdt = PI4_DTB_ADDR as *mut core::ffi::c_void;
         let len = round_up(fdt_size(pi_fdt) as usize, PAGE_SIZE) + PAGE_SIZE;
         println!("fdt orignal size {}", len);
         let slice = core::slice::from_raw_parts(pi_fdt as *const u8, len as usize);

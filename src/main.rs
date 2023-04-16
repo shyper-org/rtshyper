@@ -19,10 +19,8 @@ extern crate memoffset;
 extern crate derive_more;
 
 use device::mediated_dev_init;
-use kernel::{cpu_init, interrupt_init, physical_mem_init, timer_init};
+use kernel::{cpu_init, interrupt_init, physical_mem_init, timer_init, hvc_init, iommu_init};
 use vmm::{vm_init, vmm_boot_vm};
-
-use crate::kernel::{hvc_init, iommu_init};
 
 #[macro_use]
 mod macros;
@@ -36,21 +34,15 @@ mod dtb;
 mod kernel;
 mod mm;
 mod panic;
-#[allow(dead_code)]
 mod util;
 mod vmm;
 
 #[no_mangle]
-pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) -> ! {
+pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     if cpu_id == 0 {
+        driver::init();
         println!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
         println!("Built At {}", env!("BUILD_TIME"));
-
-        #[cfg(feature = "pi4")]
-        {
-            crate::driver::gpio_select_function(0, 4);
-            crate::driver::gpio_select_function(1, 4);
-        }
 
         let _ = kernel::logger_init();
         mm::init(); // including heap and hypervisor VA space
@@ -65,10 +57,10 @@ pub fn init(cpu_id: usize, dtb: *mut fdt::myctypes::c_void) -> ! {
     if cpu_id == 0 {
         mediated_dev_init();
     }
-    crate::util::barrier();
-    crate::kernel::hypervisor_self_coloring();
+    util::barrier();
+    kernel::hypervisor_self_coloring();
     if cpu_id != 0 {
-        crate::kernel::cpu_idle();
+        kernel::cpu_idle();
     }
     vm_init();
     println!(
