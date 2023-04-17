@@ -1,6 +1,4 @@
 pub trait ContextFrameTrait {
-    fn new(pc: usize, sp: usize, arg: usize) -> Self;
-
     fn exception_pc(&self) -> usize;
     fn set_exception_pc(&mut self, pc: usize);
     fn stack_pointer(&self) -> usize;

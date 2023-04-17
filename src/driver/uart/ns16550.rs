@@ -171,86 +171,92 @@ register_bitfields! {
             WordLength8 = 3
         ]
     ],
+}
 
-    /// Bitfields of the `MCR` register.
-    pub MCR [
-        /// Whether the old SIR decode path should be used instead of the new one.
-        OLD_SIR_DECODE OFFSET(10) NUMBITS(1) [],
+// register_bitfields! {
+//     u16,
+//     /// Bitfields of the `MCR` register.
+//     pub MCR [
+//         /// Whether the old SIR decode path should be used instead of the new one.
+//         OLD_SIR_DECODE OFFSET(10) NUMBITS(1) [],
 
-        /// Polarity selection bit for RI pin toggling to generate model status interrupt.
-        RI_POLARITY OFFSET(8) NUMBITS(2) [
-            /// Interrupt will be generated when RI pin toggles from low to high.
-            LowToHigh = 0,
-            /// Interrupt will be generated when RI pin toggles from high to low.
-            HighToLow = 1,
-            /// Interrupt will be generated on RI delta change detection.
-            BothEdges = 2,
-            /// Reserved.
-            Reserved = 3
-        ],
+//         /// Polarity selection bit for RI pin toggling to generate model status interrupt.
+//         RI_POLARITY OFFSET(8) NUMBITS(2) [
+//             /// Interrupt will be generated when RI pin toggles from low to high.
+//             LowToHigh = 0,
+//             /// Interrupt will be generated when RI pin toggles from high to low.
+//             HighToLow = 1,
+//             /// Interrupt will be generated on RI delta change detection.
+//             BothEdges = 2,
+//             /// Reserved.
+//             Reserved = 3
+//         ],
 
-        /// Whether the old qualified CTS in TX state machine should be used.
-        DEL_QUAL_CTS_EN OFFSET(7) NUMBITS(1) [],
+//         /// Whether the old qualified CTS in TX state machine should be used.
+//         DEL_QUAL_CTS_EN OFFSET(7) NUMBITS(1) [],
 
-        /// Whether RTS Hardware Flow Control should be enabled.
-        RTS_EN OFFSET(6) NUMBITS(1) [],
+//         /// Whether RTS Hardware Flow Control should be enabled.
+//         RTS_EN OFFSET(6) NUMBITS(1) [],
 
-        /// Whether CTS Hardware Flow Control should be enabled.
-        CTS_EN OFFSET(5) NUMBITS(1) [],
+//         /// Whether CTS Hardware Flow Control should be enabled.
+//         CTS_EN OFFSET(5) NUMBITS(1) [],
 
-        /// Whether internal loop back of Serial Out to In should be enabled.
-        LOOPBK OFFSET(4) NUMBITS(1) [],
+//         /// Whether internal loop back of Serial Out to In should be enabled.
+//         LOOPBK OFFSET(4) NUMBITS(1) [],
 
-        /// nOUT2 (Not Used).
-        OUT2 OFFSET(3) NUMBITS(1) [],
+//         /// nOUT2 (Not Used).
+//         OUT2 OFFSET(3) NUMBITS(1) [],
 
-        /// nOUT1 (Not Used).
-        OUT1 OFFSET(2) NUMBITS(1) [],
+//         /// nOUT1 (Not Used).
+//         OUT1 OFFSET(2) NUMBITS(1) [],
 
-        /// Whether RTS should be forced to high if RTS hardware flow control wasn't enabled.
-        RTS OFFSET(1) NUMBITS(1) [],
+//         /// Whether RTS should be forced to high if RTS hardware flow control wasn't enabled.
+//         RTS OFFSET(1) NUMBITS(1) [],
 
-        /// Whether DTR should be forced to high or not.
-        DTR OFFSET(0) NUMBITS(1) []
-    ],
+//         /// Whether DTR should be forced to high or not.
+//         DTR OFFSET(0) NUMBITS(1) []
+//     ],
 
-    /// Bitfields of the `LSR` register.
-    pub LSR [
-        /// Whether the RX FIFO is empty.
-        RX_FIFO_EMPTY OFFSET(9) NUMBITS(1) [],
+//     /// Bitfields of the `LSR` register.
+//     pub LSR [
+//         /// Whether the RX FIFO is empty.
+//         RX_FIFO_EMPTY OFFSET(9) NUMBITS(1) [],
 
-        /// Whether the Transmitter FIFO is full.
-        TX_FIFO_FULL OFFSET(8) NUMBITS(1) [],
+//         /// Whether the Transmitter FIFO is full.
+//         TX_FIFO_FULL OFFSET(8) NUMBITS(1) [],
 
-        /// Denotes a Receive FIFO error, if set to 1.
-        FIFOE OFFSET(7) NUMBITS(1) [],
+//         /// Denotes a Receive FIFO error, if set to 1.
+//         FIFOE OFFSET(7) NUMBITS(1) [],
 
-        /// Denotes a Transmit Shift Register empty status, if set to 1.
-        TMTY OFFSET(6) NUMBITS(1) [],
+//         /// Denotes a Transmit Shift Register empty status, if set to 1.
+//         TMTY OFFSET(6) NUMBITS(1) [],
 
-        /// Denotes that the Transmit Holding Register is empty, if set to 1.
-        ///
-        /// This means that data can be written.
-        THRE OFFSET(5) NUMBITS(1) [],
+//         /// Denotes that the Transmit Holding Register is empty, if set to 1.
+//         ///
+//         /// This means that data can be written.
+//         THRE OFFSET(5) NUMBITS(1) [],
 
-        /// Denotes that a BREAK condition was detected on the line, if set to 1.
-        BRK OFFSET(4) NUMBITS(1) [],
+//         /// Denotes that a BREAK condition was detected on the line, if set to 1.
+//         BRK OFFSET(4) NUMBITS(1) [],
 
-        /// Denotes a Framing Error, if set to 1.
-        FERR OFFSET(3) NUMBITS(1) [],
+//         /// Denotes a Framing Error, if set to 1.
+//         FERR OFFSET(3) NUMBITS(1) [],
 
-        /// Denotes a Parity Error, if set to 1.
-        PERR OFFSET(2) NUMBITS(1) [],
+//         /// Denotes a Parity Error, if set to 1.
+//         PERR OFFSET(2) NUMBITS(1) [],
 
-        /// Denotes a Receiver Overrun Error, if set to 1.
-        OVRF OFFSET(1) NUMBITS(1) [],
+//         /// Denotes a Receiver Overrun Error, if set to 1.
+//         OVRF OFFSET(1) NUMBITS(1) [],
 
-        /// Denotes that Receiver Data are in FIFO, if set to 1.
-        ///
-        /// This means that data are available to read.
-        RDR OFFSET(0) NUMBITS(1) []
-    ],
+//         /// Denotes that Receiver Data are in FIFO, if set to 1.
+//         ///
+//         /// This means that data are available to read.
+//         RDR OFFSET(0) NUMBITS(1) []
+//     ],
+// }
 
+register_bitfields! {
+    u8,
     /// Bitfields of the `MSR` register.
     pub MSR [
         /// State of Carrier detect pin.
@@ -313,9 +319,9 @@ register_structs! {
         (0x09 => _reserved_2),
         (0x0c => pub LCR: ReadWrite<u8, LCR::Register>),
         (0x0d => _reserved_3),
-        (0x10 => pub MCR: ReadWrite<u8, MCR::Register>),
+        (0x10 => pub MCR: ReadWrite<u8>),
         (0x11 => _reserved_4),
-        (0x14 => pub LSR: ReadOnly<u8, LSR::Register>),
+        (0x14 => pub LSR: ReadOnly<u8>),
         (0x15 => _reserved_5),
         (0x18 => pub MSR: ReadWrite<u8, MSR::Register>),
         (0x19 => _reserved_6),
@@ -350,7 +356,7 @@ impl<const BASE_ADDR: usize> super::UartOperation for Ns16550Mmio32<BASE_ADDR> {
         self.ISR_FCR.write(ISR_FCR::EN_FIFO::Mode16550);
     }
 
-    #[inline(never)]
+    #[inline]
     fn send(&self, byte: u8) {
         while self.LSR.get() & 0x20 == 0 {
             core::hint::spin_loop();

@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::arch::{
     ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext, GICD,
-    GICH, VmContext, timer_arch_get_counter, VM_IPA_SIZE,
+    GICH, VmContext, VM_IPA_SIZE,
 };
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
@@ -145,10 +145,11 @@ impl Vcpu {
 
     pub fn context_vm_restore(&self) {
         // println!("context_vm_restore");
-        let _vtimer_offset = self.vm().unwrap().update_vtimer_offset();
+        let vtimer_offset = self.vm().unwrap().update_vtimer_offset();
         self.restore_cpu_ctx();
 
-        let inner = self.inner.lock();
+        let mut inner = self.inner.lock();
+        inner.vm_ctx.generic_timer.set_offset(vtimer_offset as u64);
         // restore vm's VFP and SIMD
         inner.vm_ctx.fpsimd_restore_context();
         inner.vm_ctx.gic_restore_state();
@@ -254,16 +255,6 @@ impl Vcpu {
         inner.reset_context();
     }
 
-    pub fn reset_vmpidr(&self) {
-        let mut inner = self.inner.lock();
-        inner.reset_vmpidr();
-    }
-
-    pub fn reset_vtimer_offset(&self) {
-        let mut inner = self.inner.lock();
-        inner.reset_vtimer_offset();
-    }
-
     pub fn context_ext_regs_store(&self) {
         let mut inner = self.inner.lock();
         inner.context_ext_regs_store();
@@ -287,11 +278,6 @@ impl Vcpu {
     pub fn set_gpr(&self, idx: usize, val: usize) {
         let mut inner = self.inner.lock();
         inner.set_gpr(idx, val);
-    }
-
-    pub fn show_ctx(&self) {
-        let inner = self.inner.lock();
-        inner.show_ctx();
     }
 
     pub fn push_int(&self, int: usize) {
@@ -353,14 +339,9 @@ impl VcpuInner {
     }
 
     fn arch_ctx_reset(&mut self) {
-        // let migrate = self.vm.as_ref().unwrap().migration_state();
-        // if !migrate {
-        self.vm_ctx.cntvoff_el2 = 0;
         self.vm_ctx.sctlr_el1 = 0x30C50830;
-        self.vm_ctx.cntkctl_el1 = 0;
         self.vm_ctx.pmcr_el0 = 0;
         self.vm_ctx.vtcr_el2 = 0x80013540 + ((64 - VM_IPA_SIZE) & ((1 << 6) - 1));
-        // }
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;
 
@@ -372,25 +353,6 @@ impl VcpuInner {
 
         vmpidr |= self.id;
         self.vm_ctx.vmpidr_el2 = vmpidr as u64;
-    }
-
-    fn reset_vmpidr(&mut self) {
-        let mut vmpidr = 0;
-        vmpidr |= 1 << 31;
-
-        #[cfg(feature = "tx2")]
-        if self.vm_id() == 0 {
-            // A57 is cluster #1 for L4T
-            vmpidr |= 0x100;
-        }
-
-        vmpidr |= self.id;
-        self.vm_ctx.vmpidr_el2 = vmpidr as u64;
-    }
-
-    fn reset_vtimer_offset(&mut self) {
-        let curpct = timer_arch_get_counter() as u64;
-        self.vm_ctx.cntvoff_el2 = curpct - self.vm_ctx.cntvct_el0;
     }
 
     fn reset_context(&mut self) {
@@ -422,18 +384,6 @@ impl VcpuInner {
 
     fn set_gpr(&mut self, idx: usize, val: usize) {
         self.vcpu_ctx.set_gpr(idx, val);
-    }
-
-    fn show_ctx(&self) {
-        println!(
-            "cntvoff_el2 {:x}, sctlr_el1 {:x}, cntkctl_el1 {:x}, pmcr_el0 {:x}, vtcr_el2 {:x} x0 {:x}",
-            self.vm_ctx.cntvoff_el2,
-            self.vm_ctx.sctlr_el1,
-            self.vm_ctx.cntkctl_el1,
-            self.vm_ctx.pmcr_el0,
-            self.vm_ctx.vtcr_el2,
-            self.vcpu_ctx.gpr(0)
-        );
     }
 }
 

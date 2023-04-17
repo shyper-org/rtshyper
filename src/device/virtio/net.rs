@@ -587,15 +587,11 @@ fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
 }
 
 pub fn virtio_net_announce(vm: Vm) {
-    match vm.emu_net_dev(0) {
-        EmuDevs::VirtioNet(nic) => match nic.dev().desc() {
-            DevDesc::NetDesc(desc) => {
-                let status = desc.status();
-                desc.set_status(status | VIRTIO_NET_S_ANNOUNCE);
-                nic.notify_config(vm);
-            }
-            _ => {}
-        },
-        _ => {}
+    if let EmuDevs::VirtioNet(nic) = vm.emu_net_dev(0) {
+        if let DevDesc::NetDesc(desc) = nic.dev().desc() {
+            let status = desc.status();
+            desc.set_status(status | VIRTIO_NET_S_ANNOUNCE);
+            nic.notify_config(vm);
+        }
     }
 }

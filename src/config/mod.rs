@@ -1,4 +1,4 @@
-pub use self::config::*;
+pub use self::configure::*;
 #[cfg(feature = "static-config")]
 pub use self::vm_def::*;
 #[cfg(feature = "pi4")]
@@ -8,7 +8,7 @@ pub use self::qemu_def::*;
 #[cfg(feature = "tx2")]
 pub use self::tx2_def::*;
 
-mod config;
+mod configure;
 #[cfg(feature = "pi4")]
 mod pi4_def;
 #[cfg(feature = "qemu")]

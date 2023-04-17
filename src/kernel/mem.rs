@@ -351,6 +351,7 @@ unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
     crate::arch::Arch::invalid_hypervisor_all();
 }
 
+#[allow(clippy::forget_non_drop)]
 pub fn hypervisor_self_coloring() {
     let cpu_cache_info = CPU_CACHE.get().unwrap();
     let last_level = cpu_cache_info.min_share_level;
@@ -453,6 +454,7 @@ pub fn hypervisor_self_coloring() {
     info!("=== core {} finish self_coloring ===", current_cpu().id);
 }
 
+#[allow(clippy::forget_non_drop)]
 fn enlarge_heap(self_color_bitmap: usize) {
     // Core 0 apply for va and pa pages
     static HEAP_PAGES: Once<AllocatedPages> = Once::new();

@@ -631,7 +631,7 @@ impl Vm {
     // in this case, Physical Count is `timer_arch_get_counter()`;
     // virtual count is recorded when the VM is pending (runnning vcpu = 0)
     // Only used in Vcpu::context_vm_store
-    pub fn update_vtimer(&self) {
+    pub(super) fn update_vtimer(&self) {
         let mut inner = self.inner.lock();
         // println!(">>> update_vtimer: VM[{}] running {}", inner.id, inner.running);
         inner.running -= 1;
@@ -642,7 +642,7 @@ impl Vm {
     }
 
     // Only used in Vcpu::context_vm_restore
-    pub fn update_vtimer_offset(&self) -> usize {
+    pub(super) fn update_vtimer_offset(&self) -> usize {
         let mut inner = self.inner.lock();
         // println!(">>> update_vtimer_offset: VM[{}] running {}", inner.id, inner.running);
         if inner.running == 0 {
@@ -706,7 +706,6 @@ impl VmInner {
             ready: false,
             config: None,
             pt: None,
-            // pa_region: Vec::new(),
             color_pa_info: VmColorPaInfo::default(),
 
             vcpu_list: Vec::new(),
@@ -719,7 +718,7 @@ impl VmInner {
             iommu_ctx_id: None,
             emu_devs: Vec::new(),
             running: 0,
-            vtimer_offset: 0,
+            vtimer_offset: timer_arch_get_counter(),
             vtimer: 0,
         }
     }

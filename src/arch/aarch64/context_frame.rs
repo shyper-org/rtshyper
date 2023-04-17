@@ -5,11 +5,13 @@ use cortex_a::registers::*;
 
 use crate::arch::{GICD, GicState};
 
+use super::GenericTimerContext;
+
 global_asm!(include_str!("fpsimd.S"));
 
 extern "C" {
-    pub fn fpsimd_save_ctx(fpsimd_addr: usize);
-    pub fn fpsimd_restore_ctx(fpsimd_addr: usize);
+    fn fpsimd_save_ctx(fpsimd_addr: usize);
+    fn fpsimd_restore_ctx(fpsimd_addr: usize);
 }
 
 #[repr(C)]
@@ -37,22 +39,6 @@ impl core::fmt::Display for Aarch64ContextFrame {
 }
 
 impl crate::arch::ContextFrameTrait for Aarch64ContextFrame {
-    fn new(pc: usize, sp: usize, arg: usize) -> Self {
-        let mut r = Aarch64ContextFrame {
-            gpr: [0; 31],
-            spsr: (SPSR_EL1::M::EL1h
-                + SPSR_EL1::I::Masked
-                + SPSR_EL1::F::Masked
-                + SPSR_EL1::A::Masked
-                + SPSR_EL1::D::Masked)
-                .value as u64,
-            elr: pc as u64,
-            sp: sp as u64,
-        };
-        r.set_argument(arg);
-        r
-    }
-
     fn exception_pc(&self) -> usize {
         self.elr as usize
     }
@@ -82,16 +68,16 @@ impl crate::arch::ContextFrameTrait for Aarch64ContextFrame {
     }
 }
 
-impl Aarch64ContextFrame {
-    pub fn default() -> Aarch64ContextFrame {
-        Aarch64ContextFrame {
+impl Default for Aarch64ContextFrame {
+    fn default() -> Self {
+        Self {
             gpr: [0; 31],
             spsr: (SPSR_EL1::M::EL1h
                 + SPSR_EL1::I::Masked
                 + SPSR_EL1::F::Masked
                 + SPSR_EL1::A::Masked
                 + SPSR_EL1::D::Masked)
-                .value as u64,
+                .value,
             elr: 0,
             sp: 0,
         }
@@ -107,19 +93,21 @@ pub struct VmCtxFpsimd {
     fpcr: u32,
 }
 
-impl VmCtxFpsimd {
-    pub fn default() -> VmCtxFpsimd {
-        VmCtxFpsimd {
+impl Default for VmCtxFpsimd {
+    fn default() -> Self {
+        Self {
             fpsimd: [0; 64],
             fpsr: 0,
             fpcr: 0,
         }
     }
+}
 
+impl VmCtxFpsimd {
     pub fn reset(&mut self) {
         self.fpsr = 0;
         self.fpcr = 0;
-        self.fpsimd.iter_mut().for_each(|x| *x = 0);
+        self.fpsimd.fill(0);
     }
 }
 
@@ -175,20 +163,10 @@ impl GicContext {
     }
 }
 
-#[repr(C)]
-#[repr(align(16))]
-#[derive(Debug, Copy, Clone)]
+#[repr(C, align(16))]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct VmContext {
-    // generic timer
-    pub cntvoff_el2: u64,
-    cntp_cval_el0: u64,
-    cntv_cval_el0: u64,
-    pub cntkctl_el1: u32,
-    pub cntvct_el0: u64,
-    cntp_ctl_el0: u32,
-    cntv_ctl_el0: u32,
-    cntp_tval_el0: u32,
-    cntv_tval_el0: u32,
+    pub generic_timer: GenericTimerContext,
 
     // vpidr and vmpidr
     vpidr_el2: u32,
@@ -231,69 +209,8 @@ pub struct VmContext {
 }
 
 impl VmContext {
-    pub fn default() -> VmContext {
-        VmContext {
-            // generic timer
-            cntvoff_el2: 0,
-            cntp_cval_el0: 0,
-            cntv_cval_el0: 0,
-            cntkctl_el1: 0,
-            cntvct_el0: 0,
-            cntp_ctl_el0: 0,
-            cntv_ctl_el0: 0,
-            cntp_tval_el0: 0,
-            cntv_tval_el0: 0,
-
-            // vpidr and vmpidr
-            vpidr_el2: 0,
-            vmpidr_el2: 0,
-
-            // 64bit EL1/EL0 register
-            sp_el0: 0,
-            sp_el1: 0,
-            elr_el1: 0,
-            spsr_el1: 0,
-            sctlr_el1: 0,
-            actlr_el1: 0,
-            cpacr_el1: 0,
-            ttbr0_el1: 0,
-            ttbr1_el1: 0,
-            tcr_el1: 0,
-            esr_el1: 0,
-            far_el1: 0,
-            par_el1: 0,
-            mair_el1: 0,
-            amair_el1: 0,
-            vbar_el1: 0,
-            contextidr_el1: 0,
-            tpidr_el0: 0,
-            tpidr_el1: 0,
-            tpidrro_el0: 0,
-
-            // hypervisor context
-            hcr_el2: 0,
-            cptr_el2: 0,
-            hstr_el2: 0,
-
-            // exception
-            pmcr_el0: 0,
-            vtcr_el2: 0,
-            far_el2: 0,
-            hpfar_el2: 0,
-            fpsimd: VmCtxFpsimd::default(),
-            gic_state: GicState::default(),
-        }
-    }
-
     pub fn reset(&mut self) {
-        self.cntvoff_el2 = 0;
-        self.cntp_cval_el0 = 0;
-        self.cntv_cval_el0 = 0;
-        self.cntp_tval_el0 = 0;
-        self.cntv_tval_el0 = 0;
-        self.cntkctl_el1 = 0;
-        self.cntvct_el0 = 0;
-        self.cntp_ctl_el0 = 0;
+        self.generic_timer.reset();
         self.vpidr_el2 = 0;
         self.vmpidr_el2 = 0;
         self.sp_el0 = 0;
@@ -325,15 +242,6 @@ impl VmContext {
     }
 
     pub fn ext_regs_store(&mut self) {
-        mrs!(self.cntvoff_el2, CNTVOFF_EL2);
-        // MRS!(self.cntp_cval_el0, CNTP_CVAL_EL0);
-        mrs!(self.cntv_cval_el0, CNTV_CVAL_EL0);
-        mrs!(self.cntkctl_el1, CNTKCTL_EL1, "x");
-        mrs!(self.cntp_ctl_el0, CNTP_CTL_EL0, "x");
-        mrs!(self.cntv_ctl_el0, CNTV_CTL_EL0, "x");
-        mrs!(self.cntp_tval_el0, CNTP_TVAL_EL0, "x");
-        mrs!(self.cntv_tval_el0, CNTV_TVAL_EL0, "x");
-        mrs!(self.cntvct_el0, CNTVCT_EL0);
         // MRS!("self.vpidr_el2, VPIDR_EL2, "x");
         mrs!(self.vmpidr_el2, VMPIDR_EL2);
 
@@ -366,19 +274,11 @@ impl VmContext {
         // MRS!(self.hpfar_el2, HPFAR_EL2);
         mrs!(self.actlr_el1, ACTLR_EL1);
         // println!("save sctlr {:x}", self.sctlr_el1);
+        self.generic_timer.save();
     }
 
     pub fn ext_regs_restore(&self) {
-        // println!("restore CNTV_CTL_EL0 {:x}", self.cntv_ctl_el0);
-        // println!("restore CNTV_CVAL_EL0 {:x}", self.cntv_cval_el0);
-        msr!(CNTVOFF_EL2, self.cntvoff_el2);
-        // MSR!(CNTP_CVAL_EL0, self.cntp_cval_el0);
-        msr!(CNTV_CVAL_EL0, self.cntv_cval_el0);
-        msr!(CNTKCTL_EL1, self.cntkctl_el1, "x");
-        // MSR!(CNTP_CTL_EL0, self.cntp_ctl_el0, "x");
-        msr!(CNTV_CTL_EL0, self.cntv_ctl_el0, "x");
-        // MSR!(CNTP_TVAL_EL0, {0:x}", in(reg) self.cntp_tval_el0, "x");
-        // MSR!(CNTV_TVAL_EL0, {0:x}", in(reg) self.cntv_tval_el0, "x");
+        self.generic_timer.restore();
 
         // MSR!(VPIDR_EL2, self.vpidr_el2, "x");
         msr!(VMPIDR_EL2, self.vmpidr_el2);

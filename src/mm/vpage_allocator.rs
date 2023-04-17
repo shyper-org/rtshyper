@@ -157,6 +157,7 @@ impl fmt::Debug for AllocatedPages {
 }
 
 #[allow(dead_code)]
+#[allow(clippy::forget_non_drop)]
 impl AllocatedPages {
     pub fn merge(&mut self, ap: AllocatedPages) -> Result<(), AllocatedPages> {
         // make sure the pages are contiguous

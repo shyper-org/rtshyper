@@ -137,7 +137,7 @@ pub fn interrupt_handler(int_id: usize, src: usize) -> bool {
         return true;
     }
 
-    if int_id >= 16 && int_id < 32 {
+    if (16..32).contains(&int_id) {
         if let Some(vcpu) = &current_cpu().active_vcpu {
             if let Some(active_vm) = vcpu.vm() {
                 if active_vm.has_interrupt(int_id) {

@@ -87,7 +87,7 @@ impl IrqState {
         }
     }
 
-    pub fn to_num(&self) -> usize {
+    pub fn to_num(self) -> usize {
         match self {
             IrqState::Inactive => 0,
             IrqState::Pend => 1,
@@ -351,11 +351,7 @@ impl GicDistributor {
         let mask = 1 << (int_id % 32);
 
         let lock = GICD_LOCK.lock();
-        let pend = if (self.ISPENDR[reg_ind].get() & mask) != 0 {
-            1
-        } else {
-            0
-        };
+        let pend = usize::from((self.ISPENDR[reg_ind].get() & mask) != 0);
         let act = if (self.ISACTIVER[reg_ind].get() & mask) != 0 {
             2
         } else {
@@ -537,9 +533,9 @@ pub struct GicState {
     pub ctlr: u32,
 }
 
-impl GicState {
-    pub fn default() -> GicState {
-        GicState {
+impl Default for GicState {
+    fn default() -> Self {
+        Self {
             hcr: 0,
             eisr: [0; GIC_LIST_REGS_NUM / 32],
             elrsr: [0; GIC_LIST_REGS_NUM / 32],
@@ -548,7 +544,9 @@ impl GicState {
             ctlr: 0,
         }
     }
+}
 
+impl GicState {
     pub fn save_state(&mut self) {
         self.hcr = GICH.hcr();
         self.apr = GICH.APR.get();
