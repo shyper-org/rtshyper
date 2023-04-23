@@ -11,7 +11,7 @@ use crate::device::EmuDeviceType;
 use crate::kernel::{HVC_IRQ, VmType, HYPERVISOR_COLORS};
 
 use super::{
-    PassthroughRegion, vm_cfg_set_config_name, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
+    PassthroughRegion, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
     VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
 };
 
@@ -19,12 +19,10 @@ use super::{
 pub fn mvm_config_init() {
     println!("mvm_config_init() init config for VM0, which is manager VM");
 
-    vm_cfg_set_config_name("pi4-default");
-
     // vm0 emu
     let emu_dev_config = vec![
         VmEmulatedDeviceConfig {
-            name: Some(String::from("interrupt-controller@fff841000")),
+            name: String::from("interrupt-controller@fff841000"),
             base_ipa: 0xFFF841000,
             length: 0x1000,
             irq_id: 0,
@@ -33,7 +31,7 @@ pub fn mvm_config_init() {
             mediated: false,
         },
         VmEmulatedDeviceConfig {
-            name: Some(String::from("virtio_net@fa000800")),
+            name: String::from("virtio_net@fa000800"),
             base_ipa: 0xfa000800,
             length: 0x400,
             irq_id: 32 + 0x17,
@@ -42,7 +40,7 @@ pub fn mvm_config_init() {
             mediated: false,
         },
         VmEmulatedDeviceConfig {
-            name: Some(String::from("virtio_console@fa000c00")),
+            name: String::from("virtio_console@fa000c00"),
             base_ipa: 0xfa000c00,
             length: 0x1000,
             irq_id: 32 + 0x20,
@@ -51,7 +49,7 @@ pub fn mvm_config_init() {
             mediated: false,
         },
         VmEmulatedDeviceConfig {
-            name: Some(String::from("virtio_console@fa002000")),
+            name: String::from("virtio_console@fa002000"),
             base_ipa: 0xfa002000,
             length: 0x1000,
             irq_id: 32 + 0x18,
@@ -60,7 +58,7 @@ pub fn mvm_config_init() {
             mediated: false,
         },
         VmEmulatedDeviceConfig {
-            name: Some(String::from("vm_service")),
+            name: String::from("vm_service"),
             base_ipa: 0,
             length: 0,
             irq_id: HVC_IRQ,
@@ -162,7 +160,7 @@ pub fn mvm_config_init() {
     let mvm_config_entry = VmConfigEntry {
         id: 0,
         // name: Some("privileged"),
-        name: Some(String::from("Raspi4")),
+        name: String::from("Raspi4"),
         os_type: VmType::VmTOs,
         cmdline:
         // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
@@ -174,7 +172,6 @@ pub fn mvm_config_init() {
             kernel_entry_point: 0x280000,
             device_tree_load_ipa: 0x10000000,
             ramdisk_load_ipa: 0,
-            mediated_block_index: None,
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
@@ -188,6 +185,7 @@ pub fn mvm_config_init() {
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList{emu_dev_list: emu_dev_config,})),
         vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
         vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
+        mediated_block_index: Arc::new(Mutex::new(None)),
     };
     let _ = vm_cfg_add_vm_entry(mvm_config_entry);
 }

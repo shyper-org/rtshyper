@@ -4,15 +4,16 @@ use alloc::vec::Vec;
 
 use spin::Mutex;
 
+use crate::arch::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::board::*;
 use crate::config::vm_cfg_add_vm_entry;
 use crate::device::EmuDeviceType;
-use crate::kernel::{INTERRUPT_IRQ_GUEST_TIMER, VmType};
+use crate::kernel::VmType;
 
 use super::{
     PassthroughRegion, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
     VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion, VmDtbDevConfig,
-    AddrRegions, DtbDevType,
+    DtbDevType,
 };
 
 pub fn init_tmp_config_for_bma1() {
@@ -20,7 +21,7 @@ pub fn init_tmp_config_for_bma1() {
     // #################### bare metal app emu (vm1) ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("intc@8000000")),
+        name: String::from("intc@8000000"),
         base_ipa: 0x8000000,
         length: 0x1000,
         irq_id: 0,
@@ -29,7 +30,7 @@ pub fn init_tmp_config_for_bma1() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_blk@a000000")),
+        name: String::from("virtio_blk@a000000"),
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
@@ -66,7 +67,7 @@ pub fn init_tmp_config_for_bma1() {
     // bma config
     let bma_config = VmConfigEntry {
         id: 0,
-        name: Some(String::from("guest-bma-0")),
+        name: String::from("guest-bma-0"),
         os_type: VmType::VmTBma,
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
@@ -78,7 +79,6 @@ pub fn init_tmp_config_for_bma1() {
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
-            mediated_block_index: None,
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
@@ -89,10 +89,9 @@ pub fn init_tmp_config_for_bma1() {
             emu_dev_list: emu_dev_config,
         })),
         vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
-            dtb_device_list: vec![],
-        })),
+        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
         cmdline: String::from(""),
+        mediated_block_index: Arc::new(Mutex::new(None)),
     };
     let _ = vm_cfg_add_vm_entry(bma_config);
 }
@@ -102,7 +101,7 @@ pub fn init_tmp_config_for_bma2() {
     // #################### bare metal app emu (vm1) ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("intc@8000000")),
+        name: String::from("intc@8000000"),
         base_ipa: 0x8000000,
         length: 0x1000,
         irq_id: 0,
@@ -111,7 +110,7 @@ pub fn init_tmp_config_for_bma2() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_blk@a000000")),
+        name: String::from("virtio_blk@a000000"),
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
@@ -148,7 +147,7 @@ pub fn init_tmp_config_for_bma2() {
     // bma config
     let bma_config = VmConfigEntry {
         id: 0,
-        name: Some(String::from("guest-bma-1")),
+        name: String::from("guest-bma-1"),
         os_type: VmType::VmTBma,
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
@@ -160,7 +159,6 @@ pub fn init_tmp_config_for_bma2() {
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
-            mediated_block_index: None,
         })),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
@@ -171,10 +169,9 @@ pub fn init_tmp_config_for_bma2() {
             emu_dev_list: emu_dev_config,
         })),
         vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
-            dtb_device_list: vec![],
-        })),
+        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
         cmdline: String::from(""),
+        mediated_block_index: Arc::new(Mutex::new(None)),
     };
     let _ = vm_cfg_add_vm_entry(bma_config);
 }
@@ -185,7 +182,7 @@ pub fn init_tmp_config_for_vm1() {
     // #################### vm1 emu ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("intc@8000000")),
+        name: String::from("intc@8000000"),
         base_ipa: 0x8000000,
         length: 0x1000,
         irq_id: 0,
@@ -194,7 +191,7 @@ pub fn init_tmp_config_for_vm1() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_blk@a000000")),
+        name: String::from("virtio_blk@a000000"),
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
@@ -206,7 +203,7 @@ pub fn init_tmp_config_for_vm1() {
         mediated: true,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_net@a001000")),
+        name: String::from("virtio_net@a001000"),
         base_ipa: 0xa001000,
         length: 0x1000,
         irq_id: 32 + 0x11,
@@ -215,7 +212,7 @@ pub fn init_tmp_config_for_vm1() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_console@a002000")),
+        name: String::from("virtio_console@a002000"),
         base_ipa: 0xa002000,
         length: 0x1000,
         irq_id: 32 + 0x12,
@@ -224,7 +221,7 @@ pub fn init_tmp_config_for_vm1() {
         mediated: false,
     });
     // emu_dev_config.push(VmEmulatedDeviceConfig {
-    //     name: Some(String::from("vm_service")),
+    //     name: String::from("vm_service"),
     //     base_ipa: 0,
     //     length: 0,
     //     irq_id: HVC_IRQ,
@@ -264,8 +261,8 @@ pub fn init_tmp_config_for_vm1() {
         name: String::from("gicd"),
         dev_type: DtbDevType::Gicd,
         irqs: vec![],
-        addr_region: AddrRegions {
-            ipa: 0x8000000,
+        addr_region: VmRegion {
+            ipa_start: 0x8000000,
             length: 0x1000,
         },
     });
@@ -273,8 +270,8 @@ pub fn init_tmp_config_for_vm1() {
         name: String::from("gicc"),
         dev_type: DtbDevType::Gicc,
         irqs: vec![],
-        addr_region: AddrRegions {
-            ipa: 0x8010000,
+        addr_region: VmRegion {
+            ipa_start: 0x8010000,
             length: 0x2000,
         },
     });
@@ -282,8 +279,8 @@ pub fn init_tmp_config_for_vm1() {
     //     name: String::from("serial"),
     //     dev_type: DtbDevType::DevSerial,
     //     irqs: vec![UART_1_INT],
-    //     addr_region: AddrRegions {
-    //         ipa: UART_1_ADDR,
+    //     addr_region: VmRegion {
+    //         ipa_start: UART_1_ADDR,
     //         length: 0x1000,
     //     },
     // });
@@ -291,7 +288,7 @@ pub fn init_tmp_config_for_vm1() {
     // vm1 config
     let vm1_config = VmConfigEntry {
         id: 1,
-        name: Some(String::from("guest-os-0")),
+        name: String::from("guest-os-0"),
         os_type: VmType::VmTOs,
         // cmdline: "root=/dev/vda rw audit=0",
         cmdline: String::from("earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0"),
@@ -302,7 +299,6 @@ pub fn init_tmp_config_for_vm1() {
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
-            mediated_block_index: Some(0),
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
@@ -320,6 +316,7 @@ pub fn init_tmp_config_for_vm1() {
         vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
             dtb_device_list: vm_dtb_devs,
         })),
+        mediated_block_index: Arc::new(Mutex::new(Some(0))),
     };
     println!("generate tmp_config for vm1");
     let _ = vm_cfg_add_vm_entry(vm1_config);
@@ -331,7 +328,7 @@ pub fn init_tmp_config_for_vm2() {
     // #################### vm2 emu ######################
     let mut emu_dev_config: Vec<VmEmulatedDeviceConfig> = Vec::new();
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("intc@8000000")),
+        name: String::from("intc@8000000"),
         base_ipa: 0x8000000,
         length: 0x1000,
         irq_id: 0,
@@ -340,7 +337,7 @@ pub fn init_tmp_config_for_vm2() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_blk@a000000")),
+        name: String::from("virtio_blk@a000000"),
         base_ipa: 0xa000000,
         length: 0x1000,
         irq_id: 32 + 0x10,
@@ -349,7 +346,7 @@ pub fn init_tmp_config_for_vm2() {
         mediated: true,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_net@a001000")),
+        name: String::from("virtio_net@a001000"),
         base_ipa: 0xa001000,
         length: 0x1000,
         irq_id: 32 + 0x11,
@@ -358,7 +355,7 @@ pub fn init_tmp_config_for_vm2() {
         mediated: false,
     });
     emu_dev_config.push(VmEmulatedDeviceConfig {
-        name: Some(String::from("virtio_console@a003000")),
+        name: String::from("virtio_console@a003000"),
         base_ipa: 0xa003000,
         length: 0x1000,
         irq_id: 32 + 0x12,
@@ -398,8 +395,8 @@ pub fn init_tmp_config_for_vm2() {
         name: String::from("gicd"),
         dev_type: DtbDevType::Gicd,
         irqs: vec![],
-        addr_region: AddrRegions {
-            ipa: 0x8000000,
+        addr_region: VmRegion {
+            ipa_start: 0x8000000,
             length: 0x1000,
         },
     });
@@ -407,8 +404,8 @@ pub fn init_tmp_config_for_vm2() {
         name: String::from("gicc"),
         dev_type: DtbDevType::Gicc,
         irqs: vec![],
-        addr_region: AddrRegions {
-            ipa: 0x8010000,
+        addr_region: VmRegion {
+            ipa_start: 0x8010000,
             length: 0x2000,
         },
     });
@@ -416,8 +413,8 @@ pub fn init_tmp_config_for_vm2() {
     //     name: String::from("serial"),
     //     dev_type: DtbDevType::DevSerial,
     //     irqs: vec![UART_1_INT],
-    //     addr_region: AddrRegions {
-    //         ipa: UART_1_ADDR,
+    //     addr_region: VmRegion {
+    //         ipa_start: UART_1_ADDR,
     //         length: 0x1000,
     //     },
     // });
@@ -425,7 +422,7 @@ pub fn init_tmp_config_for_vm2() {
     // vm2 config
     let vm2_config = VmConfigEntry {
         id: 2,
-        name: Some(String::from("guest-os-1")),
+        name: String::from("guest-os-1"),
         os_type: VmType::VmTOs,
         // cmdline: "root=/dev/vda rw audit=0",
         cmdline: String::from("earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0"),
@@ -436,7 +433,6 @@ pub fn init_tmp_config_for_vm2() {
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
-            mediated_block_index: Some(1),
         })),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
@@ -454,6 +450,7 @@ pub fn init_tmp_config_for_vm2() {
         vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
             dtb_device_list: vm_dtb_devs,
         })),
+        mediated_block_index: Arc::new(Mutex::new(Some(1))),
     };
     let _ = vm_cfg_add_vm_entry(vm2_config);
 }

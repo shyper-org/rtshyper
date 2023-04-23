@@ -2,15 +2,10 @@ use alloc::ffi::CString;
 
 use crate::arch::gicc_clear_current_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
-use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::config::{vm_id_list, vm_num};
-// use crate::config::{init_tmp_config_for_bma1, init_tmp_config_for_bma2, init_tmp_config_for_vm1, init_tmp_config_for_vm2};
-use shyper::VMInfo;
 use crate::config::vm_cfg_entry;
-use crate::config::vm_type;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
-    vm_ipa2hva, Vcpu,
+    vm_if_set_type, vm_ipa2hva, vm_if_get_type, vm_id_list,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -19,11 +14,10 @@ use crate::kernel::HVC_CONFIG;
 use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
-use crate::util::sleep;
 use crate::util::bit_extract;
 use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
-use shyper::VM_NUM_MAX;
+use shyper::{VM_NUM_MAX, VMInfo};
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {
@@ -37,7 +31,7 @@ pub enum VmmEvent {
     VmmUnmapIPA,
 }
 
-pub fn vmm_shutdown_secondary_vm() {
+fn vmm_shutdown_secondary_vm() {
     println!("Shutting down all VMs...");
 }
 
@@ -45,12 +39,8 @@ pub fn vmm_shutdown_secondary_vm() {
  *
  * @param[in]  vm_id: new added VM id.
  */
-pub fn vmm_push_vm(vm_id: usize) {
+fn vmm_push_vm(vm_id: usize) {
     info!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
-    if push_vm(vm_id).is_err() {
-        return;
-    }
-    let vm = vm(vm_id).unwrap();
     let vm_cfg = match vm_cfg_entry(vm_id) {
         Some(vm_cfg) => vm_cfg,
         None => {
@@ -58,97 +48,10 @@ pub fn vmm_push_vm(vm_id: usize) {
             return;
         }
     };
-    vm.set_config_entry(Some(vm_cfg));
-
-    use crate::kernel::vm_if_set_type;
-    vm_if_set_type(vm_id, vm_type(vm_id));
-}
-
-pub fn vmm_alloc_vcpu(vm_id: usize) {
-    let vm = match vm(vm_id) {
-        None => {
-            panic!(
-                "vmm_alloc_vcpu: on core {}, VM [{}] is not added yet",
-                current_cpu().id,
-                vm_id
-            );
-        }
-        Some(vm) => vm,
-    };
-
-    for i in 0..vm.config().cpu_num() {
-        let vcpu = Vcpu::new(&vm, i);
-        vm.push_vcpu(vcpu);
+    vm_if_set_type(vm_id, vm_cfg.os_type);
+    if push_vm(vm_id, vm_cfg).is_err() {
+        error!("push_vm() error, vm_id = {vm_id}");
     }
-
-    println!(
-        "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
-        vm.id(),
-        vm.config().cpu_num(),
-        vm.config().cpu_allocated_bitmap()
-    );
-}
-
-/* Finish cpu assignment before set up VM config.
- * Only VM0 will go through this function.
- *
- * @param[in] vm_id: new added VM id.
- */
-pub fn vmm_set_up_cpu(vm_id: usize) {
-    println!("vmm_set_up_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
-    let vm = match vm(vm_id) {
-        None => {
-            panic!(
-                "vmm_set_up_cpu: on core {}, VM [{}] is not added yet",
-                current_cpu().id,
-                vm_id
-            );
-        }
-        Some(vm) => vm,
-    };
-
-    vmm_alloc_vcpu(vm_id);
-
-    let mut cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
-    let mut target_cpu_id = 0;
-    let mut cpu_num = 0;
-    while cpu_allocate_bitmap != 0 && target_cpu_id < PLATFORM_CPU_NUM_MAX {
-        if cpu_allocate_bitmap & 1 != 0 {
-            println!("vmm_set_up_cpu: vm {} physical cpu id {}", vm_id, target_cpu_id);
-            cpu_num += 1;
-
-            if target_cpu_id != current_cpu().id {
-                let m = IpiVmmMsg {
-                    vmid: vm_id,
-                    event: VmmEvent::VmmAssignCpu,
-                };
-                if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                    println!("vmm_set_up_cpu: failed to send ipi to Core {}", target_cpu_id);
-                }
-            } else {
-                vmm_cpu_assign_vcpu(vm_id);
-            }
-        }
-        cpu_allocate_bitmap >>= 1;
-        target_cpu_id += 1;
-    }
-    println!(
-        "vmm_set_up_cpu: vm {} total physical cpu num {} bitmap {:#b}",
-        vm_id,
-        cpu_num,
-        vm.config().cpu_allocated_bitmap()
-    );
-
-    // Waiting till others set up.
-    println!(
-        "vmm_set_up_cpu: on core {}, waiting VM [{}] to be set up",
-        current_cpu().id,
-        vm_id
-    );
-    while !vm.ready() {
-        sleep(10);
-    }
-    println!("vmm_set_up_cpu: VM [{}] is ready", vm_id);
 }
 
 /* Init VM before boot.
@@ -160,8 +63,6 @@ pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 || (active_vm_id() == 0 && active_vm_id() != vm_id) {
         vmm_push_vm(vm_id);
-
-        vmm_set_up_cpu(vm_id);
 
         vmm_setup_config(vm_id);
     } else {
@@ -300,7 +201,7 @@ pub fn vmm_reboot() {
     vmm_load_image_from_mvm(&vm);
 }
 
-pub fn vmm_load_image_from_mvm(vm: &Vm) {
+fn vmm_load_image_from_mvm(vm: &Vm) {
     let vm_id = vm.id();
     let msg = HvcManageMsg {
         fid: HVC_CONFIG,
@@ -349,28 +250,30 @@ pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
 
     let vm_info = unsafe { &mut *(vm_info_pa as *mut VMInfoList) };
 
+    let vm_id_list = vm_id_list();
     // Get VM num.
-    vm_info.vm_num = vm_num();
+    vm_info.vm_num = vm_id_list.len();
 
-    for (idx, vmid) in vm_id_list().iter().enumerate() {
-        let vm_cfg = match vm_cfg_entry(*vmid) {
-            Some(vm_cfg) => vm_cfg,
+    for (idx, vmid) in vm_id_list.into_iter().enumerate() {
+        let vm = match vm(vmid) {
+            Some(vm) => vm,
             None => {
-                println!("Failed to get VM config entry for VM[{}]", *vmid);
+                println!("Failed to get VM config entry for VM[{}]", vmid);
                 continue;
             }
         };
+        let vm_cfg = vm.config();
         // Get VM type.
-        let vm_type = vm_type(*vmid);
+        let vm_type = vm_if_get_type(vmid);
         // Get VM State.
-        let vm_state = vm_if_get_state(*vmid);
+        let vm_state = vm_if_get_state(vmid);
 
-        vm_info.info_list[idx].id = *vmid as u32;
+        vm_info.info_list[idx].id = vmid as u32;
         vm_info.info_list[idx].vm_type = vm_type as u32;
         vm_info.info_list[idx].vm_state = vm_state as u32;
 
         // From Rust to C: CString represents an owned, C-friendly string
-        let vm_name_cstring = CString::new(vm_cfg.vm_name()).unwrap();
+        let vm_name_cstring = CString::new(vm_cfg.name).unwrap();
         let vm_name_with_null = vm_name_cstring.to_bytes_with_nul();
         // ensure that the slice length is equal
         vm_info.info_list[idx].vm_name[..vm_name_with_null.len()].copy_from_slice(vm_name_with_null);

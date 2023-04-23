@@ -5,14 +5,14 @@ use crate::arch::{
 };
 use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
-use crate::board::{PlatOperation, Platform};
-use crate::config::{vm_cfg_entry, VmRegion};
+use crate::board::{PlatOperation, Platform, PLATFORM_CPU_NUM_MAX};
+use crate::config::VmRegion;
 use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_init};
 use crate::dtb::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType, iommu_add_device,
-    mem_region_alloc_colors, ColorMemRegion, count_missing_num,
+    mem_region_alloc_colors, ColorMemRegion, count_missing_num, Vcpu, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
 };
 use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
@@ -20,6 +20,8 @@ use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::access::copy_segment_to_vm;
+use crate::util::sleep;
+use crate::vmm::VmmEvent;
 use crate::vmm::address::vmm_setup_ipa2hva;
 
 #[cfg(feature = "ramdisk")]
@@ -76,11 +78,11 @@ fn vmm_init_memory(vm: &Vm) -> bool {
     true
 }
 
-pub fn vmm_load_image(vm: &Vm, bin: &[u8]) {
+fn vmm_load_image(vm: &Vm, bin: &[u8]) {
     copy_segment_to_vm(vm, vm.config().kernel_load_ipa(), bin);
 }
 
-pub fn vmm_init_image(vm: &Vm) -> bool {
+pub(super) fn vmm_init_image(vm: &Vm) -> bool {
     let vm_id = vm.id();
     let config = vm.config();
 
@@ -154,11 +156,7 @@ pub fn vmm_init_image(vm: &Vm) -> bool {
             }
         }
     } else {
-        println!(
-            "VM {} id {} device tree load ipa is not set",
-            vm_id,
-            vm.config().vm_name()
-        );
+        println!("VM {} id {} device tree load ipa is not set", vm_id, vm.config().name);
     }
 
     // ...
@@ -351,21 +349,21 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
                         dtb,
                         Platform::GICD_BASE as u64,
                         Platform::GICC_BASE as u64,
-                        emu_cfg.name.unwrap().as_ptr(),
+                        emu_cfg.name.as_ptr(),
                     );
                     #[cfg(feature = "pi4")]
                     fdt_setup_gic(
                         dtb,
                         (Platform::GICD_BASE | 0xF_0000_0000) as u64,
                         (Platform::GICC_BASE | 0xF_0000_0000) as u64,
-                        emu_cfg.name.unwrap().as_ptr(),
+                        emu_cfg.name.as_ptr(),
                     );
                 }
                 EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
                     #[cfg(any(feature = "tx2", feature = "qemu"))]
                     fdt_add_virtio(
                         dtb,
-                        emu_cfg.name.unwrap().as_ptr(),
+                        emu_cfg.name.as_ptr(),
                         emu_cfg.irq_id as u32 - 0x20,
                         emu_cfg.base_ipa as u64,
                     );
@@ -400,7 +398,7 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
  *
  * @param[in] vm_id: target VM id to set up config.
  */
-pub fn vmm_setup_config(vm_id: usize) {
+pub(super) fn vmm_setup_config(vm_id: usize) {
     let vm = match vm(vm_id) {
         Some(vm) => vm,
         None => {
@@ -408,23 +406,19 @@ pub fn vmm_setup_config(vm_id: usize) {
         }
     };
 
-    let config = match vm_cfg_entry(vm_id) {
-        Some(config) => config,
-        None => {
-            panic!("vmm_setup_config vm id {} config doesn't exist", vm_id);
-        }
-    };
+    let config = vm.config();
 
     println!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
         vm_id,
-        config.name.unwrap(),
+        config.name,
         current_cpu().id
     );
 
     if vm_id >= CONFIG_VM_NUM_MAX {
         panic!("vmm_setup_config: out of vm");
     }
+    vmm_init_cpu(&vm);
     if !vmm_init_memory(&vm) {
         panic!("vmm_setup_config: vmm_init_memory failed");
     }
@@ -443,7 +437,68 @@ pub fn vmm_setup_config(vm_id: usize) {
         panic!("vmm_setup_config: vmm_init_iommu_device failed");
     }
 
-    info!("VM {} id {} init ok", vm.id(), vm.config().name.unwrap());
+    info!("VM {} id {} init ok", vm.id(), vm.config().name);
+}
+
+fn vmm_alloc_vcpu(vm: &Vm) {
+    for i in 0..vm.config().cpu_num() {
+        let vcpu = Vcpu::new(vm, i);
+        vm.push_vcpu(vcpu);
+    }
+
+    println!(
+        "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
+        vm.id(),
+        vm.config().cpu_num(),
+        vm.config().cpu_allocated_bitmap()
+    );
+}
+
+fn vmm_init_cpu(vm: &Vm) {
+    let vm_id = vm.id();
+    println!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
+    vmm_alloc_vcpu(vm);
+
+    let mut cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
+    let mut target_cpu_id = 0;
+    let mut cpu_num = 0;
+    while cpu_allocate_bitmap != 0 && target_cpu_id < PLATFORM_CPU_NUM_MAX {
+        if cpu_allocate_bitmap & 1 != 0 {
+            println!("vmm_init_cpu: vm {} physical cpu id {}", vm_id, target_cpu_id);
+            cpu_num += 1;
+
+            if target_cpu_id != current_cpu().id {
+                let m = IpiVmmMsg {
+                    vmid: vm_id,
+                    event: VmmEvent::VmmAssignCpu,
+                };
+                if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+                    println!("vmm_init_cpu: failed to send ipi to Core {}", target_cpu_id);
+                }
+            } else {
+                vmm_cpu_assign_vcpu(vm_id);
+            }
+        }
+        cpu_allocate_bitmap >>= 1;
+        target_cpu_id += 1;
+    }
+    println!(
+        "vmm_init_cpu: vm {} total physical cpu num {} bitmap {:#b}",
+        vm_id,
+        cpu_num,
+        vm.config().cpu_allocated_bitmap()
+    );
+
+    // Waiting till others set up.
+    println!(
+        "vmm_init_cpu: on core {}, waiting VM [{}] to be set up",
+        current_cpu().id,
+        vm_id
+    );
+    while !vm.ready() {
+        sleep(10);
+    }
+    println!("vmm_init_cpu: VM [{}] is ready", vm_id);
 }
 
 pub fn vmm_cpu_assign_vcpu(vm_id: usize) {

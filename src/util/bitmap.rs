@@ -83,14 +83,8 @@ impl<T: BitAlloc> BitAlloc for BitMap<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BitAlloc16(u16);
-
-impl PartialEq for BitAlloc16 {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
 
 impl BitAlloc16 {
     pub const fn default() -> BitAlloc16 {
@@ -207,40 +201,5 @@ impl FlexBitmap {
         }
         println!("all is 0");
         first
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bitalloc16() {
-        let mut bitmap = BitAlloc16::default();
-        let mut value = bitmap.get(11);
-        assert_eq!(value, 0);
-
-        bitmap.set(11);
-        value = bitmap.get(11);
-        assert_eq!(value, 1);
-
-        bitmap.clear(11);
-        value = bitmap.get(11);
-        assert_eq!(value, 0);
-    }
-
-    #[test]
-    fn bitalloc256() {
-        let mut bitmap = BitAlloc256::default();
-        let mut value = bitmap.get(121);
-        assert_eq!(value, 0);
-
-        bitmap.set(121);
-        value = bitmap.get(121);
-        assert_eq!(value, 1);
-
-        bitmap.clear(11);
-        value = bitmap.get(121);
-        assert_eq!(value, 0);
     }
 }

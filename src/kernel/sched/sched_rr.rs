@@ -34,15 +34,10 @@ impl Scheduler for SchedulerRR {
                         return Some(vcpu.clone());
                     }
                 }
-                None => panic!("len != 0 but front is None"),
+                None => break,
             }
         }
         None
-    }
-
-    fn do_schedule(&mut self) {
-        let next_vcpu = self.next().unwrap();
-        current_cpu().schedule_to(next_vcpu);
     }
 
     fn sleep(&mut self, vcpu: Vcpu) {
@@ -78,22 +73,11 @@ impl Scheduler for SchedulerRR {
 
     fn wakeup(&mut self, vcpu: Vcpu) {
         let queue = &mut self.queue;
-        vcpu.set_state(VcpuState::Pend);
+        vcpu.set_state(VcpuState::Runnable);
         queue.push(vcpu);
-        if queue.len() > 1 {
-            timer_enable(true);
-        }
         if queue.len() == 1 {
             self.do_schedule();
-        }
-    }
-
-    fn yield_to(&mut self, vcpu: Vcpu) {
-        let queue = &mut self.queue;
-        queue.push(vcpu.clone());
-        self.active_idx = queue.len() - 1;
-        current_cpu().schedule_to(vcpu);
-        if queue.len() > 1 {
+        } else if queue.len() > 1 {
             timer_enable(true);
         }
     }

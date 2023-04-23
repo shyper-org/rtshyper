@@ -17,8 +17,8 @@ use super::{CpuState, Vm, WeakVm};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VcpuState {
     Inv = 0,
-    Pend = 1,
-    Active = 2,
+    Runnable = 1,
+    Running = 2,
 }
 
 #[derive(Clone)]

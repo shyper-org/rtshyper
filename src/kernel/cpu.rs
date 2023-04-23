@@ -147,7 +147,7 @@ impl Cpu {
     pub fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
         self.active_vcpu = active_vcpu;
         if let Some(vcpu) = &self.active_vcpu {
-            vcpu.set_state(VcpuState::Active);
+            vcpu.set_state(VcpuState::Running);
         }
     }
 
@@ -161,7 +161,7 @@ impl Cpu {
                 //     prev_vcpu.vm_id(),
                 //     prev_vcpu.id()
                 // );
-                prev_vcpu.set_state(VcpuState::Pend);
+                prev_vcpu.set_state(VcpuState::Runnable);
                 prev_vcpu.context_vm_store();
             }
         }

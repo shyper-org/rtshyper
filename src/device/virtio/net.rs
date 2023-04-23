@@ -3,12 +3,12 @@ use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::config::{vm_num, vm_type};
 use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
-    active_vm, active_vm_id, current_cpu, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit, vm_ipa2hva, VM_LIST,
+    active_vm, active_vm_id, current_cpu, vm_if_cmp_mac, vm_if_get_cpu_id, vm_if_set_mem_map_bit, vm_ipa2hva, VmType,
+    vm_if_get_type, vm_id_list,
 };
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -413,17 +413,12 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
     // need to check mac
     // vm_if_list_cmp_mac(active_vm_id(), frame + 6);
 
-    if frame[0] == 0xff
-        && frame[1] == 0xff
-        && frame[2] == 0xff
-        && frame[3] == 0xff
-        && frame[4] == 0xff
-        && frame[5] == 0xff
-    {
-        if !ethernet_is_arp(frame) {
+    if frame[0..6] == [0xff, 0xff, 0xff, 0xff, 0xff, 0xff] {
+        if ethernet_is_arp(frame) {
+            return ethernet_broadcast(tx_iov.clone(), len);
+        } else {
             return (false, 0);
         }
-        return ethernet_broadcast(tx_iov.clone(), len);
     }
 
     if frame[0] == 0x33 && frame[1] == 0x33 {
@@ -441,14 +436,14 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
 }
 
 fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
-    let vm_num = vm_num();
     let cur_vm_id = active_vm_id();
     let mut trgt_vmid_map = 0;
-    for vm_id in 0..vm_num {
+    let vm_id_list = vm_id_list();
+    for vm_id in vm_id_list {
         if vm_id == cur_vm_id {
             continue;
         }
-        if vm_type(vm_id) as usize != 0 {
+        if vm_if_get_type(vm_id) != VmType::VmTOs {
             continue;
         }
         if !ethernet_send_to(vm_id, tx_iov.clone(), len) {
@@ -577,8 +572,8 @@ fn ethernet_is_arp(frame: &[u8]) -> bool {
 }
 
 fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
-    for vm in VM_LIST.lock().iter() {
-        let vm_id = vm.id();
+    let vm_id_list = vm_id_list();
+    for vm_id in vm_id_list {
         if vm_if_cmp_mac(vm_id, frame) {
             return Ok(vm_id);
         }

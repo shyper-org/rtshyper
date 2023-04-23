@@ -11,19 +11,11 @@ impl Scheduler for SchedulerRT {
         todo!()
     }
 
-    fn do_schedule(&mut self) {
-        todo!()
-    }
-
     fn sleep(&mut self, vcpu: Vcpu) {
         todo!()
     }
 
     fn wakeup(&mut self, vcpu: Vcpu) {
-        todo!()
-    }
-
-    fn yield_to(&mut self, vcpu: Vcpu) {
         todo!()
     }
 }

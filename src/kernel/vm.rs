@@ -52,10 +52,10 @@ pub fn vm_if_set_type(vm_id: usize, vm_type: VmType) {
     vm_if.vm_type = vm_type;
 }
 
-// pub fn vm_if_get_type(vm_id: usize) -> VmType {
-//     let vm_if = VM_IF_LIST[vm_id].lock();
-//     vm_if.vm_type
-// }
+pub fn vm_if_get_type(vm_id: usize) -> VmType {
+    let vm_if = VM_IF_LIST[vm_id].lock();
+    vm_if.vm_type
+}
 
 fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let vm_if = VM_IF_LIST[vm_id].lock();
@@ -216,9 +216,9 @@ impl Vm {
         }
     }
 
-    pub fn new(id: usize) -> Vm {
+    pub fn new(id: usize, config: VmConfigEntry) -> Vm {
         Vm {
-            inner: Arc::new(Mutex::new(VmInner::new(id))),
+            inner: Arc::new(Mutex::new(VmInner::new(id, config))),
         }
     }
 
@@ -259,7 +259,7 @@ impl Vm {
 
     pub fn med_blk_id(&self) -> usize {
         let vm_inner = self.inner.lock();
-        match vm_inner.config.as_ref().unwrap().mediated_block_index() {
+        match vm_inner.config.mediated_block_index() {
             None => {
                 panic!("vm {} do not have mediated blk", vm_inner.id);
             }
@@ -357,12 +357,7 @@ impl Vm {
 
     pub fn set_int_bit_map(&self, int_id: usize) {
         let mut vm_inner = self.inner.lock();
-        vm_inner.int_bitmap.as_mut().unwrap().set(int_id);
-    }
-
-    pub fn set_config_entry(&self, config: Option<VmConfigEntry>) {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.config = config;
+        vm_inner.int_bitmap.set(int_id);
     }
 
     pub fn intc_dev_id(&self) -> usize {
@@ -451,12 +446,7 @@ impl Vm {
 
     pub fn config(&self) -> VmConfigEntry {
         let vm_inner = self.inner.lock();
-        match &vm_inner.config {
-            None => {
-                panic!("VM[{}] do not have vm config entry", vm_inner.id);
-            }
-            Some(config) => config.clone(),
-        }
+        vm_inner.config.clone()
     }
 
     pub fn reset_mem_regions(&self) {
@@ -539,8 +529,8 @@ impl Vm {
     }
 
     pub fn has_interrupt(&self, int_id: usize) -> bool {
-        let mut vm_inner = self.inner.lock();
-        vm_inner.int_bitmap.as_mut().unwrap().get(int_id) != 0
+        let vm_inner = self.inner.lock();
+        vm_inner.int_bitmap.get(int_id) != 0
     }
 
     pub fn emu_has_interrupt(&self, int_id: usize) -> bool {
@@ -670,7 +660,7 @@ impl Drop for VmColorPaInfo {
 struct VmInner {
     pub id: usize,
     pub ready: bool,
-    pub config: Option<VmConfigEntry>,
+    pub config: VmConfigEntry,
     // memory config
     pub pt: Option<PageTable>,
     pub color_pa_info: VmColorPaInfo,
@@ -682,7 +672,7 @@ struct VmInner {
 
     // interrupt
     pub intc_dev_id: usize,
-    pub int_bitmap: Option<BitMap<BitAlloc256>>,
+    pub int_bitmap: BitAlloc4K,
 
     // migration
     pub share_mem_base: usize,
@@ -700,11 +690,11 @@ struct VmInner {
 }
 
 impl VmInner {
-    pub fn new(id: usize) -> VmInner {
+    fn new(id: usize, config: VmConfigEntry) -> VmInner {
         VmInner {
             id,
             ready: false,
-            config: None,
+            config,
             pt: None,
             color_pa_info: VmColorPaInfo::default(),
 
@@ -713,7 +703,7 @@ impl VmInner {
             ncpu: 0,
 
             intc_dev_id: 0,
-            int_bitmap: Some(BitAlloc4K::default()),
+            int_bitmap: BitAlloc4K::default(),
             share_mem_base: Platform::SHARE_MEM_BASE, // hard code
             iommu_ctx_id: None,
             emu_devs: Vec::new(),
@@ -724,15 +714,20 @@ impl VmInner {
     }
 }
 
-pub static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
+static VM_LIST: Mutex<Vec<Vm>> = Mutex::new(Vec::new());
 
-pub fn push_vm(id: usize) -> Result<(), ()> {
+pub fn vm_id_list() -> Vec<usize> {
+    VM_LIST.lock().iter().map(|vm| vm.id()).collect()
+}
+
+pub fn push_vm(id: usize, config: VmConfigEntry) -> Result<(), ()> {
     let mut vm_list = VM_LIST.lock();
     if vm_list.iter().any(|x| x.id() == id) {
         println!("push_vm: vm {} already exists", id);
         Err(())
     } else {
-        vm_list.push(Vm::new(id));
+        let vm: Vm = Vm::new(id, config);
+        vm_list.push(vm);
         Ok(())
     }
 }

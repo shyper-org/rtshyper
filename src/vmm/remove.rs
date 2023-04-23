@@ -1,5 +1,5 @@
 use crate::arch::{GIC_SGIS_NUM, gicc_clear_current_irq};
-use crate::config::vm_cfg_remove_vm_entry;
+use crate::config::vm_cfg_del_vm;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_vm, remove_vm_async_task,
@@ -29,7 +29,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     // clear async task list
     remove_vm_async_task(vm_id);
     // remove vm cfg
-    vm_cfg_remove_vm_entry(vm_id);
+    let _ = vm_cfg_del_vm(vm_id);
     // remove vm unilib
     crate::util::unilib::unilib_fs_remove(vm_id);
     // unmap ipa(hva) percore at last

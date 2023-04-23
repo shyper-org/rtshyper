@@ -104,20 +104,3 @@ context_pop:
     ldr x30,     [sp, #(15 * 16)]
     add	sp, sp, #(0x110)
     eret
-
-.global fresh_cpu
-fresh_cpu:
-    sub sp, sp, #8
-    str x0, [sp]
-
-    ldr x0, =vectors
-    msr vbar_el2, x0
-
-    ldr x0, [sp]
-    add sp, sp, #8
-    ret
-
-.global fresh_hyper
-fresh_hyper:
-    bl  fresh_cpu
-    b   context_vm_entry

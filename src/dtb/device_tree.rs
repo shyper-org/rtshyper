@@ -165,15 +165,11 @@ pub fn create_fdt(config: &VmConfigEntry) -> Result<Vec<u8>, Error> {
     // todo: fix create_chosen_node size
     create_chosen_node(&mut fdt, &config.cmdline, config.ramdisk_load_ipa(), CPIO_RAMDISK.len())?;
     create_cpu_node(&mut fdt, config)?;
-    if !config.dtb_device_list().is_empty() {
-        create_serial_node(&mut fdt, &config.dtb_device_list())?;
+    for dev in config.dtb_device_list().iter() {
+        if dev.dev_type == DtbDevType::Serial {
+            create_serial_node(&mut fdt, dev)?;
+        }
     }
-    // match &config.vm_dtb_devs {
-    //     Some(vm_dtb_devs) => {
-    //         create_serial_node(&mut fdt, vm_dtb_devs)?;
-    //     }
-    //     None => {}
-    // }
     create_gic_node(&mut fdt, config.gicc_addr(), config.gicd_addr())?;
 
     for emu_cfg in config.emulated_device_list() {
@@ -181,18 +177,14 @@ pub fn create_fdt(config: &VmConfigEntry) -> Result<Vec<u8>, Error> {
             EmuDeviceType::EmuDeviceTVirtioBlk
             | EmuDeviceType::EmuDeviceTVirtioNet
             | EmuDeviceType::EmuDeviceTVirtioConsole => {
-                println!(
-                    "virtio fdt node init {} {:x}",
-                    emu_cfg.name.as_ref().unwrap(),
-                    emu_cfg.base_ipa
-                );
-                create_virtio_node(&mut fdt, &emu_cfg.name.unwrap(), emu_cfg.irq_id, emu_cfg.base_ipa)?;
+                println!("virtio fdt node init {} {:x}", emu_cfg.name, emu_cfg.base_ipa);
+                create_virtio_node(&mut fdt, &emu_cfg.name, emu_cfg.irq_id, emu_cfg.base_ipa)?;
             }
             EmuDeviceType::EmuDeviceTShyper => {
                 println!("shyper fdt node init {:x}", emu_cfg.base_ipa);
                 create_shyper_node(
                     &mut fdt,
-                    &emu_cfg.name.unwrap(),
+                    &emu_cfg.name,
                     emu_cfg.irq_id,
                     emu_cfg.base_ipa,
                     emu_cfg.length,
@@ -269,21 +261,18 @@ fn create_cpu_node(fdt: &mut FdtWriter, config: &VmConfigEntry) -> FdtWriterResu
     Ok(())
 }
 
-fn create_serial_node(fdt: &mut FdtWriter, devs_config: &Vec<VmDtbDevConfig>) -> FdtWriterResult<()> {
-    for dev in devs_config {
-        if dev.dev_type == DtbDevType::Serial {
-            let serial_name = format!("serial@{:x}", dev.addr_region.ipa);
-            let serial = fdt.begin_node(&serial_name)?;
-            fdt.property_string("compatible", "ns16550")?;
-            fdt.property_array_u64("reg", &[dev.addr_region.ipa as u64, 0x1000])?;
-            fdt.property_u32("reg-shift", 0x2)?;
-            fdt.property_array_u32("interrupts", &[0x0, (dev.irqs[0] - 32) as u32, 0x4])?;
-            fdt.property_u32("clock-frequency", 408000000)?;
-            // fdt.property_string("status", "disabled")?;
-            fdt.end_node(serial)?;
-        }
+fn create_serial_node(fdt: &mut FdtWriter, dev: &VmDtbDevConfig) -> FdtWriterResult<()> {
+    if dev.dev_type == DtbDevType::Serial {
+        let serial_name = format!("serial@{:x}", dev.addr_region.ipa_start);
+        let serial = fdt.begin_node(&serial_name)?;
+        fdt.property_string("compatible", "ns16550")?;
+        fdt.property_array_u64("reg", &[dev.addr_region.ipa_start as u64, 0x1000])?;
+        fdt.property_u32("reg-shift", 0x2)?;
+        fdt.property_array_u32("interrupts", &[0x0, (dev.irqs[0] - 32) as u32, 0x4])?;
+        fdt.property_u32("clock-frequency", 408000000)?;
+        // fdt.property_string("status", "disabled")?;
+        fdt.end_node(serial)?;
     }
-
     Ok(())
 }
 

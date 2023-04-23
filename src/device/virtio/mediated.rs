@@ -5,7 +5,7 @@ use spin::Mutex;
 use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
     active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
-    IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, VM_LIST,
+    IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, vm_id_list,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use crate::util::trace;
@@ -15,7 +15,9 @@ pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
 pub fn mediated_blk_list_push(mut blk: MediatedBlk) {
     let mut list = MEDIATED_BLK_LIST.lock();
-    for vm in VM_LIST.lock().iter() {
+    let vm_id_list = vm_id_list();
+    for vm_id in vm_id_list {
+        let vm = vm(vm_id).unwrap();
         if let Some(id) = vm.config().mediated_block_index() {
             if id == list.len() {
                 info!("Assign blk[{}] to VM {}", list.len(), vm.id());
