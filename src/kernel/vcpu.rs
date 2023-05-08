@@ -3,10 +3,7 @@ use alloc::vec::Vec;
 use core::mem::size_of;
 use spin::Mutex;
 
-use crate::arch::{
-    ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GIC_INTS_MAX, GIC_SGI_REGS_NUM, GICC, GicContext, GICD,
-    GICH, VmContext, VM_IPA_SIZE,
-};
+use crate::arch::{ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, VmContext, VM_IPA_SIZE};
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id};
@@ -47,60 +44,6 @@ impl Vcpu {
         Platform::cpu_shutdown();
     }
 
-    pub fn migrate_vm_ctx_save(&self, cache_pa: usize) {
-        let inner = self.inner.lock();
-        memcpy_safe(
-            cache_pa as *const u8,
-            &(inner.vm_ctx) as *const _ as *const u8,
-            size_of::<VmContext>(),
-        );
-    }
-
-    pub fn migrate_vcpu_ctx_save(&self, cache_pa: usize) {
-        let inner = self.inner.lock();
-        memcpy_safe(
-            cache_pa as *const u8,
-            &(inner.vcpu_ctx) as *const _ as *const u8,
-            size_of::<ContextFrame>(),
-        );
-    }
-
-    pub fn migrate_gic_ctx_save(&self, cache_pa: usize) {
-        let inner = self.inner.lock();
-        memcpy_safe(
-            cache_pa as *const u8,
-            &(inner.gic_ctx) as *const _ as *const u8,
-            size_of::<GicContext>(),
-        );
-    }
-
-    pub fn migrate_vm_ctx_restore(&self, cache_pa: usize) {
-        let inner = self.inner.lock();
-        memcpy_safe(
-            &(inner.vm_ctx) as *const _ as *const u8,
-            cache_pa as *const u8,
-            size_of::<VmContext>(),
-        );
-    }
-
-    pub fn migrate_vcpu_ctx_restore(&self, cache_pa: usize) {
-        let inner = self.inner.lock();
-        memcpy_safe(
-            &(inner.vcpu_ctx) as *const _ as *const u8,
-            cache_pa as *const u8,
-            size_of::<ContextFrame>(),
-        );
-    }
-
-    pub fn migrate_gic_ctx_restore(&self, cache_pa: usize) {
-        let inner = self.inner.lock();
-        memcpy_safe(
-            &(inner.gic_ctx) as *const _ as *const u8,
-            cache_pa as *const u8,
-            size_of::<GicContext>(),
-        );
-    }
-
     pub fn context_vm_store(&self) {
         self.vm().unwrap().update_vtimer();
         self.save_cpu_ctx();
@@ -109,38 +52,6 @@ impl Vcpu {
         inner.vm_ctx.ext_regs_store();
         inner.vm_ctx.fpsimd_save_context();
         inner.vm_ctx.gic_save_state();
-    }
-
-    pub fn context_gic_irqs_store(&self) {
-        let mut inner = self.inner.lock();
-        let vm = inner.vm.get_vm().unwrap();
-        for irq in vm.config().passthrough_device_irqs() {
-            inner.gic_ctx.add_irq(irq as u64);
-        }
-        inner.gic_ctx.add_irq(25);
-        let gicv_ctlr = unsafe { &*((Platform::GICV_BASE) as *const u32) };
-        inner.gic_ctx.set_gicv_ctlr(*gicv_ctlr);
-        let gicv_pmr = unsafe { &*((Platform::GICV_BASE + 0x4) as *const u32) };
-        inner.gic_ctx.set_gicv_pmr(*gicv_pmr);
-    }
-
-    pub fn context_gic_irqs_restore(&self) {
-        let inner = self.inner.lock();
-
-        for irq_state in inner.gic_ctx.irq_state.iter() {
-            if irq_state.id != 0 {
-                GICD.set_enable(irq_state.id as usize, irq_state.enable != 0);
-                GICD.set_prio(irq_state.id as usize, irq_state.priority);
-                GICD.set_trgt(irq_state.id as usize, 1 << Platform::cpuid_to_cpuif(current_cpu().id));
-            }
-        }
-
-        let gicv_pmr = unsafe { &mut *((Platform::GICV_BASE + 0x4) as *mut u32) };
-        *gicv_pmr = inner.gic_ctx.gicv_pmr();
-        // println!("Core[{}] save gic context", current_cpu().id);
-        let gicv_ctlr = unsafe { &mut *((Platform::GICV_BASE) as *mut u32) };
-        *gicv_ctlr = inner.gic_ctx.gicv_ctlr();
-        // show_vcpu_reg_context();
     }
 
     pub fn context_vm_restore(&self) {
@@ -297,7 +208,7 @@ impl Vcpu {
                 drop(inner);
                 for int in int_list {
                     // println!("schedule: inject int {} for vm {}", int, vm.id());
-                    interrupt_vm_inject(&vm, self, int, 0);
+                    interrupt_vm_inject(&vm, self, int);
                 }
             }
         }
@@ -367,8 +278,8 @@ impl VcpuInner {
     }
 
     fn gic_ctx_reset(&mut self) {
-        use crate::arch::gich_lrs_num;
-        for i in 0..gich_lrs_num() {
+        use crate::arch::gic_lrs;
+        for i in 0..gic_lrs() {
             self.vm_ctx.gic_state.lr[i] = 0;
         }
         self.vm_ctx.gic_state.hcr |= 1 << 2;
@@ -426,108 +337,4 @@ pub fn vcpu_run(announce: bool) {
     unsafe {
         context_vm_entry(current_cpu().ctx.unwrap());
     }
-}
-
-#[allow(dead_code)]
-fn show_vcpu_reg_context() {
-    print!("#### GICD ISENABLER ####");
-    for i in 0..GIC_INTS_MAX / 32 {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.is_enabler(i));
-    }
-    println!();
-    print!("#### GICD ISACTIVER ####");
-    for i in 0..GIC_INTS_MAX / 32 {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.is_activer(i));
-    }
-    println!();
-    print!("#### GICD ISPENDER ####");
-    for i in 0..GIC_INTS_MAX / 32 {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.is_pender(i));
-    }
-    println!();
-    print!("#### GICD IGROUP ####");
-    for i in 0..GIC_INTS_MAX / 32 {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.igroup(i));
-    }
-    println!();
-    print!("#### GICD ICFGR ####");
-    for i in 0..GIC_INTS_MAX * 2 / 32 {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.icfgr(i));
-    }
-    println!();
-    print!("#### GICD CPENDSGIR ####");
-    for i in 0..GIC_SGI_REGS_NUM {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.cpendsgir(i));
-    }
-    println!();
-    println!("GICH_APR {:x}", GICH.misr());
-
-    println!("GICD_CTLR {:x}", GICD.ctlr());
-    print!("#### GICD ITARGETSR ####");
-    for i in 0..GIC_INTS_MAX * 8 / 32 {
-        if i % 8 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.itargetsr(i));
-    }
-    println!();
-
-    print!("#### GICD IPRIORITYR ####");
-    for i in 0..GIC_INTS_MAX * 8 / 32 {
-        if i % 16 == 0 {
-            println!();
-        }
-        print!("{:x} ", GICD.ipriorityr(i));
-    }
-    println!();
-
-    println!("GICC_RPR {:x}", GICC.rpr());
-    println!("GICC_HPPIR {:x}", GICC.hppir());
-    println!("GICC_BPR {:x}", GICC.bpr());
-    println!("GICC_ABPR {:x}", GICC.abpr());
-    println!("#### GICC APR ####");
-    for i in 0..4 {
-        print!("{:x} ", GICC.apr(i));
-    }
-    println!();
-    println!("#### GICC NSAPR ####");
-    for i in 0..4 {
-        print!("{:x} ", GICC.nsapr(i));
-    }
-
-    println!("GICH_MISR {:x}", GICH.misr());
-    println!("GICV_CTLR {:x}", unsafe { *((Platform::GICV_BASE) as *const u32) });
-    println!("GICV_PMR {:x}", unsafe { *((Platform::GICV_BASE + 0x4) as *const u32) });
-    println!("GICV_BPR {:x}", unsafe { *((Platform::GICV_BASE + 0x8) as *const u32) });
-    println!("GICV_ABPR {:x}", unsafe {
-        *((Platform::GICV_BASE + 0x1c) as *const u32)
-    });
-    println!("GICV_STATUSR {:x}", unsafe {
-        *((Platform::GICV_BASE + 0x2c) as *const u32)
-    });
-    println!(
-        "GICV_APR[0] {:x}, GICV_APR[1] {:x}, GICV_APR[2] {:x}, GICV_APR[3] {:x}",
-        unsafe { *((Platform::GICV_BASE + 0xd0) as *const u32) },
-        unsafe { *((Platform::GICV_BASE + 0xd4) as *const u32) },
-        unsafe { *((Platform::GICV_BASE + 0xd8) as *const u32) },
-        unsafe { *((Platform::GICV_BASE + 0xdc) as *const u32) },
-    );
 }

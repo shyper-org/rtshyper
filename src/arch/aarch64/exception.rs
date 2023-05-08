@@ -1,12 +1,17 @@
 use core::arch::global_asm;
 
+use alloc::collections::BinaryHeap;
+use spin::{Mutex, Lazy};
 use tock_registers::interfaces::*;
 
-use crate::arch::{ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
-use crate::arch::{gicc_clear_current_irq, gicc_get_current_irq};
-use crate::arch::ContextFrame;
+use crate::arch::{ContextFrame, ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
 use crate::kernel::{active_vm_id, current_cpu};
 use crate::kernel::interrupt_handler;
+
+use super::{
+    cpu_interrupt_mask, cpu_interrupt_unmask, interrupt_arch_ack_irq, interrupt_arch_deactive_irq,
+    interrupt_arch_get_irq_prio,
+};
 
 global_asm!(include_str!("exception.S"));
 
@@ -175,7 +180,7 @@ extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
 
 #[no_mangle]
 extern "C" fn current_el_spx_irq(ctx: *mut ContextFrame) {
-    // println!("current_el_spx_irq");
+    // println!(">>> core {} current_el_spx_irq", current_cpu().id);
     lower_aarch64_irq(ctx);
 }
 
@@ -221,38 +226,84 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
 }
 
 #[no_mangle]
-extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
-    current_cpu().set_ctx(ctx);
-    let (id, src) = gicc_get_current_irq();
-    // if current_cpu().id == 2 {
-    //     println!(
-    //         "Core[{}] lower_aarch64_irq {} {:#x}  x30 {:x} x19 {:x} x0 {:x}",
+extern "C" fn interrupt_enter() {
+    current_cpu().interrupt_nested += 1;
+    // if current_cpu().interrupt_nested > 1 {
+    //     info!(
+    //         "core {} interrupt_nested {}, active inqs {:?}",
     //         current_cpu().id,
-    //         id,
-    //         current_cpu().get_elr(),
-    //         current_cpu().get_gpr(30),
-    //         current_cpu().get_gpr(19),
-    //         current_cpu().get_gpr(0)
+    //         current_cpu().interrupt_nested,
+    //         PENDING_IRQ_LIST
+    //             .lock()
+    //             .iter()
+    //             .map(|x| x.int_id)
+    //             .collect::<alloc::vec::Vec<_>>()
     //     );
     // }
+    cpu_interrupt_unmask();
+}
 
-    if id >= 1022 {
-        return;
+#[no_mangle]
+extern "C" fn interrupt_leave() {
+    current_cpu().interrupt_nested -= 1;
+    cpu_interrupt_mask();
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct PendingIrq {
+    int_id: usize,
+    priority: usize,
+    sender: usize,
+}
+
+impl PendingIrq {
+    fn new(int_id: usize, priority: usize, sender: usize) -> Self {
+        Self {
+            int_id,
+            priority,
+            sender,
+        }
     }
-    // use crate::lib::time_current_us;
-    // let begin = time_current_us();
-    let handled_by_hypervisor = interrupt_handler(id, src);
-    // let end = time_current_us();
+}
 
-    gicc_clear_current_irq(handled_by_hypervisor);
+impl PartialOrd for PendingIrq {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PendingIrq {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        match self.priority.cmp(&other.priority) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        match self.int_id.cmp(&other.int_id) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        self.sender.cmp(&other.sender)
+    }
+}
+
+static PENDING_IRQ_LIST: Lazy<Mutex<BinaryHeap<PendingIrq>>> = Lazy::new(|| Mutex::new(BinaryHeap::new()));
+
+#[no_mangle]
+extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
+    current_cpu().set_ctx(ctx);
+    if let Some((int_id, sender)) = interrupt_arch_ack_irq() {
+        interrupt_enter();
+        let priority = interrupt_arch_get_irq_prio(int_id);
+
+        PENDING_IRQ_LIST.lock().push(PendingIrq::new(int_id, priority, sender));
+        PENDING_IRQ_LIST.lock().pop();
+
+        let handled_by_hypervisor = interrupt_handler(int_id);
+
+        interrupt_leave();
+        interrupt_arch_deactive_irq(handled_by_hypervisor);
+    }
     current_cpu().clear_ctx();
-    // if current_cpu().active_vcpu.is_some()
-    //     && current_cpu().active_vcpu.as_ref().unwrap().vm().is_some()
-    //     && active_vm_id() == 2
-    //     && current_cpu().id == 2
-    // {
-    //     println!("Core{} VM2 end lower_aarch64_irq irq {}", current_cpu().id, id);
-    // }
 }
 
 #[no_mangle]

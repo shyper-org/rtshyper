@@ -25,9 +25,9 @@ shyper = { path = "libshyper" }
 vm-fdt = { git = "https://github.com/migu4917/vm-fdt", features = ["alloc"] }
 fdt = { path = "libfdt-binding" }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
-spin = { version = "0.9.4", features = ["use_ticket_mutex"] }
+spin = { path = "deps/spin", features = ["use_ticket_mutex"] }
 cortex-a = "7.4.0"
-buddy_system_allocator = "0.9.0"
+buddy_system_allocator = { path = "deps/buddy_system_allocator" }
 static_assertions = "1.1.0"
 derive_more = "0.99.17"
 intrusive-collections = "0.9"

@@ -3,9 +3,9 @@ use core::fmt::Formatter;
 
 use cortex_a::registers::*;
 
-use crate::arch::{GICD, GicState};
+use crate::arch::GicState;
 
-use super::GenericTimerContext;
+use super::{GenericTimerContext, GICD};
 
 global_asm!(include_str!("fpsimd.S"));
 

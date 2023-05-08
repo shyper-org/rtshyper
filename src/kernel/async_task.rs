@@ -445,12 +445,7 @@ fn remove_async_used_info(vm_id: usize) {
 pub fn remove_vm_async_task(vm_id: usize) {
     let mut io_list = ASYNC_IO_TASK_LIST.lock();
     let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    // io_list.retain(|x| x.src_vmid != vm_id);
-    // ipi_list.retain(|x| x.src_vmid != vm_id);
-    // *io_list = io_list.drain_filter(|x| x.src_vmid == vm_id).collect::<LinkedList<_>>();
     io_list.remove(vm_id);
-    *ipi_list = ipi_list
-        .drain_filter(|x| x.src_vmid == vm_id)
-        .collect::<LinkedList<_>>();
+    *ipi_list = ipi_list.drain_filter(|x| x.src_vmid == vm_id).collect();
     remove_async_used_info(vm_id);
 }

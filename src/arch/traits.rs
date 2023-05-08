@@ -46,3 +46,15 @@ pub trait CacheInvalidate {
 pub trait Address {
     fn pa2hva(self) -> usize;
 }
+
+pub trait InterruptController {
+    const NUM_MAX: usize;
+    const IRQ_IPI: usize;
+    const IRQ_HYPERVISOR_TIMER: usize;
+    const IRQ_GUEST_TIMER: usize;
+
+    fn init(&self);
+    fn enable(&self, int_id: usize, en: bool);
+    fn fetch(&self) -> Option<usize>;
+    fn finish(&self, int_id: usize);
+}

@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use alloc::collections::BTreeMap;
 use alloc::collections::LinkedList;
 
 use spin::Mutex;
@@ -97,7 +97,7 @@ pub struct IpiIntInjectMsg {
     pub int_id: usize,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IpiType {
     IpiTIntc = 0,
     IpiTPower = 1,
@@ -130,25 +130,14 @@ pub struct IpiMessage {
 
 pub type IpiHandlerFunc = fn(&IpiMessage);
 
-pub struct IpiHandler {
-    pub handler: IpiHandlerFunc,
-    pub ipi_type: IpiType,
-}
-
-impl IpiHandler {
-    fn new(handler: IpiHandlerFunc, ipi_type: IpiType) -> IpiHandler {
-        IpiHandler { handler, ipi_type }
-    }
-}
-
-static IPI_HANDLER_LIST: RwLock<Vec<IpiHandler>> = RwLock::new(Vec::new());
+static IPI_HANDLER_LIST: RwLock<BTreeMap<IpiType, IpiHandlerFunc>> = RwLock::new(BTreeMap::new());
 
 struct CpuIf {
     msg_queue: LinkedList<IpiMessage>,
 }
 
 impl CpuIf {
-    const fn default() -> Self {
+    const fn new() -> Self {
         Self {
             msg_queue: LinkedList::new(),
         }
@@ -163,8 +152,7 @@ impl CpuIf {
     }
 }
 
-static CPU_IF_LIST: [Mutex<CpuIf>; PLATFORM_CPU_NUM_MAX] =
-    [const { Mutex::new(CpuIf::default()) }; PLATFORM_CPU_NUM_MAX];
+static CPU_IF_LIST: [Mutex<CpuIf>; PLATFORM_CPU_NUM_MAX] = [const { Mutex::new(CpuIf::new()) }; PLATFORM_CPU_NUM_MAX];
 
 fn ipi_pop_message(cpu_id: usize) -> Option<IpiMessage> {
     let mut cpu_if = CPU_IF_LIST[cpu_id].lock();
@@ -178,38 +166,24 @@ pub fn ipi_irq_handler() {
     let cpu_id = current_cpu().id;
 
     while let Some(ipi_msg) = ipi_pop_message(cpu_id) {
-        let ipi_type = ipi_msg.ipi_type as usize;
+        let ipi_type = ipi_msg.ipi_type;
 
         let ipi_handler_list = IPI_HANDLER_LIST.read();
-        let len = ipi_handler_list.len();
-        let handler = ipi_handler_list[ipi_type].handler;
-        drop(ipi_handler_list);
-
-        // drop all locks before handler
-        if len <= ipi_type {
-            println!("illegal ipi type {}", ipi_type)
-        } else {
-            // println!("ipi type is {:#?}", ipi_msg.ipi_type);
+        if let Some(handler) = ipi_handler_list.get(&ipi_type).cloned() {
+            drop(ipi_handler_list);
             handler(&ipi_msg);
+        } else {
+            println!("illegal ipi type {:?}", ipi_type)
         }
     }
 }
 
 pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) -> bool {
-    // check handler max
     let mut ipi_handler_list = IPI_HANDLER_LIST.write();
-    for i in 0..ipi_handler_list.len() {
-        if ipi_type as usize == ipi_handler_list[i].ipi_type as usize {
-            println!("ipi_register: try to cover exist ipi handler");
-            return false;
-        }
+    if ipi_handler_list.insert(ipi_type, handler).is_some() {
+        println!("ipi_register: try to cover exist ipi handler");
+        return false;
     }
-
-    while (ipi_type as usize) >= ipi_handler_list.len() {
-        ipi_handler_list.push(IpiHandler::new(handler, ipi_type));
-    }
-    ipi_handler_list[ipi_type as usize] = IpiHandler::new(handler, ipi_type);
-    // ipi_handler_list.push(IpiHandler::new(handler, ipi_type));
     true
 }
 

@@ -1,7 +1,5 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use alloc::collections::BTreeSet;
-
 use spin::Mutex;
 use tock_registers::*;
 use tock_registers::interfaces::*;
@@ -37,7 +35,7 @@ const GIC_PRIO_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
 const GIC_TARGET_REGS_NUM: usize = GIC_INTS_MAX * 8 / 32;
 const GIC_CONFIG_REGS_NUM: usize = GIC_INTS_MAX * 2 / 32;
 const GIC_SEC_REGS_NUM: usize = GIC_INTS_MAX * 2 / 32;
-pub const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
+const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
 
 pub const GIC_LIST_REGS_NUM: usize = 64;
 
@@ -49,50 +47,62 @@ static GIC_LRS_NUM: AtomicUsize = AtomicUsize::new(0);
 
 static GICD_LOCK: Mutex<()> = Mutex::new(());
 
-static INTERRUPT_EN_SET: Mutex<BTreeSet<usize>> = Mutex::new(BTreeSet::new());
-
-pub fn add_en_interrupt(id: usize) {
-    if id < GIC_PRIVINT_NUM {
-        return;
-    }
-    let mut set = INTERRUPT_EN_SET.lock();
-    set.insert(id);
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(super) enum IrqState {
+    Inactive = 0b00,
+    Pend = 0b01,
+    Active = 0b10,
+    PendActive = 0b11,
 }
 
-pub fn show_en_interrupt() {
-    let set = INTERRUPT_EN_SET.lock();
-    print!("en irq set: ");
-    for irq in set.iter() {
-        print!("{} ", irq);
+impl From<u32> for IrqState {
+    fn from(num: u32) -> Self {
+        match num & 0b11 {
+            0b00 => IrqState::Inactive,
+            0b01 => IrqState::Pend,
+            0b10 => IrqState::Active,
+            _ => IrqState::PendActive,
+        }
     }
-    println!();
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum IrqState {
-    Inactive,
-    Pend,
-    Active,
-    PendActive,
 }
 
 impl IrqState {
-    pub fn num_to_state(num: usize) -> IrqState {
-        match num {
-            0 => IrqState::Inactive,
-            1 => IrqState::Pend,
-            2 => IrqState::Active,
-            3 => IrqState::PendActive,
-            _ => panic!("num_to_state: illegal irq state"),
+    pub fn is_active(self) -> bool {
+        matches!(self, IrqState::Active | IrqState::PendActive)
+    }
+
+    pub fn is_pend(self) -> bool {
+        matches!(self, IrqState::Pend | IrqState::PendActive)
+    }
+
+    pub fn add_pend(self) -> Self {
+        match self {
+            IrqState::Inactive | IrqState::Pend => IrqState::Pend,
+            IrqState::Active | IrqState::PendActive => IrqState::PendActive,
         }
     }
 
-    pub fn to_num(self) -> usize {
+    pub fn clear_pend(self) -> Self {
         match self {
-            IrqState::Inactive => 0,
-            IrqState::Pend => 1,
-            IrqState::Active => 2,
-            IrqState::PendActive => 3,
+            IrqState::Inactive | IrqState::Active => self,
+            IrqState::Pend => IrqState::Inactive,
+            IrqState::PendActive => IrqState::Active,
+        }
+    }
+
+    pub fn add_active(self) -> Self {
+        match self {
+            IrqState::Inactive => IrqState::Active,
+            IrqState::Pend => IrqState::PendActive,
+            IrqState::Active | IrqState::PendActive => self,
+        }
+    }
+
+    pub fn clear_active(self) -> Self {
+        match self {
+            IrqState::Inactive | IrqState::Pend => self,
+            IrqState::Active => IrqState::Inactive,
+            IrqState::PendActive => IrqState::Pend,
         }
     }
 }
@@ -108,32 +118,32 @@ pub struct GicDesc {
 register_structs! {
     #[allow(non_snake_case)]
     pub GicDistributorBlock {
-        (0x0000 => CTLR: ReadWrite<u32>),
-        (0x0004 => TYPER: ReadOnly<u32>),
-        (0x0008 => IIDR: ReadOnly<u32>),
+        (0x0000 => CTLR: ReadWrite<u32>),   // Distributor Control Register
+        (0x0004 => TYPER: ReadOnly<u32>),   // Interrupt Controller Type Register
+        (0x0008 => IIDR: ReadOnly<u32>),    // Distributor Implementer Identification Register
         (0x000c => reserve0),
-        (0x0080 => IGROUPR: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0100 => ISENABLER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0180 => ICENABLER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0200 => ISPENDR: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0280 => ICPENDR: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0300 => ISACTIVER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0380 => ICACTIVER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),
-        (0x0400 => IPRIORITYR: [ReadWrite<u32>; GIC_PRIO_REGS_NUM]),
-        (0x0800 => ITARGETSR: [ReadWrite<u32>; GIC_TARGET_REGS_NUM]),
-        (0x0c00 => ICFGR: [ReadWrite<u32>; GIC_CONFIG_REGS_NUM]),
+        (0x0080 => IGROUPR: [ReadWrite<u32>; GIC_INT_REGS_NUM]),    // Interrupt Group Registers
+        (0x0100 => ISENABLER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),  // Interrupt Set-Enable Registers
+        (0x0180 => ICENABLER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),  // Interrupt Clear-Enable Registers
+        (0x0200 => ISPENDR: [ReadWrite<u32>; GIC_INT_REGS_NUM]),    // Interrupt Set-Pending Registers
+        (0x0280 => ICPENDR: [ReadWrite<u32>; GIC_INT_REGS_NUM]),    // Interrupt Clear-Pending Registers
+        (0x0300 => ISACTIVER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),  // GICv2 Interrupt Set-Active Registers
+        (0x0380 => ICACTIVER: [ReadWrite<u32>; GIC_INT_REGS_NUM]),  // Interrupt Clear-Active Registers
+        (0x0400 => IPRIORITYR: [ReadWrite<u32>; GIC_PRIO_REGS_NUM]),    // Interrupt Priority Registers
+        (0x0800 => ITARGETSR: [ReadWrite<u32>; GIC_TARGET_REGS_NUM]),   // Interrupt Processor Targets Registers
+        (0x0c00 => ICFGR: [ReadWrite<u32>; GIC_CONFIG_REGS_NUM]),   // Interrupt Configuration Registers
         (0x0d00 => reserve1),
-        (0x0e00 => NSACR: [ReadWrite<u32>; GIC_SEC_REGS_NUM]),
-        (0x0f00 => SGIR: WriteOnly<u32>),
+        (0x0e00 => NSACR: [ReadWrite<u32>; GIC_SEC_REGS_NUM]),      // Non-secure Access Control Registers, optional
+        (0x0f00 => SGIR: WriteOnly<u32>),                           // Software Generated Interrupt Register
         (0x0f04 => reserve2),
-        (0x0f10 => CPENDSGIR: [ReadWrite<u32>; GIC_SGI_REGS_NUM]),
-        (0x0f20 => SPENDSGIR: [ReadWrite<u32>; GIC_SGI_REGS_NUM]),
+        (0x0f10 => CPENDSGIR: [ReadWrite<u32>; GIC_SGI_REGS_NUM]),  // SGI Clear-Pending Registers
+        (0x0f20 => SPENDSGIR: [ReadWrite<u32>; GIC_SGI_REGS_NUM]),  // SGI Set-Pending Registers
         (0x0f30 => _reserved_3),
         (0x1000 => @END),
     }
 }
 
-pub struct GicDistributor {
+pub(super) struct GicDistributor {
     base_addr: usize,
 }
 
@@ -219,7 +229,7 @@ impl GicDistributor {
         }
 
         /* Clear any pending SGIs. */
-        for i in 0..(GIC_SGIS_NUM * 8) / 32 {
+        for i in 0..GIC_SGI_REGS_NUM {
             self.CPENDSGIR[i].set(u32::MAX);
         }
 
@@ -278,7 +288,6 @@ impl GicDistributor {
 
         let lock = GICD_LOCK.lock();
         if en {
-            add_en_interrupt(int_id);
             self.ISENABLER[idx].set(bit);
         } else {
             self.ICENABLER[idx].set(bit);
@@ -322,9 +331,9 @@ impl GicDistributor {
         drop(lock);
     }
 
-    pub fn set_state(&self, int_id: usize, state: usize) {
-        self.set_act(int_id, (state & 2) != 0);
-        self.set_pend(int_id, (state & 1) != 0);
+    pub fn set_state(&self, int_id: usize, state: IrqState) {
+        self.set_act(int_id, state.is_active());
+        self.set_pend(int_id, state.is_pend());
     }
 
     pub fn set_icfgr(&self, int_id: usize, cfg: u8) {
@@ -352,11 +361,7 @@ impl GicDistributor {
 
         let lock = GICD_LOCK.lock();
         let pend = usize::from((self.ISPENDR[reg_ind].get() & mask) != 0);
-        let act = if (self.ISACTIVER[reg_ind].get() & mask) != 0 {
-            2
-        } else {
-            0
-        };
+        let act = usize::from((self.ISACTIVER[reg_ind].get() & mask) != 0) << 1;
         drop(lock);
         pend | act
     }
@@ -405,26 +410,17 @@ impl GicCpuInterface {
     }
 
     fn init(&self) {
-        for i in 0..gich_lrs_num() {
+        for i in 0..gic_lrs() {
             GICH.LR[i].set(0);
         }
 
         self.PMR.set(u32::MAX);
         let ctlr_prev = self.CTLR.get();
-        // println!(
-        //     "ctlr: {:x}, gich_lrs_num {}",
-        //     ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOImodeNS_BIT as u32,
-        //     gich_lrs_num()
-        // );
         self.CTLR
             .set(ctlr_prev | GICC_CTLR_EN_BIT as u32 | GICC_CTLR_EOIMODENS_BIT as u32);
 
         let hcr_prev = GICH.HCR.get();
         GICH.HCR.set(hcr_prev | GICH_HCR_LRENPIE_BIT as u32);
-    }
-
-    pub fn set_dir(&self, dir: u32) {
-        self.DIR.set(dir);
     }
 
     pub fn hppir(&self) -> u32 {
@@ -455,19 +451,19 @@ impl GicCpuInterface {
 register_structs! {
     #[allow(non_snake_case)]
     pub GicHypervisorInterfaceBlock {
-        (0x0000 => HCR: ReadWrite<u32>),
-        (0x0004 => VTR: ReadOnly<u32>),
-        (0x0008 => VMCR: ReadWrite<u32>),
+        (0x0000 => HCR: ReadWrite<u32>),    // Hypervisor Control Register
+        (0x0004 => VTR: ReadOnly<u32>),     // VGIC Type Register
+        (0x0008 => VMCR: ReadWrite<u32>),   // Virtual Machine Control Register
         (0x000c => reserve0),
-        (0x0010 => MISR: ReadOnly<u32>),
+        (0x0010 => MISR: ReadOnly<u32>),    // Maintenance Interrupt Status Register
         (0x0014 => reserve1),
-        (0x0020 => EISR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]),
+        (0x0020 => EISR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]),  // End of Interrupt Status Registers
         (0x0028 => reserve2),
-        (0x0030 => ELRSR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]),
+        (0x0030 => ELRSR: [ReadOnly<u32>; GIC_LIST_REGS_NUM / 32]), // Empty List Register Status Registers
         (0x0038 => reserve3),
-        (0x00f0 => APR: ReadWrite<u32>),
+        (0x00f0 => APR: ReadWrite<u32>),    // Active Priorities Register
         (0x00f4 => reserve4),
-        (0x0100 => LR: [ReadWrite<u32>; GIC_LIST_REGS_NUM]),
+        (0x0100 => LR: [ReadWrite<u32>; GIC_LIST_REGS_NUM]),    // List Registers 0-63
         (0x0200 => reserve5),
         (0x1000 => @END),
     }
@@ -559,7 +555,7 @@ impl GicState {
         // println!("GICH apr {:x}", self.apr);
         // println!("GICH eisr {:x}", self.eisr[0]);
         // println!("GICH elrsr {:x}", self.elrsr[0]);
-        for i in 0..gich_lrs_num() {
+        for i in 0..gic_lrs() {
             if self.elrsr[0] & 1 << i == 0 {
                 self.lr[i] = GICH.lr(i);
             } else {
@@ -574,7 +570,7 @@ impl GicState {
         // println!("before restore");
         // println!("GICH hcr {:x}", GICH.hcr());
         // println!("GICC ctlr {:x}", GICC.CTLR.get());
-        // for i in 0..gich_lrs_num() {
+        // for i in 0..gic_lrs() {
         //     println!("lr[{}] {:x}", i, GICH.lr(i));
         // }
 
@@ -584,7 +580,7 @@ impl GicState {
         // println!("GICH hcr {:x}", self.hcr);
         // println!("GICH apr {:x}", self.apr);
 
-        for i in 0..gich_lrs_num() {
+        for i in 0..gic_lrs() {
             // println!("lr[{}] {:x}", i, self.lr[i]);
             GICH.set_lr(i, self.lr[i]);
         }
@@ -593,25 +589,24 @@ impl GicState {
     }
 }
 
-pub static GICD: GicDistributor = GicDistributor::new(Platform::GICD_BASE);
-pub static GICC: GicCpuInterface = GicCpuInterface::new(Platform::GICC_BASE);
-pub static GICH: GicHypervisorInterface = GicHypervisorInterface::new(Platform::GICH_BASE);
+pub(super) static GICD: GicDistributor = GicDistributor::new(Platform::GICD_BASE);
+pub(super) static GICC: GicCpuInterface = GicCpuInterface::new(Platform::GICC_BASE);
+pub(super) static GICH: GicHypervisorInterface = GicHypervisorInterface::new(Platform::GICH_BASE);
 
 #[inline(always)]
-pub fn gich_lrs_num() -> usize {
-    let vtr = GICH.VTR.get();
-    ((vtr & 0b11111) + 1) as usize
-}
-
-#[inline(always)]
-pub fn gic_max_spi() -> usize {
+fn gic_max_spi() -> usize {
     let typer = GICD.TYPER.get();
     let value = typer & 0b11111;
     (32 * (value + 1)) as usize
 }
 
 pub fn gic_glb_init() {
-    set_gic_lrs(gich_lrs_num());
+    let gich_lrs_num = {
+        let vtr = GICH.VTR.get();
+        ((vtr & 0b111111) + 1) as usize
+    };
+
+    GIC_LRS_NUM.store(gich_lrs_num, Ordering::Relaxed);
     GICD.global_init();
 }
 
@@ -628,42 +623,35 @@ pub fn gic_is_priv(int_id: usize) -> bool {
     int_id < GIC_PRIVINT_NUM
 }
 
-pub fn gic_is_sgi(int_id: usize) -> bool {
+fn gic_is_sgi(int_id: usize) -> bool {
     int_id < GIC_SGIS_NUM
 }
 
-pub fn gicc_clear_current_irq(for_hypervisor: bool) {
+pub(super) fn gicc_clear_current_irq(for_hypervisor: bool) {
     let irq = current_cpu().current_irq as u32;
     if irq == 0 {
         return;
     }
-    let gicc = &GICC;
-    gicc.EOIR.set(irq);
+    GICC.EOIR.set(irq);
     if for_hypervisor {
-        // let addr = 0x08010000 + 0x1000;
-        // unsafe {
-        //     let gicc_dir = addr as *mut u32;
-        //     *gicc_dir = irq;
-        // }
-        gicc.DIR.set(irq);
+        GICC.DIR.set(irq);
     }
-    let irq = 0;
-    current_cpu().current_irq = irq;
+    current_cpu().current_irq = 0;
 }
 
-pub fn gicc_get_current_irq() -> (usize, usize) {
+pub(super) fn gicc_get_current_irq() -> Option<(usize, usize)> {
     let iar = GICC.IAR.get();
     let irq = iar as usize;
     current_cpu().current_irq = irq;
     let id = bit_extract(iar as usize, 0, 10);
     let src = bit_extract(iar as usize, 10, 3);
-    (id, src)
+    if id >= 1022 {
+        None
+    } else {
+        Some((id, src))
+    }
 }
 
 pub fn gic_lrs() -> usize {
     GIC_LRS_NUM.load(Ordering::Relaxed)
-}
-
-pub fn set_gic_lrs(lrs: usize) {
-    GIC_LRS_NUM.store(lrs, Ordering::Relaxed);
 }

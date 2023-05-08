@@ -1,4 +1,4 @@
-use crate::arch::{GIC_SGIS_NUM, gicc_clear_current_irq};
+use crate::arch::{GIC_SGIS_NUM, interrupt_arch_deactive_irq};
 use crate::config::vm_cfg_del_vm;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
@@ -45,7 +45,7 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
         current_cpu().scheduler().sleep(vcpu);
     }
     if !current_cpu().assigned() {
-        gicc_clear_current_irq(true);
+        interrupt_arch_deactive_irq(true);
         cpu_idle();
     }
 }

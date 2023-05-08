@@ -252,7 +252,7 @@ fn create_cpu_node(fdt: &mut FdtWriter, config: &VmConfigEntry) -> FdtWriterResu
         fdt.property_string("compatible", "arm,cortex-a57")?;
         fdt.property_string("device_type", "cpu")?;
         fdt.property_string("enable-method", "psci")?;
-        fdt.property_array_u32("reg", &[0, cpu_id as u32])?;
+        fdt.property_array_u32("reg", &[0, cpu_id])?;
         fdt.end_node(cpu_node)?;
     }
 

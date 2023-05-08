@@ -181,7 +181,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id, 0);
+            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -198,7 +198,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id, 0);
+            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -716,7 +716,7 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     //     println!("### emu_virtio_mmio_handler offset {:x} ###", offset);
     // }
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
-        mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING as u32);
+        mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING);
         // let q_sel = mmio.q_sel();
         // if q_sel as usize != current_cpu().get_gpr(emu_ctx.reg) {
         // println!("{} {}", q_sel as usize, current_cpu().get_gpr(emu_ctx.reg));

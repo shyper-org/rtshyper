@@ -1,4 +1,4 @@
-use crate::arch::{gic_cpu_init, gicc_clear_current_irq, vcpu_arch_init};
+use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
 use crate::board::PlatOperation;
 use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vcpu, VcpuState, Vm, active_vm_id};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
@@ -55,7 +55,7 @@ pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
 
 pub fn power_arch_cpu_shutdown() {
     gic_cpu_init();
-    gicc_clear_current_irq(true);
+    interrupt_arch_deactive_irq(true);
     timer_enable(false);
     cpu_idle();
 }

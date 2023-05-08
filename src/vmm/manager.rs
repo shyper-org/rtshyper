@@ -1,6 +1,6 @@
 use alloc::ffi::CString;
 
-use crate::arch::gicc_clear_current_irq;
+use crate::arch::interrupt_arch_deactive_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::config::vm_cfg_entry;
 use crate::kernel::{
@@ -105,7 +105,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
                 );
             }
             Some(vcpu) => {
-                gicc_clear_current_irq(true);
+                interrupt_arch_deactive_irq(true);
                 current_cpu().scheduler().wakeup(vcpu);
                 vmm_boot();
             }

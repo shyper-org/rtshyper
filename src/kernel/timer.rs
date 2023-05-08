@@ -1,6 +1,5 @@
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
-// use crate::board::PLATFORM_CPU_NUM_MAX;
-use crate::kernel::{current_cpu, InterruptHandler};
+use crate::kernel::current_cpu;
 
 pub fn timer_init() {
     crate::arch::timer_arch_init();
@@ -8,10 +7,7 @@ pub fn timer_init() {
 
     crate::util::barrier();
     if current_cpu().id == 0 {
-        crate::kernel::interrupt_reserve_int(
-            INTERRUPT_IRQ_HYPERVISOR_TIMER,
-            InterruptHandler::TimeIrqHandler(timer_irq_handler),
-        );
+        crate::kernel::interrupt_reserve_int(INTERRUPT_IRQ_HYPERVISOR_TIMER, timer_irq_handler);
         println!("Timer frequency: {}Hz", crate::arch::timer_arch_get_frequency());
         println!("Timer init ok");
     }
@@ -36,7 +32,7 @@ fn timer_notify_after(ms: usize) {
     timer_arch_enable_irq();
 }
 
-pub fn timer_irq_handler(_arg: usize) {
+pub fn timer_irq_handler() {
     use crate::arch::timer_arch_disable_irq;
 
     timer_arch_disable_irq();

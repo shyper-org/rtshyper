@@ -1,5 +1,4 @@
 use core::fmt::Display;
-use core::arch::asm;
 
 use crate::{
     device::{EmuContext, emu_register_reg, EmuRegType},
@@ -113,9 +112,7 @@ impl CacheInfoTrait for Aarch64CacheInfo {
             const CTR_L1LP_MASK: usize = ((1 << CTR_L1LP_LEN) - 1) << CTR_L1LP_OFF;
 
             let mut ctr: usize;
-            unsafe {
-                asm!("mrs {0}, CTR_EL0", out(reg) ctr);
-            }
+            mrs!(ctr, CTR_EL0);
             if ctr & CTR_L1LP_MASK == CTR_L1LP_PIPT {
                 CacheIndexed::Pipt
             } else {
@@ -349,9 +346,7 @@ pub fn vcache_ctr_el0_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
         }
         false => {
             let mut val: usize;
-            unsafe {
-                asm!("mrs {0}, CTR_EL0", out(reg) val);
-            }
+            mrs!(val, CTR_EL0);
             current_cpu().set_gpr(emu_ctx.reg, val);
             true
         }

@@ -41,6 +41,7 @@ pub struct Cpu {
     pub vcpu_array: VcpuArray,
     pub current_irq: usize,
     pub global_pt: Once<PageTable>,
+    pub interrupt_nested: usize,
     pub cpu_pt: CpuPt,
     stack: [u8; CPU_STACK_SIZE],
 }
@@ -59,6 +60,7 @@ impl Cpu {
             sched: Once::new(),
             vcpu_array: VcpuArray::new(),
             current_irq: 0,
+            interrupt_nested: 0,
             cpu_pt: CpuPt {
                 lvl1: [0; PTE_PER_PAGE],
                 lvl2: [0; PTE_PER_PAGE],

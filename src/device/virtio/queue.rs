@@ -134,7 +134,7 @@ impl Virtq {
     pub fn desc_is_writable(&self, idx: usize) -> bool {
         let inner = self.inner.lock();
         let desc_table = inner.desc_table.as_ref().unwrap();
-        desc_table[idx].flags & VIRTQ_DESC_F_WRITE as u16 != 0
+        desc_table[idx].flags & VIRTQ_DESC_F_WRITE != 0
     }
 
     pub fn desc_has_next(&self, idx: usize) -> bool {
