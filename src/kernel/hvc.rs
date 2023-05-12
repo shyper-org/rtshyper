@@ -10,7 +10,7 @@ use crate::kernel::{
     active_vm, active_vm_id, current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg,
     IpiMessage, IpiType, ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm,
 };
-use crate::util::{memcpy_safe, trace};
+use crate::util::memcpy_safe;
 use crate::util::unilib::*;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
 
@@ -368,7 +368,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
         return false;
     }
 
-    if trace() && (target_addr < 0x1000 || (guest_msg as *const _ as usize) < 0x1000) {
+    if target_addr < 0x1000 || (guest_msg as *const _ as usize) < 0x1000 {
         panic!(
             "illegal des addr {:x}, src addr {:x}",
             target_addr, guest_msg as *const _ as usize

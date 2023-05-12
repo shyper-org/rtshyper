@@ -80,6 +80,7 @@ pub struct SpinMutex<T: ?Sized, R = Spin> {
 /// When the guard falls out of scope it will release the lock.
 pub struct SpinMutexGuard<'a, T: ?Sized + 'a> {
     lock: &'a AtomicBool,
+    irq: bool,
     data: *mut T,
 }
 
@@ -177,6 +178,7 @@ impl<T: ?Sized, R: RelaxStrategy> SpinMutex<T, R> {
     pub fn lock(&self) -> SpinMutexGuard<T> {
         // Can fail to lock even if the spinlock is not locked. May be more efficient than `try_lock`
         // when called in a loop.
+        let irq = crate::preempt::preempt_disable();
         while self
             .lock
             .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -190,6 +192,7 @@ impl<T: ?Sized, R: RelaxStrategy> SpinMutex<T, R> {
 
         SpinMutexGuard {
             lock: &self.lock,
+            irq,
             data: unsafe { &mut *self.data.get() },
         }
     }
@@ -217,6 +220,7 @@ impl<T: ?Sized, R> SpinMutex<T, R> {
     #[inline(always)]
     pub unsafe fn force_unlock(&self) {
         self.lock.store(false, Ordering::Release);
+        crate::preempt::preempt_enable(true);
     }
 
     /// Try to lock this [`SpinMutex`], returning a lock guard if successful.
@@ -237,6 +241,7 @@ impl<T: ?Sized, R> SpinMutex<T, R> {
     pub fn try_lock(&self) -> Option<SpinMutexGuard<T>> {
         // The reason for using a strong compare_exchange is explained here:
         // https://github.com/Amanieu/parking_lot/pull/207#issuecomment-575869107
+        let irq = crate::preempt::preempt_disable();
         if self
             .lock
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -244,9 +249,11 @@ impl<T: ?Sized, R> SpinMutex<T, R> {
         {
             Some(SpinMutexGuard {
                 lock: &self.lock,
+                irq,
                 data: unsafe { &mut *self.data.get() },
             })
         } else {
+            crate::preempt::preempt_enable(irq);
             None
         }
     }
@@ -348,7 +355,7 @@ impl<'a, T: ?Sized> Drop for SpinMutexGuard<'a, T> {
     /// The dropping of the MutexGuard will release the lock it was created from.
     fn drop(&mut self) {
         self.lock.store(false, Ordering::Release);
-        crate::preempt::preempt_enable();
+        crate::preempt::preempt_enable(self.irq);
     }
 }
 

@@ -30,17 +30,17 @@ endif
 qemu:
 	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@
 	${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 tx2:
 	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@,${FEATURES}
 	bash upload ${PROFILE}
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 pi4:
 	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@
 	bash pi4_upload ${PROFILE}
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.txt
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 clippy:
 	cargo clippy --target ${ARCH}.json ${CARGO_FLAGS} --features tx2

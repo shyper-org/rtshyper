@@ -7,7 +7,6 @@ pub use self::interrupt::*;
 pub use self::mmu::*;
 pub use self::page_table::*;
 pub use self::psci::*;
-pub use self::regs::*;
 pub use self::smc::*;
 pub use self::smmu::*;
 pub use self::sync::*;
@@ -18,6 +17,7 @@ pub use self::cache::*;
 
 #[macro_use]
 mod regs;
+
 #[allow(dead_code)]
 mod cache;
 #[allow(dead_code)]
@@ -28,7 +28,6 @@ mod exception;
 #[allow(dead_code)]
 mod gic;
 mod interface;
-#[allow(dead_code)]
 mod interrupt;
 mod mmu;
 #[allow(dead_code)]

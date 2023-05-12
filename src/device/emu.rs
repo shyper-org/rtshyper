@@ -1,16 +1,15 @@
+use core::ops::Range;
+
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::fmt::{Display, Formatter};
 
 use spin::Mutex;
 
 use crate::arch::Vgic;
 use crate::device::VirtioMmio;
 use crate::kernel::current_cpu;
-use crate::util::in_range;
 
-pub const EMU_DEV_NUM_MAX: usize = 32;
-pub static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
+static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
 
 #[derive(Clone)]
 pub enum EmuDevs {
@@ -30,13 +29,21 @@ pub struct EmuContext {
     pub reg_width: usize,
 }
 
-pub struct EmuDevEntry {
+#[allow(dead_code)]
+struct EmuDevEntry {
     pub emu_type: EmuDeviceType,
     pub vm_id: usize,
     pub id: usize,
     pub ipa: usize,
     pub size: usize,
     pub handler: EmuDevHandler,
+}
+
+impl EmuDevEntry {
+    #[inline]
+    fn address_range(&self) -> Range<usize> {
+        self.ipa..self.ipa + self.size
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,22 +57,6 @@ pub enum EmuDeviceType {
     EmuDeviceTShyper = 6,
     EmuDeviceTVirtioBlkMediated = 7,
     EmuDeviceTIOMMU = 8,
-}
-
-impl Display for EmuDeviceType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            EmuDeviceType::EmuDeviceTConsole => write!(f, "console"),
-            EmuDeviceType::EmuDeviceTGicd => write!(f, "interrupt controller"),
-            EmuDeviceType::EmuDeviceTGPPT => write!(f, "partial passthrough interrupt controller"),
-            EmuDeviceType::EmuDeviceTVirtioBlk => write!(f, "virtio block"),
-            EmuDeviceType::EmuDeviceTVirtioNet => write!(f, "virtio net"),
-            EmuDeviceType::EmuDeviceTVirtioConsole => write!(f, "virtio console"),
-            EmuDeviceType::EmuDeviceTShyper => write!(f, "device shyper"),
-            EmuDeviceType::EmuDeviceTVirtioBlkMediated => write!(f, "medaited virtio block"),
-            EmuDeviceType::EmuDeviceTIOMMU => write!(f, "IOMMU"),
-        }
-    }
 }
 
 impl EmuDeviceType {
@@ -107,10 +98,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
 
     for emu_dev in &*emu_devs_list {
         let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
-        if active_vcpu.vm_id() == emu_dev.vm_id && in_range(ipa, emu_dev.ipa, emu_dev.size - 1) {
-            // if current_cpu().id == 2 {
-            //     println!("emu dev {:#?} handler", emu_dev.emu_type);
-            // }
+        if active_vcpu.vm_id() == emu_dev.vm_id && emu_dev.address_range().contains(&ipa) {
             let handler = emu_dev.handler;
             let id = emu_dev.id;
             drop(emu_devs_list);
@@ -134,15 +122,11 @@ pub fn emu_register_dev(
     handler: EmuDevHandler,
 ) {
     let mut emu_devs_list = EMU_DEVS_LIST.lock();
-    if emu_devs_list.len() >= EMU_DEV_NUM_MAX {
-        panic!("emu_register_dev: can't register more devs");
-    }
-
     for emu_dev in &*emu_devs_list {
         if vm_id != emu_dev.vm_id {
             continue;
         }
-        if in_range(address, emu_dev.ipa, emu_dev.size - 1) || in_range(emu_dev.ipa, address, size - 1) {
+        if emu_dev.address_range().contains(&address) || (address..address + size).contains(&emu_dev.ipa) {
             panic!("emu_register_dev: duplicated emul address region: prev address {:#x} size {:#x}, next address {:#x} size {:#x}", emu_dev.ipa, emu_dev.size, address, size);
         }
     }

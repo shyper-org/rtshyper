@@ -53,8 +53,9 @@ pub trait InterruptController {
     const IRQ_HYPERVISOR_TIMER: usize;
     const IRQ_GUEST_TIMER: usize;
 
-    fn init(&self);
-    fn enable(&self, int_id: usize, en: bool);
-    fn fetch(&self) -> Option<usize>;
-    fn finish(&self, int_id: usize);
+    fn init();
+    fn enable(int_id: usize, en: bool);
+    fn fetch() -> Option<(usize, usize)>;
+    fn finish(int_id: usize);
+    fn irq_priority(int_id: usize) -> usize;
 }

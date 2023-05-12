@@ -266,7 +266,6 @@ pub struct Sgis {
 }
 
 struct VgicCpuPriv {
-    // gich: GicHypervisorInterfaceBlock,
     curr_lrs: [u16; GIC_LIST_REGS_NUM],
     sgis: [Sgis; GIC_SGIS_NUM],
     interrupts: Vec<VgicInt>,
@@ -311,9 +310,6 @@ impl Vgic {
             }
             for i in 0..cpu_priv[vcpu_id].pend_list.len() {
                 if cpu_priv[vcpu_id].pend_list[i].id() == int_id {
-                    // if int_id == 297 {
-                    //     println!("remove int {} in pend list[{}]", int_id, i);
-                    // }
                     cpu_priv[vcpu_id].pend_list.remove(i);
                     break;
                 }
@@ -360,10 +356,11 @@ impl Vgic {
             self.remove_int_list(vcpu, &interrupt, false);
         }
 
-        if interrupt.id() < GIC_SGIS_NUM as u16 {
-            if self.cpu_priv_sgis_pend(vcpu.id(), interrupt.id() as usize) != 0 && !interrupt.in_pend() {
-                self.add_int_list(vcpu, interrupt, true);
-            }
+        if interrupt.id() < GIC_SGIS_NUM as u16
+            && self.cpu_priv_sgis_pend(vcpu.id(), interrupt.id() as usize) != 0
+            && !interrupt.in_pend()
+        {
+            self.add_int_list(vcpu, interrupt, true);
         }
     }
 
@@ -371,17 +368,9 @@ impl Vgic {
         let cpu_priv = self.cpu_priv.lock();
         let vcpu_id = vcpu.id();
         if is_pend {
-            if cpu_priv[vcpu_id].pend_list.is_empty() {
-                None
-            } else {
-                Some(cpu_priv[vcpu_id].pend_list[0].clone())
-            }
+            cpu_priv[vcpu_id].pend_list.front().cloned()
         } else {
-            if cpu_priv[vcpu_id].act_list.is_empty() {
-                None
-            } else {
-                Some(cpu_priv[vcpu_id].act_list[0].clone())
-            }
+            cpu_priv[vcpu_id].act_list.front().cloned()
         }
     }
 
@@ -612,7 +601,7 @@ impl Vgic {
             lr |= 1 << 31;
             lr |= (0b1111111111 & int_id) << 10;
             if state == IrqState::PendActive {
-                lr |= (2 & 0b11) << 28;
+                lr |= (IrqState::Active as usize) << 28;
             } else {
                 lr |= (state as usize) << 28;
             }
@@ -623,7 +612,7 @@ impl Vgic {
             if state.is_active() {
                 lr |= ((self.cpu_priv_sgis_act(vcpu_id, int_id) as usize) << 10) & (0b111 << 10);
                 // lr |= ((cpu_priv[vcpu_id].sgis[int_id].act as usize) << 10) & (0b111 << 10);
-                lr |= (2 & 0b11) << 28;
+                lr |= (IrqState::Active as usize) << 28;
             } else {
                 let mut idx = GIC_TARGETS_MAX - 1;
                 while idx as isize >= 0 {
@@ -632,7 +621,7 @@ impl Vgic {
                         let pend = self.cpu_priv_sgis_pend(vcpu_id, int_id);
                         self.set_cpu_priv_sgis_pend(vcpu_id, int_id, pend & !(1 << idx));
 
-                        lr |= (1 & 0b11) << 28;
+                        lr |= (IrqState::Pend as usize) << 28;
                         break;
                     }
                     idx -= 1;
@@ -1411,7 +1400,7 @@ impl Vgic {
             }
         } else {
             // TODO: CPENDSGIR and SPENDSGIR access
-            unimplemented!();
+            warn!("CPENDSGIR and SPENDSGIR access unimplemented");
         }
     }
 
@@ -1581,7 +1570,7 @@ impl Vgic {
                 Some(interrupt) => {
                     // println!("refill int {}", interrupt.id());
                     vgic_int_get_owner(vcpu.clone(), &interrupt);
-                    self.write_lr(vcpu, interrupt.clone(), lr_idx);
+                    self.write_lr(vcpu, interrupt, lr_idx);
                     has_pending = has_pending || prev_pend;
                 }
                 None => {
@@ -1729,7 +1718,7 @@ fn gich_get_lr(interrupt: &VgicInt) -> Option<u32> {
     }
 
     let lr_val = GICH.lr(interrupt.lr() as usize);
-    if (lr_val & 0b1111111111 == interrupt.id() as u32) && (lr_val >> 28 & 0b11 != 0) {
+    if (lr_val & 0b1111111111 == interrupt.id() as u32) && IrqState::from(lr_val >> 28 & 0b11) != IrqState::Inactive {
         return Some(lr_val);
     }
     None

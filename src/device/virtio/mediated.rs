@@ -8,7 +8,6 @@ use crate::kernel::{
     IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, vm_id_list,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
-use crate::util::trace;
 use shyper::MediatedBlkContent;
 
 pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
@@ -75,7 +74,7 @@ pub struct MediatedBlk {
 
 impl MediatedBlk {
     pub fn content(&self) -> &mut MediatedBlkContent {
-        if trace() && self.base_addr < 0x1000 {
+        if self.base_addr < 0x1000 {
             panic!("illeagal addr {:x}", self.base_addr);
         }
         unsafe { &mut *(self.base_addr as *mut MediatedBlkContent) }

@@ -24,13 +24,17 @@ cc = "1.0"
 shyper = { path = "libshyper" }
 vm-fdt = { git = "https://github.com/migu4917/vm-fdt", features = ["alloc"] }
 fdt = { path = "libfdt-binding" }
-log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+log = { version = "0.4", features = [
+    "max_level_trace",
+    "release_max_level_info",
+] }
 spin = { path = "deps/spin", features = ["use_ticket_mutex"] }
 cortex-a = "7.4.0"
 buddy_system_allocator = { path = "deps/buddy_system_allocator" }
 static_assertions = "1.1.0"
 derive_more = "0.99.17"
 intrusive-collections = "0.9"
+cfg-if = "1.0.0"
 
 [dependencies.memoffset]
 version = "0.8"
@@ -44,10 +48,11 @@ features = ["register_types"]
 
 [features]
 default = ["tx2"]
-tx2 = ["ns16550"]
-qemu = ["pl011"]
-pi4 = ["pl011"]
+tx2 = ["ns16550", "preempt"]
+qemu = ["pl011", "preempt"]
+pi4 = ["pl011", "preempt"]
 ramdisk = []
 static-config = []
 ns16550 = []
 pl011 = []
+preempt = []

@@ -10,7 +10,7 @@ use crate::device::VirtioIov;
 use crate::kernel::{active_vm, vm_if_set_mem_map_bit, vm_ipa2hva};
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::util::{round_down, trace};
+use crate::util::round_down;
 
 pub const VIRTQUEUE_CONSOLE_MAX_SIZE: usize = 64;
 
@@ -58,7 +58,7 @@ impl ConsoleDesc {
 
     pub fn offset_data(&self, offset: usize) -> u32 {
         let start_addr = self.start_addr();
-        if trace() && start_addr + offset < 0x1000 {
+        if start_addr + offset < 0x1000 {
             println!("value addr is {}", start_addr + offset);
         }
 

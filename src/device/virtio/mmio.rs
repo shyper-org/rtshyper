@@ -92,22 +92,6 @@ impl VirtMmioRegs {
         self.drv_feature = 0;
         self.q_sel = 0;
     }
-
-    pub fn save_regs(&mut self, src: &VirtMmioRegs) {
-        self.magic = src.magic;
-        self.version = src.version;
-        self.device_id = src.device_id;
-        self.vendor_id = src.vendor_id;
-        self.dev_feature = src.dev_feature;
-        self.dev_feature_sel = src.dev_feature_sel;
-        self.drv_feature = src.drv_feature;
-        self.drv_feature_sel = src.drv_feature_sel;
-        self.q_sel = src.q_sel;
-        self.q_num_max = src.q_num_max;
-        self.irt_stat = src.irt_stat;
-        self.irt_ack = src.irt_ack;
-        self.dev_stat = src.dev_stat;
-    }
 }
 
 #[derive(Clone)]

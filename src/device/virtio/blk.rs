@@ -9,7 +9,7 @@ use crate::kernel::{
     active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskState,
     IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2hva,
 };
-use crate::util::{memcpy_safe, trace};
+use crate::util::memcpy_safe;
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 
@@ -99,7 +99,7 @@ impl BlkDesc {
 
     pub fn offset_data(&self, offset: usize) -> u32 {
         let start_addr = self.start_addr();
-        if trace() && start_addr + offset < 0x1000 {
+        if start_addr + offset < 0x1000 {
             panic!("illegal addr {:x}", start_addr + offset);
         }
 

@@ -4,14 +4,13 @@ use alloc::collections::BinaryHeap;
 use spin::{Mutex, Lazy};
 use tock_registers::interfaces::*;
 
-use crate::arch::{ContextFrame, ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
+use crate::arch::{
+    ContextFrame, ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler, InterruptController,
+};
 use crate::kernel::{active_vm_id, current_cpu};
 use crate::kernel::interrupt_handler;
 
-use super::{
-    cpu_interrupt_mask, cpu_interrupt_unmask, interrupt_arch_ack_irq, interrupt_arch_deactive_irq,
-    interrupt_arch_get_irq_prio,
-};
+use super::{interrupt_arch_deactive_irq, IntCtrl};
 
 global_asm!(include_str!("exception.S"));
 
@@ -192,7 +191,7 @@ extern "C" fn current_el_spx_serror() {
 #[no_mangle]
 extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     // println!("lower_aarch64_synchronous");
-    current_cpu().set_ctx(ctx);
+    let prev_ctx = current_cpu().set_ctx(ctx);
     match exception_class() {
         0x24 => {
             // println!("Core[{}] data_abort_handler", cpu_id());
@@ -222,31 +221,41 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             );
         },
     }
-    current_cpu().clear_ctx();
+    if let Some(ctx) = prev_ctx {
+        current_cpu().set_ctx(ctx as *mut _);
+    }
 }
 
 #[no_mangle]
-extern "C" fn interrupt_enter() {
+#[cfg(feature = "preempt")]
+fn interrupt_enter() {
+    use super::{cpu_interrupt_disable, cpu_interrupt_enable};
+    let level = cpu_interrupt_disable();
     current_cpu().interrupt_nested += 1;
-    // if current_cpu().interrupt_nested > 1 {
-    //     info!(
-    //         "core {} interrupt_nested {}, active inqs {:?}",
-    //         current_cpu().id,
-    //         current_cpu().interrupt_nested,
-    //         PENDING_IRQ_LIST
-    //             .lock()
-    //             .iter()
-    //             .map(|x| x.int_id)
-    //             .collect::<alloc::vec::Vec<_>>()
-    //     );
-    // }
-    cpu_interrupt_unmask();
+    cpu_interrupt_enable(level);
+    if current_cpu().interrupt_nested > 1 {
+        debug!(
+            "irq has come, core {} interrupt_nested {}",
+            current_cpu().id,
+            current_cpu().interrupt_nested,
+        );
+    }
 }
 
 #[no_mangle]
-extern "C" fn interrupt_leave() {
+#[cfg(feature = "preempt")]
+fn interrupt_leave() {
+    use super::{cpu_interrupt_disable, cpu_interrupt_enable};
+    if current_cpu().interrupt_nested > 1 {
+        debug!(
+            "irq is going to leave, core {} interrupt_nested {}",
+            current_cpu().id,
+            current_cpu().interrupt_nested,
+        );
+    }
+    let level = cpu_interrupt_disable();
     current_cpu().interrupt_nested -= 1;
-    cpu_interrupt_mask();
+    cpu_interrupt_enable(level);
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -286,24 +295,28 @@ impl Ord for PendingIrq {
     }
 }
 
+// TODO: currently, this is useless
 static PENDING_IRQ_LIST: Lazy<Mutex<BinaryHeap<PendingIrq>>> = Lazy::new(|| Mutex::new(BinaryHeap::new()));
 
 #[no_mangle]
 extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
-    current_cpu().set_ctx(ctx);
-    if let Some((int_id, sender)) = interrupt_arch_ack_irq() {
+    let prev_ctx = current_cpu().set_ctx(ctx);
+    if let Some((int_id, sender)) = IntCtrl::fetch() {
+        #[cfg(feature = "preempt")]
         interrupt_enter();
-        let priority = interrupt_arch_get_irq_prio(int_id);
+        let priority = IntCtrl::irq_priority(int_id);
 
         PENDING_IRQ_LIST.lock().push(PendingIrq::new(int_id, priority, sender));
+        let handled_by_hypervisor = interrupt_handler(int_id);
         PENDING_IRQ_LIST.lock().pop();
 
-        let handled_by_hypervisor = interrupt_handler(int_id);
-
+        #[cfg(feature = "preempt")]
         interrupt_leave();
         interrupt_arch_deactive_irq(handled_by_hypervisor);
     }
-    current_cpu().clear_ctx();
+    if let Some(ctx) = prev_ctx {
+        current_cpu().set_ctx(ctx as *mut _);
+    }
 }
 
 #[no_mangle]

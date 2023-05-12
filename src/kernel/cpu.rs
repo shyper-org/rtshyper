@@ -9,7 +9,6 @@ use crate::arch::ContextFrameTrait;
 use crate::arch::{cpu_interrupt_unmask, PageTable};
 use crate::board::{PLATFORM_CPU_NUM_MAX, SchedRule, PLAT_DESC};
 use crate::kernel::{Vcpu, VcpuArray, VcpuState, Vm, Scheduler, SchedulerRR};
-use crate::util::trace;
 
 pub const CPU_MASTER: usize = 0;
 const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
@@ -35,7 +34,7 @@ pub struct Cpu {
     pub id: usize,
     pub cpu_state: CpuState,
     pub active_vcpu: Option<Vcpu>,
-    pub ctx: Option<usize>,
+    ctx: Option<usize>,
 
     sched: Once<Box<dyn Scheduler>>,
     pub vcpu_array: VcpuArray,
@@ -71,20 +70,20 @@ impl Cpu {
         }
     }
 
-    pub fn set_ctx(&mut self, ctx: *mut ContextFrame) {
-        self.ctx = Some(ctx as usize);
+    pub fn current_ctx(&self) -> Option<usize> {
+        self.ctx
     }
 
-    pub fn clear_ctx(&mut self) {
-        self.ctx = None;
+    pub fn set_ctx(&mut self, ctx: *mut ContextFrame) -> Option<usize> {
+        self.ctx.replace(ctx as usize)
     }
 
     pub fn set_gpr(&self, idx: usize, val: usize) {
         if idx >= CONTEXT_GPR_NUM {
             return;
         }
-        if let Some(ctx_addr) = self.ctx {
-            if trace() && ctx_addr < 0x1000 {
+        if let Some(ctx_addr) = self.current_ctx() {
+            if ctx_addr < 0x1000 {
                 panic!("illegal ctx addr {:x}", ctx_addr);
             }
             let ctx = ctx_addr as *mut ContextFrame;
@@ -98,9 +97,9 @@ impl Cpu {
         if idx >= CONTEXT_GPR_NUM {
             return 0;
         }
-        match self.ctx {
+        match self.current_ctx() {
             Some(ctx_addr) => {
-                if trace() && ctx_addr < 0x1000 {
+                if ctx_addr < 0x1000 {
                     panic!("illegal ctx addr {:x}", ctx_addr);
                 }
                 let ctx = ctx_addr as *mut ContextFrame;
@@ -111,9 +110,9 @@ impl Cpu {
     }
 
     pub fn get_elr(&self) -> usize {
-        match self.ctx {
+        match self.current_ctx() {
             Some(ctx_addr) => {
-                if trace() && ctx_addr < 0x1000 {
+                if ctx_addr < 0x1000 {
                     panic!("illegal ctx addr {:x}", ctx_addr);
                 }
                 let ctx = ctx_addr as *mut ContextFrame;
@@ -124,9 +123,9 @@ impl Cpu {
     }
 
     pub fn get_spsr(&self) -> usize {
-        match self.ctx {
+        match self.current_ctx() {
             Some(ctx_addr) => {
-                if trace() && ctx_addr < 0x1000 {
+                if ctx_addr < 0x1000 {
                     panic!("illegal ctx addr {:x}", ctx_addr);
                 }
                 let ctx = ctx_addr as *mut ContextFrame;
@@ -137,8 +136,8 @@ impl Cpu {
     }
 
     pub fn set_elr(&self, val: usize) {
-        if let Some(ctx_addr) = self.ctx {
-            if trace() && ctx_addr < 0x1000 {
+        if let Some(ctx_addr) = self.current_ctx() {
+            if ctx_addr < 0x1000 {
                 panic!("illegal ctx addr {:x}", ctx_addr);
             }
             let ctx = ctx_addr as *mut ContextFrame;

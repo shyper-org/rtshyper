@@ -182,7 +182,6 @@ impl<T: ?Sized, R: RelaxStrategy> Mutex<T, R> {
     /// ```
     #[inline(always)]
     pub fn lock(&self) -> MutexGuard<T> {
-        crate::preempt::preempt_disable();
         MutexGuard {
             inner: self.inner.lock(),
         }

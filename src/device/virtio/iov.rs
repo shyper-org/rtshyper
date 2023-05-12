@@ -4,7 +4,7 @@ use core::slice::from_raw_parts;
 
 use spin::Mutex;
 
-use crate::util::{memcpy_safe, trace};
+use crate::util::memcpy_safe;
 
 #[derive(Clone)]
 pub struct VirtioIov {
@@ -82,7 +82,7 @@ impl VirtioIov {
 
         for iov_data in &inner.vector {
             if iov_data.len > idx {
-                if trace() && iov_data.buf + idx < 0x1000 {
+                if iov_data.buf + idx < 0x1000 {
                     panic!("illegal addr {:x}", iov_data.buf + idx);
                 }
                 return unsafe { from_raw_parts((iov_data.buf + idx) as *const u8, 14) };
@@ -120,7 +120,7 @@ impl VirtioIov {
             let written;
             if dst_vlen_remain > src_vlen_remain {
                 written = src_vlen_remain;
-                if trace() && (dst_ptr < 0x1000 || src_ptr < 0x1000) {
+                if dst_ptr < 0x1000 || src_ptr < 0x1000 {
                     panic!("illegal des addr {:x}, src addr {:x}", dst_ptr, src_ptr);
                 }
                 memcpy_safe(dst_ptr as *const u8, src_ptr as *const u8, written);
@@ -138,7 +138,7 @@ impl VirtioIov {
                 // }
             } else {
                 written = dst_vlen_remain;
-                if trace() && (dst_ptr < 0x1000 || src_ptr < 0x1000) {
+                if dst_ptr < 0x1000 || src_ptr < 0x1000 {
                     panic!("illegal des addr {:x}, src addr {:x}", dst_ptr, src_ptr);
                 }
                 memcpy_safe(dst_ptr as *const u8, src_ptr as *const u8, written);

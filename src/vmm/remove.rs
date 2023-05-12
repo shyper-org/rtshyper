@@ -72,7 +72,10 @@ fn vmm_remove_emulated_device(vm: &Vm) {
     for (idx, emu_dev) in config.iter().enumerate() {
         // mmio / vgic will be removed with struct vm
         if !emu_dev.emu_type.removable() {
-            warn!("vmm_remove_emulated_device: cannot remove device {}", emu_dev.emu_type);
+            warn!(
+                "vmm_remove_emulated_device: cannot remove device {:?}",
+                emu_dev.emu_type
+            );
             return;
         }
         emu_remove_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length);

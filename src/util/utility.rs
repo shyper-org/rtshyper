@@ -1,17 +1,6 @@
 use core::ptr;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::arch::PAGE_SIZE;
-
-static TRACE: AtomicBool = AtomicBool::new(true);
-
-pub fn set_trace(value: bool) {
-    TRACE.store(value, Ordering::Relaxed);
-}
-
-pub fn trace() -> bool {
-    TRACE.load(Ordering::Relaxed)
-}
 
 #[inline(always)]
 pub fn round_up(value: usize, to: usize) -> usize {
@@ -26,16 +15,6 @@ pub fn round_down(value: usize, to: usize) -> usize {
 #[inline(always)]
 pub fn byte2page(byte: usize) -> usize {
     round_up(byte, PAGE_SIZE) / PAGE_SIZE
-}
-
-#[inline(always)]
-pub fn range_in_range(base1: usize, size1: usize, base2: usize, size2: usize) -> bool {
-    (base1 >= base2) && ((base1 + size1) <= (base2 + size2))
-}
-
-#[inline(always)]
-pub fn in_range(addr: usize, base: usize, size: usize) -> bool {
-    range_in_range(addr, 0, base, size)
 }
 
 #[inline(always)]

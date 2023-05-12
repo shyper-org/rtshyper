@@ -11,8 +11,6 @@ use tock_registers::registers::*;
 
 use Operation::*;
 
-use crate::util::trace;
-
 // use crate::device::*;
 use super::virtio::*;
 
@@ -130,7 +128,7 @@ struct VirtioMmio {
 impl core::ops::Deref for VirtioMmio {
     type Target = VirtioMmioBlock;
     fn deref(&self) -> &Self::Target {
-        if trace() && self.base_addr < 0x1000 {
+        if self.base_addr < 0x1000 {
             panic!("illegal addr {:x}", self.base_addr);
         }
         unsafe { &*self.ptr() }

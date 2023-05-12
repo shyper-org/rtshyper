@@ -83,6 +83,7 @@ pub struct TicketMutex<T: ?Sized, R = Spin> {
 pub struct TicketMutexGuard<'a, T: ?Sized + 'a> {
     next_serving: &'a AtomicUsize,
     ticket: usize,
+    irq: bool,
     data: &'a mut T,
 }
 
@@ -182,6 +183,7 @@ impl<T: ?Sized, R: RelaxStrategy> TicketMutex<T, R> {
     /// ```
     #[inline(always)]
     pub fn lock(&self) -> TicketMutexGuard<T> {
+        let irq = crate::preempt::preempt_disable();
         let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
 
         while self.next_serving.load(Ordering::Acquire) != ticket {
@@ -191,6 +193,7 @@ impl<T: ?Sized, R: RelaxStrategy> TicketMutex<T, R> {
         TicketMutexGuard {
             next_serving: &self.next_serving,
             ticket,
+            irq,
             // Safety
             // We know that we are the next ticket to be served,
             // so there's no other thread accessing the data.
@@ -225,6 +228,7 @@ impl<T: ?Sized, R> TicketMutex<T, R> {
     #[inline(always)]
     pub unsafe fn force_unlock(&self) {
         self.next_serving.fetch_add(1, Ordering::Release);
+        crate::preempt::preempt_enable(true);
     }
 
     /// Try to lock this [`TicketMutex`], returning a lock guard if successful.
@@ -243,6 +247,7 @@ impl<T: ?Sized, R> TicketMutex<T, R> {
     /// ```
     #[inline(always)]
     pub fn try_lock(&self) -> Option<TicketMutexGuard<T>> {
+        let irq = crate::preempt::preempt_disable();
         let ticket = self
             .next_ticket
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |ticket| {
@@ -253,15 +258,22 @@ impl<T: ?Sized, R> TicketMutex<T, R> {
                 }
             });
 
-        ticket.ok().map(|ticket| TicketMutexGuard {
-            next_serving: &self.next_serving,
-            ticket,
-            // Safety
-            // We have a ticket that is equal to the next_serving ticket, so we know:
-            // - that no other thread can have the same ticket id as this thread
-            // - that we are the next one to be served so we have exclusive access to the data
-            data: unsafe { &mut *self.data.get() },
-        })
+        ticket
+            .ok()
+            .map(|ticket| TicketMutexGuard {
+                next_serving: &self.next_serving,
+                ticket,
+                irq,
+                // Safety
+                // We have a ticket that is equal to the next_serving ticket, so we know:
+                // - that no other thread can have the same ticket id as this thread
+                // - that we are the next one to be served so we have exclusive access to the data
+                data: unsafe { &mut *self.data.get() },
+            })
+            .or({
+                crate::preempt::preempt_enable(irq);
+                None
+            })
     }
 
     /// Returns a mutable reference to the underlying data.
@@ -348,7 +360,7 @@ impl<'a, T: ?Sized> Drop for TicketMutexGuard<'a, T> {
     fn drop(&mut self) {
         let new_ticket = self.ticket + 1;
         self.next_serving.store(new_ticket, Ordering::Release);
-        crate::preempt::preempt_enable();
+        crate::preempt::preempt_enable(self.irq);
     }
 }
 

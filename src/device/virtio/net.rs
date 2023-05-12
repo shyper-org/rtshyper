@@ -14,7 +14,7 @@ use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::util::{round_down, trace};
+use crate::util::round_down;
 
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 
@@ -105,7 +105,7 @@ impl NetDesc {
     pub fn offset_data(&self, offset: usize) -> u32 {
         let inner = self.inner.lock();
         let start_addr = &inner.mac[0] as *const _ as usize;
-        if trace() && start_addr + offset < 0x1000 {
+        if start_addr + offset < 0x1000 {
             println!("value addr is {}", start_addr + offset);
         }
 
@@ -539,7 +539,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         println!("ethernet_send_to: rx_len smaller than tx_len");
         return false;
     }
-    if trace() && tx_iov.get_buf(0) < 0x1000 {
+    if tx_iov.get_buf(0) < 0x1000 {
         panic!("illegal header addr {}", tx_iov.get_buf(0));
     }
     let header = unsafe { &mut *(tx_iov.get_buf(0) as *mut VirtioNetHdr) };

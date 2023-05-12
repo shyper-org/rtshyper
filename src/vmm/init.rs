@@ -267,7 +267,7 @@ fn vmm_init_emulated_device(vm: &Vm) -> bool {
             }
         }
         info!(
-            "VM {} registers emulated device: id=<{}>, name=\"{}\", ipa=<{:#x}>",
+            "VM {} registers emulated device: id=<{}>, name=\"{:?}\", ipa=<{:#x}>",
             vm.id(),
             idx,
             emu_dev.emu_type,

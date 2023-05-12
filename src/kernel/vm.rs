@@ -474,10 +474,7 @@ impl Vm {
 
     pub fn has_vgic(&self) -> bool {
         let vm_inner = self.inner.lock();
-        if vm_inner.intc_dev_id >= vm_inner.emu_devs.len() {
-            return false;
-        }
-        matches!(&vm_inner.emu_devs[vm_inner.intc_dev_id], EmuDevs::Vgic(_))
+        matches!(vm_inner.emu_devs.get(vm_inner.intc_dev_id), Some(EmuDevs::Vgic(_)))
     }
 
     pub fn emu_dev(&self, dev_id: usize) -> EmuDevs {
@@ -513,7 +510,7 @@ impl Vm {
     pub fn emu_console_dev(&self, ipa: usize) -> EmuDevs {
         for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
             if emu_dev_cfg.base_ipa == ipa {
-                return self.inner.lock().emu_devs[idx].clone();
+                return self.emu_dev(idx);
             }
         }
         // println!("emu_console_dev ipa {:x}", ipa);

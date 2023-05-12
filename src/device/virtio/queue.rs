@@ -6,7 +6,6 @@ use spin::Mutex;
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
 use crate::kernel::{active_vm, Vm, vm_ipa2hva};
-use crate::util::trace;
 
 pub const VIRTQ_READY: usize = 1;
 pub const VIRTQ_DESC_F_NEXT: u16 = 1;
@@ -255,14 +254,14 @@ impl Virtq {
 
     pub fn set_desc_table(&self, addr: usize) {
         let mut inner = self.inner.lock();
-        if trace() && addr < 0x1000 {
+        if addr < 0x1000 {
             panic!("illegal desc ring addr {:x}", addr);
         }
         inner.desc_table = Some(unsafe { slice::from_raw_parts_mut(addr as *mut VringDesc, DESC_QUEUE_SIZE) });
     }
 
     pub fn set_avail(&self, addr: usize) {
-        if trace() && addr < 0x1000 {
+        if addr < 0x1000 {
             panic!("illegal avail ring addr {:x}", addr);
         }
         let mut inner = self.inner.lock();
@@ -270,7 +269,7 @@ impl Virtq {
     }
 
     pub fn set_used(&self, addr: usize) {
-        if trace() && addr < 0x1000 {
+        if addr < 0x1000 {
             panic!("illegal used ring addr {:x}", addr);
         }
         let mut inner = self.inner.lock();

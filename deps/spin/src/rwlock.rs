@@ -83,6 +83,7 @@ const WRITER: usize = 1;
 /// potentially releasing the lock.
 pub struct RwLockReadGuard<'a, T: 'a + ?Sized> {
     lock: &'a AtomicUsize,
+    irq: bool,
     data: *const T,
 }
 
@@ -92,6 +93,7 @@ pub struct RwLockReadGuard<'a, T: 'a + ?Sized> {
 pub struct RwLockWriteGuard<'a, T: 'a + ?Sized, R = Spin> {
     phantom: PhantomData<R>,
     inner: &'a RwLock<T, R>,
+    irq: bool,
     data: *mut T,
 }
 
@@ -105,6 +107,7 @@ pub struct RwLockWriteGuard<'a, T: 'a + ?Sized, R = Spin> {
 pub struct RwLockUpgradableGuard<'a, T: 'a + ?Sized, R = Spin> {
     phantom: PhantomData<R>,
     inner: &'a RwLock<T, R>,
+    irq: bool,
     data: *const T,
 }
 
@@ -208,7 +211,6 @@ impl<T: ?Sized, R: RelaxStrategy> RwLock<T, R> {
     /// ```
     #[inline]
     pub fn read(&self) -> RwLockReadGuard<T> {
-        crate::preempt::preempt_disable();
         loop {
             match self.try_read() {
                 Some(guard) => return guard,
@@ -237,7 +239,6 @@ impl<T: ?Sized, R: RelaxStrategy> RwLock<T, R> {
     /// ```
     #[inline]
     pub fn write(&self) -> RwLockWriteGuard<T, R> {
-        crate::preempt::preempt_disable();
         loop {
             match self.try_write_internal(false) {
                 Some(guard) => return guard,
@@ -250,7 +251,6 @@ impl<T: ?Sized, R: RelaxStrategy> RwLock<T, R> {
     /// Upgrades can be done through the [`RwLockUpgradableGuard::upgrade`](RwLockUpgradableGuard::upgrade) method.
     #[inline]
     pub fn upgradeable_read(&self) -> RwLockUpgradableGuard<T, R> {
-        crate::preempt::preempt_disable();
         loop {
             match self.try_upgradeable_read() {
                 Some(guard) => return guard,
@@ -300,6 +300,7 @@ impl<T: ?Sized, R> RwLock<T, R> {
     /// ```
     #[inline]
     pub fn try_read(&self) -> Option<RwLockReadGuard<T>> {
+        let irq = crate::preempt::preempt_disable();
         let value = self.acquire_reader();
 
         // We check the UPGRADED bit here so that new readers are prevented when an UPGRADED lock is held.
@@ -307,10 +308,12 @@ impl<T: ?Sized, R> RwLock<T, R> {
         if value & (WRITER | UPGRADED) != 0 {
             // Lock is taken, undo.
             self.lock.fetch_sub(READER, Ordering::Release);
+            crate::preempt::preempt_enable(irq);
             None
         } else {
             Some(RwLockReadGuard {
                 lock: &self.lock,
+                irq,
                 data: unsafe { &*self.data.get() },
             })
         }
@@ -369,13 +372,16 @@ impl<T: ?Sized, R> RwLock<T, R> {
 
     #[inline(always)]
     fn try_write_internal(&self, strong: bool) -> Option<RwLockWriteGuard<T, R>> {
+        let irq = crate::preempt::preempt_disable();
         if compare_exchange(&self.lock, 0, WRITER, Ordering::Acquire, Ordering::Relaxed, strong).is_ok() {
             Some(RwLockWriteGuard {
                 phantom: PhantomData,
                 inner: self,
+                irq,
                 data: unsafe { &mut *self.data.get() },
             })
         } else {
+            crate::preempt::preempt_enable(irq);
             None
         }
     }
@@ -407,13 +413,16 @@ impl<T: ?Sized, R> RwLock<T, R> {
     /// Tries to obtain an upgradeable lock guard.
     #[inline]
     pub fn try_upgradeable_read(&self) -> Option<RwLockUpgradableGuard<T, R>> {
+        let irq = crate::preempt::preempt_disable();
         if self.lock.fetch_or(UPGRADED, Ordering::Acquire) & (WRITER | UPGRADED) == 0 {
             Some(RwLockUpgradableGuard {
                 phantom: PhantomData,
                 inner: self,
+                irq,
                 data: unsafe { &*self.data.get() },
             })
         } else {
+            crate::preempt::preempt_enable(irq);
             // We can't unflip the UPGRADED bit back just yet as there is another upgradeable or write lock.
             // When they unlock, they will clear the bit.
             None
@@ -530,6 +539,7 @@ impl<'rwlock, T: ?Sized, R> RwLockUpgradableGuard<'rwlock, T, R> {
         .is_ok()
         {
             let inner = self.inner;
+            let irq = self.irq;
 
             // Forget the old guard so its destructor doesn't run (before mutably aliasing data below)
             mem::forget(self);
@@ -538,6 +548,7 @@ impl<'rwlock, T: ?Sized, R> RwLockUpgradableGuard<'rwlock, T, R> {
             Ok(RwLockWriteGuard {
                 phantom: PhantomData,
                 inner,
+                irq,
                 data: unsafe { &mut *inner.data.get() },
             })
         } else {
@@ -580,12 +591,14 @@ impl<'rwlock, T: ?Sized, R> RwLockUpgradableGuard<'rwlock, T, R> {
         self.inner.acquire_reader();
 
         let inner = self.inner;
+        let irq = self.irq;
 
         // Dropping self removes the UPGRADED bit
         mem::drop(self);
 
         RwLockReadGuard {
             lock: &inner.lock,
+            irq,
             data: unsafe { &*inner.data.get() },
         }
     }
@@ -640,12 +653,14 @@ impl<'rwlock, T: ?Sized, R> RwLockWriteGuard<'rwlock, T, R> {
         self.inner.acquire_reader();
 
         let inner = self.inner;
+        let irq = self.irq;
 
         // Dropping self removes the UPGRADED bit
         mem::drop(self);
 
         RwLockReadGuard {
             lock: &inner.lock,
+            irq,
             data: unsafe { &*inner.data.get() },
         }
     }
@@ -669,6 +684,7 @@ impl<'rwlock, T: ?Sized, R> RwLockWriteGuard<'rwlock, T, R> {
         self.inner.lock.store(UPGRADED, Ordering::Release);
 
         let inner = self.inner;
+        let irq = self.irq;
 
         // Dropping self removes the UPGRADED bit
         mem::forget(self);
@@ -676,6 +692,7 @@ impl<'rwlock, T: ?Sized, R> RwLockWriteGuard<'rwlock, T, R> {
         RwLockUpgradableGuard {
             phantom: PhantomData,
             inner,
+            irq,
             data: unsafe { &*inner.data.get() },
         }
     }
@@ -750,7 +767,7 @@ impl<'rwlock, T: ?Sized> Drop for RwLockReadGuard<'rwlock, T> {
     fn drop(&mut self) {
         debug_assert!(self.lock.load(Ordering::Relaxed) & !(WRITER | UPGRADED) > 0);
         self.lock.fetch_sub(READER, Ordering::Release);
-        crate::preempt::preempt_enable();
+        crate::preempt::preempt_enable(self.irq);
     }
 }
 
@@ -758,7 +775,7 @@ impl<'rwlock, T: ?Sized, R> Drop for RwLockUpgradableGuard<'rwlock, T, R> {
     fn drop(&mut self) {
         debug_assert_eq!(self.inner.lock.load(Ordering::Relaxed) & (WRITER | UPGRADED), UPGRADED);
         self.inner.lock.fetch_sub(UPGRADED, Ordering::AcqRel);
-        crate::preempt::preempt_enable();
+        crate::preempt::preempt_enable(self.irq);
     }
 }
 
@@ -769,7 +786,7 @@ impl<'rwlock, T: ?Sized, R> Drop for RwLockWriteGuard<'rwlock, T, R> {
         // Writer is responsible for clearing both WRITER and UPGRADED bits.
         // The UPGRADED bit may be set if an upgradeable lock attempts an upgrade while this lock is held.
         self.inner.lock.fetch_and(!(WRITER | UPGRADED), Ordering::Release);
-        crate::preempt::preempt_enable();
+        crate::preempt::preempt_enable(self.irq);
     }
 }
 
@@ -789,135 +806,135 @@ fn compare_exchange(
     }
 }
 
-#[cfg(feature = "lock_api")]
-unsafe impl<R: RelaxStrategy> lock_api_crate::RawRwLock for RwLock<(), R> {
-    type GuardMarker = lock_api_crate::GuardSend;
+// #[cfg(feature = "lock_api")]
+// unsafe impl<R: RelaxStrategy> lock_api_crate::RawRwLock for RwLock<(), R> {
+//     type GuardMarker = lock_api_crate::GuardSend;
 
-    const INIT: Self = Self::new(());
+//     const INIT: Self = Self::new(());
 
-    #[inline(always)]
-    fn lock_exclusive(&self) {
-        // Prevent guard destructor running
-        core::mem::forget(self.write());
-    }
+//     #[inline(always)]
+//     fn lock_exclusive(&self) {
+//         // Prevent guard destructor running
+//         core::mem::forget(self.write());
+//     }
 
-    #[inline(always)]
-    fn try_lock_exclusive(&self) -> bool {
-        // Prevent guard destructor running
-        self.try_write().map(|g| core::mem::forget(g)).is_some()
-    }
+//     #[inline(always)]
+//     fn try_lock_exclusive(&self) -> bool {
+//         // Prevent guard destructor running
+//         self.try_write().map(|g| core::mem::forget(g)).is_some()
+//     }
 
-    #[inline(always)]
-    unsafe fn unlock_exclusive(&self) {
-        drop(RwLockWriteGuard {
-            inner: self,
-            data: &mut (),
-            phantom: PhantomData,
-        });
-    }
+//     #[inline(always)]
+//     unsafe fn unlock_exclusive(&self) {
+//         drop(RwLockWriteGuard {
+//             inner: self,
+//             data: &mut (),
+//             phantom: PhantomData,
+//         });
+//     }
 
-    #[inline(always)]
-    fn lock_shared(&self) {
-        // Prevent guard destructor running
-        core::mem::forget(self.read());
-    }
+//     #[inline(always)]
+//     fn lock_shared(&self) {
+//         // Prevent guard destructor running
+//         core::mem::forget(self.read());
+//     }
 
-    #[inline(always)]
-    fn try_lock_shared(&self) -> bool {
-        // Prevent guard destructor running
-        self.try_read().map(|g| core::mem::forget(g)).is_some()
-    }
+//     #[inline(always)]
+//     fn try_lock_shared(&self) -> bool {
+//         // Prevent guard destructor running
+//         self.try_read().map(|g| core::mem::forget(g)).is_some()
+//     }
 
-    #[inline(always)]
-    unsafe fn unlock_shared(&self) {
-        drop(RwLockReadGuard {
-            lock: &self.lock,
-            data: &(),
-        });
-    }
+//     #[inline(always)]
+//     unsafe fn unlock_shared(&self) {
+//         drop(RwLockReadGuard {
+//             lock: &self.lock,
+//             data: &(),
+//         });
+//     }
 
-    #[inline(always)]
-    fn is_locked(&self) -> bool {
-        self.lock.load(Ordering::Relaxed) != 0
-    }
-}
+//     #[inline(always)]
+//     fn is_locked(&self) -> bool {
+//         self.lock.load(Ordering::Relaxed) != 0
+//     }
+// }
 
-#[cfg(feature = "lock_api")]
-unsafe impl<R: RelaxStrategy> lock_api_crate::RawRwLockUpgrade for RwLock<(), R> {
-    #[inline(always)]
-    fn lock_upgradable(&self) {
-        // Prevent guard destructor running
-        core::mem::forget(self.upgradeable_read());
-    }
+// #[cfg(feature = "lock_api")]
+// unsafe impl<R: RelaxStrategy> lock_api_crate::RawRwLockUpgrade for RwLock<(), R> {
+//     #[inline(always)]
+//     fn lock_upgradable(&self) {
+//         // Prevent guard destructor running
+//         core::mem::forget(self.upgradeable_read());
+//     }
 
-    #[inline(always)]
-    fn try_lock_upgradable(&self) -> bool {
-        // Prevent guard destructor running
-        self.try_upgradeable_read().map(|g| core::mem::forget(g)).is_some()
-    }
+//     #[inline(always)]
+//     fn try_lock_upgradable(&self) -> bool {
+//         // Prevent guard destructor running
+//         self.try_upgradeable_read().map(|g| core::mem::forget(g)).is_some()
+//     }
 
-    #[inline(always)]
-    unsafe fn unlock_upgradable(&self) {
-        drop(RwLockUpgradableGuard {
-            inner: self,
-            data: &(),
-            phantom: PhantomData,
-        });
-    }
+//     #[inline(always)]
+//     unsafe fn unlock_upgradable(&self) {
+//         drop(RwLockUpgradableGuard {
+//             inner: self,
+//             data: &(),
+//             phantom: PhantomData,
+//         });
+//     }
 
-    #[inline(always)]
-    unsafe fn upgrade(&self) {
-        let tmp_guard = RwLockUpgradableGuard {
-            inner: self,
-            data: &(),
-            phantom: PhantomData,
-        };
-        core::mem::forget(tmp_guard.upgrade());
-    }
+//     #[inline(always)]
+//     unsafe fn upgrade(&self) {
+//         let tmp_guard = RwLockUpgradableGuard {
+//             inner: self,
+//             data: &(),
+//             phantom: PhantomData,
+//         };
+//         core::mem::forget(tmp_guard.upgrade());
+//     }
 
-    #[inline(always)]
-    unsafe fn try_upgrade(&self) -> bool {
-        let tmp_guard = RwLockUpgradableGuard {
-            inner: self,
-            data: &(),
-            phantom: PhantomData,
-        };
-        tmp_guard.try_upgrade().map(|g| core::mem::forget(g)).is_ok()
-    }
-}
+//     #[inline(always)]
+//     unsafe fn try_upgrade(&self) -> bool {
+//         let tmp_guard = RwLockUpgradableGuard {
+//             inner: self,
+//             data: &(),
+//             phantom: PhantomData,
+//         };
+//         tmp_guard.try_upgrade().map(|g| core::mem::forget(g)).is_ok()
+//     }
+// }
 
-#[cfg(feature = "lock_api")]
-unsafe impl<R: RelaxStrategy> lock_api_crate::RawRwLockDowngrade for RwLock<(), R> {
-    unsafe fn downgrade(&self) {
-        let tmp_guard = RwLockWriteGuard {
-            inner: self,
-            data: &mut (),
-            phantom: PhantomData,
-        };
-        core::mem::forget(tmp_guard.downgrade());
-    }
-}
+// #[cfg(feature = "lock_api")]
+// unsafe impl<R: RelaxStrategy> lock_api_crate::RawRwLockDowngrade for RwLock<(), R> {
+//     unsafe fn downgrade(&self) {
+//         let tmp_guard = RwLockWriteGuard {
+//             inner: self,
+//             data: &mut (),
+//             phantom: PhantomData,
+//         };
+//         core::mem::forget(tmp_guard.downgrade());
+//     }
+// }
 
-#[cfg(feature = "lock_api1")]
-unsafe impl lock_api::RawRwLockUpgradeDowngrade for RwLock<()> {
-    unsafe fn downgrade_upgradable(&self) {
-        let tmp_guard = RwLockUpgradableGuard {
-            inner: self,
-            data: &(),
-            phantom: PhantomData,
-        };
-        core::mem::forget(tmp_guard.downgrade());
-    }
+// #[cfg(feature = "lock_api1")]
+// unsafe impl lock_api::RawRwLockUpgradeDowngrade for RwLock<()> {
+//     unsafe fn downgrade_upgradable(&self) {
+//         let tmp_guard = RwLockUpgradableGuard {
+//             inner: self,
+//             data: &(),
+//             phantom: PhantomData,
+//         };
+//         core::mem::forget(tmp_guard.downgrade());
+//     }
 
-    unsafe fn downgrade_to_upgradable(&self) {
-        let tmp_guard = RwLockWriteGuard {
-            inner: self,
-            data: &mut (),
-            phantom: PhantomData,
-        };
-        core::mem::forget(tmp_guard.downgrade_to_upgradeable());
-    }
-}
+//     unsafe fn downgrade_to_upgradable(&self) {
+//         let tmp_guard = RwLockWriteGuard {
+//             inner: self,
+//             data: &mut (),
+//             phantom: PhantomData,
+//         };
+//         core::mem::forget(tmp_guard.downgrade_to_upgradeable());
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
