@@ -45,9 +45,9 @@ impl VirtDev {
         }
     }
 
-    pub fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig, mediated: bool) {
+    pub fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
         let mut inner = self.inner.lock();
-        inner.init(dev_type, config, mediated);
+        inner.init(dev_type, config);
     }
 
     pub fn features(&self) -> usize {
@@ -134,7 +134,7 @@ impl VirtDevInner {
     }
 
     // virtio_dev_init
-    pub fn init(&mut self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig, mediated: bool) {
+    pub fn init(&mut self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
         self.dev_type = dev_type;
         self.int_id = config.irq_id;
 
@@ -149,7 +149,7 @@ impl VirtDevInner {
 
                 let blk_req = VirtioBlkReq::default();
                 blk_req.set_start(config.cfg_list[0]);
-                blk_req.set_mediated(mediated);
+                blk_req.set_mediated(config.mediated);
                 blk_req.set_size(config.cfg_list[1]);
                 self.req = DevReq::BlkReq(blk_req);
 

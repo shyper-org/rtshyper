@@ -17,7 +17,6 @@ pub enum EmuDevs {
     VirtioBlk(VirtioMmio),
     VirtioNet(VirtioMmio),
     VirtioConsole(VirtioMmio),
-    None,
 }
 
 pub struct EmuContext {
@@ -29,9 +28,7 @@ pub struct EmuContext {
     pub reg_width: usize,
 }
 
-#[allow(dead_code)]
 struct EmuDevEntry {
-    pub emu_type: EmuDeviceType,
     pub vm_id: usize,
     pub id: usize,
     pub ipa: usize,
@@ -89,15 +86,15 @@ impl From<usize> for EmuDeviceType {
     }
 }
 
-pub type EmuDevHandler = fn(usize, &EmuContext) -> bool;
+type EmuDevHandler = fn(usize, &EmuContext) -> bool;
 
 // TO CHECK
 pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     let ipa = emu_ctx.address;
     let emu_devs_list = EMU_DEVS_LIST.lock();
 
+    let active_vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     for emu_dev in &*emu_devs_list {
-        let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
         if active_vcpu.vm_id() == emu_dev.vm_id && emu_dev.address_range().contains(&ipa) {
             let handler = emu_dev.handler;
             let id = emu_dev.id;
@@ -113,14 +110,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     false
 }
 
-pub fn emu_register_dev(
-    emu_type: EmuDeviceType,
-    vm_id: usize,
-    dev_id: usize,
-    address: usize,
-    size: usize,
-    handler: EmuDevHandler,
-) {
+pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize, handler: EmuDevHandler) {
     let mut emu_devs_list = EMU_DEVS_LIST.lock();
     for emu_dev in &*emu_devs_list {
         if vm_id != emu_dev.vm_id {
@@ -132,7 +122,6 @@ pub fn emu_register_dev(
     }
 
     emu_devs_list.push(EmuDevEntry {
-        emu_type,
         vm_id,
         id: dev_id,
         ipa: address,
@@ -161,7 +150,7 @@ pub fn emu_reg_handler(emu_ctx: &EmuContext) -> bool {
     let address = emu_ctx.address;
     let emu_regs_list = EMU_REGS_LIST.lock();
 
-    let active_vcpu = current_cpu().active_vcpu.clone().unwrap();
+    let active_vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     let vm_id = active_vcpu.vm_id();
 
     for emu_reg in emu_regs_list.iter() {
@@ -200,7 +189,7 @@ pub fn emu_register_reg(emu_type: EmuRegType, address: usize, handler: EmuRegHan
     });
 }
 
-pub type EmuRegHandler = EmuDevHandler;
+type EmuRegHandler = EmuDevHandler;
 
 pub struct EmuRegEntry {
     pub emu_type: EmuRegType,

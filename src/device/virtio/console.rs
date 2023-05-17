@@ -181,7 +181,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     };
 
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa as usize) {
-        EmuDevs::VirtioConsole(x) => x,
+        Some(EmuDevs::VirtioConsole(x)) => x,
         _ => {
             println!(
                 "virtio_console_recv: trgt_vm[{}] failed to get virtio console dev",

@@ -1101,7 +1101,7 @@ impl Vgic {
         let mut vm_has_interrupt_flag = false;
 
         for i in 0..32 {
-            if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+            if vm.has_interrupt(first_int + i) {
                 vm_has_interrupt_flag = true;
                 break;
             }
@@ -1147,7 +1147,7 @@ impl Vgic {
         let mut vm_has_interrupt_flag = false;
 
         for i in 0..emu_ctx.width {
-            if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+            if vm.has_interrupt(first_int + i) {
                 vm_has_interrupt_flag = true;
                 break;
             }
@@ -1201,7 +1201,7 @@ impl Vgic {
         let mut vm_has_interrupt_flag = false;
 
         for i in 0..32 {
-            if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+            if vm.has_interrupt(first_int + i) {
                 vm_has_interrupt_flag = true;
                 break;
             }
@@ -1258,7 +1258,7 @@ impl Vgic {
 
         if emu_ctx.write {
             for i in 0..32 {
-                if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+                if vm.has_interrupt(first_int + i) {
                     vm_has_interrupt_flag = true;
                     break;
                 }
@@ -1310,7 +1310,7 @@ impl Vgic {
 
         if emu_ctx.write {
             for i in 0..emu_ctx.width * 8 {
-                if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+                if vm.has_interrupt(first_int + i) {
                     vm_has_interrupt_flag = true;
                     break;
                 }
@@ -1419,7 +1419,7 @@ impl Vgic {
 
         if emu_ctx.write {
             for i in 0..emu_ctx.width {
-                if vm.has_interrupt(first_int + i) || vm.emu_has_interrupt(first_int + i) {
+                if vm.has_interrupt(first_int + i) {
                     vm_has_interrupt_flag = true;
                     break;
                 }
@@ -1813,12 +1813,6 @@ pub fn emu_intc_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
     };
     let vgic = vm.vgic();
     let vgicd_offset_prefix = (offset & 0xf80) >> 7;
-    // if current_cpu().id == 2 {
-    //     println!(
-    //         "emu_intc_handler: vgicd_offset_prefix {:#x}, offset {:#x}",
-    //         vgicd_offset_prefix, offset
-    //     );
-    // }
     if !vgicd_emu_access_is_vaild(emu_ctx) {
         return false;
     }
@@ -2055,7 +2049,7 @@ pub fn emu_intc_init(vm: &Vm, emu_dev_id: usize) {
         vgic_cpu_priv.push(cpu_priv);
     }
 
-    vm.set_emu_devs(emu_dev_id, EmuDevs::Vgic(vgic.clone()));
+    vm.set_emu_devs(emu_dev_id, EmuDevs::Vgic(vgic));
 }
 
 pub fn partial_passthrough_intc_init(vm: &Vm) {

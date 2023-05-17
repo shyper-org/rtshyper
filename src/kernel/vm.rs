@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use spin::once::Once;
@@ -29,8 +30,29 @@ macro_rules! min {
 }
 // make sure that the CONFIG_VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
 pub const CONFIG_VM_NUM_MAX: usize = min!(shyper::VM_NUM_MAX, (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
-pub static VM_IF_LIST: [Mutex<VmInterface>; CONFIG_VM_NUM_MAX] =
+static VM_IF_LIST: [Mutex<VmInterface>; CONFIG_VM_NUM_MAX] =
     [const { Mutex::new(VmInterface::default()) }; CONFIG_VM_NUM_MAX];
+
+static MAC2VMID: Mutex<BTreeMap<MacAddress, usize>> = Mutex::new(BTreeMap::new());
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct MacAddress([u8; 6]);
+
+impl MacAddress {
+    fn new(mac: &[u8]) -> Self {
+        let mut this = Self([0; 6]);
+        this.0.clone_from_slice(&mac[0..6]);
+        this
+    }
+}
+
+pub fn set_mac_vmid(mac: &[u8], vmid: usize) {
+    MAC2VMID.lock().insert(MacAddress::new(mac), vmid);
+}
+
+pub fn mac_to_vmid(mac: &[u8]) -> Option<usize> {
+    MAC2VMID.lock().get(&MacAddress::new(mac)).cloned()
+}
 
 pub fn vm_if_reset(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
@@ -69,11 +91,6 @@ fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
 pub fn vm_if_get_cpu_id(vm_id: usize) -> Option<usize> {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id.get().cloned()
-}
-
-pub fn vm_if_cmp_mac(vm_id: usize, frame: &[u8]) -> bool {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.mac == frame[0..6]
 }
 
 pub fn vm_if_set_ivc_arg(vm_id: usize, ivc_arg: usize) {
@@ -147,14 +164,13 @@ impl From<usize> for VmType {
 }
 
 pub struct VmInterface {
-    pub master_cpu_id: Once<usize>,
-    pub state: VmState,
-    pub vm_type: VmType,
-    pub mac: [u8; 6],
-    pub ivc_arg: usize,
-    pub ivc_arg_ptr: usize,
-    pub mem_map: Option<FlexBitmap>,
-    pub mem_map_cache: Option<Arc<PageFrame>>,
+    master_cpu_id: Once<usize>,
+    state: VmState,
+    vm_type: VmType,
+    ivc_arg: usize,
+    ivc_arg_ptr: usize,
+    mem_map: Option<FlexBitmap>,
+    mem_map_cache: Option<Arc<PageFrame>>,
 }
 
 impl VmInterface {
@@ -163,7 +179,6 @@ impl VmInterface {
             master_cpu_id: Once::new(),
             state: VmState::Pending,
             vm_type: VmType::VmTBma,
-            mac: [0; 6],
             ivc_arg: 0,
             ivc_arg_ptr: 0,
             mem_map: None,
@@ -175,7 +190,6 @@ impl VmInterface {
         self.master_cpu_id = Once::new();
         self.state = VmState::Pending;
         self.vm_type = VmType::VmTBma;
-        self.mac = [0; 6];
         self.ivc_arg = 0;
         self.ivc_arg_ptr = 0;
         self.mem_map = None;
@@ -335,19 +349,15 @@ impl Vm {
     pub fn set_emu_devs(&self, idx: usize, emu: EmuDevs) {
         let mut vm_inner = self.inner.lock();
         if idx < vm_inner.emu_devs.len() {
-            if let EmuDevs::None = vm_inner.emu_devs[idx] {
-                // println!("set_emu_devs: cover a None emu dev");
-                vm_inner.emu_devs[idx] = emu;
-                return;
+            if vm_inner.emu_devs[idx].is_none() {
+                vm_inner.emu_devs[idx] = Some(emu);
             } else {
-                panic!("set_emu_devs: set an exsit emu dev");
+                error!("set_emu_devs: set an exsit emu dev");
             }
+        } else {
+            vm_inner.emu_devs.resize(idx, None);
+            vm_inner.emu_devs.push(Some(emu));
         }
-        while idx > vm_inner.emu_devs.len() {
-            println!("set_emu_devs: push a None emu dev");
-            vm_inner.emu_devs.push(EmuDevs::None);
-        }
-        vm_inner.emu_devs.push(emu);
     }
 
     pub fn set_intc_dev_id(&self, intc_dev_id: usize) {
@@ -358,11 +368,6 @@ impl Vm {
     pub fn set_int_bit_map(&self, int_id: usize) {
         let mut vm_inner = self.inner.lock();
         vm_inner.int_bitmap.set(int_id);
-    }
-
-    pub fn intc_dev_id(&self) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.intc_dev_id
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize, map_block: bool) {
@@ -465,7 +470,7 @@ impl Vm {
     pub fn vgic(&self) -> Arc<Vgic> {
         let vm_inner = self.inner.lock();
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
-            EmuDevs::Vgic(vgic) => vgic.clone(),
+            Some(EmuDevs::Vgic(vgic)) => vgic.clone(),
             _ => {
                 panic!("vm{} cannot find vgic", vm_inner.id);
             }
@@ -474,50 +479,37 @@ impl Vm {
 
     pub fn has_vgic(&self) -> bool {
         let vm_inner = self.inner.lock();
-        matches!(vm_inner.emu_devs.get(vm_inner.intc_dev_id), Some(EmuDevs::Vgic(_)))
+        matches!(
+            vm_inner.emu_devs.get(vm_inner.intc_dev_id),
+            Some(Some(EmuDevs::Vgic(_)))
+        )
     }
 
-    pub fn emu_dev(&self, dev_id: usize) -> EmuDevs {
+    pub fn emu_dev(&self, dev_id: usize) -> Option<EmuDevs> {
         let vm_inner = self.inner.lock();
         vm_inner.emu_devs[dev_id].clone()
     }
 
-    pub fn emu_net_dev(&self, id: usize) -> EmuDevs {
+    pub fn emu_net_dev(&self, id: usize) -> Option<EmuDevs> {
         let vm_inner = self.inner.lock();
-        let mut dev_num = 0;
-
-        for dev in vm_inner.emu_devs.iter() {
-            if let EmuDevs::VirtioNet(_) = dev {
-                if dev_num == id {
-                    return dev.clone();
-                }
-                dev_num += 1;
-            }
-        }
-        EmuDevs::None
-    }
-
-    pub fn emu_blk_dev(&self) -> EmuDevs {
-        for emu in &self.inner.lock().emu_devs {
-            if let EmuDevs::VirtioBlk(_) = emu {
-                return emu.clone();
-            }
-        }
-        EmuDevs::None
+        vm_inner
+            .emu_devs
+            .iter()
+            .flatten()
+            .filter(|dev| matches!(dev, EmuDevs::VirtioNet(_)))
+            .nth(id)
+            .cloned()
     }
 
     // Get console dev by ipa.
-    pub fn emu_console_dev(&self, ipa: usize) -> EmuDevs {
-        for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
-            if emu_dev_cfg.base_ipa == ipa {
-                return self.emu_dev(idx);
-            }
-        }
-        // println!("emu_console_dev ipa {:x}", ipa);
-        // for (idx, emu_dev_cfg) in self.config().emulated_device_list().iter().enumerate() {
-        //     println!("emu dev[{}], ipa {:#x}", idx, emu_dev_cfg.base_ipa);
-        // }
-        EmuDevs::None
+    pub fn emu_console_dev(&self, ipa: usize) -> Option<EmuDevs> {
+        self.inner
+            .lock()
+            .emu_devs
+            .iter()
+            .flatten()
+            .find(|dev| matches!(dev, EmuDevs::VirtioConsole(mmio) if mmio.base() == ipa))
+            .cloned()
     }
 
     pub fn ncpu(&self) -> usize {
@@ -528,15 +520,6 @@ impl Vm {
     pub fn has_interrupt(&self, int_id: usize) -> bool {
         let vm_inner = self.inner.lock();
         vm_inner.int_bitmap.get(int_id) != 0
-    }
-
-    pub fn emu_has_interrupt(&self, int_id: usize) -> bool {
-        for emu_dev in self.config().emulated_device_list() {
-            if int_id == emu_dev.irq_id {
-                return true;
-            }
-        }
-        false
     }
 
     pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
@@ -678,7 +661,7 @@ struct VmInner {
     pub iommu_ctx_id: Option<usize>,
 
     // emul devs
-    pub emu_devs: Vec<EmuDevs>,
+    emu_devs: Vec<Option<EmuDevs>>,
 
     // VM timer
     running: usize,

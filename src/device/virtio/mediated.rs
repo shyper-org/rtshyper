@@ -5,7 +5,8 @@ use spin::Mutex;
 use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
     active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
-    IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, vm_id_list,
+    IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, vm_id_list, HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY,
+    HVC_MEDIATED_DRV_NOTIFY,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use shyper::MediatedBlkContent;
@@ -202,8 +203,8 @@ pub fn mediated_blk_read(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_count(count);
 
     let med_msg = HvcDefaultMsg {
-        fid: 3,    // HVC_MEDIATED
-        event: 50, // HVC_MEDIATED_DEV_NOTIFY
+        fid: HVC_MEDIATED,
+        event: HVC_MEDIATED_DEV_NOTIFY,
     };
 
     if !hvc_send_msg_to_vm(0, &HvcGuestMsg::Default(med_msg)) {
@@ -220,8 +221,8 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     mediated_blk.set_count(count);
 
     let med_msg = HvcDefaultMsg {
-        fid: 3,    // HVC_MEDIATED
-        event: 50, // HVC_MEDIATED_DRV_NOTIFY
+        fid: HVC_MEDIATED,
+        event: HVC_MEDIATED_DRV_NOTIFY,
     };
 
     // println!("mediated_blk_write send msg to vm0");

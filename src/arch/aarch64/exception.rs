@@ -1,7 +1,7 @@
 use core::arch::global_asm;
 
-use alloc::collections::BinaryHeap;
-use spin::{Mutex, Lazy};
+// use alloc::collections::BinaryHeap;
+// use spin::{Mutex, Lazy};
 use tock_registers::interfaces::*;
 
 use crate::arch::{
@@ -258,57 +258,57 @@ fn interrupt_leave() {
     cpu_interrupt_enable(level);
 }
 
-#[derive(Clone, PartialEq, Eq)]
-struct PendingIrq {
-    int_id: usize,
-    priority: usize,
-    sender: usize,
-}
+// #[derive(Clone, PartialEq, Eq)]
+// struct PendingIrq {
+//     int_id: usize,
+//     priority: usize,
+//     sender: usize,
+// }
 
-impl PendingIrq {
-    fn new(int_id: usize, priority: usize, sender: usize) -> Self {
-        Self {
-            int_id,
-            priority,
-            sender,
-        }
-    }
-}
+// impl PendingIrq {
+//     fn new(int_id: usize, priority: usize, sender: usize) -> Self {
+//         Self {
+//             int_id,
+//             priority,
+//             sender,
+//         }
+//     }
+// }
 
-impl PartialOrd for PendingIrq {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
+// impl PartialOrd for PendingIrq {
+//     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }
 
-impl Ord for PendingIrq {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        match self.priority.cmp(&other.priority) {
-            core::cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
-        match self.int_id.cmp(&other.int_id) {
-            core::cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
-        self.sender.cmp(&other.sender)
-    }
-}
+// impl Ord for PendingIrq {
+//     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+//         match self.priority.cmp(&other.priority) {
+//             core::cmp::Ordering::Equal => {}
+//             ord => return ord,
+//         }
+//         match self.int_id.cmp(&other.int_id) {
+//             core::cmp::Ordering::Equal => {}
+//             ord => return ord,
+//         }
+//         self.sender.cmp(&other.sender)
+//     }
+// }
 
-// TODO: currently, this is useless
-static PENDING_IRQ_LIST: Lazy<Mutex<BinaryHeap<PendingIrq>>> = Lazy::new(|| Mutex::new(BinaryHeap::new()));
+// // TODO: currently, this is useless
+// static PENDING_IRQ_LIST: Lazy<Mutex<BinaryHeap<PendingIrq>>> = Lazy::new(|| Mutex::new(BinaryHeap::new()));
 
 #[no_mangle]
 extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     let prev_ctx = current_cpu().set_ctx(ctx);
-    if let Some((int_id, sender)) = IntCtrl::fetch() {
+    if let Some((int_id, _sender)) = IntCtrl::fetch() {
         #[cfg(feature = "preempt")]
         interrupt_enter();
-        let priority = IntCtrl::irq_priority(int_id);
+        // let priority = IntCtrl::irq_priority(int_id);
 
-        PENDING_IRQ_LIST.lock().push(PendingIrq::new(int_id, priority, sender));
+        // PENDING_IRQ_LIST.lock().push(PendingIrq::new(int_id, priority, sender));
         let handled_by_hypervisor = interrupt_handler(int_id);
-        PENDING_IRQ_LIST.lock().pop();
+        // PENDING_IRQ_LIST.lock().pop();
 
         #[cfg(feature = "preempt")]
         interrupt_leave();

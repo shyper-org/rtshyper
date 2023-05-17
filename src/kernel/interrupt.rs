@@ -61,17 +61,18 @@ pub fn interrupt_init() {
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
 
-pub fn interrupt_vm_register(vm: &Vm, id: usize) -> bool {
+pub fn interrupt_vm_register(vm: &Vm, id: usize, hw: bool) -> bool {
     // println!("VM {} register interrupt {}", vm.id(), id);
-    let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
-    if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
-        println!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);
-        return false;
+    if hw {
+        let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
+        if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
+            println!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);
+            return false;
+        }
+        interrupt_arch_vm_register(vm, id);
+        glb_bitmap_lock.set(id);
     }
-
-    interrupt_arch_vm_register(vm, id);
     vm.set_int_bit_map(id);
-    glb_bitmap_lock.set(id);
     true
 }
 

@@ -76,7 +76,7 @@ fn vmm_remove_emulated_device(vm: &Vm) {
                 "vmm_remove_emulated_device: cannot remove device {:?}",
                 emu_dev.emu_type
             );
-            return;
+            continue;
         }
         emu_remove_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length);
         // println!(

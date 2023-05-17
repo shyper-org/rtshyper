@@ -176,19 +176,11 @@ impl VmConfigEntry {
         }
     }
 
-    pub fn id(&self) -> usize {
-        self.id
-    }
-
-    fn set_id(&mut self, id: usize) {
-        self.id = id;
-    }
-
     pub fn mediated_block_index(&self) -> Option<usize> {
         *self.mediated_block_index.lock()
     }
 
-    pub fn set_mediated_block_index(&mut self, med_blk_id: usize) {
+    fn set_mediated_block_index(&mut self, med_blk_id: usize) {
         *self.mediated_block_index.lock() = Some(med_blk_id);
     }
 
@@ -235,7 +227,7 @@ impl VmConfigEntry {
         }
     }
 
-    pub fn add_memory_cfg(&self, ipa_start: usize, length: usize) {
+    fn add_memory_cfg(&self, ipa_start: usize, length: usize) {
         let mut mem_cfg = self.memory.lock();
         mem_cfg.region.push(VmRegion { ipa_start, length });
     }
@@ -255,7 +247,7 @@ impl VmConfigEntry {
         cpu_cfg.master as usize
     }
 
-    pub fn set_cpu_cfg(&self, num: usize, allocate_bitmap: usize, master: usize) {
+    fn set_cpu_cfg(&self, num: usize, allocate_bitmap: usize, master: usize) {
         let mut cpu_cfg = self.cpu.lock();
         cpu_cfg.num = usize::min(num, allocate_bitmap.count_ones() as usize);
         cpu_cfg.allocate_bitmap = allocate_bitmap as u32;
@@ -267,7 +259,7 @@ impl VmConfigEntry {
         emu_dev_cfg.emu_dev_list.clone()
     }
 
-    pub fn add_emulated_device_cfg(&self, cfg: VmEmulatedDeviceConfig) {
+    fn add_emulated_device_cfg(&self, cfg: VmEmulatedDeviceConfig) {
         let mut emu_dev_cfgs = self.vm_emu_dev_confg.lock();
         emu_dev_cfgs.emu_dev_list.push(cfg);
     }
@@ -298,12 +290,12 @@ impl VmConfigEntry {
         pt_dev_cfg.regions.push(pt_region_cfg)
     }
 
-    pub fn add_passthrough_device_irqs(&self, irqs: &mut Vec<usize>) {
+    fn add_passthrough_device_irqs(&self, irqs: &mut Vec<usize>) {
         let mut pt_dev_cfg = self.vm_pt_dev_confg.lock();
         pt_dev_cfg.irqs.append(irqs);
     }
 
-    pub fn add_passthrough_device_streams_ids(&self, streams_ids: &mut Vec<usize>) {
+    fn add_passthrough_device_streams_ids(&self, streams_ids: &mut Vec<usize>) {
         let mut pt_dev_cfg = self.vm_pt_dev_confg.lock();
         pt_dev_cfg.streams_ids.append(streams_ids);
     }
@@ -313,7 +305,7 @@ impl VmConfigEntry {
         dtb_dev_cfg.dtb_device_list.clone()
     }
 
-    pub fn add_dtb_device(&self, cfg: VmDtbDevConfig) {
+    fn add_dtb_device(&self, cfg: VmDtbDevConfig) {
         let mut dtb_dev_cfg = self.vm_dtb_devs.lock();
         dtb_dev_cfg.dtb_device_list.push(cfg);
     }
@@ -391,10 +383,10 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
             if vm_id == 0 && !vm_config.entries.is_empty() {
                 panic!("error in mvm config init, the def vm config table is not empty");
             }
-            vm_cfg_entry.set_id(vm_id);
+            vm_cfg_entry.id = vm_id;
             println!(
                 "\nSuccessfully add VM[{}]: {}, currently vm_num {}",
-                vm_cfg_entry.id(),
+                vm_cfg_entry.id,
                 vm_cfg_entry.name,
                 vm_config.entries.len() + 1
             );
@@ -525,7 +517,6 @@ pub fn vm_cfg_add_emu_dev(
         Some(vm_cfg) => vm_cfg,
         None => return Err(()),
     };
-    let emu_cfg_list = vm_cfg.emulated_device_list();
 
     // Copy emu device name from user ipa.
     let name_pa = vm_ipa2hva(&active_vm().unwrap(), name_ipa);
@@ -542,19 +533,12 @@ pub fn vm_cfg_add_emu_dev(
 
     println!(
         concat!(
-            "\nVM[{}] vm_cfg_add_emu_dev: ori emu dev num {}\n",
+            "\nVM[{}] vm_cfg_add_emu_dev:\n",
             "    name {:?}\n",
             "     cfg_list {:?}\n",
             "     base ipa {:x} length {:x} irq_id {} emu_type {}"
         ),
-        vmid,
-        emu_cfg_list.len(),
-        name_str,
-        cfg_list,
-        base_ipa,
-        length,
-        irq_id,
-        emu_type
+        vmid, name_str, cfg_list, base_ipa, length, irq_id, emu_type
     );
 
     let emu_dev_type = EmuDeviceType::from(emu_type);

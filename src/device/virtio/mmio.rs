@@ -151,9 +151,9 @@ impl VirtioQueue for VirtioMmio {
 }
 
 impl VirtioMmio {
-    pub fn new(id: usize) -> VirtioMmio {
+    pub fn new(base: usize) -> VirtioMmio {
         VirtioMmio {
-            inner: Arc::new(Mutex::new(VirtioMmioInner::new(id))),
+            inner: Arc::new(Mutex::new(VirtioMmioInner::new(base))),
         }
     }
 
@@ -191,14 +191,10 @@ impl VirtioMmio {
         }
     }
 
-    pub fn mmio_reg_init(&self, dev_type: VirtioDeviceType) {
+    fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
         let mut inner = self.inner.lock();
-        inner.reg_init(dev_type);
-    }
-
-    pub fn dev_init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig, mediated: bool) {
-        let inner = self.inner.lock();
-        inner.dev.init(dev_type, config, mediated)
+        inner.regs.init(dev_type);
+        inner.dev.init(dev_type, config);
     }
 
     // virtio_dev_reset
@@ -327,9 +323,9 @@ impl VirtioMmio {
         Ok(inner.vq[idx].clone())
     }
 
-    pub fn id(&self) -> usize {
+    pub fn base(&self) -> usize {
         let inner = self.inner.lock();
-        inner.id
+        inner.base
     }
 
     pub fn notify_handler(&self, idx: usize) -> bool {
@@ -348,7 +344,7 @@ impl VirtioMmio {
 }
 
 struct VirtioMmioInner {
-    id: usize,
+    base: usize,
     driver_features: usize,
     driver_status: usize,
     regs: VirtMmioRegs,
@@ -358,19 +354,15 @@ struct VirtioMmioInner {
 }
 
 impl VirtioMmioInner {
-    fn new(id: usize) -> VirtioMmioInner {
+    fn new(base: usize) -> VirtioMmioInner {
         VirtioMmioInner {
-            id,
+            base,
             driver_features: 0,
             driver_status: 0,
             regs: VirtMmioRegs::default(),
             dev: VirtDev::default(),
             vq: Vec::new(),
         }
-    }
-
-    fn reg_init(&mut self, dev_type: VirtioDeviceType) {
-        self.regs.init(dev_type);
     }
 }
 
@@ -431,10 +423,10 @@ fn virtio_mmio_prologue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: u
                 mmio.set_dev_stat(value);
                 if mmio.dev_stat() == 0 {
                     mmio.dev_reset();
-                    info!("VM {} virtio device {} is reset", active_vm_id(), mmio.id());
+                    info!("VM {} virtio device {:x} is reset", active_vm_id(), mmio.base());
                 } else if mmio.dev_stat() == 0xf {
                     mmio.dev().set_activated(true);
-                    info!("VM {} virtio device {} init ok", active_vm_id(), mmio.id());
+                    info!("VM {} virtio device {:x} init ok", active_vm_id(), mmio.base());
                 }
             }
             _ => {
@@ -500,16 +492,16 @@ fn virtio_mmio_queue_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usiz
                     virtq.set_ready(value);
                     if value == VIRTQ_READY {
                         info!(
-                            "VM {} virtio device {} queue {} ready",
+                            "VM {} virtio device {:x} queue {} ready",
                             active_vm_id(),
-                            mmio.id(),
+                            mmio.base(),
                             q_sel
                         );
                     } else {
                         warn!(
-                            "VM {} virtio device {} queue {} init failed",
+                            "VM {} virtio device {:x} queue {} init failed",
                             active_vm_id(),
-                            mmio.id(),
+                            mmio.base(),
                             q_sel
                         );
                     }
@@ -643,32 +635,24 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
     }
 }
 
-pub fn emu_virtio_mmio_init(vm: &Vm, emu_dev_id: usize, mediated: bool) -> bool {
-    let virt_dev_type: VirtioDeviceType;
-    let vm_cfg = vm.config();
-    let mmio = VirtioMmio::new(emu_dev_id);
-    match vm_cfg.emulated_device_list()[emu_dev_id].emu_type {
+pub fn emu_virtio_mmio_init(vm: &Vm, emu_dev_id: usize, emu_cfg: &VmEmulatedDeviceConfig) -> bool {
+    let mmio = VirtioMmio::new(emu_cfg.base_ipa);
+    let (virt_dev_type, emu_dev) = match emu_cfg.emu_type {
         crate::device::EmuDeviceType::EmuDeviceTVirtioBlk => {
-            virt_dev_type = VirtioDeviceType::Block;
-            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioBlk(mmio.clone()));
+            (VirtioDeviceType::Block, EmuDevs::VirtioBlk(mmio.clone()))
         }
-        crate::device::EmuDeviceType::EmuDeviceTVirtioNet => {
-            virt_dev_type = VirtioDeviceType::Net;
-            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioNet(mmio.clone()));
-        }
+        crate::device::EmuDeviceType::EmuDeviceTVirtioNet => (VirtioDeviceType::Net, EmuDevs::VirtioNet(mmio.clone())),
         crate::device::EmuDeviceType::EmuDeviceTVirtioConsole => {
-            virt_dev_type = VirtioDeviceType::Console;
-            vm.set_emu_devs(emu_dev_id, EmuDevs::VirtioConsole(mmio.clone()));
+            (VirtioDeviceType::Console, EmuDevs::VirtioConsole(mmio.clone()))
         }
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
             return false;
         }
-    }
+    };
+    vm.set_emu_devs(emu_dev_id, emu_dev);
 
-    mmio.mmio_reg_init(virt_dev_type);
-    mmio.dev_init(virt_dev_type, &vm_cfg.emulated_device_list()[emu_dev_id], mediated);
-    // no need to set vm_if_list
+    mmio.init(virt_dev_type, emu_cfg);
     mmio.virtio_queue_init(virt_dev_type);
 
     true
@@ -684,21 +668,16 @@ pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool 
     };
 
     let mmio = match vm.emu_dev(emu_dev_id) {
-        EmuDevs::VirtioBlk(blk) => blk,
-        EmuDevs::VirtioNet(net) => net,
-        EmuDevs::VirtioConsole(console) => console,
+        Some(EmuDevs::VirtioBlk(mmio)) | Some(EmuDevs::VirtioNet(mmio)) | Some(EmuDevs::VirtioConsole(mmio)) => mmio,
         _ => {
             panic!("emu_virtio_mmio_handler: illegal mmio dev type")
         }
     };
 
     let addr = emu_ctx.address;
-    let offset = addr - vm.config().emulated_device_list()[emu_dev_id].base_ipa;
+    let offset = addr - mmio.base();
     let write = emu_ctx.write;
 
-    // if vm.vm_id() == 1 && emu_dev_id == 2 {
-    //     println!("### emu_virtio_mmio_handler offset {:x} ###", offset);
-    // }
     if offset == VIRTIO_MMIO_QUEUE_NOTIFY && write {
         mmio.set_irt_stat(VIRTIO_MMIO_INT_VRING);
         // let q_sel = mmio.q_sel();

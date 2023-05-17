@@ -11,7 +11,7 @@ use crate::device::{emu_register_dev, emu_virtio_mmio_handler, emu_virtio_mmio_i
 use crate::dtb::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VM_IF_LIST, VmType, iommu_add_device,
+    cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VmType, iommu_add_device,
     mem_region_alloc_colors, ColorMemRegion, count_missing_num, Vcpu, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
 };
 use crate::kernel::mem_page_alloc;
@@ -162,6 +162,7 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
     // ...
     // Todo: support loading ramdisk from MVM shyper-cli.
     // ...
+    #[cfg(feature = "ramdisk")]
     if config.ramdisk_load_ipa() != 0 {
         println!("VM {} use ramdisk CPIO_RAMDISK", vm_id);
         copy_segment_to_vm(vm, config.ramdisk_load_ipa(), CPIO_RAMDISK);
@@ -177,20 +178,12 @@ fn vmm_init_emulated_device(vm: &Vm) -> bool {
         match emu_dev.emu_type {
             EmuDeviceTGicd => {
                 vm.set_intc_dev_id(idx);
-                emu_register_dev(
-                    EmuDeviceTGicd,
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_intc_handler,
-                );
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_intc_handler);
                 emu_intc_init(vm, idx);
             }
             EmuDeviceTGPPT => {
                 vm.set_intc_dev_id(idx);
                 emu_register_dev(
-                    EmuDeviceTGPPT,
                     vm.id(),
                     idx,
                     emu_dev.base_ipa,
@@ -199,59 +192,18 @@ fn vmm_init_emulated_device(vm: &Vm) -> bool {
                 );
                 partial_passthrough_intc_init(vm);
             }
-            EmuDeviceTVirtioBlk => {
-                emu_register_dev(
-                    EmuDeviceTVirtioBlk,
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_virtio_mmio_handler,
-                );
-                if !emu_virtio_mmio_init(vm, idx, emu_dev.mediated) {
+            EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet => {
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
+                if !emu_virtio_mmio_init(vm, idx, emu_dev) {
                     return false;
                 }
-            }
-            EmuDeviceTVirtioNet => {
-                emu_register_dev(
-                    EmuDeviceTVirtioNet,
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_virtio_mmio_handler,
-                );
-                if !emu_virtio_mmio_init(vm, idx, emu_dev.mediated) {
-                    return false;
-                }
-                let mut vm_if_list = VM_IF_LIST[vm.id()].lock();
-                for i in 0..6 {
-                    vm_if_list.mac[i] = emu_dev.cfg_list[i] as u8;
-                }
-                drop(vm_if_list);
-            }
-            EmuDeviceTVirtioConsole => {
-                emu_register_dev(
-                    EmuDeviceTVirtioConsole,
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_virtio_mmio_handler,
-                );
-                if !emu_virtio_mmio_init(vm, idx, emu_dev.mediated) {
-                    return false;
+                if emu_dev.emu_type == EmuDeviceTVirtioNet {
+                    let mac = emu_dev.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
+                    crate::kernel::set_mac_vmid(&mac, vm.id());
                 }
             }
             EmuDeviceTIOMMU => {
-                emu_register_dev(
-                    EmuDeviceTIOMMU,
-                    vm.id(),
-                    idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
-                    emu_smmu_handler,
-                );
+                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_smmu_handler);
                 if !iommmu_vm_init(vm) {
                     return false;
                 }
@@ -265,6 +217,9 @@ fn vmm_init_emulated_device(vm: &Vm) -> bool {
                 warn!("vmm_init_emulated_device: unknown emulated device");
                 return false;
             }
+        }
+        if !interrupt_vm_register(vm, emu_dev.irq_id, false) {
+            return false;
         }
         info!(
             "VM {} registers emulated device: id=<{}>, name=\"{:?}\", ipa=<{:#x}>",
@@ -296,7 +251,7 @@ fn vmm_init_passthrough_device(vm: &Vm) -> bool {
         );
     }
     for irq in vm.config().passthrough_device_irqs() {
-        if !interrupt_vm_register(vm, irq) {
+        if !interrupt_vm_register(vm, irq, true) {
             return false;
         }
     }
@@ -340,50 +295,48 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
     // #[cfg(feature = "pi4")]
     // fdt_set_stdout_path(dtb, "/serial@fe340000\0".as_ptr());
 
-    if !config.emulated_device_list().is_empty() {
-        for emu_cfg in config.emulated_device_list() {
-            match emu_cfg.emu_type {
-                EmuDeviceTGicd => {
-                    #[cfg(any(feature = "tx2", feature = "qemu"))]
-                    fdt_setup_gic(
-                        dtb,
-                        Platform::GICD_BASE as u64,
-                        Platform::GICC_BASE as u64,
-                        emu_cfg.name.as_ptr(),
-                    );
-                    #[cfg(feature = "pi4")]
-                    fdt_setup_gic(
-                        dtb,
-                        (Platform::GICD_BASE | 0xF_0000_0000) as u64,
-                        (Platform::GICC_BASE | 0xF_0000_0000) as u64,
-                        emu_cfg.name.as_ptr(),
-                    );
-                }
-                EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
-                    #[cfg(any(feature = "tx2", feature = "qemu"))]
-                    fdt_add_virtio(
-                        dtb,
-                        emu_cfg.name.as_ptr(),
-                        emu_cfg.irq_id as u32 - 0x20,
-                        emu_cfg.base_ipa as u64,
-                    );
-                }
-                EmuDeviceTShyper => {
-                    #[cfg(any(feature = "tx2", feature = "qemu"))]
-                    fdt_add_vm_service(
-                        dtb,
-                        emu_cfg.irq_id as u32 - 0x20,
-                        emu_cfg.base_ipa as u64,
-                        emu_cfg.length as u64,
-                    );
-                }
-                EmuDeviceTIOMMU => {
-                    #[cfg(feature = "tx2")]
-                    trace!("EmuDeviceTIOMMU");
-                }
-                _ => {
-                    todo!();
-                }
+    for emu_cfg in config.emulated_device_list() {
+        match emu_cfg.emu_type {
+            EmuDeviceTGicd => {
+                #[cfg(any(feature = "tx2", feature = "qemu"))]
+                fdt_setup_gic(
+                    dtb,
+                    Platform::GICD_BASE as u64,
+                    Platform::GICC_BASE as u64,
+                    emu_cfg.name.as_ptr(),
+                );
+                #[cfg(feature = "pi4")]
+                fdt_setup_gic(
+                    dtb,
+                    (Platform::GICD_BASE | 0xF_0000_0000) as u64,
+                    (Platform::GICC_BASE | 0xF_0000_0000) as u64,
+                    emu_cfg.name.as_ptr(),
+                );
+            }
+            EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
+                #[cfg(any(feature = "tx2", feature = "qemu"))]
+                fdt_add_virtio(
+                    dtb,
+                    emu_cfg.name.as_ptr(),
+                    emu_cfg.irq_id as u32 - 0x20,
+                    emu_cfg.base_ipa as u64,
+                );
+            }
+            EmuDeviceTShyper => {
+                #[cfg(any(feature = "tx2", feature = "qemu"))]
+                fdt_add_vm_service(
+                    dtb,
+                    emu_cfg.irq_id as u32 - 0x20,
+                    emu_cfg.base_ipa as u64,
+                    emu_cfg.length as u64,
+                );
+            }
+            EmuDeviceTIOMMU => {
+                #[cfg(feature = "tx2")]
+                trace!("EmuDeviceTIOMMU");
+            }
+            _ => {
+                todo!();
             }
         }
     }
