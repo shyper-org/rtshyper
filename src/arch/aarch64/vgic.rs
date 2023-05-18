@@ -17,6 +17,7 @@ use super::gic::*;
 
 #[derive(Clone)]
 struct VgicInt {
+    id: u16,
     inner: Arc<Mutex<VgicIntInner>>,
     lock: Arc<Mutex<()>>,
 }
@@ -24,14 +25,16 @@ struct VgicInt {
 impl VgicInt {
     fn new(id: usize) -> VgicInt {
         VgicInt {
-            inner: Arc::new(Mutex::new(VgicIntInner::new(id))),
+            id: (id + GIC_PRIVINT_NUM) as u16,
+            inner: Arc::new(Mutex::new(VgicIntInner::new())),
             lock: Arc::new(Mutex::new(())),
         }
     }
 
     fn priv_new(id: usize, owner: Vcpu, targets: usize, enabled: bool) -> VgicInt {
         VgicInt {
-            inner: Arc::new(Mutex::new(VgicIntInner::priv_new(id, owner, targets, enabled))),
+            id: id as u16,
+            inner: Arc::new(Mutex::new(VgicIntInner::priv_new(owner, targets, enabled))),
             lock: Arc::new(Mutex::new(())),
         }
     }
@@ -117,9 +120,9 @@ impl VgicInt {
         vgic_int.in_lr
     }
 
+    #[inline]
     fn id(&self) -> u16 {
-        let vgic_int = self.inner.lock();
-        vgic_int.id
+        self.id
     }
 
     fn enabled(&self) -> bool {
@@ -186,7 +189,6 @@ impl VgicInt {
 
 struct VgicIntInner {
     owner: Option<Vcpu>,
-    id: u16,
     hw: bool,
     in_lr: bool,
     lr: u16,
@@ -201,10 +203,9 @@ struct VgicIntInner {
 }
 
 impl VgicIntInner {
-    fn new(id: usize) -> VgicIntInner {
+    fn new() -> VgicIntInner {
         VgicIntInner {
             owner: None,
-            id: (id + GIC_PRIVINT_NUM) as u16,
             hw: false,
             in_lr: false,
             lr: 0,
@@ -218,10 +219,9 @@ impl VgicIntInner {
         }
     }
 
-    fn priv_new(id: usize, owner: Vcpu, targets: usize, enabled: bool) -> VgicIntInner {
+    fn priv_new(owner: Vcpu, targets: usize, enabled: bool) -> VgicIntInner {
         VgicIntInner {
             owner: Some(owner),
-            id: id as u16,
             hw: false,
             in_lr: false,
             lr: 0,

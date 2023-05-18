@@ -20,6 +20,7 @@ pub enum VcpuState {
 
 #[derive(Clone)]
 pub struct Vcpu {
+    id: usize,
     pub inner: Arc<Mutex<VcpuInner>>,
 }
 
@@ -27,7 +28,8 @@ pub struct Vcpu {
 impl Vcpu {
     pub fn new(vm: &Vm, vcpu_id: usize) -> Self {
         let this = Self {
-            inner: Arc::new(Mutex::new(VcpuInner::new(vm.get_weak(), vcpu_id))),
+            id: vcpu_id,
+            inner: Arc::new(Mutex::new(VcpuInner::new(vm.get_weak()))),
         };
         crate::arch::vcpu_arch_init(vm, &this);
         this.reset_context();
@@ -114,7 +116,7 @@ impl Vcpu {
 
     pub fn set_phys_id(&self, phys_id: usize) {
         let mut inner = self.inner.lock();
-        println!("set vcpu {} phys id {}", inner.id, phys_id);
+        println!("set vcpu {} phys id {}", self.id, phys_id);
         inner.phys_id = phys_id;
     }
 
@@ -138,9 +140,9 @@ impl Vcpu {
         inner.state = state;
     }
 
+    #[inline]
     pub fn id(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.id
+        self.id
     }
 
     pub fn vm(&self) -> Option<Vm> {
@@ -163,7 +165,14 @@ impl Vcpu {
 
     pub fn reset_context(&self) {
         let mut inner = self.inner.lock();
-        inner.reset_context();
+        inner.arch_ctx_reset(self.id);
+        inner.gic_ctx_reset();
+        // use crate::kernel::vm_if_get_type;
+        // if vm_if_get_type(self.vm_id()) == VmType::VmTBma {
+        //     println!("vm {} bma ctx restore", self.vm_id());
+        //     self.reset_vm_ctx();
+        //     self.context_ext_regs_store(); // what the fuck ?? why store here ???
+        // }
     }
 
     pub fn context_ext_regs_store(&self) {
@@ -216,7 +225,6 @@ impl Vcpu {
 }
 
 pub struct VcpuInner {
-    pub id: usize,
     pub phys_id: usize,
     pub state: VcpuState,
     pub vm: WeakVm,
@@ -227,9 +235,8 @@ pub struct VcpuInner {
 }
 
 impl VcpuInner {
-    pub fn new(vm: WeakVm, id: usize) -> Self {
+    pub fn new(vm: WeakVm) -> Self {
         Self {
-            id,
             phys_id: 0,
             state: VcpuState::Inv,
             vm,
@@ -249,7 +256,7 @@ impl VcpuInner {
         self.vm.get_vm().unwrap().id()
     }
 
-    fn arch_ctx_reset(&mut self) {
+    fn arch_ctx_reset(&mut self, id: usize) {
         self.vm_ctx.sctlr_el1 = 0x30C50830;
         self.vm_ctx.pmcr_el0 = 0;
         self.vm_ctx.vtcr_el2 = 0x80013540 + ((64 - VM_IPA_SIZE) & ((1 << 6) - 1));
@@ -262,19 +269,8 @@ impl VcpuInner {
             vmpidr |= 0x100;
         }
 
-        vmpidr |= self.id;
+        vmpidr |= id;
         self.vm_ctx.vmpidr_el2 = vmpidr as u64;
-    }
-
-    fn reset_context(&mut self) {
-        self.arch_ctx_reset();
-        self.gic_ctx_reset();
-        // use crate::kernel::vm_if_get_type;
-        // if vm_if_get_type(self.vm_id()) == VmType::VmTBma {
-        //     println!("vm {} bma ctx restore", self.vm_id());
-        //     self.reset_vm_ctx();
-        //     self.context_ext_regs_store(); // what the fuck ?? why store here ???
-        // }
     }
 
     fn gic_ctx_reset(&mut self) {

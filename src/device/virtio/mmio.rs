@@ -96,6 +96,7 @@ impl VirtMmioRegs {
 
 #[derive(Clone)]
 pub struct VirtioMmio {
+    base: usize,
     inner: Arc<Mutex<VirtioMmioInner>>,
 }
 
@@ -153,7 +154,8 @@ impl VirtioQueue for VirtioMmio {
 impl VirtioMmio {
     pub fn new(base: usize) -> VirtioMmio {
         VirtioMmio {
-            inner: Arc::new(Mutex::new(VirtioMmioInner::new(base))),
+            base,
+            inner: Arc::new(Mutex::new(VirtioMmioInner::new())),
         }
     }
 
@@ -323,9 +325,9 @@ impl VirtioMmio {
         Ok(inner.vq[idx].clone())
     }
 
+    #[inline]
     pub fn base(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.base
+        self.base
     }
 
     pub fn notify_handler(&self, idx: usize) -> bool {
@@ -344,7 +346,6 @@ impl VirtioMmio {
 }
 
 struct VirtioMmioInner {
-    base: usize,
     driver_features: usize,
     driver_status: usize,
     regs: VirtMmioRegs,
@@ -354,9 +355,8 @@ struct VirtioMmioInner {
 }
 
 impl VirtioMmioInner {
-    fn new(base: usize) -> VirtioMmioInner {
+    fn new() -> VirtioMmioInner {
         VirtioMmioInner {
-            base,
             driver_features: 0,
             driver_status: 0,
             regs: VirtMmioRegs::default(),

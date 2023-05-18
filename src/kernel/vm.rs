@@ -208,17 +208,19 @@ impl VmInterface {
 
 #[derive(Clone)]
 pub struct Vm {
+    id: usize,
     inner: Arc<Mutex<VmInner>>,
 }
 
 #[derive(Clone)]
 pub struct WeakVm {
+    id: usize,
     inner: Weak<Mutex<VmInner>>,
 }
 
 impl WeakVm {
     pub fn get_vm(&self) -> Option<Vm> {
-        Weak::upgrade(&self.inner).map(|inner| Vm { inner })
+        Weak::upgrade(&self.inner).map(|inner| Vm { id: self.id, inner })
     }
 }
 
@@ -226,13 +228,15 @@ impl WeakVm {
 impl Vm {
     pub fn get_weak(&self) -> WeakVm {
         WeakVm {
+            id: self.id,
             inner: Arc::downgrade(&self.inner),
         }
     }
 
     pub fn new(id: usize, config: VmConfigEntry) -> Vm {
         Vm {
-            inner: Arc::new(Mutex::new(VmInner::new(id, config))),
+            id,
+            inner: Arc::new(Mutex::new(VmInner::new(config))),
         }
     }
 
@@ -241,7 +245,7 @@ impl Vm {
         for vcpu in &vm_inner.vcpu_list {
             info!(
                 "vm {} vcpu {} set {} hcr",
-                vm_inner.id,
+                self.id,
                 vcpu.id(),
                 if emu { "emu" } else { "partial passthrough" }
             );
@@ -265,7 +269,7 @@ impl Vm {
         let vm_inner = self.inner.lock();
         match vm_inner.iommu_ctx_id {
             None => {
-                panic!("vm {} do not have iommu context bank", vm_inner.id);
+                panic!("vm {} do not have iommu context bank", self.id);
             }
             Some(id) => id,
         }
@@ -275,7 +279,7 @@ impl Vm {
         let vm_inner = self.inner.lock();
         match vm_inner.config.mediated_block_index() {
             None => {
-                panic!("vm {} do not have mediated blk", vm_inner.id);
+                panic!("vm {} do not have mediated blk", self.id);
             }
             Some(idx) => idx,
         }
@@ -304,7 +308,7 @@ impl Vm {
         if vcpu.id() >= vm_inner.vcpu_list.len() {
             vm_inner.vcpu_list.push(vcpu);
         } else {
-            println!("VM[{}] insert VCPU {}", vm_inner.id, vcpu.id());
+            println!("VM[{}] insert VCPU {}", self.id, vcpu.id());
             vm_inner.vcpu_list.insert(vcpu.id(), vcpu);
         }
     }
@@ -320,10 +324,10 @@ impl Vm {
         if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 && vm_inner.cpu_num < cfg_cpu_num {
             // vm.vcpu(0) must be the VM's master vcpu
             let trgt_id = if cpu_id == cfg_master
-                || (vm_if_get_cpu_id(vm_inner.id).is_none() && vm_inner.cpu_num == cfg_cpu_num - 1)
+                || (vm_if_get_cpu_id(self.id).is_none() && vm_inner.cpu_num == cfg_cpu_num - 1)
             {
                 0
-            } else if vm_if_get_cpu_id(vm_inner.id).is_some() {
+            } else if vm_if_get_cpu_id(self.id).is_some() {
                 // VM has master
                 cfg_cpu_num - vm_inner.cpu_num
             } else {
@@ -334,7 +338,7 @@ impl Vm {
                 None => None,
                 Some(vcpu) => {
                     if vcpu.id() == 0 {
-                        vm_if_set_cpu_id(vm_inner.id, cpu_id);
+                        vm_if_set_cpu_id(self.id, cpu_id);
                     }
                     vm_inner.cpu_num += 1;
                     vm_inner.ncpu |= 1 << cpu_id;
@@ -375,7 +379,7 @@ impl Vm {
         match &vm_inner.pt {
             Some(pt) => pt.pt_map_range(ipa, len, pa, pte, map_block),
             None => {
-                panic!("Vm::pt_map_range: vm{} pt is empty", vm_inner.id);
+                panic!("Vm::pt_map_range: vm{} pt is empty", self.id);
             }
         }
     }
@@ -385,7 +389,7 @@ impl Vm {
         match &vm_inner.pt {
             Some(pt) => pt.pt_unmap_range(ipa, len, map_block),
             None => {
-                panic!("Vm::pt_umnmap_range: vm{} pt is empty", vm_inner.id);
+                panic!("Vm::pt_umnmap_range: vm{} pt is empty", self.id);
             }
         }
     }
@@ -396,7 +400,7 @@ impl Vm {
         match &vm_inner.pt {
             Some(pt) => pt.access_permission(ipa, PAGE_SIZE, ap),
             None => {
-                panic!("pt_set_access_permission: vm{} pt is empty", vm_inner.id);
+                panic!("pt_set_access_permission: vm{} pt is empty", self.id);
             }
         }
     }
@@ -411,7 +415,7 @@ impl Vm {
                 }
             }
             None => {
-                panic!("Vm::read_only: vm{} pt is empty", vm_inner.id);
+                panic!("Vm::read_only: vm{} pt is empty", self.id);
             }
         }
     }
@@ -426,7 +430,7 @@ impl Vm {
         match &vm_inner.pt {
             Some(pt) => pt.base_pa(),
             None => {
-                panic!("Vm::pt_dir: vm{} pt is empty", vm_inner.id);
+                panic!("Vm::pt_dir: vm{} pt is empty", self.id);
             }
         }
     }
@@ -435,7 +439,7 @@ impl Vm {
         let vm_inner = self.inner.lock();
         match &vm_inner.pt {
             Some(pt) => pt.ipa2pa(ipa),
-            None => panic!("Vm::ipa2pa: vm{} pt is empty", vm_inner.id),
+            None => panic!("Vm::ipa2pa: vm{} pt is empty", self.id),
         }
     }
 
@@ -444,9 +448,9 @@ impl Vm {
         vm_inner.cpu_num
     }
 
+    #[inline]
     pub fn id(&self) -> usize {
-        let vm_inner = self.inner.lock();
-        vm_inner.id
+        self.id
     }
 
     pub fn config(&self) -> VmConfigEntry {
@@ -472,7 +476,7 @@ impl Vm {
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
             Some(EmuDevs::Vgic(vgic)) => vgic.clone(),
             _ => {
-                panic!("vm{} cannot find vgic", vm_inner.id);
+                panic!("vm{} cannot find vgic", self.id);
             }
         }
     }
@@ -638,7 +642,6 @@ impl Drop for VmColorPaInfo {
 }
 
 struct VmInner {
-    pub id: usize,
     pub ready: bool,
     pub config: VmConfigEntry,
     // memory config
@@ -670,9 +673,8 @@ struct VmInner {
 }
 
 impl VmInner {
-    fn new(id: usize, config: VmConfigEntry) -> VmInner {
+    fn new(config: VmConfigEntry) -> VmInner {
         VmInner {
-            id,
             ready: false,
             config,
             pt: None,
