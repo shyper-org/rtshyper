@@ -5,7 +5,7 @@ use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::config::vm_cfg_entry;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
-    vm_if_set_type, vm_ipa2hva, vm_if_get_type, vm_id_list,
+    vm_ipa2hva, vm_id_list,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -48,7 +48,6 @@ fn vmm_push_vm(vm_id: usize) {
             return;
         }
     };
-    vm_if_set_type(vm_id, vm_cfg.os_type);
     if push_vm(vm_id, vm_cfg).is_err() {
         error!("push_vm() error, vm_id = {vm_id}");
     }
@@ -264,7 +263,7 @@ pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
         };
         let vm_cfg = vm.config();
         // Get VM type.
-        let vm_type = vm_if_get_type(vmid);
+        let vm_type = vm.vm_type();
         // Get VM State.
         let vm_state = vm_if_get_state(vmid);
 
@@ -273,7 +272,7 @@ pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
         vm_info.info_list[idx].vm_state = vm_state as u32;
 
         // From Rust to C: CString represents an owned, C-friendly string
-        let vm_name_cstring = CString::new(vm_cfg.name).unwrap();
+        let vm_name_cstring = CString::new(vm_cfg.name.clone()).unwrap();
         let vm_name_with_null = vm_name_cstring.to_bytes_with_nul();
         // ensure that the slice length is equal
         vm_info.info_list[idx].vm_name[..vm_name_with_null.len()].copy_from_slice(vm_name_with_null);

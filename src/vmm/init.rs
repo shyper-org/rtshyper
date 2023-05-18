@@ -12,7 +12,7 @@ use crate::dtb::create_fdt;
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     cpu_idle, current_cpu, iommmu_vm_init, shyper_init, vm_if_init_mem_map, VmType, iommu_add_device,
-    mem_region_alloc_colors, ColorMemRegion, count_missing_num, Vcpu, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
+    mem_region_alloc_colors, ColorMemRegion, count_missing_num, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
 };
 use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
@@ -393,24 +393,16 @@ pub(super) fn vmm_setup_config(vm_id: usize) {
     info!("VM {} id {} init ok", vm.id(), vm.config().name);
 }
 
-fn vmm_alloc_vcpu(vm: &Vm) {
-    for i in 0..vm.config().cpu_num() {
-        let vcpu = Vcpu::new(vm, i);
-        vm.push_vcpu(vcpu);
-    }
-
+fn vmm_init_cpu(vm: &Vm) {
+    let vm_id = vm.id();
+    println!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
+    vm.init_vcpu_list();
     println!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
         vm.id(),
         vm.config().cpu_num(),
         vm.config().cpu_allocated_bitmap()
     );
-}
-
-fn vmm_init_cpu(vm: &Vm) {
-    let vm_id = vm.id();
-    println!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
-    vmm_alloc_vcpu(vm);
 
     let mut cpu_allocate_bitmap = vm.config().cpu_allocated_bitmap();
     let mut target_cpu_id = 0;

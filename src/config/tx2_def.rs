@@ -228,13 +228,13 @@ pub fn mvm_config_init() {
         String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/sda1 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=5\0"),
 
-        image: Arc::new(Mutex::new(VmImageConfig {
+        image: Arc::new(VmImageConfig {
             kernel_img_name: Some("L4T"),
             kernel_load_ipa: 0xa0080000,
             kernel_entry_point: 0xa0080000,
             device_tree_load_ipa: 0xa0000000,
             ramdisk_load_ipa: 0,
-        })),
+        }),
         memory: Arc::new(Mutex::new(VmMemoryConfig {
             region: vm_region,
             colors: HYPERVISOR_COLORS.get().unwrap().clone(),

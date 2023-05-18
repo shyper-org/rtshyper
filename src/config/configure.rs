@@ -138,8 +138,8 @@ pub struct VmConfigEntry {
     pub name: String,
     pub os_type: VmType,
     pub cmdline: String,
+    pub image: Arc<VmImageConfig>,
     // Following config can be modified during configuration.
-    pub image: Arc<Mutex<VmImageConfig>>,
     pub memory: Arc<Mutex<VmMemoryConfig>>,
     pub cpu: Arc<Mutex<VmCpuConfig>>,
     pub vm_emu_dev_confg: Arc<Mutex<VmEmulatedDeviceConfigList>>,
@@ -162,11 +162,11 @@ impl VmConfigEntry {
             name,
             os_type: VmType::from(vm_type),
             cmdline,
-            image: Arc::new(Mutex::new(VmImageConfig::new(
+            image: Arc::new(VmImageConfig::new(
                 kernel_load_ipa,
                 device_tree_load_ipa,
                 ramdisk_load_ipa,
-            ))),
+            )),
             memory: Arc::new(Mutex::new(VmMemoryConfig::default())),
             cpu: Arc::new(Mutex::new(VmCpuConfig::default())),
             vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList::default())),
@@ -185,28 +185,23 @@ impl VmConfigEntry {
     }
 
     pub fn kernel_img_name(&self) -> Option<&'static str> {
-        let img_cfg = self.image.lock();
-        img_cfg.kernel_img_name
+        self.image.kernel_img_name
     }
 
     pub fn kernel_load_ipa(&self) -> usize {
-        let img_cfg = self.image.lock();
-        img_cfg.kernel_load_ipa
+        self.image.kernel_load_ipa
     }
 
     pub fn kernel_entry_point(&self) -> usize {
-        let img_cfg = self.image.lock();
-        img_cfg.kernel_entry_point
+        self.image.kernel_entry_point
     }
 
     pub fn device_tree_load_ipa(&self) -> usize {
-        let img_cfg = self.image.lock();
-        img_cfg.device_tree_load_ipa
+        self.image.device_tree_load_ipa
     }
 
     pub fn ramdisk_load_ipa(&self) -> usize {
-        let img_cfg = self.image.lock();
-        img_cfg.ramdisk_load_ipa
+        self.image.ramdisk_load_ipa
     }
 
     pub fn memory_region(&self) -> Vec<VmRegion> {

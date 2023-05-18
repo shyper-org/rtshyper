@@ -7,8 +7,7 @@ use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_
 use crate::device::EmuDevs;
 use crate::device::VirtioIov;
 use crate::kernel::{
-    active_vm, active_vm_id, current_cpu, vm_if_get_cpu_id, vm_if_set_mem_map_bit, vm_ipa2hva, VmType, vm_if_get_type,
-    vm_id_list,
+    active_vm, active_vm_id, current_cpu, vm_if_get_cpu_id, vm_if_set_mem_map_bit, vm_ipa2hva, VmType, vm_id_list,
 };
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
@@ -440,7 +439,7 @@ fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
         if vm_id == cur_vm_id {
             continue;
         }
-        if vm_if_get_type(vm_id) != VmType::VmTOs {
+        if vm(vm_id).unwrap().vm_type() != VmType::VmTOs {
             continue;
         }
         if !ethernet_send_to(vm_id, tx_iov.clone(), len) {

@@ -69,16 +69,6 @@ pub fn vm_if_get_state(vm_id: usize) -> VmState {
     vm_if.state
 }
 
-pub fn vm_if_set_type(vm_id: usize, vm_type: VmType) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.vm_type = vm_type;
-}
-
-pub fn vm_if_get_type(vm_id: usize) -> VmType {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.vm_type
-}
-
 fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.master_cpu_id.call_once(|| master_cpu_id);
@@ -166,7 +156,6 @@ impl From<usize> for VmType {
 pub struct VmInterface {
     master_cpu_id: Once<usize>,
     state: VmState,
-    vm_type: VmType,
     ivc_arg: usize,
     ivc_arg_ptr: usize,
     mem_map: Option<FlexBitmap>,
@@ -178,7 +167,6 @@ impl VmInterface {
         VmInterface {
             master_cpu_id: Once::new(),
             state: VmState::Pending,
-            vm_type: VmType::VmTBma,
             ivc_arg: 0,
             ivc_arg_ptr: 0,
             mem_map: None,
@@ -189,7 +177,6 @@ impl VmInterface {
     fn reset(&mut self) {
         self.master_cpu_id = Once::new();
         self.state = VmState::Pending;
-        self.vm_type = VmType::VmTBma;
         self.ivc_arg = 0;
         self.ivc_arg_ptr = 0;
         self.mem_map = None;
@@ -207,45 +194,44 @@ impl VmInterface {
 // const HCR_EL2_INIT_VAL: u64 = 0x80080019;
 
 #[derive(Clone)]
-pub struct Vm {
-    id: usize,
-    inner: Arc<Mutex<VmInner>>,
+pub struct Vm(Arc<VmInner>);
+
+pub(super) struct WeakVm(Weak<VmInner>);
+
+struct VmInner {
+    inner_const: VmInnerConst,
+    inner_mut: Mutex<VmInnerMut>,
 }
 
-#[derive(Clone)]
-pub struct WeakVm {
+struct VmInnerConst {
     id: usize,
-    inner: Weak<Mutex<VmInner>>,
+    config: VmConfigEntry,
 }
 
 impl WeakVm {
     pub fn get_vm(&self) -> Option<Vm> {
-        Weak::upgrade(&self.inner).map(|inner| Vm { id: self.id, inner })
+        self.0.upgrade().map(|inner| Vm(inner))
     }
 }
 
-#[allow(dead_code)]
 impl Vm {
-    pub fn get_weak(&self) -> WeakVm {
-        WeakVm {
-            id: self.id,
-            inner: Arc::downgrade(&self.inner),
-        }
+    pub(super) fn get_weak(&self) -> WeakVm {
+        WeakVm(Arc::downgrade(&self.0))
     }
 
-    pub fn new(id: usize, config: VmConfigEntry) -> Vm {
-        Vm {
-            id,
-            inner: Arc::new(Mutex::new(VmInner::new(config))),
-        }
+    pub fn new(id: usize, config: VmConfigEntry) -> Self {
+        Self(Arc::new(VmInner {
+            inner_const: VmInnerConst { id, config },
+            inner_mut: Mutex::new(VmInnerMut::new()),
+        }))
     }
 
     pub fn init_intc_mode(&self, emu: bool) {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         for vcpu in &vm_inner.vcpu_list {
             info!(
                 "vm {} vcpu {} set {} hcr",
-                self.id,
+                self.id(),
                 vcpu.id(),
                 if emu { "emu" } else { "partial passthrough" }
             );
@@ -261,37 +247,33 @@ impl Vm {
     }
 
     pub fn set_iommu_ctx_id(&self, id: usize) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         vm_inner.iommu_ctx_id = Some(id);
     }
 
     pub fn iommu_ctx_id(&self) -> usize {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match vm_inner.iommu_ctx_id {
             None => {
-                panic!("vm {} do not have iommu context bank", self.id);
+                panic!("vm {} do not have iommu context bank", self.id());
             }
             Some(id) => id,
         }
     }
 
     pub fn med_blk_id(&self) -> usize {
-        let vm_inner = self.inner.lock();
-        match vm_inner.config.mediated_block_index() {
+        match self.config().mediated_block_index() {
             None => {
-                panic!("vm {} do not have mediated blk", self.id);
+                panic!("vm {} do not have mediated blk", self.id());
             }
             Some(idx) => idx,
         }
     }
 
     pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match vm_inner.vcpu_list.get(index).cloned() {
-            Some(vcpu) => {
-                assert_eq!(index, vcpu.id());
-                Some(vcpu)
-            }
+            Some(vcpu) => Some(vcpu),
             None => {
                 println!(
                     "vcpu idx {} is to large than vcpu_list len {}",
@@ -303,13 +285,10 @@ impl Vm {
         }
     }
 
-    pub fn push_vcpu(&self, vcpu: Vcpu) {
-        let mut vm_inner = self.inner.lock();
-        if vcpu.id() >= vm_inner.vcpu_list.len() {
-            vm_inner.vcpu_list.push(vcpu);
-        } else {
-            println!("VM[{}] insert VCPU {}", self.id, vcpu.id());
-            vm_inner.vcpu_list.insert(vcpu.id(), vcpu);
+    pub fn init_vcpu_list(&self) {
+        let mut vm_inner = self.0.inner_mut.lock();
+        for id in 0..self.config().cpu_num() {
+            vm_inner.vcpu_list.push(Vcpu::new(self, id));
         }
     }
 
@@ -320,14 +299,14 @@ impl Vm {
         // make sure that vcpu assign is executed sequentially, otherwise
         // the PCPUs may found that vm.cpu_num() == 0 at the same time and
         // if cfg_master is not setted, they will not set master vcpu for VM
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         if (cfg_cpu_allocate_bitmap & (1 << cpu_id)) != 0 && vm_inner.cpu_num < cfg_cpu_num {
             // vm.vcpu(0) must be the VM's master vcpu
             let trgt_id = if cpu_id == cfg_master
-                || (vm_if_get_cpu_id(self.id).is_none() && vm_inner.cpu_num == cfg_cpu_num - 1)
+                || (vm_if_get_cpu_id(self.id()).is_none() && vm_inner.cpu_num == cfg_cpu_num - 1)
             {
                 0
-            } else if vm_if_get_cpu_id(self.id).is_some() {
+            } else if vm_if_get_cpu_id(self.id()).is_some() {
                 // VM has master
                 cfg_cpu_num - vm_inner.cpu_num
             } else {
@@ -338,7 +317,7 @@ impl Vm {
                 None => None,
                 Some(vcpu) => {
                     if vcpu.id() == 0 {
-                        vm_if_set_cpu_id(self.id, cpu_id);
+                        vm_if_set_cpu_id(self.id(), cpu_id);
                     }
                     vm_inner.cpu_num += 1;
                     vm_inner.ncpu |= 1 << cpu_id;
@@ -351,7 +330,7 @@ impl Vm {
     }
 
     pub fn set_emu_devs(&self, idx: usize, emu: EmuDevs) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         if idx < vm_inner.emu_devs.len() {
             if vm_inner.emu_devs[idx].is_none() {
                 vm_inner.emu_devs[idx] = Some(emu);
@@ -365,49 +344,52 @@ impl Vm {
     }
 
     pub fn set_intc_dev_id(&self, intc_dev_id: usize) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         vm_inner.intc_dev_id = intc_dev_id;
     }
 
     pub fn set_int_bit_map(&self, int_id: usize) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         vm_inner.int_bitmap.set(int_id);
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize, map_block: bool) {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.pt {
             Some(pt) => pt.pt_map_range(ipa, len, pa, pte, map_block),
             None => {
-                panic!("Vm::pt_map_range: vm{} pt is empty", self.id);
+                panic!("Vm::pt_map_range: vm{} pt is empty", self.id());
             }
         }
     }
 
+    #[allow(dead_code)]
     pub fn pt_unmap_range(&self, ipa: usize, len: usize, map_block: bool) {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.pt {
             Some(pt) => pt.pt_unmap_range(ipa, len, map_block),
             None => {
-                panic!("Vm::pt_umnmap_range: vm{} pt is empty", self.id);
+                panic!("Vm::pt_umnmap_range: vm{} pt is empty", self.id());
             }
         }
     }
 
     // ap: access permission
+    #[allow(dead_code)]
     pub fn pt_set_access_permission(&self, ipa: usize, ap: usize) -> (usize, usize) {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.pt {
             Some(pt) => pt.access_permission(ipa, PAGE_SIZE, ap),
             None => {
-                panic!("pt_set_access_permission: vm{} pt is empty", self.id);
+                panic!("pt_set_access_permission: vm{} pt is empty", self.id());
             }
         }
     }
 
+    #[allow(dead_code)]
     pub fn pt_read_only(&self) {
         let config = self.config();
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.pt {
             Some(pt) => {
                 for region in config.memory_region().iter() {
@@ -415,47 +397,52 @@ impl Vm {
                 }
             }
             None => {
-                panic!("Vm::read_only: vm{} pt is empty", self.id);
+                panic!("Vm::read_only: vm{} pt is empty", self.id());
             }
         }
     }
 
     pub fn set_pt(&self, pt_dir_frame: PageFrame) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         vm_inner.pt = Some(PageTable::new(pt_dir_frame, true))
     }
 
     pub fn pt_dir(&self) -> usize {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.pt {
             Some(pt) => pt.base_pa(),
             None => {
-                panic!("Vm::pt_dir: vm{} pt is empty", self.id);
+                panic!("Vm::pt_dir: vm{} pt is empty", self.id());
             }
         }
     }
 
     pub fn ipa2pa(&self, ipa: usize) -> Option<usize> {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.pt {
             Some(pt) => pt.ipa2pa(ipa),
-            None => panic!("Vm::ipa2pa: vm{} pt is empty", self.id),
+            None => panic!("Vm::ipa2pa: vm{} pt is empty", self.id()),
         }
     }
 
     pub fn cpu_num(&self) -> usize {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner.cpu_num
     }
 
     #[inline]
     pub fn id(&self) -> usize {
-        self.id
+        self.0.inner_const.id
     }
 
-    pub fn config(&self) -> VmConfigEntry {
-        let vm_inner = self.inner.lock();
-        vm_inner.config.clone()
+    #[inline]
+    pub fn config(&self) -> &VmConfigEntry {
+        &self.0.inner_const.config
+    }
+
+    #[inline]
+    pub fn vm_type(&self) -> VmType {
+        self.config().os_type
     }
 
     pub fn reset_mem_regions(&self) {
@@ -467,22 +454,22 @@ impl Vm {
     }
 
     pub fn append_color_regions(&self, mut regions: Vec<ColorMemRegion>) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         vm_inner.color_pa_info.color_pa_region.append(&mut regions);
     }
 
     pub fn vgic(&self) -> Arc<Vgic> {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
             Some(EmuDevs::Vgic(vgic)) => vgic.clone(),
             _ => {
-                panic!("vm{} cannot find vgic", self.id);
+                panic!("vm{} cannot find vgic", self.id());
             }
         }
     }
 
     pub fn has_vgic(&self) -> bool {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         matches!(
             vm_inner.emu_devs.get(vm_inner.intc_dev_id),
             Some(Some(EmuDevs::Vgic(_)))
@@ -490,12 +477,12 @@ impl Vm {
     }
 
     pub fn emu_dev(&self, dev_id: usize) -> Option<EmuDevs> {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner.emu_devs[dev_id].clone()
     }
 
     pub fn emu_net_dev(&self, id: usize) -> Option<EmuDevs> {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner
             .emu_devs
             .iter()
@@ -507,7 +494,8 @@ impl Vm {
 
     // Get console dev by ipa.
     pub fn emu_console_dev(&self, ipa: usize) -> Option<EmuDevs> {
-        self.inner
+        self.0
+            .inner_mut
             .lock()
             .emu_devs
             .iter()
@@ -517,18 +505,18 @@ impl Vm {
     }
 
     pub fn ncpu(&self) -> usize {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner.ncpu
     }
 
     pub fn has_interrupt(&self, int_id: usize) -> bool {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner.int_bitmap.get(int_id) != 0
     }
 
     pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
         // println!("vcpuid_to_pcpuid");
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         if vcpuid < vm_inner.cpu_num {
             let vcpu = vm_inner.vcpu_list[vcpuid].clone();
             drop(vm_inner);
@@ -539,7 +527,7 @@ impl Vm {
     }
 
     pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         for vcpuid in 0..vm_inner.cpu_num {
             if vm_inner.vcpu_list[vcpuid].phys_id() == pcpuid {
                 return Ok(vcpuid);
@@ -575,27 +563,27 @@ impl Vm {
     }
 
     pub fn show_pagetable(&self, ipa: usize) {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner.pt.as_ref().unwrap().show_pt(ipa);
     }
 
     pub fn ready(&self) -> bool {
-        let vm_inner = self.inner.lock();
+        let vm_inner = self.0.inner_mut.lock();
         vm_inner.ready
     }
 
     pub fn set_ready(&self, ready: bool) {
-        let mut vm_inner = self.inner.lock();
+        let mut vm_inner = self.0.inner_mut.lock();
         vm_inner.ready = ready;
     }
 
     pub fn share_mem_base(&self) -> usize {
-        let inner = self.inner.lock();
+        let inner = self.0.inner_mut.lock();
         inner.share_mem_base
     }
 
     pub fn add_share_mem_base(&self, len: usize) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner_mut.lock();
         inner.share_mem_base += len;
     }
 
@@ -606,7 +594,7 @@ impl Vm {
     // virtual count is recorded when the VM is pending (runnning vcpu = 0)
     // Only used in Vcpu::context_vm_store
     pub(super) fn update_vtimer(&self) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner_mut.lock();
         // println!(">>> update_vtimer: VM[{}] running {}", inner.id, inner.running);
         inner.running -= 1;
         if inner.running == 0 {
@@ -617,7 +605,7 @@ impl Vm {
 
     // Only used in Vcpu::context_vm_restore
     pub(super) fn update_vtimer_offset(&self) -> usize {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner_mut.lock();
         // println!(">>> update_vtimer_offset: VM[{}] running {}", inner.id, inner.running);
         if inner.running == 0 {
             inner.vtimer_offset = timer_arch_get_counter() - inner.vtimer;
@@ -641,9 +629,8 @@ impl Drop for VmColorPaInfo {
     }
 }
 
-struct VmInner {
+struct VmInnerMut {
     pub ready: bool,
-    pub config: VmConfigEntry,
     // memory config
     pub pt: Option<PageTable>,
     pub color_pa_info: VmColorPaInfo,
@@ -672,11 +659,10 @@ struct VmInner {
     vtimer: usize,
 }
 
-impl VmInner {
-    fn new(config: VmConfigEntry) -> VmInner {
-        VmInner {
+impl VmInnerMut {
+    fn new() -> Self {
+        Self {
             ready: false,
-            config,
             pt: None,
             color_pa_info: VmColorPaInfo::default(),
 

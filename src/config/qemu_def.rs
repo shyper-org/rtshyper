@@ -103,7 +103,7 @@ pub fn mvm_config_init() {
         name: String::from("supervisor"),
         os_type: VmType::VmTOs,
         cmdline: String::from("earlycon console=ttyAMA0 root=/dev/vda rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        image: Arc::new(Mutex::new(VmImageConfig {
+        image: Arc::new(VmImageConfig {
             kernel_img_name: Some("Image"),
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
@@ -112,7 +112,7 @@ pub fn mvm_config_init() {
             // ramdisk_filename: Some("initrd.gz"),
             // ramdisk_load_ipa: 0x53000000,
             ramdisk_load_ipa: 0,
-        })),
+        }),
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 4,
             allocate_bitmap: 0b1111,
