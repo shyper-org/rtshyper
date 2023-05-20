@@ -1,10 +1,13 @@
+use core::cell::Cell;
+use core::mem::size_of;
+
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::{ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, VmContext, VM_IPA_SIZE};
 use crate::board::{PlatOperation, Platform};
+use crate::config::VmConfigEntry;
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::kernel::{active_vcpu_id, active_vm_id};
 use crate::util::memcpy_safe;
@@ -19,6 +22,7 @@ pub enum VcpuState {
 }
 
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct Vcpu(pub Arc<VcpuInner>);
 
 pub struct VcpuInner {
@@ -27,23 +31,27 @@ pub struct VcpuInner {
 }
 
 struct VcpuConst {
-    id: usize,  // vcpu_id
-    vm: WeakVm, // weak pointer to related Vm
+    id: usize,            // vcpu_id
+    vm: WeakVm,           // weak pointer to related Vm
+    phys_id: Cell<usize>, // related physical CPU id
 }
 
 #[allow(dead_code)]
 impl Vcpu {
-    pub fn new(vm: &Vm, vcpu_id: usize) -> Self {
-        let this = Self(Arc::new(VcpuInner {
+    pub(super) fn new(vm: WeakVm, vcpu_id: usize) -> Self {
+        Self(Arc::new(VcpuInner {
             inner_const: VcpuConst {
                 id: vcpu_id,
-                vm: vm.get_weak(),
+                vm,
+                phys_id: Cell::new(0),
             },
             inner_mut: Mutex::new(VcpuInnerMut::new()),
-        }));
-        crate::arch::vcpu_arch_init(vm, &this);
-        this.reset_context();
-        this
+        }))
+    }
+
+    pub(super) fn init(&self, config: &VmConfigEntry) {
+        crate::arch::vcpu_arch_init(config, self);
+        self.reset_context();
     }
 
     pub fn shutdown(&self) {
@@ -124,10 +132,9 @@ impl Vcpu {
         }
     }
 
-    pub fn set_phys_id(&self, phys_id: usize) {
-        let mut inner = self.0.inner_mut.lock();
+    pub(super) fn set_phys_id(&self, phys_id: usize) {
         println!("set vcpu {} phys id {}", self.id(), phys_id);
-        inner.phys_id = phys_id;
+        self.0.inner_const.phys_id.set(phys_id);
     }
 
     pub fn set_gich_ctlr(&self, ctlr: u32) {
@@ -160,9 +167,9 @@ impl Vcpu {
         self.0.inner_const.vm.get_vm()
     }
 
+    #[inline]
     pub fn phys_id(&self) -> usize {
-        let inner = self.0.inner_mut.lock();
-        inner.phys_id
+        self.0.inner_const.phys_id.get()
     }
 
     pub fn vm_id(&self) -> usize {
@@ -239,8 +246,7 @@ impl Vcpu {
             None => {}
             Some(vm) => {
                 let mut inner = self.0.inner_mut.lock();
-                let int_list = inner.int_list.clone();
-                inner.int_list.clear();
+                let int_list = core::mem::take(&mut inner.int_list);
                 drop(inner);
                 for int in int_list {
                     // println!("schedule: inject int {} for vm {}", int, vm.id());
@@ -252,7 +258,6 @@ impl Vcpu {
 }
 
 pub struct VcpuInnerMut {
-    pub phys_id: usize,
     pub state: VcpuState,
     pub int_list: Vec<usize>,
     pub vcpu_ctx: ContextFrame,
@@ -263,7 +268,6 @@ pub struct VcpuInnerMut {
 impl VcpuInnerMut {
     pub fn new() -> Self {
         Self {
-            phys_id: 0,
             state: VcpuState::Inv,
             int_list: vec![],
             vcpu_ctx: ContextFrame::default(),

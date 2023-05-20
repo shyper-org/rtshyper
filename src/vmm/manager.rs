@@ -39,18 +39,16 @@ fn vmm_shutdown_secondary_vm() {
  *
  * @param[in]  vm_id: new added VM id.
  */
-fn vmm_push_vm(vm_id: usize) {
+fn vmm_push_vm(vm_id: usize) -> Result<Vm, ()> {
     info!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
     let vm_cfg = match vm_cfg_entry(vm_id) {
         Some(vm_cfg) => vm_cfg,
         None => {
             println!("vmm_push_vm: failed to find config for vm {}", vm_id);
-            return;
+            return Err(());
         }
     };
-    if push_vm(vm_id, vm_cfg).is_err() {
-        error!("push_vm() error, vm_id = {vm_id}");
-    }
+    push_vm(vm_id, vm_cfg)
 }
 
 /* Init VM before boot.
@@ -61,9 +59,11 @@ fn vmm_push_vm(vm_id: usize) {
 pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
     if current_cpu().id == 0 || (active_vm_id() == 0 && active_vm_id() != vm_id) {
-        vmm_push_vm(vm_id);
-
-        vmm_setup_config(vm_id);
+        if let Ok(vm) = vmm_push_vm(vm_id) {
+            vmm_setup_config(vm);
+        } else {
+            error!("VM[{}] alloc failed", vm_id);
+        }
     } else {
         error!(
             "VM[{}] Core {} should not init VM [{}]",
@@ -194,7 +194,7 @@ pub fn vmm_reboot() {
     vm_if_set_ivc_arg_ptr(vm.id(), 0);
 
     crate::arch::interrupt_arch_clear();
-    crate::arch::vcpu_arch_init(&vm, &vm.vcpu(0).unwrap());
+    crate::arch::vcpu_arch_init(vm.config(), vm.vcpu(0).unwrap());
     vcpu.reset_context();
 
     vmm_load_image_from_mvm(&vm);

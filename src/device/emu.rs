@@ -3,13 +3,13 @@ use core::ops::Range;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use spin::Mutex;
+use spin::RwLock;
 
 use crate::arch::Vgic;
 use crate::device::VirtioMmio;
 use crate::kernel::current_cpu;
 
-static EMU_DEVS_LIST: Mutex<Vec<EmuDevEntry>> = Mutex::new(Vec::new());
+static EMU_DEVS_LIST: RwLock<Vec<EmuDevEntry>> = RwLock::new(Vec::new());
 
 #[derive(Clone)]
 pub enum EmuDevs {
@@ -91,7 +91,7 @@ type EmuDevHandler = fn(usize, &EmuContext) -> bool;
 // TO CHECK
 pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     let ipa = emu_ctx.address;
-    let emu_devs_list = EMU_DEVS_LIST.lock();
+    let emu_devs_list = EMU_DEVS_LIST.read();
 
     let active_vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     for emu_dev in &*emu_devs_list {
@@ -111,7 +111,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
 }
 
 pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize, handler: EmuDevHandler) {
-    let mut emu_devs_list = EMU_DEVS_LIST.lock();
+    let mut emu_devs_list = EMU_DEVS_LIST.write();
     for emu_dev in &*emu_devs_list {
         if vm_id != emu_dev.vm_id {
             continue;
@@ -131,7 +131,7 @@ pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize
 }
 
 pub fn emu_remove_dev(vm_id: usize, dev_id: usize, address: usize, size: usize) {
-    let mut emu_devs_list = EMU_DEVS_LIST.lock();
+    let mut emu_devs_list = EMU_DEVS_LIST.write();
     for (idx, emu_dev) in emu_devs_list.iter().enumerate() {
         if vm_id == emu_dev.vm_id && emu_dev.ipa == address && emu_dev.id == dev_id && emu_dev.size == size {
             emu_devs_list.remove(idx);
@@ -144,11 +144,11 @@ pub fn emu_remove_dev(vm_id: usize, dev_id: usize, address: usize, size: usize) 
     );
 }
 
-static EMU_REGS_LIST: Mutex<Vec<EmuRegEntry>> = Mutex::new(Vec::new());
+static EMU_REGS_LIST: RwLock<Vec<EmuRegEntry>> = RwLock::new(Vec::new());
 
 pub fn emu_reg_handler(emu_ctx: &EmuContext) -> bool {
     let address = emu_ctx.address;
-    let emu_regs_list = EMU_REGS_LIST.lock();
+    let emu_regs_list = EMU_REGS_LIST.read();
 
     let active_vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     let vm_id = active_vcpu.vm_id();
@@ -170,7 +170,7 @@ pub fn emu_reg_handler(emu_ctx: &EmuContext) -> bool {
 }
 
 pub fn emu_register_reg(emu_type: EmuRegType, address: usize, handler: EmuRegHandler) {
-    let mut emu_regs_list = EMU_REGS_LIST.lock();
+    let mut emu_regs_list = EMU_REGS_LIST.write();
 
     for emu_reg in emu_regs_list.iter() {
         if address == emu_reg.addr {

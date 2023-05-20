@@ -1,9 +1,10 @@
+use core::cell::Cell;
+
 use alloc::collections::BTreeMap;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
-use spin::once::Once;
 
-use spin::Mutex;
+use spin::{Mutex, Once};
 
 use crate::arch::{PAGE_SIZE, PTE_S2_FIELD_AP_RO, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
@@ -194,8 +195,15 @@ impl VmInterface {
 // const HCR_EL2_INIT_VAL: u64 = 0x80080019;
 
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct Vm(Arc<VmInner>);
 
+// SAFETY: VmInnerConst is only mutable set when setup on one core
+// now only intc_dev_id is modified after Vm constructed
+unsafe impl Send for Vm {}
+
+// Weak pointer used for `struct Vcpu` to avoid "Reference Cycle"
+#[repr(transparent)]
 pub(super) struct WeakVm(Weak<VmInner>);
 
 struct VmInner {
@@ -206,29 +214,42 @@ struct VmInner {
 struct VmInnerConst {
     id: usize,
     config: VmConfigEntry,
+    vcpu_list: Vec<Vcpu>,
+    intc_dev_id: Cell<usize>,
 }
 
 impl WeakVm {
     pub fn get_vm(&self) -> Option<Vm> {
-        self.0.upgrade().map(|inner| Vm(inner))
+        self.0.upgrade().map(Vm)
     }
 }
 
 impl Vm {
-    pub(super) fn get_weak(&self) -> WeakVm {
-        WeakVm(Arc::downgrade(&self.0))
-    }
-
     pub fn new(id: usize, config: VmConfigEntry) -> Self {
-        Self(Arc::new(VmInner {
-            inner_const: VmInnerConst { id, config },
+        let cpu_num = config.cpu_num();
+        let this = Self(Arc::new_cyclic(|weak| VmInner {
+            inner_const: VmInnerConst {
+                id,
+                config,
+                intc_dev_id: Cell::new(0),
+                vcpu_list: {
+                    let mut vcpu_list = vec![];
+                    for id in 0..cpu_num {
+                        vcpu_list.push(Vcpu::new(WeakVm(weak.clone()), id));
+                    }
+                    vcpu_list
+                },
+            },
             inner_mut: Mutex::new(VmInnerMut::new()),
-        }))
+        }));
+        for vcpu in this.vcpu_list() {
+            vcpu.init(this.config());
+        }
+        this
     }
 
     pub fn init_intc_mode(&self, emu: bool) {
-        let vm_inner = self.0.inner_mut.lock();
-        for vcpu in &vm_inner.vcpu_list {
+        for vcpu in self.vcpu_list() {
             info!(
                 "vm {} vcpu {} set {} hcr",
                 self.id(),
@@ -270,26 +291,14 @@ impl Vm {
         }
     }
 
-    pub fn vcpu(&self, index: usize) -> Option<Vcpu> {
-        let vm_inner = self.0.inner_mut.lock();
-        match vm_inner.vcpu_list.get(index).cloned() {
-            Some(vcpu) => Some(vcpu),
-            None => {
-                println!(
-                    "vcpu idx {} is to large than vcpu_list len {}",
-                    index,
-                    vm_inner.vcpu_list.len()
-                );
-                None
-            }
-        }
+    #[inline]
+    pub fn vcpu(&self, index: usize) -> Option<&Vcpu> {
+        self.vcpu_list().get(index)
     }
 
-    pub fn init_vcpu_list(&self) {
-        let mut vm_inner = self.0.inner_mut.lock();
-        for id in 0..self.config().cpu_num() {
-            vm_inner.vcpu_list.push(Vcpu::new(self, id));
-        }
+    #[inline]
+    pub fn vcpu_list(&self) -> &[Vcpu] {
+        &self.0.inner_const.vcpu_list
     }
 
     pub fn select_vcpu2assign(&self, cpu_id: usize) -> Option<Vcpu> {
@@ -313,7 +322,7 @@ impl Vm {
                 // if master vcpu is not assigned, retain id 0 for it
                 cfg_cpu_num - vm_inner.cpu_num - 1
             };
-            match vm_inner.vcpu_list.get(trgt_id).cloned() {
+            match self.vcpu_list().get(trgt_id).cloned() {
                 None => None,
                 Some(vcpu) => {
                     if vcpu.id() == 0 {
@@ -344,8 +353,7 @@ impl Vm {
     }
 
     pub fn set_intc_dev_id(&self, intc_dev_id: usize) {
-        let mut vm_inner = self.0.inner_mut.lock();
-        vm_inner.intc_dev_id = intc_dev_id;
+        self.0.inner_const.intc_dev_id.set(intc_dev_id);
     }
 
     pub fn set_int_bit_map(&self, int_id: usize) {
@@ -460,7 +468,7 @@ impl Vm {
 
     pub fn vgic(&self) -> Arc<Vgic> {
         let vm_inner = self.0.inner_mut.lock();
-        match &vm_inner.emu_devs[vm_inner.intc_dev_id] {
+        match &vm_inner.emu_devs[self.0.inner_const.intc_dev_id.get()] {
             Some(EmuDevs::Vgic(vgic)) => vgic.clone(),
             _ => {
                 panic!("vm{} cannot find vgic", self.id());
@@ -471,7 +479,7 @@ impl Vm {
     pub fn has_vgic(&self) -> bool {
         let vm_inner = self.0.inner_mut.lock();
         matches!(
-            vm_inner.emu_devs.get(vm_inner.intc_dev_id),
+            vm_inner.emu_devs.get(self.0.inner_const.intc_dev_id.get()),
             Some(Some(EmuDevs::Vgic(_)))
         )
     }
@@ -516,10 +524,7 @@ impl Vm {
 
     pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
         // println!("vcpuid_to_pcpuid");
-        let vm_inner = self.0.inner_mut.lock();
-        if vcpuid < vm_inner.cpu_num {
-            let vcpu = vm_inner.vcpu_list[vcpuid].clone();
-            drop(vm_inner);
+        if let Some(vcpu) = self.vcpu_list().get(vcpuid) {
             Ok(vcpu.phys_id())
         } else {
             Err(())
@@ -527,10 +532,9 @@ impl Vm {
     }
 
     pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
-        let vm_inner = self.0.inner_mut.lock();
-        for vcpuid in 0..vm_inner.cpu_num {
-            if vm_inner.vcpu_list[vcpuid].phys_id() == pcpuid {
-                return Ok(vcpuid);
+        for vcpu in self.vcpu_list() {
+            if vcpu.phys_id() == pcpuid {
+                return Ok(vcpu.id());
             }
         }
         Err(())
@@ -636,12 +640,10 @@ struct VmInnerMut {
     pub color_pa_info: VmColorPaInfo,
 
     // vcpu config
-    pub vcpu_list: Vec<Vcpu>,
     pub cpu_num: usize,
     pub ncpu: usize,
 
     // interrupt
-    pub intc_dev_id: usize,
     pub int_bitmap: BitAlloc4K,
 
     // migration
@@ -666,11 +668,9 @@ impl VmInnerMut {
             pt: None,
             color_pa_info: VmColorPaInfo::default(),
 
-            vcpu_list: Vec::new(),
             cpu_num: 0,
             ncpu: 0,
 
-            intc_dev_id: 0,
             int_bitmap: BitAlloc4K::default(),
             share_mem_base: Platform::SHARE_MEM_BASE, // hard code
             iommu_ctx_id: None,
@@ -688,15 +688,15 @@ pub fn vm_id_list() -> Vec<usize> {
     VM_LIST.lock().iter().map(|vm| vm.id()).collect()
 }
 
-pub fn push_vm(id: usize, config: VmConfigEntry) -> Result<(), ()> {
+pub fn push_vm(id: usize, config: VmConfigEntry) -> Result<Vm, ()> {
     let mut vm_list = VM_LIST.lock();
-    if vm_list.iter().any(|x| x.id() == id) {
+    if id >= CONFIG_VM_NUM_MAX || vm_list.iter().any(|x| x.id() == id) {
         println!("push_vm: vm {} already exists", id);
         Err(())
     } else {
-        let vm: Vm = Vm::new(id, config);
-        vm_list.push(vm);
-        Ok(())
+        let vm = Vm::new(id, config);
+        vm_list.push(vm.clone());
+        Ok(vm)
     }
 }
 

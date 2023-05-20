@@ -51,8 +51,7 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
 }
 
 fn vmm_remove_vcpu(vm: &Vm) {
-    for idx in 0..vm.cpu_num() {
-        let vcpu = vm.vcpu(idx).unwrap();
+    for vcpu in vm.vcpu_list() {
         if vcpu.phys_id() == current_cpu().id {
             vmm_cpu_remove_vcpu(vm.id());
         } else {

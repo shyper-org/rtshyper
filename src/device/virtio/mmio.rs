@@ -167,7 +167,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id);
+            interrupt_vm_inject(&vm, vm.vcpu(0).unwrap(), int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -184,7 +184,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(&vm, &vm.vcpu(0).unwrap(), int_id);
+            interrupt_vm_inject(&vm, vm.vcpu(0).unwrap(), int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -635,7 +635,7 @@ fn virtio_mmio_cfg_access(mmio: VirtioMmio, emu_ctx: &EmuContext, offset: usize,
     }
 }
 
-pub fn emu_virtio_mmio_init(vm: &Vm, emu_dev_id: usize, emu_cfg: &VmEmulatedDeviceConfig) -> bool {
+pub fn emu_virtio_mmio_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<EmuDevs, ()> {
     let mmio = VirtioMmio::new(emu_cfg.base_ipa);
     let (virt_dev_type, emu_dev) = match emu_cfg.emu_type {
         crate::device::EmuDeviceType::EmuDeviceTVirtioBlk => {
@@ -647,15 +647,14 @@ pub fn emu_virtio_mmio_init(vm: &Vm, emu_dev_id: usize, emu_cfg: &VmEmulatedDevi
         }
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
-            return false;
+            return Err(());
         }
     };
-    vm.set_emu_devs(emu_dev_id, emu_dev);
 
     mmio.init(virt_dev_type, emu_cfg);
     mmio.virtio_queue_init(virt_dev_type);
 
-    true
+    Ok(emu_dev)
 }
 
 pub fn emu_virtio_mmio_handler(emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {

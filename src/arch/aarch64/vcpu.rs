@@ -1,11 +1,11 @@
 use cortex_a::registers::*;
 
 use crate::arch::traits::ContextFrameTrait;
-use crate::kernel::{Vcpu, Vm};
+use crate::config::VmConfigEntry;
+use crate::kernel::Vcpu;
 use crate::kernel::VmType;
 
-pub fn vcpu_arch_init(vm: &Vm, vcpu: &Vcpu) {
-    let config = vm.config();
+pub fn vcpu_arch_init(config: &VmConfigEntry, vcpu: &Vcpu) {
     let mut vcpu_inner = vcpu.0.inner_mut.lock();
     match config.os_type {
         VmType::VmTOs => {

@@ -18,7 +18,6 @@ use crate::kernel::mem_page_alloc;
 use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
-use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::access::copy_segment_to_vm;
 use crate::util::sleep;
 use crate::vmm::VmmEvent;
@@ -146,7 +145,7 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
             copy_segment_to_vm(vm, config.device_tree_load_ipa(), dtb.as_slice());
         } else {
             // Init dtb for GVM.
-            match create_fdt(&config) {
+            match create_fdt(config) {
                 Ok(dtb) => {
                     copy_segment_to_vm(vm, config.device_tree_load_ipa(), dtb.as_slice());
                 }
@@ -174,42 +173,45 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
 fn vmm_init_emulated_device(vm: &Vm) -> bool {
     let config = vm.config().emulated_device_list();
 
-    for (idx, emu_dev) in config.iter().enumerate() {
-        match emu_dev.emu_type {
+    for (idx, emu_cfg) in config.iter().enumerate() {
+        match emu_cfg.emu_type {
             EmuDeviceTGicd => {
                 vm.set_intc_dev_id(idx);
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_intc_handler);
-                emu_intc_init(vm, idx);
+                emu_register_dev(vm.id(), idx, emu_cfg.base_ipa, emu_cfg.length, emu_intc_handler);
+                let emu_dev = emu_intc_init(vm).unwrap();
+                vm.set_emu_devs(idx, emu_dev);
             }
             EmuDeviceTGPPT => {
                 vm.set_intc_dev_id(idx);
                 emu_register_dev(
                     vm.id(),
                     idx,
-                    emu_dev.base_ipa,
-                    emu_dev.length,
+                    emu_cfg.base_ipa,
+                    emu_cfg.length,
                     partial_passthrough_intc_handler,
                 );
                 partial_passthrough_intc_init(vm);
             }
             EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet => {
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_virtio_mmio_handler);
-                if !emu_virtio_mmio_init(vm, idx, emu_dev) {
+                emu_register_dev(vm.id(), idx, emu_cfg.base_ipa, emu_cfg.length, emu_virtio_mmio_handler);
+                if let Ok(emu_dev) = emu_virtio_mmio_init(emu_cfg) {
+                    vm.set_emu_devs(idx, emu_dev);
+                } else {
                     return false;
                 }
-                if emu_dev.emu_type == EmuDeviceTVirtioNet {
-                    let mac = emu_dev.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
+                if emu_cfg.emu_type == EmuDeviceTVirtioNet {
+                    let mac = emu_cfg.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
                     crate::kernel::set_mac_vmid(&mac, vm.id());
                 }
             }
             EmuDeviceTIOMMU => {
-                emu_register_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length, emu_smmu_handler);
+                emu_register_dev(vm.id(), idx, emu_cfg.base_ipa, emu_cfg.length, emu_smmu_handler);
                 if !iommmu_vm_init(vm) {
                     return false;
                 }
             }
             EmuDeviceTShyper => {
-                if !shyper_init(vm, emu_dev.base_ipa, emu_dev.length) {
+                if !shyper_init(vm, emu_cfg.base_ipa, emu_cfg.length) {
                     return false;
                 }
             }
@@ -218,15 +220,15 @@ fn vmm_init_emulated_device(vm: &Vm) -> bool {
                 return false;
             }
         }
-        if !interrupt_vm_register(vm, emu_dev.irq_id, false) {
+        if !interrupt_vm_register(vm, emu_cfg.irq_id, false) {
             return false;
         }
         info!(
             "VM {} registers emulated device: id=<{}>, name=\"{:?}\", ipa=<{:#x}>",
             vm.id(),
             idx,
-            emu_dev.emu_type,
-            emu_dev.base_ipa
+            emu_cfg.emu_type,
+            emu_cfg.base_ipa
         );
     }
 
@@ -351,26 +353,14 @@ unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
  *
  * @param[in] vm_id: target VM id to set up config.
  */
-pub(super) fn vmm_setup_config(vm_id: usize) {
-    let vm = match vm(vm_id) {
-        Some(vm) => vm,
-        None => {
-            panic!("vmm_setup_config vm id {} doesn't exist", vm_id);
-        }
-    };
-
-    let config = vm.config();
-
+pub fn vmm_setup_config(vm: Vm) {
     println!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
-        vm_id,
-        config.name,
+        vm.id(),
+        vm.config().name,
         current_cpu().id
     );
 
-    if vm_id >= CONFIG_VM_NUM_MAX {
-        panic!("vmm_setup_config: out of vm");
-    }
     vmm_init_cpu(&vm);
     if !vmm_init_memory(&vm) {
         panic!("vmm_setup_config: vmm_init_memory failed");
@@ -396,7 +386,6 @@ pub(super) fn vmm_setup_config(vm_id: usize) {
 fn vmm_init_cpu(vm: &Vm) {
     let vm_id = vm.id();
     println!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
-    vm.init_vcpu_list();
     println!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
         vm.id(),
@@ -452,7 +441,6 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
         debug!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
     }
 
-    // let cpu_config = vm(vm_id).config().cpu;
     let vm = vm(vm_id).unwrap();
     let cfg_master = vm.config().cpu_master();
     let cfg_cpu_num = vm.config().cpu_num();

@@ -188,7 +188,10 @@ pub fn psci_ipi_handler(msg: &IpiMessage) {
                     unimplemented!("PowerEvent::PsciIpiCpuOff")
                 }
                 PowerEvent::PsciIpiCpuReset => {
-                    vcpu_arch_init(&active_vm().unwrap(), current_cpu().active_vcpu.as_ref().unwrap());
+                    vcpu_arch_init(
+                        active_vm().unwrap().config(),
+                        current_cpu().active_vcpu.as_ref().unwrap(),
+                    );
                 }
             }
         }

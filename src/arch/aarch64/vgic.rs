@@ -1,3 +1,6 @@
+use core::cell::Cell;
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -16,157 +19,170 @@ use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write
 use super::gic::*;
 
 #[derive(Clone)]
-struct VgicInt {
+#[repr(transparent)]
+struct VgicInt(Arc<VgicIntInner>);
+
+struct VgicIntInner {
+    inner_const: VgicIntInnerConst,
+    inner: Mutex<VgicIntInnerMut>,
+    lock: Mutex<()>,
+}
+
+struct VgicIntInnerConst {
     id: u16,
-    inner: Arc<Mutex<VgicIntInner>>,
-    lock: Arc<Mutex<()>>,
+    hw: Cell<bool>,
 }
 
 impl VgicInt {
     fn new(id: usize) -> VgicInt {
-        VgicInt {
-            id: (id + GIC_PRIVINT_NUM) as u16,
-            inner: Arc::new(Mutex::new(VgicIntInner::new())),
-            lock: Arc::new(Mutex::new(())),
-        }
+        VgicInt(Arc::new(VgicIntInner {
+            inner_const: VgicIntInnerConst {
+                id: (id + GIC_PRIVINT_NUM) as u16,
+                hw: Cell::new(false),
+            },
+            inner: Mutex::new(VgicIntInnerMut::new()),
+            lock: Mutex::new(()),
+        }))
     }
 
     fn priv_new(id: usize, owner: Vcpu, targets: usize, enabled: bool) -> VgicInt {
-        VgicInt {
-            id: id as u16,
-            inner: Arc::new(Mutex::new(VgicIntInner::priv_new(owner, targets, enabled))),
-            lock: Arc::new(Mutex::new(())),
-        }
+        VgicInt(Arc::new(VgicIntInner {
+            inner_const: VgicIntInnerConst {
+                id: id as u16,
+                hw: Cell::new(false),
+            },
+            inner: Mutex::new(VgicIntInnerMut::priv_new(owner, targets, enabled)),
+            lock: Mutex::new(()),
+        }))
     }
 
     fn set_in_pend_state(&self, is_pend: bool) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.in_pend = is_pend;
     }
 
     fn set_in_act_state(&self, is_act: bool) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.in_act = is_act;
     }
 
     pub fn in_pend(&self) -> bool {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.in_pend
     }
 
     pub fn in_act(&self) -> bool {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.in_act
     }
 
     fn set_enabled(&self, enabled: bool) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.enabled = enabled;
     }
 
     fn set_lr(&self, lr: u16) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.lr = lr;
     }
 
     fn set_targets(&self, targets: u8) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.targets = targets;
     }
 
     fn set_prio(&self, prio: u8) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.prio = prio;
     }
 
     fn set_in_lr(&self, in_lr: bool) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.in_lr = in_lr;
     }
 
     fn set_state(&self, state: IrqState) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.state = state;
     }
 
     fn set_owner(&self, owner: Vcpu) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.owner = Some(owner);
     }
 
     fn clear_owner(&self) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         // println!("clear owner get lock");
         vgic_int.owner = None;
     }
 
     fn set_hw(&self, hw: bool) {
-        let mut vgic_int = self.inner.lock();
-        vgic_int.hw = hw;
+        self.0.inner_const.hw.set(hw);
     }
 
     fn set_cfg(&self, cfg: u8) {
-        let mut vgic_int = self.inner.lock();
+        let mut vgic_int = self.0.inner.lock();
         vgic_int.cfg = cfg;
     }
 
     fn lr(&self) -> u16 {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.lr
     }
 
     fn in_lr(&self) -> bool {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.in_lr
     }
 
     #[inline]
     fn id(&self) -> u16 {
-        self.id
+        self.0.inner_const.id
     }
 
     fn enabled(&self) -> bool {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.enabled
     }
 
     fn prio(&self) -> u8 {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.prio
     }
 
     fn targets(&self) -> u8 {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.targets
     }
 
+    #[inline]
     fn hw(&self) -> bool {
-        let vgic_int = self.inner.lock();
-        vgic_int.hw
+        self.0.inner_const.hw.get()
     }
 
     pub fn state(&self) -> IrqState {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.state
     }
 
     fn cfg(&self) -> u8 {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.cfg
     }
 
     fn owner(&self) -> Option<Vcpu> {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.owner.clone()
     }
 
     fn owner_phys_id(&self) -> Option<usize> {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.owner.as_ref().map(|owner| owner.phys_id())
     }
 
     fn owner_id(&self) -> Option<usize> {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         match &vgic_int.owner {
             Some(owner) => Some(owner.id()),
             None => {
@@ -177,17 +193,17 @@ impl VgicInt {
     }
 
     fn owner_vm_id(&self) -> Option<usize> {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.owner.as_ref().map(|owner| owner.vm_id())
     }
 
     fn owner_vm(&self) -> Vm {
-        let vgic_int = self.inner.lock();
+        let vgic_int = self.0.inner.lock();
         vgic_int.owner_vm()
     }
 }
 
-struct VgicIntInner {
+struct VgicIntInnerMut {
     owner: Option<Vcpu>,
     hw: bool,
     in_lr: bool,
@@ -202,9 +218,9 @@ struct VgicIntInner {
     in_act: bool,
 }
 
-impl VgicIntInner {
-    fn new() -> VgicIntInner {
-        VgicIntInner {
+impl VgicIntInnerMut {
+    fn new() -> VgicIntInnerMut {
+        VgicIntInnerMut {
             owner: None,
             hw: false,
             in_lr: false,
@@ -219,8 +235,8 @@ impl VgicIntInner {
         }
     }
 
-    fn priv_new(owner: Vcpu, targets: usize, enabled: bool) -> VgicIntInner {
-        VgicIntInner {
+    fn priv_new(owner: Vcpu, targets: usize, enabled: bool) -> VgicIntInnerMut {
+        VgicIntInnerMut {
             owner: Some(owner),
             hw: false,
             in_lr: false,
@@ -242,7 +258,7 @@ impl VgicIntInner {
 }
 
 struct Vgicd {
-    ctlr: u32,
+    ctlr: AtomicU32,
     typer: u32,
     iidr: u32,
     interrupts: Vec<VgicInt>,
@@ -251,7 +267,7 @@ struct Vgicd {
 impl Vgicd {
     fn default() -> Vgicd {
         Vgicd {
-            ctlr: 0,
+            ctlr: AtomicU32::new(0),
             typer: 0,
             iidr: 0,
             interrupts: Vec::new(),
@@ -266,9 +282,13 @@ pub struct Sgis {
 }
 
 struct VgicCpuPriv {
+    interrupts: Vec<VgicInt>,
+    inner_mut: Mutex<VgicCpuPrivMut>,
+}
+
+struct VgicCpuPrivMut {
     curr_lrs: [u16; GIC_LIST_REGS_NUM],
     sgis: [Sgis; GIC_SGIS_NUM],
-    interrupts: Vec<VgicInt>,
 
     pend_list: VecDeque<VgicInt>,
     act_list: VecDeque<VgicInt>,
@@ -277,40 +297,42 @@ struct VgicCpuPriv {
 impl Default for VgicCpuPriv {
     fn default() -> Self {
         Self {
-            curr_lrs: [0; GIC_LIST_REGS_NUM],
-            sgis: [Sgis::default(); GIC_SGIS_NUM],
             interrupts: Vec::new(),
-            pend_list: VecDeque::new(),
-            act_list: VecDeque::new(),
+            inner_mut: Mutex::new(VgicCpuPrivMut {
+                curr_lrs: [0; GIC_LIST_REGS_NUM],
+                sgis: [Sgis::default(); GIC_SGIS_NUM],
+                pend_list: VecDeque::new(),
+                act_list: VecDeque::new(),
+            }),
         }
     }
 }
 
 pub struct Vgic {
-    vgicd: Mutex<Vgicd>,
-    cpu_priv: Mutex<Vec<VgicCpuPriv>>,
+    vgicd: Vgicd,
+    cpu_priv: Vec<VgicCpuPriv>,
 }
 
 impl Vgic {
     pub fn default() -> Vgic {
         Vgic {
-            vgicd: Mutex::new(Vgicd::default()),
-            cpu_priv: Mutex::new(Vec::new()),
+            vgicd: Vgicd::default(),
+            cpu_priv: Vec::new(),
         }
     }
 
     fn remove_int_list(&self, vcpu: &Vcpu, interrupt: &VgicInt, is_pend: bool) {
-        let mut cpu_priv = self.cpu_priv.lock();
         let vcpu_id = vcpu.id();
         let int_id = interrupt.id();
+        let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.lock();
         if is_pend {
             if !interrupt.in_pend() {
                 // println!("why int {} in pend is false but in pend list", int_id);
                 return;
             }
-            for i in 0..cpu_priv[vcpu_id].pend_list.len() {
-                if cpu_priv[vcpu_id].pend_list[i].id() == int_id {
-                    cpu_priv[vcpu_id].pend_list.remove(i);
+            for (i, virt_int) in cpu_priv.pend_list.iter().enumerate() {
+                if virt_int.id() == int_id {
+                    cpu_priv.pend_list.remove(i);
                     break;
                 }
             }
@@ -319,9 +341,9 @@ impl Vgic {
             if !interrupt.in_act() {
                 return;
             }
-            for i in 0..cpu_priv[vcpu_id].act_list.len() {
-                if cpu_priv[vcpu_id].act_list[i].id() == int_id {
-                    cpu_priv[vcpu_id].act_list.remove(i);
+            for (i, virt_int) in cpu_priv.act_list.iter().enumerate() {
+                if virt_int.id() == int_id {
+                    cpu_priv.act_list.remove(i);
                     break;
                 }
             }
@@ -330,14 +352,14 @@ impl Vgic {
     }
 
     fn add_int_list(&self, vcpu: &Vcpu, interrupt: VgicInt, is_pend: bool) {
-        let mut cpu_priv = self.cpu_priv.lock();
         let vcpu_id = vcpu.id();
+        let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.lock();
         if is_pend {
             interrupt.set_in_pend_state(true);
-            cpu_priv[vcpu_id].pend_list.push_back(interrupt);
+            cpu_priv.pend_list.push_back(interrupt);
         } else {
             interrupt.set_in_act_state(true);
-            cpu_priv[vcpu_id].act_list.push_back(interrupt);
+            cpu_priv.act_list.push_back(interrupt);
         }
     }
 
@@ -365,83 +387,78 @@ impl Vgic {
     }
 
     fn int_list_head(&self, vcpu: &Vcpu, is_pend: bool) -> Option<VgicInt> {
-        let cpu_priv = self.cpu_priv.lock();
         let vcpu_id = vcpu.id();
+        let cpu_priv = self.cpu_priv[vcpu_id].inner_mut.lock();
         if is_pend {
-            cpu_priv[vcpu_id].pend_list.front().cloned()
+            cpu_priv.pend_list.front().cloned()
         } else {
-            cpu_priv[vcpu_id].act_list.front().cloned()
+            cpu_priv.act_list.front().cloned()
         }
     }
 
     fn set_vgicd_ctlr(&self, ctlr: u32) {
-        let mut vgicd = self.vgicd.lock();
-        vgicd.ctlr = ctlr;
+        self.vgicd.ctlr.store(ctlr, Ordering::Relaxed);
     }
 
     pub fn vgicd_ctlr(&self) -> u32 {
-        let vgicd = self.vgicd.lock();
-        vgicd.ctlr
+        self.vgicd.ctlr.load(Ordering::Relaxed)
     }
 
     pub fn vgicd_typer(&self) -> u32 {
-        let vgicd = self.vgicd.lock();
-        vgicd.typer
+        self.vgicd.typer
     }
 
     pub fn vgicd_iidr(&self) -> u32 {
-        let vgicd = self.vgicd.lock();
-        vgicd.iidr
+        self.vgicd.iidr
     }
 
-    fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> VgicInt {
-        let cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].interrupts[idx].clone()
+    fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> Option<&VgicInt> {
+        self.cpu_priv[cpu_id].interrupts.get(idx)
     }
 
     fn cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize) -> u16 {
-        let cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].curr_lrs[idx]
+        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.lock();
+        cpu_priv.curr_lrs[idx]
     }
 
     fn cpu_priv_sgis_pend(&self, cpu_id: usize, idx: usize) -> u8 {
-        let cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].sgis[idx].pend
+        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.lock();
+        cpu_priv.sgis[idx].pend
     }
 
     fn cpu_priv_sgis_act(&self, cpu_id: usize, idx: usize) -> u8 {
-        let cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].sgis[idx].act
+        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.lock();
+        cpu_priv.sgis[idx].act
     }
 
     fn set_cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize, val: u16) {
-        let mut cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].curr_lrs[idx] = val;
+        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.lock();
+        cpu_priv.curr_lrs[idx] = val;
     }
 
     fn set_cpu_priv_sgis_pend(&self, cpu_id: usize, idx: usize, pend: u8) {
-        let mut cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].sgis[idx].pend = pend;
+        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.lock();
+        cpu_priv.sgis[idx].pend = pend;
     }
 
     fn set_cpu_priv_sgis_act(&self, cpu_id: usize, idx: usize, act: u8) {
-        let mut cpu_priv = self.cpu_priv.lock();
-        cpu_priv[cpu_id].sgis[idx].act = act;
+        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.lock();
+        cpu_priv.sgis[idx].act = act;
     }
 
-    fn vgicd_interrupt(&self, idx: usize) -> VgicInt {
-        let vgicd = self.vgicd.lock();
-        vgicd.interrupts[idx].clone()
+    fn vgicd_interrupt(&self, idx: usize) -> Option<&VgicInt> {
+        self.vgicd.interrupts.get(idx)
     }
 
-    fn get_int(&self, vcpu: &Vcpu, int_id: usize) -> Option<VgicInt> {
+    fn get_int(&self, vcpu: &Vcpu, int_id: usize) -> Option<&VgicInt> {
         if int_id < GIC_PRIVINT_NUM {
             let vcpu_id = vcpu.id();
-            return Some(self.cpu_priv_interrupt(vcpu_id, int_id));
+            self.cpu_priv_interrupt(vcpu_id, int_id)
         } else if int_id >= GIC_PRIVINT_NUM && int_id < GIC_INTS_MAX {
-            return Some(self.vgicd_interrupt(int_id - GIC_PRIVINT_NUM));
+            self.vgicd_interrupt(int_id - GIC_PRIVINT_NUM)
+        } else {
+            None
         }
-        None
     }
 
     fn remove_lr(&self, vcpu: &Vcpu, interrupt: &VgicInt) -> bool {
@@ -577,7 +594,7 @@ impl Vgic {
         let prev_int_id = self.cpu_priv_curr_lrs(vcpu_id, lr_ind) as usize;
         if prev_int_id != int_id {
             if let Some(prev_interrupt) = self.get_int(vcpu, prev_int_id) {
-                let prev_interrupt_lock = prev_interrupt.lock.lock();
+                let prev_interrupt_lock = prev_interrupt.0.lock.lock();
                 // println!(
                 //     "write_lr: Core {} get int {} lock",
                 //     current_cpu().id,
@@ -688,7 +705,7 @@ impl Vgic {
         }
         match self.get_int(vcpu, int_id) {
             Some(interrupt) => {
-                let interrupt_lock = interrupt.lock.lock();
+                let interrupt_lock = interrupt.0.lock.lock();
                 if vgic_int_get_owner(vcpu.clone(), &interrupt) {
                     if interrupt.enabled() ^ en {
                         interrupt.set_enabled(en);
@@ -737,7 +754,7 @@ impl Vgic {
         }
 
         if let Some(interrupt) = self.get_int(vcpu, bit_extract(int_id, 0, 10)) {
-            let interrupt_lock = interrupt.lock.lock();
+            let interrupt_lock = interrupt.0.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), &interrupt) {
                 self.remove_lr(vcpu, &interrupt);
 
@@ -792,7 +809,7 @@ impl Vgic {
 
     fn set_active(&self, vcpu: &Vcpu, int_id: usize, act: bool) {
         if let Some(interrupt) = self.get_int(vcpu, bit_extract(int_id, 0, 10)) {
-            let interrupt_lock = interrupt.lock.lock();
+            let interrupt_lock = interrupt.0.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), &interrupt) {
                 self.remove_lr(vcpu, &interrupt);
                 let state = interrupt.state();
@@ -833,7 +850,7 @@ impl Vgic {
 
     fn set_icfgr(&self, vcpu: &Vcpu, int_id: usize, cfg: u8) {
         if let Some(interrupt) = self.get_int(vcpu, int_id) {
-            let interrupt_lock = interrupt.lock.lock();
+            let interrupt_lock = interrupt.0.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), &interrupt) {
                 interrupt.set_cfg(cfg);
                 if interrupt.hw() {
@@ -882,7 +899,7 @@ impl Vgic {
         let source = bit_extract(int_id, 10, 5);
 
         if let Some(interrupt) = self.get_int(vcpu, bit_extract(int_id, 0, 10)) {
-            let interrupt_lock = interrupt.lock.lock();
+            let interrupt_lock = interrupt.0.lock.lock();
             self.remove_lr(vcpu, &interrupt);
             let vcpu_id = vcpu.id();
 
@@ -928,7 +945,7 @@ impl Vgic {
         prio &= 0xf0; // gic-400 only allows 4 priority bits in non-secure state
 
         if let Some(interrupt) = self.get_int(vcpu, int_id) {
-            let interrupt_lock = interrupt.lock.lock();
+            let interrupt_lock = interrupt.0.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), &interrupt) {
                 if interrupt.prio() != prio {
                     self.remove_lr(vcpu, &interrupt);
@@ -973,7 +990,7 @@ impl Vgic {
 
     fn set_trgt(&self, vcpu: &Vcpu, int_id: usize, trgt: u8) {
         if let Some(interrupt) = self.get_int(vcpu, int_id) {
-            let interrupt_lock = interrupt.lock.lock();
+            let interrupt_lock = interrupt.0.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), &interrupt) {
                 if interrupt.targets() != trgt {
                     interrupt.set_targets(trgt);
@@ -1023,7 +1040,7 @@ impl Vgic {
         // println!("Core {} inject int {} to vm{}", current_cpu().id, int_id, vcpu.vm_id());
         if let Some(interrupt) = self.get_int(vcpu, bit_extract(int_id, 0, 10)) {
             if interrupt.hw() {
-                let interrupt_lock = interrupt.lock.lock();
+                let interrupt_lock = interrupt.0.lock.lock();
                 interrupt.set_owner(vcpu.clone());
                 interrupt.set_state(IrqState::Pend);
                 self.update_int_list(vcpu, interrupt.clone());
@@ -1502,7 +1519,7 @@ impl Vgic {
 
             match self.get_int(vcpu, bit_extract(lr_val, 0, 10)) {
                 Some(interrupt) => {
-                    let interrupt_lock = interrupt.lock.lock();
+                    let interrupt_lock = interrupt.0.lock.lock();
                     // if current_cpu().id == 2 {
                     //     println!("handle_trapped_eoir interrupt {}", interrupt.id());
                     // }
@@ -1587,8 +1604,6 @@ impl Vgic {
     fn eoir_highest_spilled_active(&self, vcpu: &Vcpu) {
         let interrupt = self.int_list_head(vcpu, false);
         if let Some(int) = interrupt {
-            // FIXME: uncertain lock
-            int.lock.lock();
             vgic_int_get_owner(vcpu.clone(), &int);
 
             let state = int.state();
@@ -1997,7 +2012,7 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
             }
             InitcEvent::VgicdRoute => {
                 if let Some(interrupt) = vgic.get_int(&trgt_vcpu, bit_extract(int_id as usize, 0, 10)) {
-                    let interrupt_lock = interrupt.lock.lock();
+                    let interrupt_lock = interrupt.0.lock.lock();
                     if vgic_int_get_owner(trgt_vcpu.clone(), &interrupt) {
                         if (interrupt.targets() & (1 << current_cpu().id)) != 0 {
                             vgic.add_lr(&trgt_vcpu, interrupt.clone());
@@ -2015,13 +2030,12 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
     save_vcpu_gic(current_cpu().active_vcpu.clone(), &trgt_vcpu);
 }
 
-pub fn emu_intc_init(vm: &Vm, emu_dev_id: usize) {
-    let vgic_cpu_num = vm.config().cpu_num();
+pub fn emu_intc_init(vm: &Vm) -> Result<EmuDevs, ()> {
     vm.init_intc_mode(true);
 
-    let vgic = Arc::new(Vgic::default());
+    let mut vgic = Vgic::default();
 
-    let mut vgicd = vgic.vgicd.lock();
+    let vgicd = &mut vgic.vgicd;
     vgicd.typer = (GICD.typer() & GICD_TYPER_CPUNUM_MSK as u32)
         | (((vm.cpu_num() - 1) << GICD_TYPER_CPUNUM_OFF) & GICD_TYPER_CPUNUM_MSK) as u32;
     vgicd.iidr = GICD.iidr();
@@ -2031,12 +2045,10 @@ pub fn emu_intc_init(vm: &Vm, emu_dev_id: usize) {
     }
     drop(vgicd);
 
-    for i in 0..vgic_cpu_num {
+    for vcpu in vm.vcpu_list() {
+        let phys_id = vcpu.phys_id();
         let mut cpu_priv = VgicCpuPriv::default();
         for int_idx in 0..GIC_PRIVINT_NUM {
-            let vcpu = vm.vcpu(i).unwrap();
-            let phys_id = vcpu.phys_id();
-
             cpu_priv.interrupts.push(VgicInt::priv_new(
                 int_idx,
                 vcpu.clone(),
@@ -2045,11 +2057,9 @@ pub fn emu_intc_init(vm: &Vm, emu_dev_id: usize) {
             ));
         }
 
-        let mut vgic_cpu_priv = vgic.cpu_priv.lock();
-        vgic_cpu_priv.push(cpu_priv);
+        vgic.cpu_priv.push(cpu_priv);
     }
-
-    vm.set_emu_devs(emu_dev_id, EmuDevs::Vgic(vgic));
+    Ok(EmuDevs::Vgic(Arc::new(vgic)))
 }
 
 pub fn partial_passthrough_intc_init(vm: &Vm) {
@@ -2067,28 +2077,24 @@ pub fn vgic_set_hw_int(vm: &Vm, int_id: usize) {
     let vgic = vm.vgic();
 
     if int_id < GIC_PRIVINT_NUM {
-        for i in 0..vm.cpu_num() {
-            if let Some(interrupt) = vgic.get_int(&vm.vcpu(i).unwrap(), int_id) {
-                let interrupt_lock = interrupt.lock.lock();
+        for vcpu in vm.vcpu_list() {
+            if let Some(interrupt) = vgic.get_int(vcpu, int_id) {
                 // println!(
                 //     "vgic_set_hw_int: Core {} get int {} lock",
                 //     cpu_id(),
                 //     interrupt.id()
                 // );
                 interrupt.set_hw(true);
-                drop(interrupt_lock);
             }
         }
     } else {
-        if let Some(interrupt) = vgic.get_int(&vm.vcpu(0).unwrap(), int_id) {
-            let interrupt_lock = interrupt.lock.lock();
+        if let Some(interrupt) = vgic.get_int(vm.vcpu(0).unwrap(), int_id) {
             // println!(
             //     "vgic_set_hw_int: Core {} get int {} lock",
             //     cpu_id(),
             //     interrupt.id()
             // );
             interrupt.set_hw(true);
-            drop(interrupt_lock);
         }
     }
 }
