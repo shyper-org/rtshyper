@@ -96,18 +96,30 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
         match vm.config().kernel_img_name() {
             Some(name) => {
                 #[cfg(feature = "tx2")]
-                if name == "L4T" {
-                    println!("MVM {} loading Image", vm.id());
-                    vmm_load_image(vm, include_bytes!("../../image/L4T"));
-                } else if name == "Image_vanilla" {
-                    println!("VM {} loading default Linux Image", vm.id());
-                    if cfg!(feature = "static-config") {
-                        vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
+                {
+                    if name == "L4T" {
+                        println!("MVM {} loading Image", vm.id());
+                        vmm_load_image(vm, include_bytes!("../../image/L4T"));
                     } else {
-                        println!("*** Please enable feature `static-config`");
+                        cfg_if::cfg_if! {
+                            if #[cfg(feature = "static-config")] {
+                                if name == "Image_vanilla" {
+                                    println!("VM {} loading default Linux Image", vm.id());
+                                    vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
+                                } else {
+                                    warn!("Image {} is not supported", name);
+                                }
+                            } else if #[cfg(feature = "unishyper")] {
+                                if name == "Image_Unishyper" {
+                                    vmm_load_image(vm, include_bytes!("../../image/Image_Unishyper"));
+                                } else {
+                                    warn!("Image {} is not supported", name);
+                                }
+                            } else {
+                                warn!("Image {} is not supported", name);
+                            }
+                        }
                     }
-                } else {
-                    warn!("Image {} is not supported", name);
                 }
                 #[cfg(feature = "pi4")]
                 if name.is_empty() {
@@ -480,7 +492,11 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
 pub fn vm_init() {
     if current_cpu().id == 0 {
         // Set up basic config.
-        crate::config::mvm_config_init();
+        if cfg!(feature = "unishyper") {
+            crate::config::unishyper_config_init();
+        } else {
+            crate::config::mvm_config_init();
+        }
         // Add VM 0
         super::vmm_init_gvm(0);
         #[cfg(feature = "static-config")]

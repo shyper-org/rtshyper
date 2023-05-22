@@ -27,10 +27,10 @@ log = { version = "0.4", features = [
     "max_level_trace",
     "release_max_level_info",
 ] }
-spin = { path = "deps/spin", features = ["use_ticket_mutex"] }
-# spin = { version = "0.9.8", features = ["use_ticket_mutex"] }
 cortex-a = "7.4.0"
+spin = { path = "deps/spin" }
 buddy_system_allocator = { path = "deps/buddy_system_allocator" }
+# spin = { version = "0.9.8" }
 # buddy_system_allocator = "0.9.0"
 static_assertions = "1.1.0"
 derive_more = "0.99.17"
@@ -57,3 +57,4 @@ static-config = []
 ns16550 = []
 pl011 = []
 preempt = []
+unishyper = []

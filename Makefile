@@ -43,7 +43,7 @@ pi4:
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 clippy:
-	cargo clippy --target ${ARCH}.json ${CARGO_FLAGS} --features tx2
+	cargo clippy --target ${ARCH}.json ${CARGO_FLAGS} --features tx2 # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
 	cargo fmt
 
 fmt:

@@ -251,3 +251,94 @@ pub fn mvm_config_init() {
     };
     let _ = vm_cfg_add_vm_entry(mvm_config_entry);
 }
+
+#[allow(dead_code)]
+pub fn unishyper_config_init() {
+    let emu_dev_config = vec![
+        VmEmulatedDeviceConfig {
+            name: String::from("interrupt-controller@8000000"),
+            base_ipa: 0x8000000,
+            length: 0x1000,
+            irq_id: 0,
+            cfg_list: Vec::new(),
+            emu_type: EmuDeviceType::EmuDeviceTGicd,
+            mediated: false,
+        },
+        VmEmulatedDeviceConfig {
+            name: String::from("virtio_blk@a000000"),
+            base_ipa: 0xa000000,
+            length: 0x1000,
+            irq_id: 32 + 0x10,
+            cfg_list: vec![0, 209715200], // 100G
+            emu_type: EmuDeviceType::EmuDeviceTVirtioBlk,
+            mediated: true,
+        },
+        VmEmulatedDeviceConfig {
+            name: String::from("virtio_net@a001000"),
+            base_ipa: 0xa001000,
+            length: 0x1000,
+            irq_id: 32 + 0x11,
+            cfg_list: vec![0x74, 0x56, 0xaa, 0x0f, 0x47, 0xd1],
+            emu_type: EmuDeviceType::EmuDeviceTVirtioNet,
+            mediated: false,
+        },
+    ];
+
+    // vm0 passthrough
+    let pt_dev_config = VmPassthroughDeviceConfig {
+        regions: vec![
+            PassthroughRegion {
+                ipa: Platform::UART_1_ADDR,
+                pa: Platform::UART_1_ADDR,
+                length: 0x1000,
+                dev_property: true,
+            },
+            PassthroughRegion {
+                ipa: 0x8010000,
+                pa: Platform::GICV_BASE,
+                length: 0x2000,
+                dev_property: true,
+            },
+        ],
+        irqs: vec![INTERRUPT_IRQ_GUEST_TIMER, Platform::UART_1_INT],
+        streams_ids: vec![],
+    };
+
+    // vm0 vm_region
+    let vm_region = vec![VmRegion {
+        ipa_start: 0x40000000,
+        length: 0x40000000,
+    }];
+
+    // vm0 config
+    let mvm_config_entry = VmConfigEntry {
+        id: 0,
+        name: String::from("unishyper"),
+        os_type: VmType::VmTOs,
+        cmdline: String::from("\0"),
+
+        image: Arc::new(VmImageConfig {
+            kernel_img_name: Some("Image_Unishyper"),
+            kernel_load_ipa: 0x40080000,
+            kernel_entry_point: 0x40080000,
+            device_tree_load_ipa: 0,
+            ramdisk_load_ipa: 0,
+        }),
+        memory: Arc::new(Mutex::new(VmMemoryConfig {
+            region: vm_region,
+            colors: vec![],
+        })),
+        cpu: Arc::new(Mutex::new(VmCpuConfig {
+            num: 1,
+            allocate_bitmap: 0b0001,
+            master: 0,
+        })),
+        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+            emu_dev_list: emu_dev_config,
+        })),
+        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
+        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
+        mediated_block_index: Arc::new(Mutex::new(None)),
+    };
+    let _ = vm_cfg_add_vm_entry(mvm_config_entry);
+}
