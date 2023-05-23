@@ -1,9 +1,9 @@
-use crate::arch::{GIC_SGIS_NUM, interrupt_arch_deactive_irq};
+use crate::arch::{interrupt_arch_deactive_irq, INTERRUPT_IRQ_GUEST_TIMER};
 use crate::config::vm_cfg_del_vm;
 use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_vm, remove_vm_async_task,
-    Vm, cpu_idle, vm,
+    Vm, cpu_idle, vm, interrupt_cpu_enable,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
@@ -45,6 +45,8 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
         current_cpu().scheduler().sleep(vcpu);
     }
     if !current_cpu().assigned() {
+        // hard code: remove el1 timer interrupt 27
+        interrupt_cpu_enable(INTERRUPT_IRQ_GUEST_TIMER, false);
         interrupt_arch_deactive_irq(true);
         cpu_idle();
     }
@@ -90,9 +92,7 @@ fn vmm_remove_emulated_device(vm: &Vm) {
 
 fn vmm_remove_passthrough_device(vm: &Vm) {
     for irq in vm.config().passthrough_device_irqs() {
-        if irq > GIC_SGIS_NUM {
-            interrupt_vm_remove(vm, irq);
-            // println!("VM[{}] remove irq {}", vm.id(), irq);
-        }
+        interrupt_vm_remove(vm, irq);
+        // println!("VM[{}] remove irq {}", vm.id(), irq);
     }
 }

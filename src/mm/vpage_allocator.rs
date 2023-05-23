@@ -30,7 +30,7 @@ pub fn init() {
     extern "C" {
         fn CPU_BASE();
     }
-    assert_eq!(CPU_BANKED_ADDRESS, CPU_BASE as usize);
+    debug_assert_eq!(CPU_BANKED_ADDRESS, CPU_BASE as usize);
 
     let image_end_align_gb = round_up(_image_end as usize, 1 << LVL1_SHIFT);
     let va_range = Page::containing_address(VAddr::new(image_end_align_gb))..=PAGES_UPPER_BOUND;

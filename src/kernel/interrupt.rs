@@ -2,8 +2,10 @@ use alloc::collections::BTreeMap;
 
 use spin::Mutex;
 
-use crate::arch::{interrupt_arch_ipi_send, interrupt_arch_vm_inject, INTERRUPT_IRQ_IPI, INTERRUPT_NUM_MAX};
-use crate::arch::{GIC_PRIVINT_NUM, interrupt_arch_vm_register};
+use crate::arch::{
+    interrupt_arch_ipi_send, interrupt_arch_vm_inject, INTERRUPT_IRQ_IPI, INTERRUPT_NUM_MAX, GIC_SGIS_NUM,
+    GIC_PRIVINT_NUM, interrupt_arch_vm_register,
+};
 use crate::kernel::{current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
 use crate::kernel::{ipi_register, IpiType, Vm};
 use crate::util::{BitAlloc, BitAlloc4K};
@@ -77,12 +79,14 @@ pub fn interrupt_vm_register(vm: &Vm, id: usize, hw: bool) -> bool {
 }
 
 pub fn interrupt_vm_remove(_vm: &Vm, id: usize) {
-    let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
-    // vgic and vm will be removed with struct vm
-    glb_bitmap_lock.clear(id);
-    // todo: for interrupt 16~31, need to check by vm config
-    if id >= GIC_PRIVINT_NUM {
-        interrupt_cpu_enable(id, false);
+    if id >= GIC_SGIS_NUM {
+        let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
+        // vgic and vm will be removed with struct vm
+        glb_bitmap_lock.clear(id);
+        // todo: for interrupt 16~31, need to check by vm config
+        if id >= GIC_PRIVINT_NUM {
+            interrupt_cpu_enable(id, false);
+        }
     }
 }
 

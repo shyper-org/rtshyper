@@ -295,7 +295,8 @@ impl PageTable {
             if let Ok(frame) = result {
                 l1e = Aarch64PageTableEntry::make_table(frame.pa());
                 let mut pages = self.pages.lock();
-                assert!(pages.insert(frame.pa(), frame).is_none());
+                let pf = pages.insert(frame.pa(), frame);
+                debug_assert!(pf.is_none());
                 directory.set_entry(pt_lvl1_idx(ipa), l1e);
             } else {
                 panic!("map lv1 page failed");
@@ -337,7 +338,8 @@ impl PageTable {
             if let Ok(frame) = result {
                 l1e = Aarch64PageTableEntry::make_table(frame.pa());
                 let mut pages = self.pages.lock();
-                assert!(pages.insert(frame.pa(), frame).is_none());
+                let pf = pages.insert(frame.pa(), frame);
+                debug_assert!(pf.is_none());
                 directory.set_entry(pt_lvl1_idx(ipa), l1e);
             } else {
                 panic!("map lv1 page failed");
@@ -350,7 +352,8 @@ impl PageTable {
             if let Ok(frame) = result {
                 l2e = Aarch64PageTableEntry::make_table(frame.pa());
                 let mut pages = self.pages.lock();
-                assert!(pages.insert(frame.pa(), frame).is_none());
+                let pf = pages.insert(frame.pa(), frame);
+                debug_assert!(pf.is_none());
                 l1e.set_entry(pt_lvl2_idx(ipa), l2e);
             } else {
                 panic!("map lv2 page failed {:#?}", result.err());

@@ -493,6 +493,7 @@ pub fn vm_init() {
     if current_cpu().id == 0 {
         // Set up basic config.
         if cfg!(feature = "unishyper") {
+            #[cfg(feature = "tx2")]
             crate::config::unishyper_config_init();
         } else {
             crate::config::mvm_config_init();

@@ -375,21 +375,41 @@ pub fn vcache_ctr_el0_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
 //     CSSELR_EL1,
 // }
 
-core::arch::global_asm!(include_str!("./cache.S"));
-
-extern "C" {
-    fn cache_invalidate_d(start: usize, len: usize);
-    fn cache_clean_invalidate_d(start: usize, len: usize);
-}
-
 impl CacheInvalidate for Aarch64Arch {
     #[inline]
     fn dcache_flush(va: usize, len: usize) {
-        unsafe { cache_invalidate_d(va, len) };
+        cache_fush_range(va, len, |addr| unsafe {
+            core::arch::asm!("dc ivac, {0}", in(reg) addr, options(nostack));
+        })
     }
 
     #[inline]
     fn dcache_clean_flush(va: usize, len: usize) {
-        unsafe { cache_clean_invalidate_d(va, len) };
+        cache_fush_range(va, len, |addr| unsafe {
+            core::arch::asm!("dc civac, {0}", in(reg) addr, options(nostack));
+        })
+    }
+}
+
+#[inline]
+fn cache_fush_range<F>(va: usize, len: usize, f: F)
+where
+    F: Fn(usize),
+{
+    // const CTR_DMINLINE_OFF: usize = 16;
+    // const CTR_DMINLINE_LEN: usize = 4;
+
+    // let ctr = mrs!(CTR_EL0) as usize;
+    // let min_line_size = 1 << bit_extract(ctr, CTR_DMINLINE_OFF, CTR_DMINLINE_LEN);
+    let min_line_size = 64;
+
+    // align the start with a cache line
+    let mut addr = va & !(min_line_size - 1);
+    while addr < va + len {
+        f(addr); // invalidate cache to PoC by VA
+        addr += min_line_size;
+    }
+    unsafe {
+        core::arch::asm!("dmb sy");
     }
 }

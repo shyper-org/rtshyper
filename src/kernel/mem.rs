@@ -4,7 +4,10 @@ use core::ops::RangeInclusive;
 use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
-use crate::arch::{PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PTE_S1_NORMAL, PTE_S1_DEVICE};
+use crate::arch::{
+    PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PTE_S1_NORMAL, PTE_S1_DEVICE, ArchTrait,
+    TlbInvalidate, CacheInvalidate, Arch,
+};
 use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
@@ -128,7 +131,7 @@ pub fn mem_region_alloc_colors(size: usize, color_bitmap: usize) -> Result<Vec<C
             region.count = usize::min(region.count, color_size);
             remaining_pages -= region.count;
         }
-        assert_eq!(remaining_pages, 0);
+        debug_assert_eq!(remaining_pages, 0);
         sort_color_list(&mut color2pages);
         color2pages
     };
@@ -311,6 +314,7 @@ fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> 
     cpu_map_va2color_regions(current_cpu(), range, &color_regions);
     // copy src to va
     memcpy_safe(dest_va, src as *const u8, len);
+    Arch::dcache_clean_flush(dest_va as usize, len);
     (unsafe { &mut *(dest_va as *mut T) }, color_regions)
 }
 
@@ -335,7 +339,6 @@ unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
     // NOTE: do nothing complex (means need stack, heap or any global variables)
     // for example, `println!()`, `info!()` is not allowed here
     // because it may cause unpredictable problems
-    use crate::arch::{ArchTrait, TlbInvalidate};
 
     let current_sp = crate::arch::Arch::current_stack_pointer();
     let length = current_cpu().stack_top() - current_sp;
@@ -434,7 +437,6 @@ pub fn hypervisor_self_coloring() {
         relocate_space(cpu_new, cpu_new.pt().base_pa());
     }
     // cache invalidate
-    use crate::arch::{Arch, CacheInvalidate};
     Arch::dcache_clean_flush(image_start, image_size);
     Arch::dcache_clean_flush(CPU_BANKED_ADDRESS, size_of::<Cpu>());
 
@@ -467,7 +469,7 @@ fn enlarge_heap(self_color_bitmap: usize) {
         };
         let heap_color_regions = match mem_region_alloc_colors(HEAP_SIZE, self_color_bitmap) {
             Ok(color_regions) => {
-                debug!("HEAP_COLOR_REGIONS: {color_regions:#x?}");
+                debug!("HEAP_COLOR_REGIONS: {color_regions:x?}");
                 color_regions
             }
             Err(_) => panic!("mem_region_alloc_colors failed"),

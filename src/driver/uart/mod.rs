@@ -14,9 +14,9 @@ use crate::board::{Platform, PlatOperation};
 const UART_BASE: usize = Platform::HYPERVISOR_UART_BASE;
 
 #[cfg(feature = "tx2")]
-const UART: ns16550::Ns16550Mmio32<UART_BASE> = ns16550::Ns16550Mmio32;
+const UART: &dyn UartOperation = &ns16550::Ns16550Mmio32::<UART_BASE>;
 #[cfg(any(feature = "pi4", feature = "qemu"))]
-const UART: pl011::Pl011Mmio<UART_BASE> = pl011::Pl011Mmio;
+const UART: &dyn UartOperation = &pl011::Pl011Mmio::<UART_BASE>;
 
 pub fn putc(byte: u8) {
     if byte == b'\n' {

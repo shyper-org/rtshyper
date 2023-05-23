@@ -101,7 +101,7 @@ const_assert!(PA2HVA < 1 << VM_IPA_SIZE); // if not, the va will ocuppy the ipa2
 impl Address for usize {
     #[inline]
     fn pa2hva(self) -> usize {
-        assert_eq!(self & PA2HVA, 0, "illegal pa {self:#x}");
+        debug_assert_eq!(self & PA2HVA, 0, "illegal pa {self:#x}");
         self | PA2HVA
     }
 }

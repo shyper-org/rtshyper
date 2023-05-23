@@ -84,8 +84,7 @@ impl Default for Aarch64ContextFrame {
     }
 }
 
-#[repr(C)]
-#[repr(align(16))]
+#[repr(C, align(16))]
 #[derive(Copy, Clone, Debug)]
 pub struct VmCtxFpsimd {
     fpsimd: [u64; 64],
@@ -111,8 +110,7 @@ impl VmCtxFpsimd {
     }
 }
 
-#[repr(C)]
-#[repr(align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GicIrqState {
     pub id: u64,
@@ -123,8 +121,7 @@ pub struct GicIrqState {
     pub target: u8,
 }
 
-#[repr(C)]
-#[repr(align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct GicContext {
     irq_num: usize,

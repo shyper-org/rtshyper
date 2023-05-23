@@ -87,10 +87,9 @@ impl BlockDescriptor {
     }
 }
 
-#[repr(C)]
-#[repr(align(4096))]
+#[repr(C, align(4096))]
 pub(super) struct PageTables {
-    lvl1: [BlockDescriptor; ENTRY_PER_PAGE],
+    entry: [BlockDescriptor; ENTRY_PER_PAGE],
 }
 
 #[no_mangle]
@@ -108,7 +107,7 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         // Always MMIO (0.0G – 0.5G)    0x0_0000_0000 – 0x1FFF_FFFF
         for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let output_addr = i << LVL1_SHIFT;
-            lvl1_pt.lvl1[i] = if (PLAT_DESC.mem_desc.base..image_end_align_gb).contains(&output_addr) {
+            lvl1_pt.entry[i] = if (PLAT_DESC.mem_desc.base..image_end_align_gb).contains(&output_addr) {
                 BlockDescriptor::new(output_addr, false)
             } else {
                 BlockDescriptor::invalid()
@@ -118,50 +117,50 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         //     pt.lvl1[i] = BlockDescriptor::invalid();
         // }
 
-        lvl1_pt.lvl1[pt_lvl1_idx(0)] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.entry[pt_lvl1_idx(0)] = BlockDescriptor::table(lvl2_base);
         // 0x200000 ~ 2MB
         // UART0 ~ 0x3000000 - 0x3200000 (0x3100000)
         // UART1 ~ 0xc200000 - 0xc400000 (0xc280000)
         // EMMC ~ 0x3400000 - 0x3600000 (0x3460000)
         // GIC  ~ 0x3800000 - 0x3a00000 (0x3881000)
         // SMMU ~ 0x12000000 - 0x13000000
-        lvl2_pt.lvl1[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
-        lvl2_pt.lvl1[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
+        lvl2_pt.entry[pt_lvl2_idx(0x3000000)] = BlockDescriptor::new(0x3000000, true);
+        lvl2_pt.entry[pt_lvl2_idx(0xc200000)] = BlockDescriptor::new(0xc200000, true);
         // lvl2_pt.lvl1[pt_lvl2_idx(0x3400000)] = BlockDescriptor::new(0x3400000, true);
-        lvl2_pt.lvl1[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
+        lvl2_pt.entry[pt_lvl2_idx(0x3800000)] = BlockDescriptor::new(0x3800000, true);
         for addr in (0x12000000..0x13000000).step_by(1 << LVL2_SHIFT) {
-            lvl2_pt.lvl1[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
+            lvl2_pt.entry[pt_lvl2_idx(addr)] = BlockDescriptor::new(addr, true);
         }
     } else if cfg!(feature = "pi4") {
         // TODO: image_end_align_gb to map va
         // 0x0_0000_0000 ~ 0x0_c000_0000 --> normal memory (3GB)
         let normal_memory_0 = 0x0_0000_0000..0x0_c000_0000;
         for (i, pa) in normal_memory_0.step_by(1 << LVL1_SHIFT).enumerate() {
-            lvl1_pt.lvl1[i] = BlockDescriptor::new(pa, false);
+            lvl1_pt.entry[i] = BlockDescriptor::new(pa, false);
         }
         // 0x0_c000_0000 ~ 0x0_fc00_0000 --> normal memory (960MB)
         let normal_memory_1 = 0x0_c000_0000..0x0_fc00_0000;
-        lvl1_pt.lvl1[pt_lvl1_idx(normal_memory_1.start)] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.entry[pt_lvl1_idx(normal_memory_1.start)] = BlockDescriptor::table(lvl2_base);
         for (i, pa) in normal_memory_1.step_by(1 << LVL2_SHIFT).enumerate() {
-            lvl2_pt.lvl1[i] = BlockDescriptor::new(pa, false);
+            lvl2_pt.entry[i] = BlockDescriptor::new(pa, false);
         }
         // 0x0_fc00_0000 ~ 0x1_0000_0000 --> device memory (64MB)
         let device_memory = 0x0_fc00_0000..0x1_0000_0000;
         for (i, pa) in device_memory.step_by(1 << LVL2_SHIFT).enumerate() {
-            lvl2_pt.lvl1[i] = BlockDescriptor::new(pa, true);
+            lvl2_pt.entry[i] = BlockDescriptor::new(pa, true);
         }
         // 0x1_0000_0000 ~ 0x2_0000_0000 --> normal memory (4GB)
         let normal_memory_2 = 0x1_0000_0000..0x2_0000_0000;
         for (i, pa) in normal_memory_2.clone().step_by(1 << LVL1_SHIFT).enumerate() {
-            lvl1_pt.lvl1[i] = BlockDescriptor::new(pa, false);
+            lvl1_pt.entry[i] = BlockDescriptor::new(pa, false);
         }
         for i in pt_lvl1_idx(normal_memory_2.end)..512 {
-            lvl1_pt.lvl1[i] = BlockDescriptor::invalid();
+            lvl1_pt.entry[i] = BlockDescriptor::invalid();
         }
     } else if cfg!(feature = "qemu") {
         for index in 0..PLATFORM_PHYSICAL_LIMIT_GB {
             let pa = index << LVL1_SHIFT;
-            lvl1_pt.lvl1[index] = if pa < PLAT_DESC.mem_desc.base {
+            lvl1_pt.entry[index] = if pa < PLAT_DESC.mem_desc.base {
                 BlockDescriptor::new(pa, true)
             } else if (PLAT_DESC.mem_desc.base..image_end_align_gb).contains(&pa) {
                 BlockDescriptor::new(pa, false)
@@ -169,20 +168,20 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
                 BlockDescriptor::invalid()
             };
         }
-        lvl1_pt.lvl1[pt_lvl1_idx(0)] = BlockDescriptor::table(lvl2_base);
+        lvl1_pt.entry[pt_lvl1_idx(0)] = BlockDescriptor::table(lvl2_base);
         for (index, pa) in (0..PLAT_DESC.mem_desc.base)
             .step_by(1 << LVL2_SHIFT)
             .take(PTE_PER_PAGE)
             .enumerate()
         {
-            lvl2_pt.lvl1[index] = BlockDescriptor::new(pa, true);
+            lvl2_pt.entry[index] = BlockDescriptor::new(pa, true);
         }
     }
 
     // map pa to hva
     for i in 0..PLATFORM_PHYSICAL_LIMIT_GB {
         let pa = i << LVL1_SHIFT;
-        lvl1_pt.lvl1[pt_lvl1_idx(pa.pa2hva())] = BlockDescriptor::new(pa, false);
+        lvl1_pt.entry[pt_lvl1_idx(pa.pa2hva())] = BlockDescriptor::new(pa, false);
     }
 }
 
@@ -197,7 +196,7 @@ pub(super) extern "C" fn mmu_init(pt: &PageTables) {
             + MAIR_EL2::Attr2_Normal_Outer::NonCacheable
             + MAIR_EL2::Attr2_Normal_Inner::NonCacheable,
     );
-    TTBR0_EL2.set(&pt.lvl1 as *const _ as u64);
+    TTBR0_EL2.set(&pt.entry as *const _ as u64);
 
     TCR_EL2.write(
         TCR_EL2::PS::Bits_48
