@@ -83,7 +83,7 @@ pub fn init_tmp_config_for_bma1() {
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
-            master: 1,
+            master: Some(1),
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
@@ -163,7 +163,7 @@ pub fn init_tmp_config_for_bma2() {
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0100,
-            master: 2,
+            master: Some(2),
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
@@ -307,7 +307,7 @@ pub fn init_tmp_config_for_vm1() {
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
-            master: 1,
+            master: Some(1),
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
@@ -441,7 +441,7 @@ pub fn init_tmp_config_for_vm2() {
         cpu: Arc::new(Mutex::new(VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0100,
-            master: 2,
+            master: Some(2),
         })),
         vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,

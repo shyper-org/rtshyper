@@ -5,7 +5,7 @@ use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::config::vm_cfg_entry;
 use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
-    vm_ipa2hva, vm_id_list,
+    vm_id_list,
 };
 use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
@@ -219,7 +219,7 @@ fn vmm_load_image_from_mvm(vm: &Vm) {
  */
 pub fn get_vm_id(id_ipa: usize) -> bool {
     let vm = active_vm().unwrap();
-    let id_pa = vm_ipa2hva(&vm, id_ipa);
+    let id_pa = vm.ipa2hva(id_ipa);
     if id_pa == 0 {
         println!("illegal id_pa {:x}", id_pa);
         return false;
@@ -241,7 +241,7 @@ struct VMInfoList {
  * @param[in] vm_info_ipa : vm info list ipa.
  */
 pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
-    let vm_info_pa = vm_ipa2hva(&active_vm().unwrap(), vm_info_ipa);
+    let vm_info_pa = active_vm().unwrap().ipa2hva(vm_info_ipa);
     if vm_info_pa == 0 {
         println!("illegal vm_info_ipa {:x}", vm_info_ipa);
         return Err(());

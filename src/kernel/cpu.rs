@@ -196,10 +196,10 @@ impl Cpu {
         crate::arch::Arch::invalid_hypervisor_all();
     }
 
-    pub(super) unsafe fn reset_pt(&mut self, directory: usize) {
+    pub(super) fn reset_pt(&mut self, directory: usize) {
         // reset global pt without calling the destructor of PageTable
-        let dst = core::ptr::addr_of_mut!(self.global_pt);
-        core::ptr::write(dst, Once::new());
+        let prev = core::mem::replace(&mut self.global_pt, Once::new());
+        core::mem::forget(prev);
         assert!(self.global_pt.get().is_none());
         self.init_pt(directory);
     }

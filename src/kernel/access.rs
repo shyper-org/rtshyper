@@ -3,12 +3,11 @@ use core::slice;
 
 use super::Vm;
 use crate::arch::CacheInvalidate;
-use crate::kernel::vm_ipa2hva;
 use crate::util::memcpy_safe;
 
 pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
     let bin = unsafe { slice::from_raw_parts(bin.as_ptr() as *const u8, bin.len() * size_of::<T>()) };
-    let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
+    let hva = vm.ipa2hva(load_ipa) as *mut u8;
     if hva.is_null() {
         error!("illegal ipa {:#x} from VM {}", load_ipa, vm.id());
         return;
@@ -23,7 +22,7 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
     //         PAGE_SIZE,
     //         bin.len()
     //     );
-    //     let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
+    //     let hva = vm.ipa2hva(load_ipa) as *mut u8;
     //     let size = usize::min(bin.len(), PAGE_SIZE - offset);
     //     memcpy_safe(hva as *mut _, bin[0..].as_ptr() as *const _, size);
     //     crate::arch::Arch::dcache_flush(hva as usize, size);
@@ -34,7 +33,7 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
     //     0
     // };
     // for i in (start..bin.len()).step_by(PAGE_SIZE) {
-    //     let hva = vm_ipa2hva(vm, load_ipa + i) as *mut u8;
+    //     let hva = vm.ipa2hva(load_ipa + i) as *mut u8;
     //     let size = usize::min(bin.len() - i, PAGE_SIZE);
     //     memcpy_safe(hva as *mut _, bin[i..].as_ptr() as *const _, size);
     //     crate::arch::Arch::dcache_flush(hva as usize, size);
@@ -45,7 +44,7 @@ pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
 
 pub fn copy_between_vm(dest: (&Vm, usize), src: (&Vm, usize), len: usize) -> bool {
     let (src_vm, src_ipa) = src;
-    let src_hva = vm_ipa2hva(src_vm, src_ipa);
+    let src_hva = src_vm.ipa2hva(src_ipa);
     if src_hva == 0 {
         error!("illegal ipa {:#x} from src VM {}", src_ipa, src_vm.id());
         return false;
@@ -54,7 +53,7 @@ pub fn copy_between_vm(dest: (&Vm, usize), src: (&Vm, usize), len: usize) -> boo
     let src_bin = unsafe { core::slice::from_raw_parts(src_hva as *const u8, len) };
 
     let (dest_vm, dest_ipa) = dest;
-    let dest_hva = vm_ipa2hva(dest_vm, dest_ipa);
+    let dest_hva = dest_vm.ipa2hva(dest_ipa);
     if dest_hva == 0 {
         error!("illegal ipa {:#x} from dest VM {}", dest_ipa, dest_vm.id());
         return false;
@@ -69,7 +68,7 @@ pub fn copy_between_vm(dest: (&Vm, usize), src: (&Vm, usize), len: usize) -> boo
 
 pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
     let bin = unsafe { slice::from_raw_parts_mut(bin.as_mut_ptr() as *mut u8, bin.len() * size_of::<T>()) };
-    let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
+    let hva = vm.ipa2hva(load_ipa) as *mut u8;
     if hva.is_null() {
         error!("illegal ipa {:#x} from VM {}", load_ipa, vm.id());
         return;
@@ -83,7 +82,7 @@ pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
     //         PAGE_SIZE,
     //         bin.len()
     //     );
-    //     let hva = vm_ipa2hva(vm, load_ipa) as *mut u8;
+    //     let hva = vm.ipa2hva(load_ipa) as *mut u8;
     //     let size = usize::min(bin.len(), PAGE_SIZE - offset);
     //     memcpy_safe(bin[0..].as_ptr() as *mut _, hva as *const _, size);
     //     // let src = unsafe { slice::from_raw_parts(pa, size) };
@@ -93,7 +92,7 @@ pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
     //     0
     // };
     // for i in (start..bin.len()).step_by(PAGE_SIZE) {
-    //     let hva = vm_ipa2hva(vm, load_ipa + i) as *mut u8;
+    //     let hva = vm.ipa2hva(load_ipa + i) as *mut u8;
     //     let size = usize::min(bin.len() - i, PAGE_SIZE);
     //     memcpy_safe(bin[i..].as_ptr() as *mut _, hva as *const _, size);
     //     // let src = unsafe { slice::from_raw_parts(pa, size) };

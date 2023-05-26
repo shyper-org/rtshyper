@@ -71,10 +71,9 @@ pub fn interrupt_vm_register(vm: &Vm, id: usize, hw: bool) -> bool {
             println!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);
             return false;
         }
-        interrupt_arch_vm_register(vm, id);
         glb_bitmap_lock.set(id);
+        interrupt_arch_vm_register(vm, id);
     }
-    vm.set_int_bit_map(id);
     true
 }
 

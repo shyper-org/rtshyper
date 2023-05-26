@@ -1,4 +1,3 @@
-use core::cell::Cell;
 use core::mem::size_of;
 
 use alloc::sync::Arc;
@@ -31,19 +30,19 @@ pub struct VcpuInner {
 }
 
 struct VcpuConst {
-    id: usize,            // vcpu_id
-    vm: WeakVm,           // weak pointer to related Vm
-    phys_id: Cell<usize>, // related physical CPU id
+    id: usize,      // vcpu_id
+    vm: WeakVm,     // weak pointer to related Vm
+    phys_id: usize, // related physical CPU id
 }
 
 #[allow(dead_code)]
 impl Vcpu {
-    pub(super) fn new(vm: WeakVm, vcpu_id: usize) -> Self {
+    pub(super) fn new(vm: WeakVm, vcpu_id: usize, phys_id: usize) -> Self {
         Self(Arc::new(VcpuInner {
             inner_const: VcpuConst {
                 id: vcpu_id,
                 vm,
-                phys_id: Cell::new(0),
+                phys_id,
             },
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         }))
@@ -132,11 +131,6 @@ impl Vcpu {
         }
     }
 
-    pub(super) fn set_phys_id(&self, phys_id: usize) {
-        println!("set vcpu {} phys id {}", self.id(), phys_id);
-        self.0.inner_const.phys_id.set(phys_id);
-    }
-
     pub fn set_gich_ctlr(&self, ctlr: u32) {
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.gic_state.ctlr = ctlr;
@@ -169,7 +163,7 @@ impl Vcpu {
 
     #[inline]
     pub fn phys_id(&self) -> usize {
-        self.0.inner_const.phys_id.get()
+        self.0.inner_const.phys_id
     }
 
     pub fn vm_id(&self) -> usize {

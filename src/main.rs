@@ -5,6 +5,7 @@
 #![feature(drain_filter)]
 #![feature(inline_const)]
 #![feature(const_refs_to_cell)]
+#![feature(const_cmp)]
 #![allow(unused_doc_comments)]
 
 #[macro_use]

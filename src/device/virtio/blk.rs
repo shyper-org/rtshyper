@@ -7,7 +7,7 @@ use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
 use crate::kernel::{
     active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskState,
-    IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm, vm_ipa2hva,
+    IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm,
 };
 use crate::util::memcpy_safe;
 
@@ -508,7 +508,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                         return false;
                     }
                     head = false;
-                    let vreq_addr = vm_ipa2hva(&vm, vq.desc_addr(next_desc_idx));
+                    let vreq_addr = vm.ipa2hva(vq.desc_addr(next_desc_idx));
                     if vreq_addr == 0 {
                         println!("virtio_blk_notify_handler: failed to get vreq");
                         return false;
@@ -529,7 +529,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                         // vq.notify(dev.int_id(), vm.clone());
                         return false;
                     }
-                    let data_bg = vm_ipa2hva(&vm, vq.desc_addr(next_desc_idx));
+                    let data_bg = vm.ipa2hva(vq.desc_addr(next_desc_idx));
                     if data_bg == 0 {
                         println!("virtio_blk_notify_handler: failed to get iov data begin");
                         return false;
@@ -550,7 +550,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                     // vq.notify(dev.int_id(), vm.clone());
                     return false;
                 }
-                let vstatus_addr = vm_ipa2hva(&vm, vq.desc_addr(next_desc_idx));
+                let vstatus_addr = vm.ipa2hva(vq.desc_addr(next_desc_idx));
                 if vstatus_addr == 0 {
                     println!("virtio_blk_notify_handler: vm[{}] failed to vstatus", vm.id());
                     return false;

@@ -11,7 +11,6 @@ use crate::kernel::{
     IpiMessage, IpiType, ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm,
 };
 use crate::util::memcpy_safe;
-use crate::util::unilib::*;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
 
 use shyper::VM_NUM_MAX;
@@ -36,6 +35,7 @@ pub const HVC_VMM: usize = 1;
 pub const HVC_IVC: usize = 2;
 pub const HVC_MEDIATED: usize = 3;
 pub const HVC_CONFIG: usize = 0x11;
+#[cfg(feature = "unilib")]
 pub const HVC_UNILIB: usize = 0x12;
 
 // hvc_sys_event
@@ -86,15 +86,19 @@ pub const HVC_MEDIATED_DEV_APPEND: usize = 0x30;
 pub const HVC_MEDIATED_DEV_NOTIFY: usize = 0x31;
 pub const HVC_MEDIATED_DRV_NOTIFY: usize = 0x32;
 
-pub const HVC_UNILIB_FS_INIT: usize = 0;
-pub const HVC_UNILIB_FS_OPEN: usize = 1;
-pub const HVC_UNILIB_FS_CLOSE: usize = 2;
-pub const HVC_UNILIB_FS_READ: usize = 3;
-pub const HVC_UNILIB_FS_WRITE: usize = 4;
-pub const HVC_UNILIB_FS_LSEEK: usize = 5;
-pub const HVC_UNILIB_FS_STAT: usize = 6;
-pub const HVC_UNILIB_FS_APPEND: usize = 7;
-pub const HVC_UNILIB_FS_FINISHED: usize = 8;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "unilib")] {
+        pub const HVC_UNILIB_FS_INIT: usize = 0;
+        pub const HVC_UNILIB_FS_OPEN: usize = 1;
+        pub const HVC_UNILIB_FS_CLOSE: usize = 2;
+        pub const HVC_UNILIB_FS_READ: usize = 3;
+        pub const HVC_UNILIB_FS_WRITE: usize = 4;
+        pub const HVC_UNILIB_FS_LSEEK: usize = 5;
+        pub const HVC_UNILIB_FS_STAT: usize = 6;
+        pub const HVC_UNILIB_FS_APPEND: usize = 7;
+        pub const HVC_UNILIB_FS_FINISHED: usize = 8;
+    }
+}
 
 // hvc_config_event
 pub const HVC_CONFIG_ADD_VM: usize = 0;
@@ -120,6 +124,7 @@ pub enum HvcGuestMsg {
     Default(HvcDefaultMsg),
     Manage(HvcManageMsg),
     Migrate(HvcMigrateMsg),
+    #[cfg(feature = "unilib")]
     UniLib(HvcUniLibMsg),
 }
 
@@ -149,6 +154,7 @@ pub struct HvcMigrateMsg {
     pub page_num: usize, // bitmap page num
 }
 
+#[cfg(feature = "unilib")]
 #[repr(C)]
 pub struct HvcUniLibMsg {
     pub fid: usize,
@@ -191,6 +197,7 @@ pub fn hvc_guest_handler(
         HVC_IVC => hvc_ivc_handler(event, x0, x1),
         HVC_MEDIATED => hvc_mediated_handler(event, x0, x1),
         HVC_CONFIG => hvc_config_handler(event, x0, x1, x2, x3, x4, x5, x6),
+        #[cfg(feature = "unilib")]
         HVC_UNILIB => hvc_unilib_handler(event, x0, x1, x2),
         _ => {
             println!("hvc_guest_handler: unknown hvc type {} event {}", hvc_type, event);
@@ -329,7 +336,9 @@ fn hvc_mediated_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()>
     }
 }
 
+#[cfg(feature = "unilib")]
 fn hvc_unilib_handler(event: usize, x0: usize, x1: usize, x2: usize) -> Result<usize, ()> {
+    use crate::util::unilib::*;
     match event {
         HVC_UNILIB_FS_INIT => unilib_fs_init(),
         HVC_UNILIB_FS_OPEN => unilib_fs_open(x0, x1, x2),
@@ -399,6 +408,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
             );
             (msg.fid, msg.event)
         }
+        #[cfg(feature = "unilib")]
         HvcGuestMsg::UniLib(msg) => {
             memcpy_safe(
                 target_addr as *const u8,
@@ -486,6 +496,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
                         todo!();
                     }
                 },
+                #[cfg(feature = "unilib")]
                 HVC_UNILIB => {
                     hvc_guest_notify(msg.trgt_vmid);
                 }

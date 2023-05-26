@@ -5,9 +5,8 @@ use spin::Mutex;
 use crate::arch::PAGE_SIZE;
 use crate::device::{VirtioMmio, Virtq};
 use crate::device::DevDesc;
-use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{active_vm, vm_if_set_mem_map_bit, vm_ipa2hva};
+use crate::kernel::{active_vm, vm_if_set_mem_map_bit};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::util::round_down;
@@ -131,7 +130,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         tx_iov.clear();
 
         loop {
-            let addr = vm_ipa2hva(&active_vm().unwrap(), vq.desc_addr(idx));
+            let addr = active_vm().unwrap().ipa2hva(vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_console_notify_handler: failed to desc addr");
                 return false;
@@ -181,7 +180,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     };
 
     let console = match trgt_vm.emu_console_dev(trgt_console_ipa as usize) {
-        Some(EmuDevs::VirtioConsole(x)) => x,
+        Some(x) => x,
         _ => {
             println!(
                 "virtio_console_recv: trgt_vm[{}] failed to get virtio console dev",
@@ -224,7 +223,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     let rx_iov = VirtioIov::default();
     let mut rx_len = 0;
     loop {
-        let dst = vm_ipa2hva(&trgt_vm, rx_vq.desc_addr(desc_idx));
+        let dst = trgt_vm.ipa2hva(rx_vq.desc_addr(desc_idx));
         if dst == 0 {
             println!(
                 "virtio_console_recv: failed to get dst, desc_idx {}, avail idx {}",

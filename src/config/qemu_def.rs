@@ -1,8 +1,5 @@
 use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
-
-use spin::Mutex;
 
 use crate::board::*;
 use crate::device::EmuDeviceType;
@@ -103,7 +100,7 @@ pub fn mvm_config_init() {
         name: String::from("supervisor"),
         os_type: VmType::VmTOs,
         cmdline: String::from("earlycon console=ttyAMA0 root=/dev/vda rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
-        image: Arc::new(VmImageConfig {
+        image: VmImageConfig {
             kernel_img_name: Some("Image"),
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
@@ -112,20 +109,20 @@ pub fn mvm_config_init() {
             // ramdisk_filename: Some("initrd.gz"),
             // ramdisk_load_ipa: 0x53000000,
             ramdisk_load_ipa: 0,
-        }),
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
+        },
+        cpu: VmCpuConfig {
             num: 4,
             allocate_bitmap: 0b1111,
-            master: -1,
-        })),
-        memory: Arc::new(Mutex::new(VmMemoryConfig {
+            master: None,
+        },
+        memory: VmMemoryConfig {
             region: vm_region,
             colors: HYPERVISOR_COLORS.get().unwrap().clone(),
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList { emu_dev_list: emu_dev_config })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
-        mediated_block_index: Arc::new(Mutex::new(None)),
+        },
+        vm_emu_dev_confg: VmEmulatedDeviceConfigList { emu_dev_list: emu_dev_config },
+        vm_pt_dev_confg: pt_dev_config,
+        vm_dtb_devs: VMDtbDevConfigList::default(),
+        mediated_block_index: None,
     };
     let _ = vm_cfg_add_vm_entry(mvm_config_entry);
 }
@@ -199,7 +196,7 @@ pub fn mvm_config_init() {
 //         cpu: VmCpuConfig {
 //             num: 1,
 //             allocate_bitmap: 0b0010,
-//             master: -1,
+//             master: None,
 //         },
 //         vm_emu_dev_confg: Some(emu_dev_config),
 //         vm_pt_dev_confg: Some(pt_dev_config),
@@ -273,7 +270,7 @@ pub fn mvm_config_init() {
 //         cpu: VmCpuConfig {
 //             num: 1,
 //             allocate_bitmap: 0b0100,
-//             master: -1,
+//             master: None,
 //         },
 //         vm_emu_dev_confg: Some(emu_dev_config),
 //         vm_pt_dev_confg: Some(pt_dev_config),

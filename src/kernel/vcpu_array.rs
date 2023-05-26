@@ -32,7 +32,7 @@ impl VcpuArray {
             Some(x) => match x {
                 Some(_) => panic!("self.array[vm_id].is_some()"),
                 None => {
-                    vcpu.set_phys_id(current_cpu().id);
+                    debug_assert_eq!(current_cpu().id, vcpu.phys_id());
                     info!(
                         "append_vcpu: append VM[{}] vcpu {} on core {}",
                         vm_id,

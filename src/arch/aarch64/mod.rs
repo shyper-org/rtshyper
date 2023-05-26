@@ -40,5 +40,4 @@ mod sync;
 mod timer;
 mod tlb;
 mod vcpu;
-#[allow(dead_code)]
 mod vgic;

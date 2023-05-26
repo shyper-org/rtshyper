@@ -5,7 +5,7 @@ use spin::Mutex;
 use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
     active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
-    IpiInnerMsg, set_front_io_task_state, vm, vm_ipa2hva, vm_id_list, HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY,
+    IpiInnerMsg, set_front_io_task_state, vm, vm_id_list, HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY,
     HVC_MEDIATED_DRV_NOTIFY,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
@@ -127,14 +127,14 @@ pub fn mediated_dev_init() {
 // only run in vm0
 pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> Result<usize, ()> {
     let vm = active_vm().unwrap();
-    let blk_pa = vm_ipa2hva(&vm, mmio_ipa);
+    let blk_pa = vm.ipa2hva(mmio_ipa);
     let mediated_blk = MediatedBlk {
         base_addr: blk_pa,
         avail: true,
     };
     mediated_blk.set_nreq(0);
 
-    let cache_pa = vm_ipa2hva(&vm, mediated_blk.cache_ipa());
+    let cache_pa = vm.ipa2hva(mediated_blk.cache_ipa());
     info!(
         "mediated_dev_append: dev_ipa_reg {:#x}, cache ipa {:#x}, cache_pa {:#x}, dma_block_max {:#x}",
         mmio_ipa,
@@ -149,7 +149,7 @@ pub fn mediated_dev_append(_class_id: usize, mmio_ipa: usize) -> Result<usize, (
 
 // service VM finish blk request, and inform the requested VM
 pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> Result<usize, ()> {
-    let dev_pa_reg = vm_ipa2hva(&active_vm().unwrap(), dev_ipa_reg);
+    let dev_pa_reg = active_vm().unwrap().ipa2hva(dev_ipa_reg);
 
     // check weather src vm is still alive
     let mediated_blk = match mediated_blk_list_get_from_pa(dev_pa_reg) {

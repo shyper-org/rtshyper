@@ -12,6 +12,7 @@ mod print;
 mod string;
 #[allow(dead_code)]
 mod time;
+#[cfg(feature = "unilib")]
 pub mod unilib;
 #[allow(dead_code)]
 mod utility;

@@ -11,7 +11,7 @@ use alloc::collections::BTreeMap;
 use spin::Mutex;
 
 use crate::util::{memcpy_safe, sleep};
-use crate::kernel::{vm_ipa2hva, active_vm, HVC_UNILIB_FS_INIT, HVC_UNILIB_FS_LSEEK};
+use crate::kernel::{active_vm, HVC_UNILIB_FS_INIT, HVC_UNILIB_FS_LSEEK};
 use crate::kernel::{HvcGuestMsg, HvcUniLibMsg, hvc_send_msg_to_vm};
 use crate::kernel::HVC_UNILIB;
 use crate::kernel::{HVC_UNILIB_FS_OPEN, HVC_UNILIB_FS_CLOSE, HVC_UNILIB_FS_READ, HVC_UNILIB_FS_WRITE};
@@ -171,9 +171,9 @@ pub fn unilib_fs_init() -> Result<usize, ()> {
 /// * `mmio_ipa`        - The intermediated physical address of target GVM's `UnilibFS` struct provided ny MVM.
 pub fn unilib_fs_append(mmio_ipa: usize) -> Result<usize, ()> {
     let vm = active_vm().unwrap();
-    let mmio_pa = vm_ipa2hva(&vm, mmio_ipa);
+    let mmio_pa = vm.ipa2hva(mmio_ipa);
     let unilib_fs = UnilibFS { base_addr: mmio_pa };
-    let buf_pa = vm_ipa2hva(&vm, unilib_fs.buf_ipa());
+    let buf_pa = vm.ipa2hva(unilib_fs.buf_ipa());
     println!(
         "unilib_fs_append: VM[{}] fs_mmio_ipa {:#x}, buf ipa {:#x}, buf_pa {:#x}",
         unilib_fs.vm_id(),
@@ -226,7 +226,7 @@ pub fn unilib_fs_open(path_start_ipa: usize, path_length: usize, flags: usize) -
     };
 
     // Copy path to unilib_fs buf, see UnilibFSCfg.
-    let path_pa = vm_ipa2hva(&active_vm().unwrap(), path_start_ipa);
+    let path_pa = active_vm().unwrap().ipa2hva(path_start_ipa);
     memcpy_safe(fs_cfg.get_buf(), path_pa as *mut u8, path_length);
     // Add end '\0' for path buf.
     unsafe {
@@ -341,7 +341,7 @@ pub fn unilib_fs_read(fd: usize, buf_ipa: usize, len: usize) -> Result<usize, ()
     if res < 0 {
         return Ok(res as usize);
     }
-    let buf_pa = vm_ipa2hva(&vm, buf_ipa);
+    let buf_pa = vm.ipa2hva(buf_ipa);
     memcpy_safe(buf_pa as *mut u8, fs_cfg.get_buf(), fs_cfg.value());
     Ok(fs_cfg.value())
 }
@@ -373,7 +373,7 @@ pub fn unilib_fs_write(fd: usize, buf_ipa: usize, len: usize) -> Result<usize, (
             return Err(());
         }
     };
-    let buf_pa = vm_ipa2hva(&vm, buf_ipa);
+    let buf_pa = vm.ipa2hva(buf_ipa);
     memcpy_safe(fs_cfg.get_buf(), buf_pa as *mut u8, len);
 
     fs_cfg.prepare_for_request();

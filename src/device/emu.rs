@@ -1,22 +1,16 @@
 use core::ops::Range;
 
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use spin::RwLock;
 
-use crate::arch::Vgic;
-use crate::device::VirtioMmio;
-use crate::kernel::current_cpu;
+use crate::kernel::{current_cpu, active_vm};
 
-static EMU_DEVS_LIST: RwLock<Vec<EmuDevEntry>> = RwLock::new(Vec::new());
-
-#[derive(Clone)]
-pub enum EmuDevs {
-    Vgic(Arc<Vgic>),
-    VirtioBlk(VirtioMmio),
-    VirtioNet(VirtioMmio),
-    VirtioConsole(VirtioMmio),
+pub trait EmuDev: Send + Sync {
+    fn emu_type(&self) -> EmuDeviceType;
+    fn as_any(&self) -> &dyn core::any::Any;
+    fn address_range(&self) -> Range<usize>;
+    fn handler(&self, emu_ctx: &EmuContext) -> bool;
 }
 
 pub struct EmuContext {
@@ -26,21 +20,6 @@ pub struct EmuContext {
     pub sign_ext: bool,
     pub reg: usize,
     pub reg_width: usize,
-}
-
-struct EmuDevEntry {
-    pub vm_id: usize,
-    pub id: usize,
-    pub ipa: usize,
-    pub size: usize,
-    pub handler: EmuDevHandler,
-}
-
-impl EmuDevEntry {
-    #[inline]
-    fn address_range(&self) -> Range<usize> {
-        self.ipa..self.ipa + self.size
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,19 +33,6 @@ pub enum EmuDeviceType {
     EmuDeviceTShyper = 6,
     EmuDeviceTVirtioBlkMediated = 7,
     EmuDeviceTIOMMU = 8,
-}
-
-impl EmuDeviceType {
-    pub fn removable(&self) -> bool {
-        matches!(
-            self,
-            EmuDeviceType::EmuDeviceTGicd
-                | EmuDeviceType::EmuDeviceTGPPT
-                | EmuDeviceType::EmuDeviceTVirtioBlk
-                | EmuDeviceType::EmuDeviceTVirtioNet
-                | EmuDeviceType::EmuDeviceTVirtioConsole
-        )
-    }
 }
 
 impl From<usize> for EmuDeviceType {
@@ -91,57 +57,17 @@ type EmuDevHandler = fn(usize, &EmuContext) -> bool;
 // TO CHECK
 pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
     let ipa = emu_ctx.address;
-    let emu_devs_list = EMU_DEVS_LIST.read();
 
-    let active_vcpu = current_cpu().active_vcpu.as_ref().unwrap();
-    for emu_dev in &*emu_devs_list {
-        if active_vcpu.vm_id() == emu_dev.vm_id && emu_dev.address_range().contains(&ipa) {
-            let handler = emu_dev.handler;
-            let id = emu_dev.id;
-            drop(emu_devs_list);
-            return handler(id, emu_ctx);
-        }
+    if let Some(emu_dev) = active_vm().unwrap().find_emu_dev(ipa) {
+        return emu_dev.handler(emu_ctx);
     }
+
     println!(
         "emu_handler: no emul handler for Core {} data abort ipa {:#x}",
         current_cpu().id,
         ipa
     );
     false
-}
-
-pub fn emu_register_dev(vm_id: usize, dev_id: usize, address: usize, size: usize, handler: EmuDevHandler) {
-    let mut emu_devs_list = EMU_DEVS_LIST.write();
-    for emu_dev in &*emu_devs_list {
-        if vm_id != emu_dev.vm_id {
-            continue;
-        }
-        if emu_dev.address_range().contains(&address) || (address..address + size).contains(&emu_dev.ipa) {
-            panic!("emu_register_dev: duplicated emul address region: prev address {:#x} size {:#x}, next address {:#x} size {:#x}", emu_dev.ipa, emu_dev.size, address, size);
-        }
-    }
-
-    emu_devs_list.push(EmuDevEntry {
-        vm_id,
-        id: dev_id,
-        ipa: address,
-        size,
-        handler,
-    });
-}
-
-pub fn emu_remove_dev(vm_id: usize, dev_id: usize, address: usize, size: usize) {
-    let mut emu_devs_list = EMU_DEVS_LIST.write();
-    for (idx, emu_dev) in emu_devs_list.iter().enumerate() {
-        if vm_id == emu_dev.vm_id && emu_dev.ipa == address && emu_dev.id == dev_id && emu_dev.size == size {
-            emu_devs_list.remove(idx);
-            return;
-        }
-    }
-    panic!(
-        "emu_remove_dev: emu dev not exist address {:#x} size {:#x}",
-        address, size
-    );
 }
 
 static EMU_REGS_LIST: RwLock<Vec<EmuRegEntry>> = RwLock::new(Vec::new());

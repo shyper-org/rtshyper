@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use spin::RwLock;
 
 use crate::arch::{PAGE_SIZE, PTE_S1_NORMAL, LVL1_SHIFT};
-use crate::kernel::{vm, current_cpu, IpiVmmMsg, vm_ipa2hva, Vm, IpiInnerMsg, ipi_send_msg, IpiType};
+use crate::kernel::{vm, current_cpu, IpiVmmMsg, Vm, IpiInnerMsg, ipi_send_msg, IpiType};
 use crate::board::PLAT_DESC;
 use crate::util::barrier;
 
@@ -80,7 +80,7 @@ pub(super) fn vmm_map_ipa_percore(vm_id: usize, is_master: bool) {
         shared_pte_list.clear();
         for region in config.memory_region().iter() {
             for ipa in region.as_range().step_by(PAGE_SIZE) {
-                let hva = vm_ipa2hva(&vm, ipa);
+                let hva = vm.ipa2hva(ipa);
                 let pa = vm.ipa2pa(ipa).unwrap();
                 current_cpu()
                     .pt()
@@ -88,7 +88,7 @@ pub(super) fn vmm_map_ipa_percore(vm_id: usize, is_master: bool) {
             }
 
             for ipa in region.as_range().step_by(1 << LVL1_SHIFT) {
-                let hva = vm_ipa2hva(&vm, ipa);
+                let hva = vm.ipa2hva(ipa);
                 let pte = current_cpu().pt().get_pte(hva, 1).unwrap();
                 shared_pte_list.push((hva, pte));
             }
@@ -122,7 +122,7 @@ pub(super) fn vmm_unmap_ipa_percore(vm_id: usize) {
     info!("vmm_unmap_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
     let config = vm.config();
     for region in config.memory_region().iter() {
-        let hva = vm_ipa2hva(&vm, region.ipa_start);
+        let hva = vm.ipa2hva(region.ipa_start);
         current_cpu().pt().pt_unmap_range(hva, region.length, false);
     }
     barrier();

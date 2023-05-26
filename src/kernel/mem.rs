@@ -378,7 +378,7 @@ pub fn hypervisor_self_coloring() {
     cpu_new.cpu_pt.lvl2.fill(0);
     cpu_new.cpu_pt.lvl3.fill(0);
     match current_cpu().pt().ipa2pa(cpu_new.cpu_pt.lvl1.as_ptr() as usize) {
-        Some(directory) => unsafe { cpu_new.reset_pt(directory) },
+        Some(directory) => cpu_new.reset_pt(directory),
         None => panic!(
             "Invalid va {:#x} when rewrite cpu_new page table",
             cpu_new.cpu_pt.lvl1.as_ptr() as usize

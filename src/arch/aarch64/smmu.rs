@@ -1,5 +1,7 @@
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::mem::size_of;
+use core::ops::Range;
 use core::ptr;
 
 use spin::Mutex;
@@ -8,7 +10,10 @@ use tock_registers::interfaces::*;
 use tock_registers::registers::*;
 
 use crate::board::PLAT_DESC;
+use crate::config::VmEmulatedDeviceConfig;
 use crate::device::EmuContext;
+use crate::device::EmuDev;
+use crate::device::EmuDeviceType;
 use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::Vm;
 use crate::kernel::{active_vm, active_vm_id, current_cpu};
@@ -682,48 +687,76 @@ fn emu_smmu_revise_cbar(emu_ctx: &EmuContext) {
     smmu_v2.glb_rs1.CBAR[context_id].set(cbar as u32);
 }
 
-pub fn emu_smmu_handler(_emu_dev_id: usize, emu_ctx: &EmuContext) -> bool {
-    let address = emu_ctx.address;
-    let smmu_v2 = SMMU_V2.lock();
+pub struct EmuSmmu {
+    address_range: Range<usize>,
+}
 
-    let mut permit_write = true;
-    let cbar = &smmu_v2.glb_rs1.CBAR;
-    if cbar.as_ptr_range().contains(&(address as *const _)) && emu_ctx.write {
-        drop(smmu_v2);
-        emu_smmu_revise_cbar(emu_ctx);
-        return true;
-    } else if address >= smmu_v2.context_bank[smmu_v2.context_s2_idx].base_addr {
-        // Forbid writing hypervisor's context banks.
-        permit_write = false;
-    }
-
-    if emu_ctx.write {
-        let val = current_cpu().get_gpr(emu_ctx.reg);
-        if permit_write {
-            if emu_ctx.width > 4 {
-                unsafe { ptr::write_volatile(address as *mut usize, val) };
-            } else {
-                unsafe { ptr::write_volatile(address as *mut u32, val as u32) };
-            }
-        } else {
-            info!(
-                "emu_smmu_handler: vm {} is not allowed to access context[{}]",
-                active_vm_id(),
-                (address - smmu_v2.context_bank.first().unwrap().base_addr as usize) / 0x10000,
-            );
-        }
+pub fn emu_smmu_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
+    if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTIOMMU {
+        Ok(Box::new(EmuSmmu {
+            address_range: emu_cfg.base_ipa..emu_cfg.base_ipa + emu_cfg.length,
+        }))
     } else {
-        let val = if address == &smmu_v2.glb_rs0.IDR1 as *const _ as usize {
-            smmu_v2.emu_rs0_idr1 as usize
-        } else {
-            if emu_ctx.width > 4 {
-                unsafe { ptr::read_volatile(address as *const usize) }
-            } else {
-                unsafe { ptr::read_volatile(address as *const u32) as usize }
-            }
-        };
-        current_cpu().set_gpr(emu_ctx.reg, val);
+        Err(())
+    }
+}
+
+impl EmuDev for EmuSmmu {
+    fn emu_type(&self) -> EmuDeviceType {
+        EmuDeviceType::EmuDeviceTIOMMU
     }
 
-    true
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
+
+    fn address_range(&self) -> Range<usize> {
+        self.address_range.clone()
+    }
+
+    fn handler(&self, emu_ctx: &EmuContext) -> bool {
+        let address = emu_ctx.address;
+        let smmu_v2 = SMMU_V2.lock();
+
+        let mut permit_write = true;
+        let cbar = &smmu_v2.glb_rs1.CBAR;
+        if cbar.as_ptr_range().contains(&(address as *const _)) && emu_ctx.write {
+            drop(smmu_v2);
+            emu_smmu_revise_cbar(emu_ctx);
+            return true;
+        } else if address >= smmu_v2.context_bank[smmu_v2.context_s2_idx].base_addr {
+            // Forbid writing hypervisor's context banks.
+            permit_write = false;
+        }
+
+        if emu_ctx.write {
+            let val = current_cpu().get_gpr(emu_ctx.reg);
+            if permit_write {
+                if emu_ctx.width > 4 {
+                    unsafe { ptr::write_volatile(address as *mut usize, val) };
+                } else {
+                    unsafe { ptr::write_volatile(address as *mut u32, val as u32) };
+                }
+            } else {
+                info!(
+                    "emu_smmu_handler: vm {} is not allowed to access context[{}]",
+                    active_vm_id(),
+                    (address - smmu_v2.context_bank.first().unwrap().base_addr as usize) / 0x10000,
+                );
+            }
+        } else {
+            let val = if address == &smmu_v2.glb_rs0.IDR1 as *const _ as usize {
+                smmu_v2.emu_rs0_idr1 as usize
+            } else {
+                if emu_ctx.width > 4 {
+                    unsafe { ptr::read_volatile(address as *const usize) }
+                } else {
+                    unsafe { ptr::read_volatile(address as *const u32) as usize }
+                }
+            };
+            current_cpu().set_gpr(emu_ctx.reg, val);
+        }
+
+        true
+    }
 }

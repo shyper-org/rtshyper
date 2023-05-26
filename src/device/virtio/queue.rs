@@ -5,7 +5,7 @@ use spin::Mutex;
 
 use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
-use crate::kernel::{active_vm, Vm, vm_ipa2hva};
+use crate::kernel::{active_vm, Vm};
 
 pub const VIRTQ_READY: usize = 1;
 pub const VIRTQ_DESC_F_NEXT: u16 = 1;
@@ -185,7 +185,7 @@ impl Virtq {
         let desc = inner.desc_table.as_ref().unwrap();
         println!("[*desc_ring*]");
         for i in 0..size {
-            let desc_addr = vm_ipa2hva(&vm, desc[i].addr as usize);
+            let desc_addr = vm.ipa2hva(desc[i].addr as usize);
             println!(
                 "index {}   desc_addr_ipa {:#x}   desc_addr_pa {:#x}   len {:#x}   flags {}  next {}",
                 i, desc[i].addr, desc_addr, desc[i].len, desc[i].flags, desc[i].next

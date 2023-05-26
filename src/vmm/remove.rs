@@ -1,6 +1,5 @@
 use crate::arch::{interrupt_arch_deactive_irq, INTERRUPT_IRQ_GUEST_TIMER};
 use crate::config::vm_cfg_del_vm;
-use crate::device::emu_remove_dev;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_vm, remove_vm_async_task,
     Vm, cpu_idle, vm, interrupt_cpu_enable,
@@ -22,14 +21,13 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vmm_remove_vcpu(&vm);
     // reset vm interface
     vm_if_reset(vm_id);
-    // emu dev
-    vmm_remove_emulated_device(&vm);
     // passthrough dev
     vmm_remove_passthrough_device(&vm);
     // clear async task list
     remove_vm_async_task(vm_id);
     // remove vm cfg
     let _ = vm_cfg_del_vm(vm_id);
+    #[cfg(feature = "unilib")]
     // remove vm unilib
     crate::util::unilib::unilib_fs_remove(vm_id);
     // unmap ipa(hva) percore at last
@@ -68,31 +66,9 @@ fn vmm_remove_vcpu(vm: &Vm) {
     }
 }
 
-fn vmm_remove_emulated_device(vm: &Vm) {
-    let config = vm.config().emulated_device_list();
-    for (idx, emu_dev) in config.iter().enumerate() {
-        // mmio / vgic will be removed with struct vm
-        if !emu_dev.emu_type.removable() {
-            warn!(
-                "vmm_remove_emulated_device: cannot remove device {:?}",
-                emu_dev.emu_type
-            );
-            continue;
-        }
-        emu_remove_dev(vm.id(), idx, emu_dev.base_ipa, emu_dev.length);
-        // println!(
-        //     "VM[{}] removes emulated device: id=<{}>, name=\"{}\", ipa=<{:#x}>",
-        //     vm.id(),
-        //     idx,
-        //     emu_dev.emu_type,
-        //     emu_dev.base_ipa
-        // );
-    }
-}
-
 fn vmm_remove_passthrough_device(vm: &Vm) {
     for irq in vm.config().passthrough_device_irqs() {
-        interrupt_vm_remove(vm, irq);
+        interrupt_vm_remove(vm, *irq);
         // println!("VM[{}] remove irq {}", vm.id(), irq);
     }
 }

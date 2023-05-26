@@ -1,8 +1,5 @@
 use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
-
-use spin::Mutex;
 
 use crate::arch::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::board::*;
@@ -166,26 +163,26 @@ pub fn mvm_config_init() {
         // String::from("earlycon=uart8250,mmio32,0x3100000 console=ttyS0,115200n8 root=/dev/nvme0n1p2 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         String::from("coherent_pool=1M snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1 console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
 
-        image: Arc::new(VmImageConfig {
+        image: VmImageConfig {
             kernel_img_name: Some("Raspi4"),
             kernel_load_ipa: 0x280000,
             kernel_entry_point: 0x280000,
             device_tree_load_ipa: 0x10000000,
             ramdisk_load_ipa: 0,
-        }),
-        memory: Arc::new(Mutex::new(VmMemoryConfig {
+        },
+        memory: VmMemoryConfig {
             region: vm_region,
             colors: HYPERVISOR_COLORS.get().unwrap().clone(),
-        })),
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
+        },
+        cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0001,
-            master: 0,
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList{emu_dev_list: emu_dev_config,})),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
-        mediated_block_index: Arc::new(Mutex::new(None)),
+            master: Some(0),
+        },
+        vm_emu_dev_confg: VmEmulatedDeviceConfigList{emu_dev_list: emu_dev_config,},
+        vm_pt_dev_confg: pt_dev_config,
+        vm_dtb_devs: VMDtbDevConfigList::default(),
+        mediated_block_index: None,
     };
     let _ = vm_cfg_add_vm_entry(mvm_config_entry);
 }

@@ -4,11 +4,8 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
-use crate::device::EmuDevs;
 use crate::device::VirtioIov;
-use crate::kernel::{
-    active_vm, active_vm_id, current_cpu, vm_if_get_cpu_id, vm_if_set_mem_map_bit, vm_ipa2hva, VmType, vm_id_list,
-};
+use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_get_cpu_id, vm_if_set_mem_map_bit, VmType, vm_id_list};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
@@ -171,7 +168,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         in_iov.clear();
 
         loop {
-            let addr = vm_ipa2hva(&active_vm().unwrap(), vq.desc_addr(idx));
+            let addr = active_vm().unwrap().ipa2hva(vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_handle_ctrl: failed to desc addr");
                 return false;
@@ -251,7 +248,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         tx_iov.clear();
 
         loop {
-            let addr = vm_ipa2hva(&active_vm().unwrap(), vq.desc_addr(idx));
+            let addr = active_vm().unwrap().ipa2hva(vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_notify_handler: failed to desc addr");
                 return false;
@@ -307,7 +304,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             let vcpu = vm.vcpu(0).unwrap();
             if vcpu.phys_id() == current_cpu().id {
                 let nic = match vm.emu_net_dev(0) {
-                    Some(EmuDevs::VirtioNet(x)) => x,
+                    Some(x) => x,
                     _ => {
                         println!("virtio_net_notify_handler: failed to get virtio net dev");
                         return false;
@@ -363,7 +360,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
                 Some(_vm) => _vm,
             };
             let nic = match vm.emu_net_dev(0) {
-                Some(EmuDevs::VirtioNet(x)) => x,
+                Some(x) => x,
                 _ => {
                     // println!(
                     //     "ethernet_ipi_rev_handler: vm[{}] failed to get virtio net dev",
@@ -460,7 +457,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         Some(vm) => vm,
     };
     let nic = match vm.emu_net_dev(0) {
-        Some(EmuDevs::VirtioNet(x)) => x,
+        Some(x) => x,
         _ => {
             // println!("ethernet_send_to: vm[{}] failed to get virtio net dev", vmid);
             return true;
@@ -498,7 +495,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let mut rx_len = 0;
 
     loop {
-        let dst = vm_ipa2hva(&vm, rx_vq.desc_addr(desc_idx));
+        let dst = vm.ipa2hva(rx_vq.desc_addr(desc_idx));
         if dst == 0 {
             println!(
                 "rx_vq desc base table addr {:#x}, idx {}, avail table addr {:#x}, avail last idx {}",
@@ -573,7 +570,7 @@ fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
 }
 
 pub fn virtio_net_announce(vm: Vm) {
-    if let Some(EmuDevs::VirtioNet(nic)) = vm.emu_net_dev(0) {
+    if let Some(nic) = vm.emu_net_dev(0) {
         if let DevDesc::NetDesc(desc) = nic.dev().desc() {
             let status = desc.status();
             desc.set_status(status | VIRTIO_NET_S_ANNOUNCE);
