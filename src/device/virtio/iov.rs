@@ -7,7 +7,7 @@ use spin::Mutex;
 use crate::util::memcpy_safe;
 
 #[derive(Clone)]
-pub struct VirtioIov {
+pub(super) struct VirtioIov {
     inner: Arc<Mutex<VirtioIovInner>>,
 }
 

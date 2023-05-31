@@ -25,6 +25,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     vmm_remove_passthrough_device(&vm);
     // clear async task list
     remove_vm_async_task(vm_id);
+    crate::device::remove_virtio_nic(vm_id);
     // remove vm cfg
     let _ = vm_cfg_del_vm(vm_id);
     #[cfg(feature = "unilib")]

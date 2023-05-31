@@ -4,18 +4,18 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::config::VmEmulatedDeviceConfig;
-use crate::device::{
-    EmuContext, virtio_blk_notify_handler, virtio_console_notify_handler, virtio_mediated_blk_notify_handler,
-    virtio_net_handle_ctrl, virtio_net_notify_handler,
-};
-use crate::device::{EmuDev, EmuDeviceType, VirtioDeviceType};
-use crate::device::{VirtioQueue, Virtq};
-use crate::device::{VIRTQUEUE_BLK_MAX_SIZE, VIRTQUEUE_CONSOLE_MAX_SIZE, VIRTQUEUE_NET_MAX_SIZE};
-use crate::device::VirtDev;
-use crate::device::VIRTQ_READY;
+use crate::device::{EmuContext};
+use crate::device::{EmuDev, EmuDeviceType};
+use crate::device::Virtq;
 use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 use crate::kernel::{active_vm, active_vm_id};
 use crate::kernel::Vm;
+
+use super::queue::VIRTQ_READY;
+use super::net::{virtio_net_handle_ctrl, virtio_net_notify_handler, VIRTQUEUE_NET_MAX_SIZE};
+use super::dev::{VirtDev, VirtioDeviceType};
+use super::console::{VIRTQUEUE_CONSOLE_MAX_SIZE, virtio_console_notify_handler};
+use super::blk::{VIRTQUEUE_BLK_MAX_SIZE, virtio_blk_notify_handler, virtio_mediated_blk_notify_handler};
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
 pub const VIRTIO_MMIO_MAGIC_VALUE: usize = 0x000;
@@ -49,7 +49,7 @@ pub const VIRTIO_MMIO_INT_CONFIG: u32 = 1 << 1;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct VirtMmioRegs {
+struct VirtMmioRegs {
     magic: u32,
     version: u32,
     device_id: u32,
@@ -95,20 +95,47 @@ impl VirtMmioRegs {
     }
 }
 
-#[derive(Clone)]
-pub struct VirtioMmio {
+struct VirtioInnerConst {
     base: usize,
     length: usize,
     emu_type: EmuDeviceType,
-    inner: Arc<Mutex<VirtioMmioInner>>,
+    vq: Vec<Virtq>,
 }
 
-impl VirtioQueue for VirtioMmio {
-    fn virtio_queue_init(&self, dev_type: VirtioDeviceType) {
+struct VirtioInner {
+    inner_const: VirtioInnerConst,
+    inner: Mutex<VirtioMmioInnerMut>,
+}
+
+impl VirtioInner {
+    fn new(base: usize, length: usize, emu_type: EmuDeviceType) -> Self {
+        Self {
+            inner_const: VirtioInnerConst {
+                base,
+                length,
+                emu_type,
+                vq: vec![],
+            },
+            inner: Mutex::new(VirtioMmioInnerMut::new()),
+        }
+    }
+
+    fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
+        let mut inner = self.inner.lock();
+        inner.regs.init(dev_type);
+        inner.dev.init(dev_type, config);
+    }
+
+    pub fn set_q_num_max(&self, q_num_max: u32) {
+        let mut inner = self.inner.lock();
+        inner.regs.q_num_max = q_num_max;
+    }
+
+    fn virtio_queue_init(&mut self, dev_type: VirtioDeviceType) {
         match dev_type {
             VirtioDeviceType::Block => {
                 self.set_q_num_max(VIRTQUEUE_BLK_MAX_SIZE as u32);
-                let mut inner = self.inner.lock();
+                let inner = self.inner.lock();
                 let queue = Virtq::default();
                 queue.reset(0);
                 if inner.dev.mediated() {
@@ -116,30 +143,29 @@ impl VirtioQueue for VirtioMmio {
                 } else {
                     queue.set_notify_handler(virtio_blk_notify_handler);
                 }
-                inner.vq.push(queue);
+                self.inner_const.vq.push(queue);
             }
             VirtioDeviceType::Net => {
                 self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
-                let mut inner = self.inner.lock();
                 // Not support feature VIRTIO_NET_F_CTRL_VQ (no control queue)
                 for i in 0..2 {
                     let queue = Virtq::default();
                     queue.reset(i);
                     queue.set_notify_handler(virtio_net_notify_handler);
-                    inner.vq.push(queue);
+                    self.inner_const.vq.push(queue);
                 }
-                inner.vq.push(Virtq::default());
-                inner.vq[2].reset(2);
-                inner.vq[2].set_notify_handler(virtio_net_handle_ctrl);
+                let queue = Virtq::default();
+                queue.reset(2);
+                queue.set_notify_handler(virtio_net_handle_ctrl);
+                self.inner_const.vq.push(queue);
             }
             VirtioDeviceType::Console => {
                 self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
-                let mut inner = self.inner.lock();
                 for i in 0..4 {
                     let queue = Virtq::default();
                     queue.reset(i);
                     queue.set_notify_handler(virtio_console_notify_handler);
-                    inner.vq.push(queue);
+                    self.inner_const.vq.push(queue);
                 }
             }
             VirtioDeviceType::None => {
@@ -147,25 +173,15 @@ impl VirtioQueue for VirtioMmio {
             }
         }
     }
-
-    fn virtio_queue_reset(&self, index: usize) {
-        let inner = self.inner.lock();
-        inner.vq[index].reset(index);
-    }
 }
 
-impl VirtioMmio {
-    pub fn new(base: usize, length: usize, emu_type: EmuDeviceType) -> VirtioMmio {
-        VirtioMmio {
-            base,
-            length,
-            emu_type,
-            inner: Arc::new(Mutex::new(VirtioMmioInner::new())),
-        }
-    }
+#[repr(transparent)]
+#[derive(Clone)]
+pub struct VirtioMmio(Arc<VirtioInner>);
 
+impl VirtioMmio {
     pub fn notify_config(&self, vm: Vm) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_CONFIG;
         let int_id = inner.dev.int_id();
         let trgt_id = vm.vcpu(0).unwrap().phys_id();
@@ -182,7 +198,7 @@ impl VirtioMmio {
     }
 
     pub fn notify(&self, vm: Vm) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_VRING;
         let int_id = inner.dev.int_id();
         let trgt_id = vm.vcpu(0).unwrap().phys_id();
@@ -198,175 +214,155 @@ impl VirtioMmio {
         }
     }
 
-    fn init(&self, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) {
-        let mut inner = self.inner.lock();
-        inner.regs.init(dev_type);
-        inner.dev.init(dev_type, config);
-    }
-
     // virtio_dev_reset
     pub fn dev_reset(&self) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.dev_stat = 0;
         inner.regs.irt_stat = 0;
         let idx = inner.regs.q_sel as usize;
-        inner.vq[idx].set_ready(0);
-        for (idx, virtq) in inner.vq.iter().enumerate() {
+        let vq = &self.0.inner_const.vq;
+        vq[idx].set_ready(0);
+        for (idx, virtq) in vq.iter().enumerate() {
             virtq.reset(idx);
         }
         inner.dev.set_activated(false);
     }
 
     pub fn set_irt_stat(&self, irt_stat: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.irt_stat = irt_stat;
     }
 
     pub fn set_irt_ack(&self, irt_ack: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.irt_ack = irt_ack;
     }
 
     pub fn set_q_sel(&self, q_sel: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.q_sel = q_sel;
     }
 
     pub fn set_dev_stat(&self, dev_stat: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.dev_stat = dev_stat;
     }
 
-    pub fn set_q_num_max(&self, q_num_max: u32) {
-        let mut inner = self.inner.lock();
-        inner.regs.q_num_max = q_num_max;
-    }
-
     pub fn set_dev_feature(&self, dev_feature: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.dev_feature = dev_feature;
     }
 
     pub fn set_dev_feature_sel(&self, dev_feature_sel: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.dev_feature_sel = dev_feature_sel;
     }
 
     pub fn set_drv_feature(&self, drv_feature: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.drv_feature = drv_feature;
     }
 
     pub fn set_drv_feature_sel(&self, drv_feature_sel: u32) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.regs.drv_feature = drv_feature_sel;
     }
 
     pub fn or_driver_feature(&self, driver_features: usize) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.0.inner.lock();
         inner.driver_features |= driver_features;
     }
 
-    pub fn dev(&self) -> VirtDev {
-        let inner = self.inner.lock();
+    pub(super) fn dev(&self) -> VirtDev {
+        let inner = self.0.inner.lock();
         inner.dev.clone()
     }
 
     pub fn q_sel(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.q_sel
     }
 
     pub fn magic(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.magic
     }
 
     pub fn version(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.version
     }
 
     pub fn device_id(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.device_id
     }
 
     pub fn vendor_id(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.vendor_id
     }
 
     pub fn dev_stat(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.dev_stat
     }
 
     pub fn dev_feature_sel(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.dev_feature_sel
     }
 
     pub fn drv_feature_sel(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.drv_feature_sel
     }
 
     pub fn q_num_max(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.q_num_max
     }
 
     pub fn irt_stat(&self) -> u32 {
-        let inner = self.inner.lock();
+        let inner = self.0.inner.lock();
         inner.regs.irt_stat
     }
 
     pub fn vq(&self, idx: usize) -> Result<Virtq, ()> {
-        let inner = self.inner.lock();
-        if idx >= inner.vq.len() {
-            return Err(());
+        match self.0.inner_const.vq.get(idx) {
+            Some(vq) => Ok(vq.clone()),
+            None => Err(()),
         }
-        Ok(inner.vq[idx].clone())
     }
 
     #[inline]
     pub fn base(&self) -> usize {
-        self.base
+        self.0.inner_const.base
     }
 
     pub fn notify_handler(&self, idx: usize) -> bool {
-        let inner = self.inner.lock();
-        if idx >= inner.vq.len() {
-            return false;
-        }
-        let vq = inner.vq[idx].clone();
-        drop(inner);
-        vq.call_notify_handler(self.clone())
+        self.0.inner_const.vq[idx].call_notify_handler(self.clone())
     }
 
     pub fn vq_num(&self) -> usize {
-        self.inner.lock().vq.len()
+        self.0.inner_const.vq.len()
     }
 }
 
-struct VirtioMmioInner {
+struct VirtioMmioInnerMut {
     driver_features: usize,
     driver_status: usize,
     regs: VirtMmioRegs,
     dev: VirtDev,
-
-    vq: Vec<Virtq>,
 }
 
-impl VirtioMmioInner {
-    fn new() -> VirtioMmioInner {
-        VirtioMmioInner {
+impl VirtioMmioInnerMut {
+    fn new() -> VirtioMmioInnerMut {
+        VirtioMmioInnerMut {
             driver_features: 0,
             driver_status: 0,
             regs: VirtMmioRegs::default(),
             dev: VirtDev::default(),
-            vq: Vec::new(),
         }
     }
 }
@@ -617,10 +613,10 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
                 value = mmio.dev().generation() as u32;
             }
             VIRTIO_MMIO_CONFIG..=0x1ff => match mmio.dev().desc() {
-                super::DevDesc::BlkDesc(blk_desc) => {
+                super::dev::DevDesc::BlkDesc(blk_desc) => {
                     value = blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
                 }
-                super::DevDesc::NetDesc(net_desc) => {
+                super::dev::DevDesc::NetDesc(net_desc) => {
                     value = net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG);
                 }
                 _ => {
@@ -640,26 +636,31 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
     }
 }
 
-pub fn emu_virtio_mmio_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
-    let mmio = VirtioMmio::new(emu_cfg.base_ipa, emu_cfg.length, emu_cfg.emu_type);
+pub fn emu_virtio_mmio_init(vmid: usize, emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
     let virt_dev_type = match emu_cfg.emu_type {
-        crate::device::EmuDeviceType::EmuDeviceTVirtioBlk => VirtioDeviceType::Block,
-        crate::device::EmuDeviceType::EmuDeviceTVirtioNet => VirtioDeviceType::Net,
-        crate::device::EmuDeviceType::EmuDeviceTVirtioConsole => VirtioDeviceType::Console,
+        EmuDeviceType::EmuDeviceTVirtioBlk => VirtioDeviceType::Block,
+        EmuDeviceType::EmuDeviceTVirtioNet => VirtioDeviceType::Net,
+        EmuDeviceType::EmuDeviceTVirtioConsole => VirtioDeviceType::Console,
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");
             return Err(());
         }
     };
-
+    let mut mmio = VirtioInner::new(emu_cfg.base_ipa, emu_cfg.length, emu_cfg.emu_type);
     mmio.init(virt_dev_type, emu_cfg);
     mmio.virtio_queue_init(virt_dev_type);
+    let mmio = VirtioMmio(Arc::new(mmio));
+    if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTVirtioNet {
+        let nic = mmio.clone();
+        let mac = emu_cfg.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
+        super::mac::set_mac_info(&mac, vmid, nic);
+    }
     Ok(Box::new(mmio))
 }
 
 impl EmuDev for VirtioMmio {
     fn emu_type(&self) -> EmuDeviceType {
-        self.emu_type
+        self.0.inner_const.emu_type
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
@@ -667,7 +668,7 @@ impl EmuDev for VirtioMmio {
     }
 
     fn address_range(&self) -> core::ops::Range<usize> {
-        self.base..self.base + self.length
+        self.0.inner_const.base..self.0.inner_const.base + self.0.inner_const.length
     }
 
     fn handler(&self, emu_ctx: &EmuContext) -> bool {

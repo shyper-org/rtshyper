@@ -3,14 +3,17 @@ use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{DevDesc, VirtioMmio, Virtq, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
-use crate::device::VirtioIov;
+use crate::device::{VirtioMmio, Virtq};
 use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_get_cpu_id, vm_if_set_mem_map_bit, VmType, vm_id_list};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::util::round_down;
+
+use super::queue::{VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+use super::dev::DevDesc;
+use super::iov::VirtioIov;
 
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 
@@ -72,9 +75,13 @@ pub struct NetDesc {
 }
 
 impl NetDesc {
-    pub fn default() -> NetDesc {
+    pub fn new(mac: &[usize]) -> NetDesc {
+        let mut desc = NetDescInner::default();
+        for (i, item) in mac.iter().enumerate().take(6) {
+            desc.mac[i] = *item as u8;
+        }
         NetDesc {
-            inner: Arc::new(Mutex::new(NetDescInner::default())),
+            inner: Arc::new(Mutex::new(desc)),
         }
     }
 
@@ -86,13 +93,6 @@ impl NetDesc {
     pub fn status(&self) -> u16 {
         let inner = self.inner.lock();
         inner.status
-    }
-
-    pub fn cfg_init(&self, mac: &[usize]) {
-        let mut inner = self.inner.lock();
-        for (i, item) in mac.iter().enumerate().take(6) {
-            inner.mac[i] = *item as u8;
-        }
     }
 
     pub fn offset_data(&self, offset: usize) -> u32 {
@@ -111,13 +111,13 @@ pub const VIRTIO_NET_S_ANNOUNCE: u16 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct NetDescInner {
+struct NetDescInner {
     mac: [u8; 6],
     status: u16,
 }
 
 impl NetDescInner {
-    pub fn default() -> NetDescInner {
+    fn default() -> NetDescInner {
         NetDescInner {
             mac: [0; 6],
             status: VIRTIO_NET_S_LINK_UP,
@@ -262,8 +262,8 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             idx = vq.desc_next(idx) as usize;
         }
 
-        let trgt_vmid_map = ethernet_transmit(tx_iov.clone(), len).1;
-        if trgt_vmid_map != 0 {
+        let (success, trgt_vmid_map) = ethernet_transmit(tx_iov.clone(), len);
+        if success {
             vms_to_notify |= trgt_vmid_map;
         }
 
@@ -303,6 +303,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             };
             let vcpu = vm.vcpu(0).unwrap();
             if vcpu.phys_id() == current_cpu().id {
+                // vms_to_notify来自ethernet_transmit根据mac获取的bitmap
                 let nic = match vm.emu_net_dev(0) {
                     Some(x) => x,
                     _ => {
@@ -359,6 +360,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
                 }
                 Some(_vm) => _vm,
             };
+            // trgt_vmid来自ipi消息，这个消息是334行的ipi信息发出的
             let nic = match vm.emu_net_dev(0) {
                 Some(x) => x,
                 _ => {
@@ -456,6 +458,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         }
         Some(vm) => vm,
     };
+    // vmid 可能来自广播的所有vm id列表，也可能来自根据mac地址获取的vmid
     let nic = match vm.emu_net_dev(0) {
         Some(x) => x,
         _ => {
@@ -566,10 +569,11 @@ fn ethernet_is_arp(frame: &[u8]) -> bool {
 
 fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
     let frame_mac = &frame[0..6];
-    crate::kernel::mac_to_vmid(frame_mac).ok_or(())
+    super::mac::mac_to_vmid(frame_mac).ok_or(())
 }
 
 pub fn virtio_net_announce(vm: Vm) {
+    // 这个就是纯纯小丑了，改成遍历整个网卡列表找到哪个网卡属于这个vm
     if let Some(nic) = vm.emu_net_dev(0) {
         if let DevDesc::NetDesc(desc) = nic.dev().desc() {
             let status = desc.status();

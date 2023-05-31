@@ -3,7 +3,6 @@ use core::slice;
 
 use spin::Mutex;
 
-use crate::device::VirtioDeviceType;
 use crate::device::VirtioMmio;
 use crate::kernel::{active_vm, Vm};
 
@@ -49,11 +48,6 @@ struct VringUsed {
     flags: u16,
     idx: u16,
     ring: [VringUsedElem; 512],
-}
-
-pub trait VirtioQueue {
-    fn virtio_queue_init(&self, dev_type: VirtioDeviceType);
-    fn virtio_queue_reset(&self, index: usize);
 }
 
 #[derive(Clone)]

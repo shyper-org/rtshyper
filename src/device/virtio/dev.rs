@@ -4,12 +4,13 @@ use spin::Mutex;
 
 use crate::config::VmEmulatedDeviceConfig;
 // use crate::device::add_mediated_dev;
-use crate::device::{net_features, NetDesc};
-use crate::device::{console_features, ConsoleDesc};
-use crate::device::{BlkDesc, BLOCKIF_IOV_MAX, VirtioBlkReq};
-use crate::device::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, VIRTIO_F_VERSION_1};
 use crate::kernel::mem_pages_alloc;
 use crate::mm::PageFrame;
+
+use super::mmio::VIRTIO_F_VERSION_1;
+use super::console::{ConsoleDesc, console_features};
+use super::net::{NetDesc, net_features};
+use super::blk::{VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX, BlkDesc, VirtioBlkReq, BLOCKIF_IOV_MAX};
 
 #[derive(Copy, Clone, Debug)]
 pub enum VirtioDeviceType {
@@ -34,7 +35,7 @@ pub enum DevReq {
 }
 
 #[derive(Clone)]
-pub struct VirtDev {
+pub(super) struct VirtDev {
     inner: Arc<Mutex<VirtDevInner>>,
 }
 
@@ -77,7 +78,7 @@ impl VirtDev {
 
     pub fn cache(&self) -> usize {
         let inner = self.inner.lock();
-        return inner.cache.as_ref().unwrap().pa();
+        inner.cache.as_ref().unwrap().pa()
     }
 
     pub fn activated(&self) -> bool {
@@ -101,7 +102,7 @@ impl VirtDev {
     }
 }
 
-pub struct VirtDevInner {
+struct VirtDevInner {
     activated: bool,
     dev_type: VirtioDeviceType,
     features: usize,
@@ -140,8 +141,7 @@ impl VirtDevInner {
 
         match self.dev_type {
             VirtioDeviceType::Block => {
-                let blk_desc = BlkDesc::default();
-                blk_desc.cfg_init(config.cfg_list[1]);
+                let blk_desc = BlkDesc::new(config.cfg_list[1]);
                 self.desc = DevDesc::BlkDesc(blk_desc);
 
                 // TODO: blk_features_init & cache init
@@ -169,8 +169,7 @@ impl VirtDevInner {
                 }
             }
             VirtioDeviceType::Net => {
-                let net_desc = NetDesc::default();
-                net_desc.cfg_init(&config.cfg_list);
+                let net_desc = NetDesc::new(&config.cfg_list);
                 self.desc = DevDesc::NetDesc(net_desc);
 
                 self.features |= net_features();
@@ -186,8 +185,7 @@ impl VirtDevInner {
                 }
             }
             VirtioDeviceType::Console => {
-                let console_desc = ConsoleDesc::default();
-                console_desc.cfg_init(config.cfg_list[0] as u16, config.cfg_list[1] as u64);
+                let console_desc = ConsoleDesc::new(config.cfg_list[0] as u16, config.cfg_list[1] as u64);
                 self.desc = DevDesc::ConsoleDesc(console_desc);
                 self.features |= console_features();
 

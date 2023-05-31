@@ -5,7 +5,6 @@ pub use self::interrupt::*;
 pub use self::iommu::*;
 pub use self::ipi::*;
 pub use self::ivc::*;
-pub use self::logger::*;
 pub use self::mem::*;
 pub use self::sched::*;
 pub use self::timer::*;
@@ -23,7 +22,6 @@ mod iommu;
 #[allow(dead_code)]
 mod ipi;
 mod ivc;
-mod logger;
 mod mem;
 mod sched;
 mod timer;

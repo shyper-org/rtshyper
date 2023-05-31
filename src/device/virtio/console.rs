@@ -4,12 +4,13 @@ use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{VirtioMmio, Virtq};
-use crate::device::DevDesc;
-use crate::device::VirtioIov;
 use crate::kernel::{active_vm, vm_if_set_mem_map_bit};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::util::round_down;
+
+use super::dev::DevDesc;
+use super::iov::VirtioIov;
 
 pub const VIRTQUEUE_CONSOLE_MAX_SIZE: usize = 64;
 
@@ -36,21 +37,18 @@ pub struct ConsoleDesc {
 }
 
 impl ConsoleDesc {
-    pub fn default() -> ConsoleDesc {
+    pub fn new(oppo_end_vmid: u16, oppo_end_ipa: u64) -> ConsoleDesc {
+        let mut desc = ConsoleDescInner::default();
+        desc.oppo_end_vmid = oppo_end_vmid;
+        desc.oppo_end_ipa = oppo_end_ipa;
+        desc.cols = 80;
+        desc.rows = 25;
         ConsoleDesc {
-            inner: Arc::new(Mutex::new(ConsoleDescInner::default())),
+            inner: Arc::new(Mutex::new(desc)),
         }
     }
 
-    pub fn cfg_init(&self, oppo_end_vmid: u16, oppo_end_ipa: u64) {
-        let mut inner = self.inner.lock();
-        inner.oppo_end_vmid = oppo_end_vmid;
-        inner.oppo_end_ipa = oppo_end_ipa;
-        inner.cols = 80;
-        inner.rows = 25;
-    }
-
-    pub fn start_addr(&self) -> usize {
+    fn start_addr(&self) -> usize {
         let inner = self.inner.lock();
         &inner.cols as *const _ as usize
     }
@@ -72,7 +70,7 @@ impl ConsoleDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct ConsoleDescInner {
+struct ConsoleDescInner {
     oppo_end_vmid: u16,
     oppo_end_ipa: u64,
     // vm access
@@ -83,7 +81,7 @@ pub struct ConsoleDescInner {
 }
 
 impl ConsoleDescInner {
-    pub fn default() -> ConsoleDescInner {
+    fn default() -> ConsoleDescInner {
         ConsoleDescInner {
             oppo_end_vmid: 0,
             oppo_end_ipa: 0,

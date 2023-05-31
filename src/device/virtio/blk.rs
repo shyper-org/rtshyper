@@ -34,25 +34,15 @@ pub const VIRTIO_BLK_S_OK: usize = 0;
 pub const VIRTIO_BLK_S_UNSUPP: usize = 2;
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct BlkGeometry {
     cylinders: u16,
     heads: u8,
     sectors: u8,
 }
 
-impl BlkGeometry {
-    fn default() -> BlkGeometry {
-        BlkGeometry {
-            cylinders: 0,
-            heads: 0,
-            sectors: 0,
-        }
-    }
-}
-
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct BlkTopology {
     // # of logical blocks per physical block (log2)
     physical_block_exp: u8,
@@ -64,37 +54,22 @@ struct BlkTopology {
     opt_io_size: u32,
 }
 
-impl BlkTopology {
-    fn default() -> BlkTopology {
-        BlkTopology {
-            physical_block_exp: 0,
-            alignment_offset: 0,
-            min_io_size: 0,
-            opt_io_size: 0,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct BlkDesc {
-    inner: Arc<Mutex<BlkDescInner>>,
+    inner: Arc<BlkDescInner>,
 }
 
 impl BlkDesc {
-    pub fn default() -> BlkDesc {
-        BlkDesc {
-            inner: Arc::new(Mutex::new(BlkDescInner::default())),
-        }
+    pub fn new(bsize: usize) -> BlkDesc {
+        let mut desc = BlkDescInner::default();
+        desc.capacity = bsize;
+        desc.size_max = BLOCKIF_SIZE_MAX as u32;
+        desc.seg_max = BLOCKIF_IOV_MAX as u32;
+        BlkDesc { inner: Arc::new(desc) }
     }
 
-    pub fn cfg_init(&self, bsize: usize) {
-        let mut inner = self.inner.lock();
-        inner.cfg_init(bsize);
-    }
-
-    pub fn start_addr(&self) -> usize {
-        let inner = self.inner.lock();
-        &inner.capacity as *const _ as usize
+    fn start_addr(&self) -> usize {
+        &self.inner.capacity as *const _ as usize
     }
 
     pub fn offset_data(&self, offset: usize) -> u32 {
@@ -108,8 +83,8 @@ impl BlkDesc {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
-pub struct BlkDescInner {
+#[derive(Copy, Clone, Default)]
+struct BlkDescInner {
     capacity: usize,
     size_max: u32,
     seg_max: u32,
@@ -127,34 +102,6 @@ pub struct BlkDescInner {
     unused1: [u8; 3],
 }
 
-impl BlkDescInner {
-    pub fn default() -> BlkDescInner {
-        BlkDescInner {
-            capacity: 0,
-            size_max: 0,
-            seg_max: 0,
-            geometry: BlkGeometry::default(),
-            blk_size: 0,
-            topology: BlkTopology::default(),
-            writeback: 0,
-            unused0: [0; 3],
-            max_discard_sectors: 0,
-            max_discard_seg: 0,
-            discard_sector_alignment: 0,
-            max_write_zeroes_sectors: 0,
-            max_write_zeroes_seg: 0,
-            write_zeroes_may_unmap: 0,
-            unused1: [0; 3],
-        }
-    }
-
-    pub fn cfg_init(&mut self, bsize: usize) {
-        self.capacity = bsize;
-        self.size_max = BLOCKIF_SIZE_MAX as u32;
-        self.seg_max = BLOCKIF_IOV_MAX as u32;
-    }
-}
-
 #[repr(C)]
 #[derive(Clone)]
 pub struct BlkIov {
@@ -163,7 +110,7 @@ pub struct BlkIov {
 }
 
 #[repr(C)]
-pub struct BlkReqRegion {
+struct BlkReqRegion {
     pub start: usize,
     pub size: usize,
 }
@@ -460,7 +407,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     // let mediated = blk.mediated();
     let dev = blk.dev();
     let req = match dev.req() {
-        super::DevReq::BlkReq(blk_req) => blk_req,
+        super::dev::DevReq::BlkReq(blk_req) => blk_req,
         _ => {
             panic!("virtio_blk_notify_handler: illegal req");
         }

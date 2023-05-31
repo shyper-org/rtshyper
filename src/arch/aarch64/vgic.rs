@@ -314,25 +314,31 @@ impl Default for VgicCpuPriv {
     }
 }
 
-pub struct Vgic {
+#[derive(Clone)]
+#[repr(transparent)]
+pub struct Vgic(Arc<VgicInner>);
+
+struct VgicInner {
     address_range: Range<usize>,
     vgicd: Vgicd,
     cpu_priv: Vec<VgicCpuPriv>,
 }
 
-impl Vgic {
-    fn new(base: usize, length: usize) -> Vgic {
-        Vgic {
+impl VgicInner {
+    fn new(base: usize, length: usize) -> Self {
+        Self {
             address_range: base..base + length,
             vgicd: Vgicd::default(),
             cpu_priv: Vec::new(),
         }
     }
+}
 
+impl Vgic {
     fn remove_int_list(&self, vcpu: &Vcpu, interrupt: &VgicInt, is_pend: bool) {
         let vcpu_id = vcpu.id();
         let int_id = interrupt.id();
-        let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.0.cpu_priv[vcpu_id].inner_mut.borrow_mut();
         if is_pend {
             if !interrupt.in_pend() {
                 // println!("why int {} in pend is false but in pend list", int_id);
@@ -361,7 +367,7 @@ impl Vgic {
 
     fn add_int_list(&self, vcpu: &Vcpu, interrupt: VgicInt, is_pend: bool) {
         let vcpu_id = vcpu.id();
-        let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.0.cpu_priv[vcpu_id].inner_mut.borrow_mut();
         if is_pend {
             interrupt.set_in_pend_state(true);
             cpu_priv.pend_list.push_back(interrupt);
@@ -396,7 +402,7 @@ impl Vgic {
 
     fn int_list_head(&self, vcpu: &Vcpu, is_pend: bool) -> Option<VgicInt> {
         let vcpu_id = vcpu.id();
-        let cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow();
+        let cpu_priv = self.0.cpu_priv[vcpu_id].inner_mut.borrow();
         if is_pend {
             cpu_priv.pend_list.front().cloned()
         } else {
@@ -405,57 +411,57 @@ impl Vgic {
     }
 
     fn set_vgicd_ctlr(&self, ctlr: u32) {
-        self.vgicd.ctlr.store(ctlr, Ordering::Relaxed);
+        self.0.vgicd.ctlr.store(ctlr, Ordering::Relaxed);
     }
 
     pub fn vgicd_ctlr(&self) -> u32 {
-        self.vgicd.ctlr.load(Ordering::Relaxed)
+        self.0.vgicd.ctlr.load(Ordering::Relaxed)
     }
 
     pub fn vgicd_typer(&self) -> u32 {
-        self.vgicd.typer
+        self.0.vgicd.typer
     }
 
     pub fn vgicd_iidr(&self) -> u32 {
-        self.vgicd.iidr
+        self.0.vgicd.iidr
     }
 
     fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> Option<&VgicInt> {
-        self.cpu_priv[cpu_id].interrupts.get(idx)
+        self.0.cpu_priv[cpu_id].interrupts.get(idx)
     }
 
     fn cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize) -> u16 {
-        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow();
+        let cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow();
         cpu_priv.curr_lrs[idx]
     }
 
     fn cpu_priv_sgis_pend(&self, cpu_id: usize, idx: usize) -> u8 {
-        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow();
+        let cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow();
         cpu_priv.sgis[idx].pend
     }
 
     fn cpu_priv_sgis_act(&self, cpu_id: usize, idx: usize) -> u8 {
-        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow();
+        let cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow();
         cpu_priv.sgis[idx].act
     }
 
     fn set_cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize, val: u16) {
-        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow_mut();
         cpu_priv.curr_lrs[idx] = val;
     }
 
     fn set_cpu_priv_sgis_pend(&self, cpu_id: usize, idx: usize, pend: u8) {
-        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow_mut();
         cpu_priv.sgis[idx].pend = pend;
     }
 
     fn set_cpu_priv_sgis_act(&self, cpu_id: usize, idx: usize, act: u8) {
-        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow_mut();
         cpu_priv.sgis[idx].act = act;
     }
 
     fn vgicd_interrupt(&self, idx: usize) -> Option<&VgicInt> {
-        self.vgicd.interrupts.get(idx)
+        self.0.vgicd.interrupts.get(idx)
     }
 
     fn get_int(&self, vcpu: &Vcpu, int_id: usize) -> Option<&VgicInt> {
@@ -2003,7 +2009,7 @@ impl EmuDev for Vgic {
     }
 
     fn address_range(&self) -> Range<usize> {
-        self.address_range.clone()
+        self.0.address_range.clone()
     }
 
     fn handler(&self, emu_ctx: &EmuContext) -> bool {
@@ -2076,7 +2082,7 @@ pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Re
     if emu_cfg.emu_type != EmuDeviceType::EmuDeviceTGicd {
         return Err(());
     }
-    let mut vgic = Vgic::new(emu_cfg.base_ipa, emu_cfg.length);
+    let mut vgic = VgicInner::new(emu_cfg.base_ipa, emu_cfg.length);
 
     let cpu_num = vcpu_list.len();
     let vgicd = &mut vgic.vgicd;
@@ -2102,7 +2108,7 @@ pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Re
 
         vgic.cpu_priv.push(cpu_priv);
     }
-    Ok(Box::new(vgic))
+    Ok(Box::new(Vgic(Arc::new(vgic))))
 }
 
 pub fn vgic_set_hw_int(vm: &Vm, int_id: usize) {

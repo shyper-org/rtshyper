@@ -1,5 +1,4 @@
 use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 
@@ -26,27 +25,6 @@ use super::vcpu::Vcpu;
 pub const CONFIG_VM_NUM_MAX: usize = core::cmp::min(shyper::VM_NUM_MAX, (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
 static VM_IF_LIST: [Mutex<VmInterface>; CONFIG_VM_NUM_MAX] =
     [const { Mutex::new(VmInterface::default()) }; CONFIG_VM_NUM_MAX];
-
-static MAC2VMID: Mutex<BTreeMap<MacAddress, usize>> = Mutex::new(BTreeMap::new());
-
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct MacAddress([u8; 6]);
-
-impl MacAddress {
-    fn new(mac: &[u8]) -> Self {
-        let mut this = Self([0; 6]);
-        this.0.clone_from_slice(&mac[0..6]);
-        this
-    }
-}
-
-fn set_mac_vmid(mac: &[u8], vmid: usize) {
-    MAC2VMID.lock().insert(MacAddress::new(mac), vmid);
-}
-
-pub fn mac_to_vmid(mac: &[u8]) -> Option<usize> {
-    MAC2VMID.lock().get(&MacAddress::new(mac)).cloned()
-}
 
 pub fn vm_if_reset(vm_id: usize) {
     let mut vm_if = VM_IF_LIST[vm_id].lock();
@@ -213,7 +191,8 @@ struct VmInnerConst {
     config: VmConfigEntry,
     vcpu_list: Vec<Vcpu>,
     intc_type: IntCtrlType,
-    intc_dev_id: Option<usize>,
+    // TODO: create struct ArchVcpu and move intc_dev into it
+    arch_intc_dev: Option<Vgic>,
     int_bitmap: BitAlloc4K,
     emu_devs: Vec<Box<dyn EmuDev>>,
 }
@@ -265,8 +244,7 @@ impl VmInnerConst {
             id,
             config,
             vcpu_list,
-            // intc_dev_id: Cell::new(0),
-            intc_dev_id: None,
+            arch_intc_dev: None,
             int_bitmap: BitAlloc4K::default(),
             emu_devs: vec![],
             intc_type: IntCtrlType::Emulated,
@@ -282,20 +260,17 @@ impl VmInnerConst {
             let dev = match emu_cfg.emu_type {
                 EmuDeviceTGicd => {
                     self.intc_type = IntCtrlType::Emulated;
-                    self.intc_dev_id = Some(self.emu_devs.len());
-                    emu_intc_init(emu_cfg, &self.vcpu_list)
+                    emu_intc_init(emu_cfg, &self.vcpu_list).map(|vgic| {
+                        self.arch_intc_dev = vgic.as_any().downcast_ref::<Vgic>().cloned();
+                        vgic
+                    })
                 }
                 EmuDeviceTGPPT => {
                     self.intc_type = IntCtrlType::Passthrough;
-                    self.intc_dev_id = Some(self.emu_devs.len());
                     partial_passthrough_intc_init(emu_cfg)
                 }
                 EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet => {
-                    if emu_cfg.emu_type == EmuDeviceTVirtioNet {
-                        let mac = emu_cfg.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
-                        set_mac_vmid(&mac, self.id);
-                    }
-                    emu_virtio_mmio_init(emu_cfg)
+                    emu_virtio_mmio_init(self.id, emu_cfg)
                 }
                 EmuDeviceTIOMMU => emu_smmu_init(emu_cfg), // Do IOMMU init later, after add VM to global list
                 EmuDeviceTShyper => {
@@ -488,18 +463,14 @@ impl Vm {
     }
 
     pub fn vgic(&self) -> &Vgic {
-        if let Some(intc_dev_id) = self.0.inner_const.intc_dev_id {
-            if let Some(dev) = self.0.inner_const.emu_devs.get(intc_dev_id) {
-                if let Some(vgic) = dev.as_any().downcast_ref::<Vgic>() {
-                    return vgic;
-                }
-            }
+        if let Some(vgic) = self.0.inner_const.arch_intc_dev.as_ref() {
+            return vgic;
         }
         panic!("vm{} cannot find vgic", self.id());
     }
 
     pub fn has_vgic(&self) -> bool {
-        self.0.inner_const.intc_dev_id.is_some()
+        self.0.inner_const.arch_intc_dev.is_some()
     }
 
     pub fn emu_net_dev(&self, id: usize) -> Option<VirtioMmio> {
@@ -531,14 +502,10 @@ impl Vm {
     }
 
     pub fn ncpu(&self) -> usize {
-        // let vm_inner = self.0.inner_mut.lock();
-        // vm_inner.ncpu
         self.0.inner_const.config.cpu_allocated_bitmap() as usize
     }
 
     pub fn has_interrupt(&self, int_id: usize) -> bool {
-        // let vm_inner = self.0.inner_mut.lock();
-        // vm_inner.int_bitmap.get(int_id) != 0
         self.0.inner_const.int_bitmap.get(int_id) != 0
     }
 
