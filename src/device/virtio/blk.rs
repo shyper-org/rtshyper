@@ -4,11 +4,8 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq};
-use crate::kernel::{
-    active_vm_id, add_async_task, async_blk_id_req, async_blk_io_req, async_ipi_req, AsyncTask, AsyncTaskState,
-    IoAsyncMsg, IoIdAsyncMsg, IpiMediatedMsg, push_used_info, Vm,
-};
+use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq, IoAsyncMsg, UsedInfo};
+use crate::kernel::{active_vm_id, async_blk_io_req, async_ipi_req, AsyncTask, IpiMediatedMsg, Vm, EXECUTOR};
 use crate::util::memcpy_safe;
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
@@ -61,10 +58,12 @@ pub struct BlkDesc {
 
 impl BlkDesc {
     pub fn new(bsize: usize) -> BlkDesc {
-        let mut desc = BlkDescInner::default();
-        desc.capacity = bsize;
-        desc.size_max = BLOCKIF_SIZE_MAX as u32;
-        desc.seg_max = BLOCKIF_IOV_MAX as u32;
+        let desc = BlkDescInner {
+            capacity: bsize,
+            size_max: BLOCKIF_SIZE_MAX as u32,
+            seg_max: BLOCKIF_IOV_MAX as u32,
+            ..Default::default()
+        };
         BlkDesc { inner: Arc::new(desc) }
     }
 
@@ -285,11 +284,15 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
                             iov_list: Arc::new(req_node.iov.clone()),
+                            used_info: UsedInfo {
+                                desc_chain_head_idx: req_node.desc_chain_head_idx,
+                                used_len: req_node.iov_total as u32,
+                            },
                         },
                         vm.id(),
                         async_blk_io_req(),
                     );
-                    add_async_task(task, false);
+                    EXECUTOR.add_task(task, false);
                 } else {
                     for iov in req_node.iov.iter() {
                         let data_bg = iov.data_bg;
@@ -318,11 +321,15 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
                             iov_list: Arc::new(req_node.iov.clone()),
+                            used_info: UsedInfo {
+                                desc_chain_head_idx: req_node.desc_chain_head_idx,
+                                used_len: req_node.iov_total as u32,
+                            },
                         },
                         vm.id(),
                         async_blk_io_req(),
                     );
-                    add_async_task(task, false);
+                    EXECUTOR.add_task(task, false);
                 } else {
                     for iov in req_node.iov.iter() {
                         let data_bg = iov.data_bg;
@@ -345,16 +352,10 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
                 let data_bg =
                     unsafe { core::slice::from_raw_parts_mut(req_node.iov[0].data_bg as *mut u8, cstr.len()) };
                 data_bg.copy_from_slice(cstr);
-                let task = AsyncTask::new(
-                    IoIdAsyncMsg {
-                        vq: vq.clone(),
-                        dev: dev.clone(),
-                    },
-                    vm.id(),
-                    async_blk_id_req(),
-                );
-                task.set_state(AsyncTaskState::Finish);
-                add_async_task(task, false);
+                if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32) {
+                    println!("blk_req_handler: fail to update used ring");
+                }
+                dev.notify(vm.clone());
             }
             _ => {
                 println!("Wrong block request type {} ", req_node.req_type);
@@ -368,8 +369,6 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
             // if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32) {
             //     println!("blk_req_handler: fail to update used ring");
             // }
-        } else {
-            push_used_info(req_node.desc_chain_head_idx, req_node.iov_total as u32, vm.id());
         }
     }
 
@@ -377,7 +376,6 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
 }
 
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
-    //     add_task_count();
     let task = AsyncTask::new(
         IpiMediatedMsg {
             src_id: vm.id(),
@@ -387,7 +385,7 @@ pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) ->
         vm.id(),
         async_ipi_req(),
     );
-    add_async_task(task, true);
+    EXECUTOR.add_task(task, true);
     true
 }
 
@@ -451,7 +449,6 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                             vq.desc_flags(next_desc_idx)
                         );
                         blk.notify(vm);
-                        // vq.notify(dev.int_id(), vm.clone());
                         return false;
                     }
                     head = false;
@@ -473,7 +470,6 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                             vq.desc_flags(next_desc_idx)
                         );
                         blk.notify(vm);
-                        // vq.notify(dev.int_id(), vm.clone());
                         return false;
                     }
                     let data_bg = vm.ipa2hva(vq.desc_addr(next_desc_idx));
@@ -494,7 +490,6 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                 if !vq.desc_is_writable(next_desc_idx) {
                     println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx);
                     blk.notify(vm);
-                    // vq.notify(dev.int_id(), vm.clone());
                     return false;
                 }
                 let vstatus_addr = vm.ipa2hva(vq.desc_addr(next_desc_idx));
@@ -533,14 +528,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
         println!("virtio blk notify");
         blk.notify(vm);
-        // vq.notify(dev.int_id(), vm.clone());
     }
-
-    // if req.mediated() {
-    // finish_task(true);
-    //     finish_async_task(true);
-    //     async_task_exe();
-    // }
 
     // let end = time_current_us();
     // println!("init time {}us, while handle desc ring time {}us, finish task {}us", time0 - begin, time1 - time0, end - time1);

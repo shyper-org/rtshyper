@@ -45,7 +45,7 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
         println!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
         println!("Built At {}", env!("BUILD_TIME"));
 
-        let _ = util::logger::logger_init();
+        util::logger::logger_init().unwrap();
         mm::init(); // including heap and hypervisor VA space
         physical_mem_init();
         dtb::init_vm0_dtb(dtb);

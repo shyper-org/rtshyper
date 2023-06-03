@@ -1,10 +1,7 @@
-use alloc::vec::Vec;
-
 use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
-use crate::board::{PlatOperation, Platform};
 use crate::config::VmRegion;
-use crate::dtb::create_fdt;
+use crate::dtb::{create_fdt, setup_fdt_vm0};
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     cpu_idle, current_cpu, iommmu_vm_init, vm_if_init_mem_map, VmType, iommu_add_device, mem_region_alloc_colors,
@@ -157,7 +154,7 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
             let mut dtb = crate::dtb::SYSTEM_FDT.get().unwrap().clone();
             // enlarge the size of dtb, because vmm_setup_fdt_vm0 will enlarge it unsafely!
             dtb.resize(dtb.len() << 1, 0);
-            let size = unsafe { vmm_setup_fdt_vm0(vm, dtb.as_ptr() as *mut _) };
+            let size = unsafe { setup_fdt_vm0(vm.config(), dtb.as_ptr() as *mut _) };
             if size >= dtb.len() {
                 panic!("unsafe dtb editing!!");
             }
@@ -216,81 +213,6 @@ fn vmm_init_hardware(vm: &Vm) -> bool {
         }
     }
     true
-}
-
-unsafe fn vmm_setup_fdt_vm0(vm: &Vm, dtb: *mut core::ffi::c_void) -> usize {
-    use fdt::*;
-    let config = vm.config();
-    let mut mr = Vec::new();
-    for r in config.memory_region() {
-        mr.push(region {
-            ipa_start: r.ipa_start as u64,
-            length: r.length as u64,
-        });
-    }
-    #[cfg(feature = "tx2")]
-    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
-    #[cfg(feature = "pi4")]
-    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@200000\0".as_ptr());
-    #[cfg(feature = "qemu")]
-    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@50000000\0".as_ptr());
-    // FDT+TIMER
-    fdt_add_timer(dtb, 0x8);
-    // FDT+BOOTCMD
-    fdt_set_bootcmd(dtb, config.cmdline.as_ptr());
-    #[cfg(feature = "tx2")]
-    fdt_set_stdout_path(dtb, "/serial@3100000\0".as_ptr());
-    // #[cfg(feature = "pi4")]
-    // fdt_set_stdout_path(dtb, "/serial@fe340000\0".as_ptr());
-
-    for emu_cfg in config.emulated_device_list() {
-        match emu_cfg.emu_type {
-            EmuDeviceTGicd => {
-                #[cfg(any(feature = "tx2", feature = "qemu"))]
-                fdt_setup_gic(
-                    dtb,
-                    Platform::GICD_BASE as u64,
-                    Platform::GICC_BASE as u64,
-                    emu_cfg.name.as_ptr(),
-                );
-                #[cfg(feature = "pi4")]
-                fdt_setup_gic(
-                    dtb,
-                    (Platform::GICD_BASE | 0xF_0000_0000) as u64,
-                    (Platform::GICC_BASE | 0xF_0000_0000) as u64,
-                    emu_cfg.name.as_ptr(),
-                );
-            }
-            EmuDeviceTVirtioNet | EmuDeviceTVirtioConsole => {
-                #[cfg(any(feature = "tx2", feature = "qemu"))]
-                fdt_add_virtio(
-                    dtb,
-                    emu_cfg.name.as_ptr(),
-                    emu_cfg.irq_id as u32 - 0x20,
-                    emu_cfg.base_ipa as u64,
-                );
-            }
-            EmuDeviceTShyper => {
-                #[cfg(any(feature = "tx2", feature = "qemu"))]
-                fdt_add_vm_service(
-                    dtb,
-                    emu_cfg.irq_id as u32 - 0x20,
-                    emu_cfg.base_ipa as u64,
-                    emu_cfg.length as u64,
-                );
-            }
-            EmuDeviceTIOMMU => {
-                #[cfg(feature = "tx2")]
-                trace!("EmuDeviceTIOMMU");
-            }
-            _ => {
-                todo!();
-            }
-        }
-    }
-    let size = fdt_size(dtb) as usize;
-    println!("after dtb size {:#x}", size);
-    size
 }
 
 /* Setup VM Configuration before boot.

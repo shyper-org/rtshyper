@@ -124,7 +124,7 @@ pub fn mvm_config_init() {
         vm_dtb_devs: VMDtbDevConfigList::default(),
         mediated_block_index: None,
     };
-    let _ = vm_cfg_add_vm_entry(mvm_config_entry);
+    vm_cfg_add_vm_entry(mvm_config_entry).unwrap();
 }
 
 // pub fn config_init() {

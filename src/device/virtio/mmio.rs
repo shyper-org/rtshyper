@@ -136,35 +136,31 @@ impl VirtioInner {
             VirtioDeviceType::Block => {
                 self.set_q_num_max(VIRTQUEUE_BLK_MAX_SIZE as u32);
                 let inner = self.inner.lock();
-                let queue = Virtq::default();
-                queue.reset(0);
-                if inner.dev.mediated() {
-                    queue.set_notify_handler(virtio_mediated_blk_notify_handler);
+                let queue = if inner.dev.mediated() {
+                    Virtq::new(virtio_mediated_blk_notify_handler)
                 } else {
-                    queue.set_notify_handler(virtio_blk_notify_handler);
-                }
+                    Virtq::new(virtio_blk_notify_handler)
+                };
+                queue.reset(0);
                 self.inner_const.vq.push(queue);
             }
             VirtioDeviceType::Net => {
                 self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
                 // Not support feature VIRTIO_NET_F_CTRL_VQ (no control queue)
                 for i in 0..2 {
-                    let queue = Virtq::default();
+                    let queue = Virtq::new(virtio_net_notify_handler);
                     queue.reset(i);
-                    queue.set_notify_handler(virtio_net_notify_handler);
                     self.inner_const.vq.push(queue);
                 }
-                let queue = Virtq::default();
+                let queue = Virtq::new(virtio_net_handle_ctrl);
                 queue.reset(2);
-                queue.set_notify_handler(virtio_net_handle_ctrl);
                 self.inner_const.vq.push(queue);
             }
             VirtioDeviceType::Console => {
                 self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
                 for i in 0..4 {
-                    let queue = Virtq::default();
+                    let queue = Virtq::new(virtio_console_notify_handler);
                     queue.reset(i);
-                    queue.set_notify_handler(virtio_console_notify_handler);
                     self.inner_const.vq.push(queue);
                 }
             }

@@ -52,12 +52,14 @@ struct VringUsed {
 
 #[derive(Clone)]
 pub struct Virtq {
+    notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool,
     inner: Arc<Mutex<VirtqInner<'static>>>,
 }
 
 impl Virtq {
-    pub fn default() -> Virtq {
+    pub fn new(notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool) -> Virtq {
         Virtq {
+            notify_handler,
             inner: Arc::new(Mutex::new(VirtqInner::default())),
         }
     }
@@ -155,23 +157,8 @@ impl Virtq {
         }
     }
 
-    pub fn set_notify_handler(&self, handler: fn(Virtq, VirtioMmio, Vm) -> bool) {
-        let mut inner = self.inner.lock();
-        inner.notify_handler = Some(handler);
-    }
-
     pub fn call_notify_handler(&self, mmio: VirtioMmio) -> bool {
-        let inner = self.inner.lock();
-        match inner.notify_handler {
-            Some(handler) => {
-                drop(inner);
-                handler(self.clone(), mmio, active_vm().unwrap())
-            }
-            None => {
-                println!("call_notify_handler: virtq notify handler is None");
-                false
-            }
-        }
+        (self.notify_handler)(self.clone(), mmio, active_vm().unwrap())
     }
 
     pub fn show_desc_info(&self, size: usize, vm: Vm) {
@@ -392,8 +379,6 @@ struct VirtqInner<'a> {
     desc_table_addr: usize,
     avail_addr: usize,
     used_addr: usize,
-
-    notify_handler: Option<fn(Virtq, VirtioMmio, Vm) -> bool>,
 }
 
 impl VirtqInner<'_> {

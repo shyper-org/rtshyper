@@ -287,7 +287,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     }
 
     nic.notify(vm);
-    // vq.notify(dev.int_id(), vm.clone());
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
@@ -323,7 +322,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                 };
                 if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
                     nic.notify(vm.clone());
-                    // rx_vq.notify(nic.dev().int_id(), vm.clone());
                 }
             } else {
                 let msg = IpiEthernetMsg {
@@ -384,7 +382,6 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
 
             if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
                 nic.notify(vm);
-                // rx_vq.notify(nic.dev().int_id(), vm);
             }
         }
         _ => {

@@ -1,17 +1,16 @@
 use core::future::Future;
 use core::pin::Pin;
 use core::task::Context;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, LinkedList};
 use alloc::sync::Arc;
 use alloc::task::Wake;
-use alloc::vec::Vec;
 use spin::mutex::Mutex;
 
 use crate::device::{
-    BlkIov, mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,
-    VirtioMmio, Virtq,
+    mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, IoAsyncMsg,
 };
 use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
 use crate::util::{memcpy_safe, sleep};
@@ -23,54 +22,129 @@ pub enum AsyncTaskState {
     Finish,
 }
 
-pub struct UsedInfo {
-    pub desc_chain_head_idx: u32,
-    pub used_len: u32,
-}
-
-#[derive(Clone)]
-pub struct IoAsyncMsg {
-    pub src_vmid: usize,
-    pub vq: Virtq,
-    pub dev: VirtioMmio,
-    pub io_type: usize,
-    pub blk_id: usize,
-    pub sector: usize,
-    pub count: usize,
-    pub cache: usize,
-    pub iov_list: Arc<Vec<BlkIov>>,
-}
-
-#[derive(Clone)]
-pub struct IoIdAsyncMsg {
-    pub vq: Virtq,
-    pub dev: VirtioMmio,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AsyncExeStatus {
+enum AsyncExeStatus {
     Pending,
     Scheduling,
 }
 
-pub static ASYNC_EXE_STATUS: Mutex<AsyncExeStatus> = Mutex::new(AsyncExeStatus::Pending);
-pub static ASYNC_IPI_TASK_LIST: Mutex<LinkedList<AsyncTask>> = Mutex::new(LinkedList::new());
-pub static ASYNC_IO_TASK_LIST: Mutex<FairQueue<AsyncTask>> = Mutex::new(FairQueue::new());
-pub static ASYNC_USED_INFO_LIST: Mutex<BTreeMap<usize, LinkedList<UsedInfo>>> = Mutex::new(BTreeMap::new());
+pub struct Executor {
+    status: Mutex<AsyncExeStatus>,
+    ipi_task_list: Mutex<LinkedList<Arc<AsyncTask>>>,
+    io_task_list: Mutex<FairQueue<AsyncTask>>,
+}
 
-pub trait TaskOwner {
+impl Executor {
+    const fn new() -> Self {
+        Self {
+            status: Mutex::new(AsyncExeStatus::Pending),
+            ipi_task_list: Mutex::new(LinkedList::new()),
+            io_task_list: Mutex::new(FairQueue::new()),
+        }
+    }
+
+    fn status(&self) -> AsyncExeStatus {
+        *self.status.lock()
+    }
+
+    fn set_status(&self, status: AsyncExeStatus) {
+        *self.status.lock() = status;
+    }
+
+    pub fn exec(&self) {
+        if active_vm_id() == 0 {
+            match self.status() {
+                AsyncExeStatus::Pending => self.set_status(AsyncExeStatus::Scheduling),
+                AsyncExeStatus::Scheduling => return,
+            }
+        }
+        loop {
+            let ipi_list = self.ipi_task_list.lock();
+            let io_list = self.io_task_list.lock();
+
+            let (task, ipi) = if io_list.is_empty() && ipi_list.is_empty() {
+                self.set_status(AsyncExeStatus::Pending);
+                return;
+            } else if !io_list.is_empty() {
+                // if io_list is not empty, prioritize IO requests
+                (io_list.front().unwrap().clone(), false)
+            } else {
+                // other VM start an IO which need to be handled by service VM
+                (ipi_list.front().unwrap().clone(), true)
+            };
+            drop(ipi_list);
+            drop(io_list);
+            if task.handle() || ipi {
+                // task finish
+                self.finish_task(ipi);
+            } else {
+                // wait for notify
+                self.set_status(AsyncExeStatus::Pending);
+                return;
+            }
+            // not a service VM, end loop
+            if active_vm_id() != 0 {
+                return;
+            }
+        }
+    }
+
+    pub fn set_front_io_task_state(&self, state: AsyncTaskState) {
+        if let Some(task) = self.io_task_list.lock().front() {
+            task.set_state(state)
+        }
+    }
+
+    pub fn add_task(&self, task: AsyncTask, ipi: bool) {
+        let mut ipi_list = self.ipi_task_list.lock();
+        let mut io_list = self.io_task_list.lock();
+        if ipi {
+            ipi_list.push_back(Arc::new(task));
+        } else {
+            io_list.push_back(Arc::new(task));
+        }
+        let need_execute = active_vm_id() != 0
+            && ipi_list.len() == 1
+            && io_list.is_empty()
+            && self.status() == AsyncExeStatus::Pending;
+        drop(ipi_list);
+        drop(io_list);
+        while active_vm_id() != 0 && self.ipi_task_list.lock().len() >= 1024 {
+            sleep(1);
+        }
+        // if this is a normal VM and this is the first IO request
+        // (which generate a ipi async task in `virtio_mediated_blk_notify_handler`)
+        // invoke the executor to handle it
+        if need_execute {
+            self.exec();
+        }
+    }
+
+    fn finish_task(&self, ipi: bool) {
+        if let Some(task) = if ipi {
+            self.ipi_task_list.lock().pop_front()
+        } else {
+            self.io_task_list.lock().pop_front()
+        } {
+            task.callback.finish();
+        }
+    }
+}
+
+pub static EXECUTOR: Executor = Executor::new();
+
+trait TaskOwner {
     fn owner(&self) -> usize;
 }
 
-pub struct FairQueue<T: TaskOwner> {
+struct FairQueue<T: TaskOwner> {
     len: usize,
-    map: BTreeMap<usize, LinkedList<T>>,
+    map: BTreeMap<usize, LinkedList<Arc<T>>>,
     queue: LinkedList<usize>,
 }
 
-#[allow(dead_code)]
 impl<T: TaskOwner> FairQueue<T> {
-    pub const fn new() -> Self {
+    const fn new() -> Self {
         Self {
             len: 0,
             map: BTreeMap::new(),
@@ -78,15 +152,16 @@ impl<T: TaskOwner> FairQueue<T> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
 
-    pub fn len(&self) -> usize {
+    #[allow(dead_code)]
+    fn len(&self) -> usize {
         self.len
     }
 
-    pub fn push_back(&mut self, task: T) {
+    fn push_back(&mut self, task: Arc<T>) {
         let key = task.owner();
         match self.map.get_mut(&key) {
             Some(sub_queue) => sub_queue.push_back(task),
@@ -100,7 +175,7 @@ impl<T: TaskOwner> FairQueue<T> {
         self.len += 1;
     }
 
-    pub fn pop_front(&mut self) -> Option<T> {
+    fn pop_front(&mut self) -> Option<Arc<T>> {
         match self.queue.pop_front() {
             Some(owner) => match self.map.get_mut(&owner) {
                 Some(sub_queue) => {
@@ -113,13 +188,13 @@ impl<T: TaskOwner> FairQueue<T> {
                     self.len -= 1;
                     res
                 }
-                None => panic!(""),
+                None => None,
             },
-            None => panic!("front: queue empty"),
+            None => None,
         }
     }
 
-    pub fn front(&self) -> Option<&T> {
+    fn front(&self) -> Option<&Arc<T>> {
         match self.queue.front() {
             Some(owner) => match self.map.get(owner) {
                 Some(sub_queue) => sub_queue.front(),
@@ -129,7 +204,7 @@ impl<T: TaskOwner> FairQueue<T> {
         }
     }
 
-    pub fn remove(&mut self, owner: usize) {
+    fn remove(&mut self, owner: usize) {
         if let Some(sub_queue) = self.map.remove(&owner) {
             self.len -= sub_queue.len();
             self.queue = self.queue.drain_filter(|x| *x == owner).collect();
@@ -141,7 +216,7 @@ pub trait AsyncCallback {
     #[inline]
     fn preprocess(&self) {}
     #[inline]
-    fn finish(&self, _src_vmid: usize) {}
+    fn finish(&self) {}
 }
 
 impl AsyncCallback for IpiMediatedMsg {
@@ -175,7 +250,7 @@ impl AsyncCallback for IoAsyncMsg {
     }
 
     #[inline]
-    fn finish(&self, src_vmid: usize) {
+    fn finish(&self) {
         if self.io_type == VIRTIO_BLK_T_IN {
             // let mut sum = 0;
             let mut cache_ptr = self.cache;
@@ -189,35 +264,31 @@ impl AsyncCallback for IoAsyncMsg {
             // println!("read check_sum is {:x}", sum);
         }
 
-        update_used_info(&self.vq, src_vmid);
-        let src_vm = vm(src_vmid).unwrap();
+        let info = &self.used_info;
+        self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
+        let src_vm = vm(self.src_vmid).unwrap();
         self.dev.notify(src_vm);
     }
 }
 
-impl AsyncCallback for IoIdAsyncMsg {
-    #[inline]
-    fn finish(&self, src_vmid: usize) {
-        update_used_info(&self.vq, src_vmid);
-        let src_vm = vm(src_vmid).unwrap();
-        self.dev.notify(src_vm);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+struct TaskId(usize);
+
+impl TaskId {
+    fn new() -> Self {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+        TaskId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
 
-fn async_exe_status() -> AsyncExeStatus {
-    *ASYNC_EXE_STATUS.lock()
-}
-
-fn set_async_exe_status(status: AsyncExeStatus) {
-    *ASYNC_EXE_STATUS.lock() = status;
-}
-
-#[derive(Clone)]
 pub struct AsyncTask {
-    pub callback: Arc<dyn AsyncCallback + Send + Sync>,
-    pub src_vmid: usize,
-    pub state: Arc<Mutex<AsyncTaskState>>,
-    pub task: Arc<Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>>,
+    #[allow(unused)]
+    id: TaskId,
+    callback: Box<dyn AsyncCallback + Send + Sync>,
+    src_vmid: usize,
+    state: Mutex<AsyncTaskState>,
+    task: Mutex<Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>>,
 }
 
 impl TaskOwner for AsyncTask {
@@ -237,21 +308,20 @@ impl AsyncTask {
         callback: impl AsyncCallback + 'static + Send + Sync,
         src_vmid: usize,
         future: impl Future<Output = ()> + 'static + Send + Sync,
-    ) -> AsyncTask {
-        AsyncTask {
-            callback: Arc::new(callback),
+    ) -> Self {
+        Self {
+            id: TaskId::new(),
+            callback: Box::new(callback),
             src_vmid,
-            state: Arc::new(Mutex::new(AsyncTaskState::Pending)),
-            task: Arc::new(Mutex::new(Box::pin(future))),
+            state: Mutex::new(AsyncTaskState::Pending),
+            task: Mutex::new(Box::pin(future)),
         }
     }
 
-    pub fn handle(&mut self) -> bool {
+    fn handle(self: &Arc<Self>) -> bool {
         let mut state = self.state.lock();
         match *state {
-            AsyncTaskState::Pending => {
-                *state = AsyncTaskState::Running;
-            }
+            AsyncTaskState::Pending => *state = AsyncTaskState::Running,
             AsyncTaskState::Running => {
                 return false;
             }
@@ -260,13 +330,13 @@ impl AsyncTask {
             }
         }
         drop(state);
-        let waker = Arc::new(self.clone()).into();
+        let waker = self.clone().into();
         let mut context = Context::from_waker(&waker);
         let _ = self.task.lock().as_mut().poll(&mut context);
         false
     }
 
-    pub fn set_state(&self, state: AsyncTaskState) {
+    fn set_state(&self, state: AsyncTaskState) {
         let mut cur_state = self.state.lock();
         *cur_state = state;
     }
@@ -274,178 +344,25 @@ impl AsyncTask {
 
 // async req function
 pub async fn async_ipi_req() {
-    let ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    if ipi_list.is_empty() {
-        panic!("ipi_list should not be empty");
+    let ipi_list = EXECUTOR.ipi_task_list.lock();
+    if let Some(task) = ipi_list.front().cloned() {
+        drop(ipi_list);
+        task.callback.preprocess();
     }
-    let task = ipi_list.front().unwrap().clone();
-    drop(ipi_list);
-    task.callback.preprocess();
 }
 
-pub async fn async_blk_id_req() {}
-
 pub async fn async_blk_io_req() {
-    let io_list = ASYNC_IO_TASK_LIST.lock();
-    if io_list.is_empty() {
-        panic!("io_list should not be empty");
+    let io_list = EXECUTOR.io_task_list.lock();
+    if let Some(task) = io_list.front().cloned() {
+        drop(io_list);
+        task.callback.preprocess();
     }
-    let task = io_list.front().unwrap().clone();
-    drop(io_list);
-    task.callback.preprocess();
 }
 // end async req function
 
-pub fn set_front_io_task_state(state: AsyncTaskState) {
-    let io_list = ASYNC_IO_TASK_LIST.lock();
-    match io_list.front() {
-        None => {
-            panic!("front io task is none");
-        }
-        Some(task) => {
-            task.set_state(state);
-        }
-    }
-}
-
-pub fn add_async_task(task: AsyncTask, ipi: bool) {
-    // println!("add {} task", if ipi { "ipi" } else { "blk io" });
-    let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    let mut io_list = ASYNC_IO_TASK_LIST.lock();
-
-    if ipi {
-        ipi_list.push_back(task);
-    } else {
-        io_list.push_back(task);
-    }
-    let need_execute = ipi_list.len() == 1
-        && io_list.is_empty()
-        && active_vm_id() != 0
-        && async_exe_status() == AsyncExeStatus::Pending;
-    // println!("add_async_task: ipi len {} io len {}", ipi_list.len(), io_list.len());
-    drop(ipi_list);
-    drop(io_list);
-    while active_vm_id() != 0 && ASYNC_IPI_TASK_LIST.lock().len() >= 1024 {
-        sleep(1);
-    }
-
-    // if this is a normal VM and this is the first IO request
-    // (which generate a ipi async task in `virtio_mediated_blk_notify_handler`)
-    // invoke the executor to handle it
-    if need_execute {
-        async_task_exe();
-    }
-}
-
-// async task executor
-pub fn async_task_exe() {
-    if active_vm_id() == 0 {
-        match async_exe_status() {
-            AsyncExeStatus::Pending => {
-                set_async_exe_status(AsyncExeStatus::Scheduling);
-            }
-            AsyncExeStatus::Scheduling => {
-                return;
-            }
-        }
-    }
-    loop {
-        let ipi_list = ASYNC_IPI_TASK_LIST.lock();
-        let io_list = ASYNC_IO_TASK_LIST.lock();
-
-        let mut task;
-        let ipi;
-        if io_list.is_empty() {
-            if !ipi_list.is_empty() {
-                // other VM start an IO which need to be handled by service VM
-                task = ipi_list.front().unwrap().clone();
-                ipi = true;
-            } else {
-                set_async_exe_status(AsyncExeStatus::Pending);
-                return;
-            }
-        } else {
-            // if io_list is not empty, prioritize IO requests
-            ipi = false;
-            task = io_list.front().unwrap().clone();
-        }
-        drop(ipi_list);
-        drop(io_list);
-        if task.handle() || (ipi && active_vm_id() == 0) {
-            // task finish
-            finish_async_task(ipi);
-        } else {
-            // wait for notify
-            set_async_exe_status(AsyncExeStatus::Pending);
-            return;
-        }
-        // not a service VM, end loop
-        if active_vm_id() != 0 {
-            return;
-        }
-    }
-}
-
-pub fn finish_async_task(ipi: bool) {
-    let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
-    let mut io_list = ASYNC_IO_TASK_LIST.lock();
-    let task = match if ipi { ipi_list.pop_front() } else { io_list.pop_front() } {
-        None => {
-            panic!("there is no {} task", if ipi { "ipi" } else { "io" })
-        }
-        Some(t) => t,
-    };
-    // println!("finish_async_task: ipi len {} io len {}", ipi_list.len(), io_list.len());
-    drop(io_list);
-    drop(ipi_list);
-    task.callback.finish(task.src_vmid);
-}
-
-pub fn push_used_info(desc_chain_head_idx: u32, used_len: u32, src_vmid: usize) {
-    let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    let info = UsedInfo {
-        desc_chain_head_idx,
-        used_len,
-    };
-    match used_info_list.get_mut(&src_vmid) {
-        Some(info_list) => {
-            info_list.push_back(info);
-        }
-        None => {
-            let mut list = LinkedList::new();
-            list.push_back(info);
-            used_info_list.insert(src_vmid, list);
-        }
-    }
-}
-
-fn update_used_info(vq: &Virtq, src_vmid: usize) {
-    let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    match used_info_list.get_mut(&src_vmid) {
-        Some(info_list) => {
-            // for info in info_list.iter() {
-            // vq.update_used_ring(info.used_len, info.desc_chain_head_idx, vq_size);
-            let info = info_list.pop_front().unwrap();
-            vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
-            // }
-            // info_list.clear();
-        }
-        None => {
-            println!("async_push_used_info: src_vmid {} not existed", src_vmid);
-        }
-    }
-}
-
-fn remove_async_used_info(vm_id: usize) {
-    let mut used_info_list = ASYNC_USED_INFO_LIST.lock();
-    used_info_list.remove(&vm_id);
-    // println!("VM[{}] remove async used info", vm_id);
-}
-
 pub fn remove_vm_async_task(vm_id: usize) {
-    let mut io_list = ASYNC_IO_TASK_LIST.lock();
-    let mut ipi_list = ASYNC_IPI_TASK_LIST.lock();
+    let mut io_list = EXECUTOR.io_task_list.lock();
+    let mut ipi_list = EXECUTOR.ipi_task_list.lock();
     io_list.remove(vm_id);
     *ipi_list = ipi_list.drain_filter(|x| x.src_vmid == vm_id).collect();
-    remove_async_used_info(vm_id);
 }

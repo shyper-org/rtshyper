@@ -1,15 +1,17 @@
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use spin::Mutex;
 
 use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
-    active_vm, async_task_exe, AsyncTaskState, finish_async_task, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg,
-    IpiInnerMsg, set_front_io_task_state, vm, vm_id_list, HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY,
-    HVC_MEDIATED_DRV_NOTIFY,
+    active_vm, EXECUTOR, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg, IpiInnerMsg, vm, vm_id_list,
+    HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY, HVC_MEDIATED_DRV_NOTIFY,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use shyper::MediatedBlkContent;
+
+use super::{Virtq, VirtioMmio, BlkIov};
 
 pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
@@ -161,12 +163,12 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> Result<usize, ()> {
     };
     if !mediated_blk.avail {
         // finish current IO task
-        set_front_io_task_state(AsyncTaskState::Finish);
+        EXECUTOR.set_front_io_task_state(AsyncTaskState::Finish);
     } else {
         println!("Mediated blk not belong to any VM");
     }
     // invoke the excuter to handle finished IO task
-    async_task_exe();
+    EXECUTOR.exec();
     Ok(0)
 }
 
@@ -187,10 +189,8 @@ pub fn mediated_ipi_handler(msg: &IpiMessage) {
         let vm = vm(src_id).unwrap();
         // generate IO request in `virtio_blk_notify_handler`
         virtio_blk_notify_handler(mediated_msg.vq.clone(), mediated_msg.blk.clone(), vm);
-        // mark the ipi task as finish (pop it from the ipi queue)
-        finish_async_task(true);
         // invoke the executor to do IO request
-        async_task_exe();
+        EXECUTOR.exec();
     }
 }
 
@@ -229,4 +229,22 @@ pub fn mediated_blk_write(blk_idx: usize, sector: usize, count: usize) {
     if !hvc_send_msg_to_vm(0, &HvcGuestMsg::Default(med_msg)) {
         println!("mediated_blk_write: failed to notify VM 0");
     }
+}
+
+pub struct UsedInfo {
+    pub desc_chain_head_idx: u32,
+    pub used_len: u32,
+}
+
+pub struct IoAsyncMsg {
+    pub src_vmid: usize,
+    pub vq: Virtq,
+    pub dev: VirtioMmio,
+    pub io_type: usize,
+    pub blk_id: usize,
+    pub sector: usize,
+    pub count: usize,
+    pub cache: usize,
+    pub iov_list: Arc<Vec<BlkIov>>,
+    pub used_info: UsedInfo,
 }
