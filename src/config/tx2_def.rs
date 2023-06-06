@@ -71,7 +71,16 @@ pub fn mvm_config_init() {
             cfg_list: Vec::new(),
             emu_type: EmuDeviceType::EmuDeviceTShyper,
             mediated: false,
-        }
+        },
+        VmEmulatedDeviceConfig {
+            name: String::from("virtio_balloon@a004000"),
+            base_ipa: 0xa004000,
+            length: 0x1000,
+            irq_id: 32 + 0x103,
+            cfg_list: vec![1 << 20], // 1MB
+            emu_type: EmuDeviceType::VirtioBalloon,
+            mediated: false,
+        },
     ];
 
     // vm0 passthrough

@@ -19,12 +19,12 @@ pub unsafe fn setup_fdt_vm0(config: &VmConfigEntry, dtb: *mut core::ffi::c_void)
             length: r.length as u64,
         });
     }
-    #[cfg(feature = "tx2")]
-    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@90000000\0".as_ptr());
-    #[cfg(feature = "pi4")]
-    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@200000\0".as_ptr());
-    #[cfg(feature = "qemu")]
-    fdt_set_memory(dtb, mr.len() as u64, mr.as_ptr(), "memory@50000000\0".as_ptr());
+    fdt_set_memory(
+        dtb,
+        mr.len() as u64,
+        mr.as_ptr(),
+        format!("memory@{:x}\0", mr[0].ipa_start).as_ptr(),
+    );
     // FDT+TIMER
     fdt_add_timer(dtb, 0x8);
     // FDT+BOOTCMD
@@ -52,7 +52,9 @@ pub unsafe fn setup_fdt_vm0(config: &VmConfigEntry, dtb: *mut core::ffi::c_void)
                     emu_cfg.name.as_ptr(),
                 );
             }
-            EmuDeviceType::EmuDeviceTVirtioNet | EmuDeviceType::EmuDeviceTVirtioConsole => {
+            EmuDeviceType::EmuDeviceTVirtioNet
+            | EmuDeviceType::EmuDeviceTVirtioConsole
+            | EmuDeviceType::VirtioBalloon => {
                 #[cfg(any(feature = "tx2", feature = "qemu"))]
                 fdt_add_virtio(
                     dtb,

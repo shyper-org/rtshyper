@@ -16,7 +16,6 @@ use crate::config::VmConfigEntry;
 use crate::device::{EmuDev, emu_virtio_mmio_init, VirtioMmio, EmuDeviceType};
 use crate::kernel::{mem_color_region_free, shyper_init};
 use crate::util::*;
-use crate::mm::PageFrame;
 
 use super::{ColorMemRegion, mem_page_alloc};
 use super::vcpu::Vcpu;
@@ -74,31 +73,6 @@ pub fn vm_if_ivc_arg_ptr(vm_id: usize) -> usize {
     let vm_if = VM_IF_LIST[vm_id].lock();
     vm_if.ivc_arg_ptr
 }
-
-// new if for vm migration
-pub fn vm_if_init_mem_map(vm_id: usize, len: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.mem_map = Some(FlexBitmap::new(len));
-}
-
-pub fn vm_if_set_mem_map_bit(vm: &Vm, ipa: usize) {
-    let mut vm_if = VM_IF_LIST[vm.id()].lock();
-    let mut bit = 0;
-    for region in vm.config().memory_region().iter() {
-        let range = region.as_range();
-        if range.contains(&ipa) {
-            bit += (ipa - range.start) / PAGE_SIZE;
-            // if vm_if.mem_map.as_mut().unwrap().get(bit) == 0 {
-            //     println!("vm_if_set_mem_map_bit: set pa {:#x}", pa);
-            // }
-            vm_if.mem_map.as_mut().unwrap().set(bit, true);
-            return;
-        } else {
-            bit += range.len() / PAGE_SIZE;
-        }
-    }
-    error!("vm_if_set_mem_map_bit: illegal ipa {:#x}", ipa);
-}
 // End vm interface func implementation
 
 #[allow(dead_code)]
@@ -130,8 +104,6 @@ pub struct VmInterface {
     state: VmState,
     ivc_arg: usize,
     ivc_arg_ptr: usize,
-    mem_map: Option<FlexBitmap>,
-    mem_map_cache: Option<Arc<PageFrame>>,
 }
 
 impl VmInterface {
@@ -141,8 +113,6 @@ impl VmInterface {
             state: VmState::Pending,
             ivc_arg: 0,
             ivc_arg_ptr: 0,
-            mem_map: None,
-            mem_map_cache: None,
         }
     }
 
@@ -151,8 +121,6 @@ impl VmInterface {
         self.state = VmState::Pending;
         self.ivc_arg = 0;
         self.ivc_arg_ptr = 0;
-        self.mem_map = None;
-        self.mem_map_cache = None;
     }
 }
 
@@ -269,7 +237,7 @@ impl VmInnerConst {
                     self.intc_type = IntCtrlType::Passthrough;
                     partial_passthrough_intc_init(emu_cfg)
                 }
-                EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet => {
+                EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet | VirtioBalloon => {
                     emu_virtio_mmio_init(self.id, emu_cfg)
                 }
                 EmuDeviceTIOMMU => emu_smmu_init(emu_cfg), // Do IOMMU init later, after add VM to global list
@@ -459,7 +427,7 @@ impl Vm {
 
     pub fn append_color_regions(&self, mut regions: Vec<ColorMemRegion>) {
         let mut vm_inner = self.0.inner_mut.lock();
-        vm_inner.color_pa_info.color_pa_region.append(&mut regions);
+        vm_inner.color_pa_info.region_list.append(&mut regions);
     }
 
     pub fn vgic(&self) -> &Vgic {
@@ -606,16 +574,38 @@ impl Vm {
         let prefix = prefix - ((self.id() & mask) << VM_IPA_SIZE);
         prefix | ipa
     }
+
+    pub fn inflate_balloon(&self, guest_addr: usize, len: usize) {
+        if len != PAGE_SIZE {
+            error!("len {:#x} not handable", len);
+            return;
+        }
+        let pa = self.ipa2pa(guest_addr).unwrap();
+        debug!("inflate_balloon: remove guest_addr {guest_addr:#x} -> pa {pa:#x}");
+        let mut inner = self.0.inner_mut.lock();
+        let mut tmp = vec![];
+        for region in inner.color_pa_info.region_list.iter_mut() {
+            if region.contains(&pa) {
+                if let Some(new_region) = region.split(pa) {
+                    debug!("append new region {:x?}", new_region);
+                    tmp.push(new_region);
+                }
+            }
+        }
+        inner.color_pa_info.region_list.retain(|region| !region.is_empty());
+        inner.color_pa_info.region_list.append(&mut tmp);
+        inner.balloon.push(guest_addr);
+    }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct VmColorPaInfo {
-    pub color_pa_region: Vec<ColorMemRegion>,
+    region_list: Vec<ColorMemRegion>,
 }
 
 impl Drop for VmColorPaInfo {
     fn drop(&mut self) {
-        for region in self.color_pa_region.iter() {
+        for region in self.region_list.iter() {
             mem_color_region_free(region);
         }
     }
@@ -625,6 +615,7 @@ struct VmInnerMut {
     // memory config
     pt: PageTable,
     color_pa_info: VmColorPaInfo,
+    balloon: Vec<usize>,
 
     // migration
     share_mem_base: usize,
@@ -647,6 +638,7 @@ impl VmInnerMut {
                 panic!("vmm_init_memory: page alloc failed");
             },
             color_pa_info: VmColorPaInfo::default(),
+            balloon: vec![],
             share_mem_base: Platform::SHARE_MEM_BASE, // hard code
             iommu_ctx_id: None,
             running: 0,

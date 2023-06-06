@@ -52,21 +52,23 @@ struct VringUsed {
 
 #[derive(Clone)]
 pub struct Virtq {
+    vq_index: usize,
     notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool,
     inner: Arc<Mutex<VirtqInner<'static>>>,
 }
 
 impl Virtq {
-    pub fn new(notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool) -> Virtq {
+    pub fn new(vq_index: usize, notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool) -> Virtq {
         Virtq {
+            vq_index,
             notify_handler,
             inner: Arc::new(Mutex::new(VirtqInner::default())),
         }
     }
 
-    pub fn reset(&self, index: usize) {
+    pub fn reset(&self) {
         let mut inner = self.inner.lock();
-        inner.reset(index);
+        inner.reset();
     }
 
     pub fn pop_avail_desc_idx(&self, avail_idx: u16) -> Option<u16> {
@@ -161,52 +163,52 @@ impl Virtq {
         (self.notify_handler)(self.clone(), mmio, active_vm().unwrap())
     }
 
-    pub fn show_desc_info(&self, size: usize, vm: Vm) {
-        let inner = self.inner.lock();
-        let desc = inner.desc_table.as_ref().unwrap();
-        println!("[*desc_ring*]");
-        for i in 0..size {
-            let desc_addr = vm.ipa2hva(desc[i].addr as usize);
-            println!(
-                "index {}   desc_addr_ipa {:#x}   desc_addr_pa {:#x}   len {:#x}   flags {}  next {}",
-                i, desc[i].addr, desc_addr, desc[i].len, desc[i].flags, desc[i].next
-            );
-        }
-    }
+    // pub fn show_desc_info(&self, size: usize, vm: Vm) {
+    //     let inner = self.inner.lock();
+    //     let desc = inner.desc_table.as_ref().unwrap();
+    //     println!("[*desc_ring*]");
+    //     for i in 0..size {
+    //         let desc_addr = vm.ipa2hva(desc[i].addr as usize);
+    //         println!(
+    //             "index {}   desc_addr_ipa {:#x}   desc_addr_pa {:#x}   len {:#x}   flags {}  next {}",
+    //             i, desc[i].addr, desc_addr, desc[i].len, desc[i].flags, desc[i].next
+    //         );
+    //     }
+    // }
 
-    pub fn show_avail_info(&self, size: usize) {
-        let inner = self.inner.lock();
-        let avail = inner.avail.as_ref().unwrap();
-        println!("[*avail_ring*]");
-        for i in 0..size {
-            println!("index {} ring_idx {}", i, avail.ring[i]);
-        }
-    }
+    // pub fn show_avail_info(&self, size: usize) {
+    //     let inner = self.inner.lock();
+    //     let avail = inner.avail.as_ref().unwrap();
+    //     println!("[*avail_ring*]");
+    //     for i in 0..size {
+    //         println!("index {} ring_idx {}", i, avail.ring[i]);
+    //     }
+    // }
 
-    pub fn show_used_info(&self, size: usize) {
-        let inner = self.inner.lock();
-        let used = inner.used.as_ref().unwrap();
-        println!("[*used_ring*]");
-        for i in 0..size {
-            println!(
-                "index {} ring_id {} ring_len {:x}",
-                i, used.ring[i].id, used.ring[i].len
-            );
-        }
-    }
+    // pub fn show_used_info(&self, size: usize) {
+    //     let inner = self.inner.lock();
+    //     let used = inner.used.as_ref().unwrap();
+    //     println!("[*used_ring*]");
+    //     for i in 0..size {
+    //         println!(
+    //             "index {} ring_id {} ring_len {:x}",
+    //             i, used.ring[i].id, used.ring[i].len
+    //         );
+    //     }
+    // }
 
-    pub fn show_addr_info(&self) {
-        let inner = self.inner.lock();
-        println!(
-            "avail_addr {:x}, desc_addr {:x}, used_addr {:x}",
-            inner.avail_addr, inner.desc_table_addr, inner.used_addr
-        );
-    }
+    // pub fn show_addr_info(&self) {
+    //     let inner = self.inner.lock();
+    //     println!(
+    //         "avail_addr {:x}, desc_addr {:x}, used_addr {:x}",
+    //         inner.avail_addr, inner.desc_table_addr, inner.used_addr
+    //     );
+    // }
 
-    pub fn set_last_used_idx(&self, last_used_idx: u16) {
-        let mut inner = self.inner.lock();
-        inner.last_used_idx = last_used_idx;
-    }
+    // pub fn set_last_used_idx(&self, last_used_idx: u16) {
+    //     let mut inner = self.inner.lock();
+    //     inner.last_used_idx = last_used_idx;
+    // }
 
     pub fn set_num(&self, num: usize) {
         let mut inner = self.inner.lock();
@@ -257,10 +259,10 @@ impl Virtq {
         inner.used = Some(unsafe { &mut *(addr as *mut VringUsed) });
     }
 
-    pub fn last_used_idx(&self) -> u16 {
-        let inner = self.inner.lock();
-        inner.last_used_idx
-    }
+    // pub fn last_used_idx(&self) -> u16 {
+    //     let inner = self.inner.lock();
+    //     inner.last_used_idx
+    // }
 
     pub fn desc_table_addr(&self) -> usize {
         let inner = self.inner.lock();
@@ -277,29 +279,29 @@ impl Virtq {
         inner.used_addr
     }
 
-    pub fn desc_table(&self) -> usize {
-        let inner = self.inner.lock();
-        match &inner.desc_table {
-            None => 0,
-            Some(desc_table) => &(desc_table[0]) as *const _ as usize,
-        }
-    }
+    // pub fn desc_table(&self) -> usize {
+    //     let inner = self.inner.lock();
+    //     match &inner.desc_table {
+    //         None => 0,
+    //         Some(desc_table) => &(desc_table[0]) as *const _ as usize,
+    //     }
+    // }
 
-    pub fn avail(&self) -> usize {
-        let inner = self.inner.lock();
-        match &inner.avail {
-            None => 0,
-            Some(avail) => (*avail) as *const _ as usize,
-        }
-    }
+    // pub fn avail(&self) -> usize {
+    //     let inner = self.inner.lock();
+    //     match &inner.avail {
+    //         None => 0,
+    //         Some(avail) => (*avail) as *const _ as usize,
+    //     }
+    // }
 
-    pub fn used(&self) -> usize {
-        let inner = self.inner.lock();
-        match &inner.used {
-            None => 0,
-            Some(used) => (*used) as *const _ as usize,
-        }
-    }
+    // pub fn used(&self) -> usize {
+    //     let inner = self.inner.lock();
+    //     match &inner.used {
+    //         None => 0,
+    //         Some(used) => (*used) as *const _ as usize,
+    //     }
+    // }
 
     pub fn ready(&self) -> usize {
         let inner = self.inner.lock();
@@ -307,8 +309,7 @@ impl Virtq {
     }
 
     pub fn vq_indx(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.vq_index
+        self.vq_index
     }
 
     pub fn num(&self) -> usize {
@@ -352,22 +353,21 @@ impl Virtq {
         avail.idx
     }
 
-    pub fn last_avail_idx(&self) -> u16 {
-        let inner = self.inner.lock();
-        inner.last_avail_idx
-    }
+    // pub fn last_avail_idx(&self) -> u16 {
+    //     let inner = self.inner.lock();
+    //     inner.last_avail_idx
+    // }
 
-    pub fn used_idx(&self) -> u16 {
-        let inner = self.inner.lock();
-        let used = inner.used.as_ref().unwrap();
-        used.idx
-    }
+    // pub fn used_idx(&self) -> u16 {
+    //     let inner = self.inner.lock();
+    //     let used = inner.used.as_ref().unwrap();
+    //     used.idx
+    // }
 }
 
 #[derive(Default)]
 struct VirtqInner<'a> {
     ready: usize,
-    vq_index: usize,
     num: usize,
     desc_table: Option<&'a mut [VringDesc]>,
     avail: Option<&'a mut VringAvail>,
@@ -383,9 +383,8 @@ struct VirtqInner<'a> {
 
 impl VirtqInner<'_> {
     // virtio_queue_reset
-    pub fn reset(&mut self, index: usize) {
+    pub fn reset(&mut self) {
         self.ready = 0;
-        self.vq_index = index;
         self.num = 0;
         self.last_avail_idx = 0;
         self.last_used_idx = 0;

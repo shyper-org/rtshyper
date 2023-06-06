@@ -15,15 +15,9 @@ pub enum SchedRule {
 }
 
 #[repr(C)]
-pub struct PlatMemRegion {
-    pub base: usize,
-    pub size: usize,
-}
-
-#[repr(C)]
 pub struct PlatMemoryConfig {
     pub base: usize,
-    pub regions: &'static [PlatMemRegion],
+    pub regions: &'static [Range<usize>],
 }
 
 pub struct PlatCpuCoreConfig {

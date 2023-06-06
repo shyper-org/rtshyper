@@ -1,18 +1,19 @@
 use alloc::ffi::CString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq, IoAsyncMsg, UsedInfo};
-use crate::kernel::{active_vm_id, async_blk_io_req, async_ipi_req, AsyncTask, IpiMediatedMsg, Vm, EXECUTOR};
+use crate::kernel::{async_blk_io_req, async_ipi_req, AsyncTask, IpiMediatedMsg, Vm, EXECUTOR};
 use crate::util::memcpy_safe;
+
+use super::mmio::VIRTIO_F_VERSION_1;
 
 pub const VIRTQUEUE_BLK_MAX_SIZE: usize = 256;
 
 /* VIRTIO_BLK_FEATURES*/
-pub const VIRTIO_BLK_F_SIZE_MAX: usize = 1 << 1;
-pub const VIRTIO_BLK_F_SEG_MAX: usize = 1 << 2;
+const VIRTIO_BLK_F_SIZE_MAX: usize = 1 << 1;
+const VIRTIO_BLK_F_SEG_MAX: usize = 1 << 2;
 
 /* BLOCK PARAMETERS*/
 pub const SECTOR_BSIZE: usize = 512;
@@ -29,6 +30,10 @@ pub const VIRTIO_BLK_T_GET_ID: usize = 8;
 pub const VIRTIO_BLK_S_OK: usize = 0;
 // pub const VIRTIO_BLK_S_IOERR: usize = 1;
 pub const VIRTIO_BLK_S_UNSUPP: usize = 2;
+
+pub fn blk_features() -> usize {
+    VIRTIO_F_VERSION_1 | VIRTIO_BLK_F_SIZE_MAX | VIRTIO_BLK_F_SEG_MAX
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
@@ -51,9 +56,8 @@ struct BlkTopology {
     opt_io_size: u32,
 }
 
-#[derive(Clone)]
 pub struct BlkDesc {
-    inner: Arc<BlkDescInner>,
+    inner: BlkDescInner,
 }
 
 impl BlkDesc {
@@ -64,7 +68,7 @@ impl BlkDesc {
             seg_max: BLOCKIF_IOV_MAX as u32,
             ..Default::default()
         };
-        BlkDesc { inner: Arc::new(desc) }
+        BlkDesc { inner: desc }
     }
 
     fn start_addr(&self) -> usize {
@@ -114,87 +118,42 @@ struct BlkReqRegion {
     pub size: usize,
 }
 
-#[derive(Clone)]
+#[repr(C)]
 pub struct VirtioBlkReq {
-    inner: Arc<Mutex<VirtioBlkReqInner>>,
-    req_list: Arc<Mutex<Vec<VirtioBlkReqNode>>>,
+    region: BlkReqRegion,
+    mediated: bool,
 }
 
 impl VirtioBlkReq {
     pub fn default() -> VirtioBlkReq {
         VirtioBlkReq {
-            inner: Arc::new(Mutex::new(VirtioBlkReqInner::default())),
-            req_list: Arc::new(Mutex::new(Vec::new())),
+            region: BlkReqRegion { start: 0, size: 0 },
+            mediated: false,
         }
     }
 
-    pub fn add_req_node(&self, node: VirtioBlkReqNode, _vm: &Vm) {
-        let mut list = self.req_list.lock();
-        // let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
-        // push_used_info(node.desc_chain_head_idx, node.iov_total as u32, vm.id());
-        list.push(node);
-
-        // match list.last_mut() {
-        //     None => {
-        //         list.push(node);
-        //     }
-        //     Some(prev) => {
-        //         if prev.req_type == node.req_type
-        //             && (prev.sector + prev.iov_sum_up / SECTOR_BSIZE) == node.sector
-        //             && (prev.iov_sum_up + node.iov_sum_up) / SECTOR_BSIZE < mediated_blk.dma_block_max()
-        //         {
-        //             prev.iov_sum_up += node.iov_sum_up;
-        //             prev.iov.append(&mut node.iov);
-        //         } else {
-        //             list.push(node);
-        //         }
-        //     }
-        // }
+    pub fn set_start(&mut self, start: usize) {
+        self.region.start = start;
     }
 
-    pub fn req_num(&self) -> usize {
-        let list = self.req_list.lock();
-        list.len()
+    pub fn set_size(&mut self, size: usize) {
+        self.region.size = size;
     }
 
-    pub fn req_node(&self, idx: usize) -> VirtioBlkReqNode {
-        let list = self.req_list.lock();
-        list[idx].clone()
-    }
-
-    pub fn clear_node(&self) {
-        let mut list = self.req_list.lock();
-        list.clear();
-    }
-
-    pub fn set_start(&self, start: usize) {
-        let mut inner = self.inner.lock();
-        inner.set_start(start);
-    }
-
-    pub fn set_size(&self, size: usize) {
-        let mut inner = self.inner.lock();
-        inner.set_size(size);
-    }
-
-    pub fn set_mediated(&self, mediated: bool) {
-        let mut inner = self.inner.lock();
-        inner.mediated = mediated;
+    pub fn set_mediated(&mut self, mediated: bool) {
+        self.mediated = mediated;
     }
 
     pub fn mediated(&self) -> bool {
-        let inner = self.inner.lock();
-        inner.mediated
+        self.mediated
     }
 
     pub fn region_start(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.region.start
+        self.region.start
     }
 
     pub fn region_size(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.region.size
+        self.region.size
     }
 }
 
@@ -226,37 +185,18 @@ impl VirtioBlkReqNode {
     }
 }
 
-#[repr(C)]
-struct VirtioBlkReqInner {
-    region: BlkReqRegion,
-    mediated: bool,
-    process_list: Vec<usize>,
-}
-
-impl VirtioBlkReqInner {
-    pub fn default() -> VirtioBlkReqInner {
-        VirtioBlkReqInner {
-            region: BlkReqRegion { start: 0, size: 0 },
-            mediated: false,
-            process_list: Vec::new(),
-        }
-    }
-
-    pub fn set_start(&mut self, start: usize) {
-        self.region.start = start;
-    }
-
-    pub fn set_size(&mut self, size: usize) {
-        self.region.size = size;
-    }
-}
-
-fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usize, vm: &Vm) {
+fn generate_blk_req(
+    req: &VirtioBlkReq,
+    vq: &Virtq,
+    dev: &VirtioMmio,
+    cache: usize,
+    vm: &Vm,
+    req_node_list: Vec<VirtioBlkReqNode>,
+) {
     let region_start = req.region_start();
     let region_size = req.region_size();
     let mut cache_ptr = cache;
-    for idx in 0..req.req_num() {
-        let req_node = req.req_node(idx);
+    for req_node in req_node_list {
         let sector = req_node.sector;
         if sector + req_node.iov_sum_up / SECTOR_BSIZE > region_start + region_size {
             println!(
@@ -283,7 +223,7 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
                             sector: sector + region_start,
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
-                            iov_list: Arc::new(req_node.iov.clone()),
+                            iov_list: Arc::new(req_node.iov),
                             used_info: UsedInfo {
                                 desc_chain_head_idx: req_node.desc_chain_head_idx,
                                 used_len: req_node.iov_total as u32,
@@ -320,7 +260,7 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
                             sector: sector + region_start,
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
-                            iov_list: Arc::new(req_node.iov.clone()),
+                            iov_list: Arc::new(req_node.iov),
                             used_info: UsedInfo {
                                 desc_chain_head_idx: req_node.desc_chain_head_idx,
                                 used_len: req_node.iov_total as u32,
@@ -371,8 +311,6 @@ fn generate_blk_req(req: &VirtioBlkReq, vq: &Virtq, dev: &VirtioMmio, cache: usi
             // }
         }
     }
-
-    req.clear_node();
 }
 
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
@@ -390,10 +328,6 @@ pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) ->
 }
 
 pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
-    if vm.id() == 0 && active_vm_id() == 0 {
-        panic!("src vm should not be 0");
-    }
-
     let avail_idx = vq.avail_idx();
 
     // let begin = time_current_us();
@@ -405,13 +339,13 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     // let mediated = blk.mediated();
     let dev = blk.dev();
     let req = match dev.req() {
-        super::dev::DevReq::BlkReq(blk_req) => blk_req,
+        Some(blk_req) => blk_req,
         _ => {
             panic!("virtio_blk_notify_handler: illegal req");
         }
     };
 
-    // let vq_size = vq.num();
+    let mut req_node_list = vec![];
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     let mut process_count: i32 = 0;
     // let mut desc_chain_head_idx;
@@ -508,7 +442,8 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
             next_desc_idx = vq.desc_next(next_desc_idx) as usize;
         }
         req_node.iov_total = req_node.iov_sum_up;
-        req.add_req_node(req_node, &vm);
+        // req.add_req_node(req_node, &vm);
+        req_node_list.push(req_node);
 
         process_count += 1;
         next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
@@ -520,7 +455,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
     } else {
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         let cache = mediated_blk.cache_pa();
-        generate_blk_req(&req, &vq, &blk, cache, &vm);
+        generate_blk_req(req, &vq, &blk, cache, &vm, req_node_list);
     };
 
     // let time1 = time_current_us();

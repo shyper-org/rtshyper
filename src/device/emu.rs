@@ -33,6 +33,7 @@ pub enum EmuDeviceType {
     EmuDeviceTShyper = 6,
     EmuDeviceTVirtioBlkMediated = 7,
     EmuDeviceTIOMMU = 8,
+    VirtioBalloon = 9,
 }
 
 impl From<usize> for EmuDeviceType {
@@ -47,7 +48,8 @@ impl From<usize> for EmuDeviceType {
             6 => EmuDeviceType::EmuDeviceTShyper,
             7 => EmuDeviceType::EmuDeviceTVirtioBlkMediated,
             8 => EmuDeviceType::EmuDeviceTIOMMU,
-            _ => panic!("Unknown  EmuDeviceType value: {}", value),
+            9 => EmuDeviceType::VirtioBalloon,
+            _ => panic!("Unknown EmuDeviceType value: {}", value),
         }
     }
 }

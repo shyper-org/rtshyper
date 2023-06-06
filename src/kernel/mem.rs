@@ -34,6 +34,7 @@ pub fn mem_page_alloc() -> Result<PageFrame, AllocError> {
     PageFrame::alloc_pages(1)
 }
 
+#[allow(dead_code)]
 pub fn mem_pages_alloc(page_num: usize) -> Result<PageFrame, AllocError> {
     PageFrame::alloc_pages(page_num)
 }
@@ -68,6 +69,47 @@ impl ColorMemRegion {
 
     fn mark_available(&mut self, state: bool) {
         self.available = state;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    pub fn contains(&self, addr: &usize) -> bool {
+        (self.base..self.base + self.count * self.step).contains(addr) && (addr - self.base) % self.step == 0
+    }
+
+    pub fn split(&mut self, addr: usize) -> Option<Self> {
+        let color_region = ColorMemRegion::new(self.color, addr, 1, self.step);
+        MEM_REGION_BY_COLOR
+            .lock()
+            .get_mut(self.color)
+            .unwrap()
+            .push(color_region);
+        if self.contains(&addr) {
+            let left_count = (addr - self.base) / self.step;
+            let right_count = self.count - left_count - 1;
+            let right_base = addr + self.step;
+            if left_count == 0 {
+                self.count = right_count;
+                self.base = right_base;
+                None
+            } else if right_count == 0 {
+                self.count = left_count;
+                None
+            } else {
+                self.count = left_count;
+                Some(Self {
+                    color: self.color,
+                    base: right_base,
+                    count: right_count,
+                    step: self.step,
+                    available: false,
+                })
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -235,14 +277,14 @@ fn mem_region_init_by_colors() {
 
     let step = num_colors * PAGE_SIZE;
 
-    for (i, region) in PLAT_DESC.mem_desc.regions.iter().enumerate() {
+    for (i, range) in PLAT_DESC.mem_desc.regions.iter().enumerate() {
         let (plat_mem_region_base, plat_mem_region_size) = {
-            if (region.base..region.base + region.size).contains(&(_image_end as usize)) {
+            if range.contains(&(_image_end as usize)) {
                 let start = round_up(_image_end as usize, step);
-                let size = region.base + region.size - start;
+                let size = range.end - start;
                 (start, size)
             } else {
-                (region.base, region.size)
+                (range.start, range.end)
             }
         };
         if plat_mem_region_size == 0 {
@@ -419,6 +461,7 @@ pub fn hypervisor_self_coloring() {
         cpu_new.pt().set_pte(image_start, 1, pte);
         debug!("core {} set va {image_start:#x} pte {pte:#x}", current_cpu().id);
     }
+    barrier();
 
     // copy again: for heap space in bss segment
     if current_cpu().id == CPU_MASTER {

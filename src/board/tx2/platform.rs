@@ -1,10 +1,7 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 use crate::board::ARM_CORTEX_A57;
-use crate::board::{
-    PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
-    PlatMemRegion,
-};
+use crate::board::{PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig};
 use crate::board::SchedRule::RoundRobin;
 
 pub struct Tx2Platform;
@@ -101,14 +98,8 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
             [0003.854] I> added [base:0xf0200000, size:0x185600000] to /memory
         */
         regions: &[
-            PlatMemRegion {
-                base: 0x8000_0000,
-                size: 0x7000_0000,
-            },
-            PlatMemRegion {
-                base: 0xf020_0000,
-                size: 0x1_8560_0000,
-            },
+            0x8000_0000..0x8000_0000 + 0x7000_0000,
+            0xf020_0000..0xf020_0000 + 0x1_8560_0000,
         ],
         base: 0x80000000,
     },

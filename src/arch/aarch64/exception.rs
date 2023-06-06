@@ -234,7 +234,7 @@ fn interrupt_enter() {
     current_cpu().interrupt_nested += 1;
     cpu_interrupt_enable(level);
     if current_cpu().interrupt_nested > 1 {
-        debug!(
+        trace!(
             "irq has come, core {} interrupt_nested {}",
             current_cpu().id,
             current_cpu().interrupt_nested,
@@ -247,7 +247,7 @@ fn interrupt_enter() {
 fn interrupt_leave() {
     use super::{cpu_interrupt_disable, cpu_interrupt_enable};
     if current_cpu().interrupt_nested > 1 {
-        debug!(
+        trace!(
             "irq is going to leave, core {} interrupt_nested {}",
             current_cpu().id,
             current_cpu().interrupt_nested,

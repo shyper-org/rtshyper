@@ -4,8 +4,8 @@ use crate::config::VmRegion;
 use crate::dtb::{create_fdt, setup_fdt_vm0};
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    cpu_idle, current_cpu, iommmu_vm_init, vm_if_init_mem_map, VmType, iommu_add_device, mem_region_alloc_colors,
-    ColorMemRegion, count_missing_num, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
+    cpu_idle, current_cpu, iommmu_vm_init, VmType, iommu_add_device, mem_region_alloc_colors, ColorMemRegion,
+    count_missing_num, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
 };
 use crate::kernel::{vm, Vm};
 use crate::kernel::{active_vcpu_id, vcpu_run};
@@ -37,7 +37,6 @@ fn vm_map_ipa2color_regions(vm: &Vm, vm_region: &VmRegion, color_regions: &[Colo
 }
 
 fn vmm_init_memory(vm: &Vm) -> bool {
-    let vm_id = vm.id();
     let config = vm.config();
     // passthrough regions
     for region in vm.config().passthrough_device_regions() {
@@ -57,7 +56,6 @@ fn vmm_init_memory(vm: &Vm) -> bool {
     }
     // normal memory regions
     let vm_memory_regions = config.memory_region();
-    let vm_mem_size = vm_memory_regions.iter().map(|x| x.length).sum::<usize>();
     for vm_region in vm_memory_regions.iter() {
         match mem_region_alloc_colors(vm_region.length, config.memory_color_bitmap()) {
             Ok(vm_color_regions) => {
@@ -77,7 +75,6 @@ fn vmm_init_memory(vm: &Vm) -> bool {
         }
     }
     vmm_setup_ipa2hva(vm);
-    vm_if_init_mem_map(vm_id, (vm_mem_size + PAGE_SIZE - 1) / PAGE_SIZE);
 
     true
 }

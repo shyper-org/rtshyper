@@ -172,6 +172,7 @@ pub fn mediated_blk_notify_handler(dev_ipa_reg: usize) -> Result<usize, ()> {
     Ok(0)
 }
 
+#[allow(dead_code)]
 fn check_sum(addr: usize, len: usize) -> usize {
     let slice = unsafe { core::slice::from_raw_parts(addr as *const usize, len / 8) };
     let mut sum = 0;

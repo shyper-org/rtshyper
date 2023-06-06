@@ -2,10 +2,7 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 use crate::board::ARM_CORTEX_A57;
-use crate::board::{
-    PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
-    PlatMemRegion,
-};
+use crate::board::{PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig};
 use crate::board::SchedRule::RoundRobin;
 use crate::driver::{read, write};
 
@@ -93,14 +90,8 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     mem_desc: PlatMemoryConfig {
         regions: &[
             // reserve 0x48000000 ~ 0x48100000 for QEMU dtb
-            PlatMemRegion {
-                base: 0x40000000,
-                size: 0x08000000,
-            },
-            PlatMemRegion {
-                base: 0x50000000,
-                size: 0x1f0000000,
-            },
+            0x40000000..0x48000000,
+            0x50000000..0x50000000 + 0x1f0000000,
         ],
         base: 0x40000000,
     },

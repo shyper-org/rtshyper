@@ -1,10 +1,7 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 use crate::board::ARM_CORTEX_A57;
-use crate::board::{
-    PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
-    PlatMemRegion,
-};
+use crate::board::{PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig};
 use crate::board::SchedRule::RoundRobin;
 
 pub struct Pi4Platform;
@@ -93,22 +90,10 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
     },
     mem_desc: PlatMemoryConfig {
         regions: &[
-            PlatMemRegion {
-                base: 0xf0000000,
-                size: 0xc000000,
-            },
-            PlatMemRegion {
-                base: 0x200000,
-                size: 0x3e000000 - 0x200000,
-            },
-            PlatMemRegion {
-                base: 0x40000000,
-                size: 0xf0000000 - 0x40000000,
-            },
-            PlatMemRegion {
-                base: 0x100000000,
-                size: 0x100000000,
-            },
+            0xf0000000..0xf0000000 + 0xc000000,
+            0x200000..0x3e000000,
+            0x40000000..0xf0000000,
+            0x100000000..0x100000000 + 0x100000000,
         ],
         base: 0xf0000000,
     },

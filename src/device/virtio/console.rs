@@ -1,20 +1,16 @@
-use alloc::sync::Arc;
-
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{VirtioMmio, Virtq};
-use crate::kernel::{active_vm, vm_if_set_mem_map_bit};
 use crate::kernel::vm;
 use crate::kernel::Vm;
 use crate::util::round_down;
 
 use super::dev::DevDesc;
 use super::iov::VirtioIov;
+use super::mmio::VIRTIO_F_VERSION_1;
 
 pub const VIRTQUEUE_CONSOLE_MAX_SIZE: usize = 64;
-
-const VIRTIO_F_VERSION_1: usize = 1 << 32;
 
 const VIRTQUEUE_SERIAL_MAX_SIZE: usize = 64;
 
@@ -31,9 +27,8 @@ const VIRTIO_CONSOLE_RESIZE: usize = 5;
 const VIRTIO_CONSOLE_PORT_OPEN: usize = 6;
 const VIRTIO_CONSOLE_PORT_NAME: usize = 7;
 
-#[derive(Clone)]
 pub struct ConsoleDesc {
-    inner: Arc<Mutex<ConsoleDescInner>>,
+    inner: Mutex<ConsoleDescInner>,
 }
 
 impl ConsoleDesc {
@@ -44,7 +39,7 @@ impl ConsoleDesc {
         desc.cols = 80;
         desc.rows = 25;
         ConsoleDesc {
-            inner: Arc::new(Mutex::new(desc)),
+            inner: Mutex::new(desc),
         }
     }
 
@@ -108,7 +103,6 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         return false;
     }
 
-    let tx_iov = VirtioIov::default();
     let dev = console.dev();
 
     let (trgt_vmid, trgt_console_ipa) = match dev.desc() {
@@ -119,16 +113,15 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         }
     };
 
-    // let buf = dev.cache();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
 
     while next_desc_idx_opt.is_some() {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
         let mut len = 0;
-        tx_iov.clear();
+        let mut tx_iov = VirtioIov::default();
 
         loop {
-            let addr = active_vm().unwrap().ipa2hva(vq.desc_addr(idx));
+            let addr = vm.ipa2hva(vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_console_notify_handler: failed to desc addr");
                 return false;
@@ -142,13 +135,9 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
             idx = vq.desc_next(idx) as usize;
         }
 
-        if !virtio_console_recv(trgt_vmid, trgt_console_ipa, tx_iov.clone(), len) {
+        if !virtio_console_recv(trgt_vmid, trgt_console_ipa, tx_iov, len) {
             println!("virtio_console_notify_handler: failed send");
             // return false;
-        }
-        if vm.id() != 0 {
-            vm_if_set_mem_map_bit(&vm, vq.used_addr());
-            vm_if_set_mem_map_bit(&vm, vq.used_addr() + PAGE_SIZE);
         }
         if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
             return false;
@@ -217,7 +206,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
 
     let desc_idx_header = desc_header_idx_opt.unwrap();
     let mut desc_idx = desc_header_idx_opt.unwrap() as usize;
-    let rx_iov = VirtioIov::default();
+    let mut rx_iov = VirtioIov::default();
     let mut rx_len = 0;
     loop {
         let dst = trgt_vm.ipa2hva(rx_vq.desc_addr(desc_idx));
@@ -234,7 +223,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         if trgt_vmid != 0 {
             let mut ipa_addr = round_down(rx_vq.desc_addr(desc_idx), PAGE_SIZE);
             while ipa_addr <= round_down(rx_vq.desc_addr(desc_idx) + desc_len, PAGE_SIZE) {
-                vm_if_set_mem_map_bit(&trgt_vm, ipa_addr);
                 ipa_addr += PAGE_SIZE;
             }
         }
@@ -255,7 +243,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {
+    if tx_iov.write_through_iov(&rx_iov, len) > 0 {
         println!(
             "virtio_console_recv: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}",
             rx_iov.num(),
@@ -266,10 +254,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    if trgt_vmid != 0 {
-        vm_if_set_mem_map_bit(&trgt_vm, rx_vq.used_addr());
-        vm_if_set_mem_map_bit(&trgt_vm, rx_vq.used_addr() + PAGE_SIZE);
-    }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         println!(
             "virtio_console_recv: update used ring failed len {} rx_vq num {}",

@@ -1,16 +1,14 @@
-use alloc::sync::Arc;
 use core::mem::size_of;
 use spin::Mutex;
 
-use crate::arch::PAGE_SIZE;
 use crate::device::{VirtioMmio, Virtq};
-use crate::kernel::{active_vm, active_vm_id, current_cpu, vm_if_get_cpu_id, vm_if_set_mem_map_bit, VmType, vm_id_list};
+use crate::kernel::{current_cpu, vm_if_get_cpu_id, vm_id_list};
 use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::vm;
 use crate::kernel::Vm;
-use crate::util::round_down;
 
+use super::mmio::VIRTIO_F_VERSION_1;
 use super::queue::{VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
 use super::dev::DevDesc;
 use super::iov::VirtioIov;
@@ -20,7 +18,6 @@ pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 const VIRTIO_NET_OK: u8 = 0;
 const VIRTIO_NET_ERR: u8 = 1;
 
-const VIRTIO_F_VERSION_1: usize = 1 << 32;
 const VIRTIO_NET_F_CSUM: usize = 1 << 0;
 const VIRTIO_NET_F_GUEST_CSUM: usize = 1 << 1;
 const VIRTIO_NET_F_MAC: usize = 1 << 5;
@@ -69,9 +66,8 @@ struct VirtioNetHdr {
     pub num_buffers: u16,
 }
 
-#[derive(Clone)]
 pub struct NetDesc {
-    inner: Arc<Mutex<NetDescInner>>,
+    inner: Mutex<NetDescInner>,
 }
 
 impl NetDesc {
@@ -81,7 +77,7 @@ impl NetDesc {
             desc.mac[i] = *item as u8;
         }
         NetDesc {
-            inner: Arc::new(Mutex::new(desc)),
+            inner: Mutex::new(desc),
         }
     }
 
@@ -158,17 +154,15 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         return false;
     }
 
-    let out_iov = VirtioIov::default();
-    let in_iov = VirtioIov::default();
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     while next_desc_idx_opt.is_some() {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
         let mut len = 0;
-        out_iov.clear();
-        in_iov.clear();
+        let mut out_iov = VirtioIov::default();
+        let mut in_iov = VirtioIov::default();
 
         loop {
-            let addr = active_vm().unwrap().ipa2hva(vq.desc_addr(idx));
+            let addr = vm.ipa2hva(vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_handle_ctrl: failed to desc addr");
                 return false;
@@ -209,14 +203,6 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
 
         // update ctrl queue used ring
-        if vm.id() != 0 {
-            vm_if_set_mem_map_bit(&vm, vq.used_addr());
-
-            for idx in 0..in_iov.num() {
-                // TODO: in_iov.get_buf(idx) is pa, but i need a ipa
-                vm_if_set_mem_map_bit(&vm, in_iov.get_buf(idx));
-            }
-        }
         if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
             return false;
         }
@@ -237,7 +223,6 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         return true;
     }
 
-    let tx_iov = VirtioIov::default();
     let mut vms_to_notify = 0;
 
     let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
@@ -245,10 +230,10 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     while next_desc_idx_opt.is_some() {
         let mut idx = next_desc_idx_opt.unwrap() as usize;
         let mut len = 0;
-        tx_iov.clear();
+        let mut tx_iov = VirtioIov::default();
 
         loop {
-            let addr = active_vm().unwrap().ipa2hva(vq.desc_addr(idx));
+            let addr = vm.ipa2hva(vq.desc_addr(idx));
             if addr == 0 {
                 println!("virtio_net_notify_handler: failed to desc addr");
                 return false;
@@ -262,15 +247,11 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
             idx = vq.desc_next(idx) as usize;
         }
 
-        let (success, trgt_vmid_map) = ethernet_transmit(tx_iov.clone(), len);
+        let (success, trgt_vmid_map) = ethernet_transmit(tx_iov, len, &vm);
         if success {
             vms_to_notify |= trgt_vmid_map;
         }
 
-        if vm.id() != 0 {
-            vm_if_set_mem_map_bit(&vm, vq.used_addr());
-            vm_if_set_mem_map_bit(&vm, vq.used_addr() + PAGE_SIZE);
-        }
         if !vq.update_used_ring(
             (len - size_of::<VirtioNetHdr>()) as u32,
             next_desc_idx_opt.unwrap() as u32,
@@ -325,7 +306,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                 }
             } else {
                 let msg = IpiEthernetMsg {
-                    src_vmid: active_vm_id(),
+                    src_vmid: vm.id(),
                     trgt_vmid,
                 };
                 let cpu_trgt = vm_if_get_cpu_id(trgt_vmid).unwrap();
@@ -390,7 +371,7 @@ pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
     }
 }
 
-fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
+fn ethernet_transmit(tx_iov: VirtioIov, len: usize, vm: &Vm) -> (bool, usize) {
     // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]
     if len < size_of::<VirtioNetHdr>() || len - size_of::<VirtioNetHdr>() < 6 + 6 + 2 {
         println!(
@@ -402,12 +383,9 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
     }
 
     let frame: &[u8] = tx_iov.get_ptr(size_of::<VirtioNetHdr>());
-    // need to check mac
-    // vm_if_list_cmp_mac(active_vm_id(), frame + 6);
-
     if frame[0..6] == [0xff, 0xff, 0xff, 0xff, 0xff, 0xff] {
         if ethernet_is_arp(frame) {
-            return ethernet_broadcast(tx_iov.clone(), len);
+            return ethernet_broadcast(&tx_iov, len, vm);
         } else {
             return (false, 0);
         }
@@ -418,27 +396,24 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
             // Only IPV6 multicast packet is allowed to be broadcast
             return (false, 0);
         }
-        return ethernet_broadcast(tx_iov.clone(), len);
+        return ethernet_broadcast(&tx_iov, len, vm);
     }
 
     match ethernet_mac_to_vm_id(frame) {
-        Ok(vm_id) => (ethernet_send_to(vm_id, tx_iov.clone(), len), 1 << vm_id),
+        Ok(vm_id) => (ethernet_send_to(vm_id, &tx_iov, len), 1 << vm_id),
         Err(_) => (false, 0),
     }
 }
 
-fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
-    let cur_vm_id = active_vm_id();
+fn ethernet_broadcast(tx_iov: &VirtioIov, len: usize, cur_vm: &Vm) -> (bool, usize) {
+    let cur_vm_id = cur_vm.id();
     let mut trgt_vmid_map = 0;
     let vm_id_list = vm_id_list();
     for vm_id in vm_id_list {
         if vm_id == cur_vm_id {
             continue;
         }
-        if vm(vm_id).unwrap().vm_type() != VmType::VmTOs {
-            continue;
-        }
-        if !ethernet_send_to(vm_id, tx_iov.clone(), len) {
+        if !ethernet_send_to(vm_id, tx_iov, len) {
             continue;
         }
         trgt_vmid_map |= 1 << vm_id;
@@ -446,12 +421,12 @@ fn ethernet_broadcast(tx_iov: VirtioIov, len: usize) -> (bool, usize) {
     (trgt_vmid_map != 0, trgt_vmid_map)
 }
 
-fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
+fn ethernet_send_to(vmid: usize, tx_iov: &VirtioIov, len: usize) -> bool {
     // println!("ethernet send to vm{}", vmid);
     let vm = match vm(vmid) {
         None => {
             // println!("ethernet_send_to: target vm [{}] is not ready or not exist", vmid);
-            return true;
+            return false;
         }
         Some(vm) => vm,
     };
@@ -460,7 +435,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         Some(x) => x,
         _ => {
             // println!("ethernet_send_to: vm[{}] failed to get virtio net dev", vmid);
-            return true;
+            return false;
         }
     };
 
@@ -491,7 +466,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
 
     let desc_idx_header = desc_header_idx_opt.unwrap();
     let mut desc_idx = desc_header_idx_opt.unwrap() as usize;
-    let rx_iov = VirtioIov::default();
+    let mut rx_iov = VirtioIov::default();
     let mut rx_len = 0;
 
     loop {
@@ -509,13 +484,6 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         }
         let desc_len = rx_vq.desc_len(desc_idx) as usize;
 
-        if vmid != 0 {
-            let mut ipa_addr = round_down(rx_vq.desc_addr(desc_idx), PAGE_SIZE);
-            while ipa_addr <= round_down(rx_vq.desc_addr(desc_idx) + desc_len, PAGE_SIZE) {
-                vm_if_set_mem_map_bit(&vm, ipa_addr);
-                ipa_addr += PAGE_SIZE;
-            }
-        }
         rx_iov.push_data(dst, desc_len);
         rx_len += desc_len;
         if rx_len >= len {
@@ -538,7 +506,7 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
     let header = unsafe { &mut *(tx_iov.get_buf(0) as *mut VirtioNetHdr) };
     header.num_buffers = 1;
 
-    if tx_iov.write_through_iov(rx_iov.clone(), len) > 0 {
+    if tx_iov.write_through_iov(&rx_iov, len) > 0 {
         println!(
             "ethernet_send_to: write through iov failed, rx_iov_num {} tx_iov_num {} rx_len {} tx_len {}",
             rx_iov.num(),
@@ -549,10 +517,6 @@ fn ethernet_send_to(vmid: usize, tx_iov: VirtioIov, len: usize) -> bool {
         return false;
     }
 
-    if vmid != 0 {
-        vm_if_set_mem_map_bit(&vm, rx_vq.used_addr());
-        vm_if_set_mem_map_bit(&vm, rx_vq.used_addr() + PAGE_SIZE);
-    }
     if !rx_vq.update_used_ring(len as u32, desc_idx_header as u32) {
         return false;
     }
