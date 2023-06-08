@@ -1,4 +1,4 @@
-.equ CPU_STACK_OFFSET, 0x4000
+.equ CPU_STACK_OFFSET, 0x5000
 .equ CPU_STACK_SIZE, (4096 * 128)
 
 .section .text.boot

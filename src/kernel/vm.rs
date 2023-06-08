@@ -595,6 +595,8 @@ impl Vm {
         inner.color_pa_info.region_list.retain(|region| !region.is_empty());
         inner.color_pa_info.region_list.append(&mut tmp);
         inner.balloon.push(guest_addr);
+        drop(inner);
+        self.pt_unmap_range(guest_addr, len, false);
     }
 }
 

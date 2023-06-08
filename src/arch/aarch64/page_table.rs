@@ -24,8 +24,8 @@ const PTE_BLOCK: usize = 0b01;
 
 const PTE_S1_FIELD_AP_RW_EL0_NONE: usize = 0b00 << 6;
 const PTE_S1_FIELD_AP_RW_EL0_RW: usize = 0b01 << 6;
-const PTE_S1_FIELD_AP_R0_EL0_NONE: usize = 0b10 << 6;
-const PTE_S1_FIELD_AP_R0_EL0_RW: usize = 0b11 << 6;
+const PTE_S1_FIELD_AP_RO_EL0_NONE: usize = 0b10 << 6;
+const PTE_S1_FIELD_AP_RO_EL0_RW: usize = 0b11 << 6;
 
 const PTE_S1_FIELD_SH_NON_SHAREABLE: usize = 0b00 << 8;
 const PTE_S1_FIELD_SH_RESERVED: usize = 0b01 << 8;
@@ -54,6 +54,9 @@ pub const PTE_S2_FIELD_AF: usize = 1 << 10;
 
 pub const PTE_S1_NORMAL: usize =
     pte_s1_field_attr_indx(1) | PTE_S1_FIELD_AP_RW_EL0_NONE | PTE_S1_FIELD_SH_INNER_SHAREABLE | PTE_S1_FIELD_AF;
+
+const PTE_S1_RO: usize =
+    pte_s1_field_attr_indx(1) | PTE_S1_FIELD_AP_RO_EL0_NONE | PTE_S1_FIELD_SH_INNER_SHAREABLE | PTE_S1_FIELD_AF;
 
 pub const PTE_S1_DEVICE: usize =
     pte_s1_field_attr_indx(0) | PTE_S1_FIELD_AP_RW_EL0_NONE | PTE_S1_FIELD_SH_OUTER_SHAREABLE | PTE_S1_FIELD_AF;
@@ -123,9 +126,14 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     cpu.cpu_pt.lvl2[pt_lvl2_idx(CPU_BANKED_ADDRESS)] = lvl3_addr | PTE_S1_NORMAL | PTE_TABLE;
 
     let page_num = round_up(size_of::<Cpu>(), PAGE_SIZE) / PAGE_SIZE;
-
-    for i in 0..page_num {
-        cpu.cpu_pt.lvl3[pt_lvl3_idx(CPU_BANKED_ADDRESS) + i] = (cpu_addr + i * PAGE_SIZE) | PTE_S1_NORMAL | PTE_PAGE;
+    let guard_page_index = offset_of!(Cpu, _guard_page) / PAGE_SIZE;
+    for i in (0..page_num).into_iter() {
+        let pte = if i == guard_page_index {
+            PTE_S1_RO
+        } else {
+            PTE_S1_NORMAL
+        } | PTE_PAGE;
+        cpu.cpu_pt.lvl3[pt_lvl3_idx(CPU_BANKED_ADDRESS) + i] = (cpu_addr + i * PAGE_SIZE) | pte;
     }
 
     crate::arch::Arch::invalid_hypervisor_all();

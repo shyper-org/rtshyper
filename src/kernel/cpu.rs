@@ -39,14 +39,15 @@ pub struct Cpu {
     sched: Once<Box<dyn Scheduler>>,
     pub vcpu_array: VcpuArray,
     pub current_irq: usize,
-    pub global_pt: Once<PageTable>,
+    global_pt: Once<PageTable>,
     pub interrupt_nested: usize,
     pub cpu_pt: CpuPt,
+    pub _guard_page: [u8; PAGE_SIZE],
     stack: [u8; CPU_STACK_SIZE],
 }
 
 // see start.S
-const_assert_eq!(offset_of!(Cpu, stack), 0x4000);
+const_assert_eq!(offset_of!(Cpu, stack), 0x5000);
 
 #[allow(dead_code)]
 impl Cpu {
@@ -60,13 +61,14 @@ impl Cpu {
             vcpu_array: VcpuArray::new(),
             current_irq: 0,
             interrupt_nested: 0,
+            global_pt: Once::new(),
             cpu_pt: CpuPt {
                 lvl1: [0; PTE_PER_PAGE],
                 lvl2: [0; PTE_PER_PAGE],
                 lvl3: [0; PTE_PER_PAGE],
             },
+            _guard_page: [0; PAGE_SIZE],
             stack: [0; CPU_STACK_SIZE],
-            global_pt: Once::new(),
         }
     }
 
