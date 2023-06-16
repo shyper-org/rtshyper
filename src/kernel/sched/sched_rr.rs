@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
-use crate::kernel::{Vcpu, Scheduler, current_cpu, VcpuState, timer_enable};
+use crate::kernel::{Vcpu, current_cpu, VcpuState, timer_enable};
+
+use super::Scheduler;
 
 #[allow(dead_code)]
 #[derive(Default)]

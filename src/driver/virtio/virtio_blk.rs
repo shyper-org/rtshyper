@@ -115,7 +115,6 @@ register_structs! {
     (0x0a4 => QueueDeviceHigh: WriteOnly<u32>),
     (0x0a8 => _reserved_9),
     (0x0fc => ConfigGeneration: ReadOnly<u32>),
-    (0x0fd => _reserved_10),
     (0x100 => _reserved_config),
     (0x200 => @END),
   }

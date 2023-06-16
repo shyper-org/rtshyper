@@ -512,9 +512,7 @@ pub fn hvc_ipi_handler(msg: &IpiMessage) {
 }
 
 pub fn hvc_init() {
-    if !ipi_register(IpiType::IpiTHvc, hvc_ipi_handler) {
-        panic!("hvc_init: failed to register hvc ipi {}", IpiType::IpiTHvc as usize)
-    }
+    ipi_register(IpiType::IpiTHvc, hvc_ipi_handler);
 }
 
 pub fn send_hvc_ipi(src_vmid: usize, trgt_vmid: usize, fid: usize, event: usize, trgt_cpuid: usize) {

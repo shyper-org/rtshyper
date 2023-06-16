@@ -28,9 +28,7 @@ const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
 pub fn power_arch_init() {
     use crate::kernel::ipi_register;
-    if !ipi_register(IpiType::IpiTPower, psci_ipi_handler) {
-        panic!("power_arch_init: failed to register ipi IpiTPower");
-    }
+    ipi_register(IpiType::IpiTPower, psci_ipi_handler);
 }
 
 pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {

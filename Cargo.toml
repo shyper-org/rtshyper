@@ -27,7 +27,8 @@ log = { version = "0.4", features = [
     "max_level_trace",
     "release_max_level_info",
 ] }
-cortex-a = "7.4.0"
+tock-registers = "0.8.0"
+cortex-a = { package = "aarch64-cpu", version = "9.3.1" }
 spin = { path = "deps/spin" }
 buddy_system_allocator = { path = "deps/buddy_system_allocator" }
 # spin = { version = "0.9.8" }
@@ -42,14 +43,9 @@ version = "0.8"
 default-features = false
 features = ["unstable_const"]
 
-[dependencies.tock-registers]
-version = "0.7.0"
-default-features = false
-features = ["register_types"]
-
 [features]
 default = ["tx2"]
-tx2 = ["ns16550", "preempt"]
+tx2 = ["ns16550", "preempt", "memory-reservation"]
 qemu = ["pl011", "preempt"]
 pi4 = ["pl011", "preempt"]
 ramdisk = []
@@ -59,3 +55,4 @@ pl011 = []
 preempt = []
 unishyper = []
 unilib = []
+memory-reservation = []

@@ -3,11 +3,10 @@ use alloc::collections::BTreeMap;
 use spin::Mutex;
 
 use crate::arch::{
-    interrupt_arch_ipi_send, interrupt_arch_vm_inject, INTERRUPT_IRQ_IPI, INTERRUPT_NUM_MAX, GIC_SGIS_NUM,
-    GIC_PRIVINT_NUM, interrupt_arch_vm_register,
+    interrupt_arch_ipi_send, interrupt_arch_vm_inject, INTERRUPT_NUM_MAX, GIC_SGIS_NUM, GIC_PRIVINT_NUM,
+    interrupt_arch_vm_register,
 };
-use crate::kernel::{current_cpu, ipi_irq_handler, IpiInnerMsg, IpiMessage, Vcpu, VcpuState};
-use crate::kernel::{ipi_register, IpiType, Vm};
+use crate::kernel::{current_cpu, Vcpu, VcpuState, Vm};
 use crate::util::{BitAlloc, BitAlloc4K};
 
 static INTERRUPT_GLB_BITMAP: Mutex<BitAlloc4K> = Mutex::new(BitAlloc4K::default());
@@ -29,38 +28,9 @@ pub fn interrupt_cpu_enable(int_id: usize, en: bool) {
     interrupt_arch_enable(int_id, en);
 }
 
-pub fn interrupt_init() {
+pub fn interrupt_irqchip_init() {
     use crate::arch::interrupt_arch_init;
     interrupt_arch_init();
-
-    if current_cpu().id == 0 {
-        interrupt_reserve_int(INTERRUPT_IRQ_IPI, ipi_irq_handler);
-
-        if !ipi_register(IpiType::IpiTIntInject, interrupt_inject_ipi_handler) {
-            panic!(
-                "interrupt_init: failed to register int inject ipi {:#?}",
-                IpiType::IpiTIntInject
-            )
-        }
-        use crate::arch::vgic_ipi_handler;
-        if !ipi_register(IpiType::IpiTIntc, vgic_ipi_handler) {
-            panic!("interrupt_init: failed to register intc ipi {:#?}", IpiType::IpiTIntc)
-        }
-        use crate::device::ethernet_ipi_rev_handler;
-        if !ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler) {
-            panic!(
-                "interrupt_init: failed to register eth ipi {:#?}",
-                IpiType::IpiTEthernetMsg,
-            );
-        }
-        use crate::vmm::vmm_ipi_handler;
-        if !ipi_register(IpiType::IpiTVMM, vmm_ipi_handler) {
-            panic!("interrupt_init: failed to register ipi vmm");
-        }
-
-        println!("Interrupt init ok");
-    }
-    interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
 
 pub fn interrupt_vm_register(vm: &Vm, id: usize, hw: bool) -> bool {
@@ -143,24 +113,4 @@ pub fn interrupt_handler(int_id: usize) -> bool {
         int_id
     );
     true
-}
-
-fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
-    match &msg.ipi_message {
-        IpiInnerMsg::IntInjectMsg(int_msg) => {
-            let vm_id = int_msg.vm_id;
-            let int_id = int_msg.int_id;
-            match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
-                None => {
-                    panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
-                }
-                Some(vcpu) => {
-                    interrupt_vm_inject(&vcpu.vm().unwrap(), &vcpu, int_id);
-                }
-            }
-        }
-        _ => {
-            println!("interrupt_inject_ipi_handler: illegal ipi type");
-        }
-    }
 }

@@ -6,10 +6,8 @@ pub use self::iommu::*;
 pub use self::ipi::*;
 pub use self::ivc::*;
 pub use self::mem::*;
-pub use self::sched::*;
 pub use self::timer::*;
 pub use self::vcpu::*;
-pub use self::vcpu_array::*;
 pub use self::vm::*;
 
 pub mod access;

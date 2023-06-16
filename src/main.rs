@@ -20,7 +20,7 @@ extern crate memoffset;
 extern crate derive_more;
 
 use device::mediated_dev_init;
-use kernel::{cpu_init, interrupt_init, physical_mem_init, timer_init, hvc_init, iommu_init};
+use kernel::{cpu_init, physical_mem_init, timer_init, hvc_init, iommu_init};
 use vmm::{vm_init, vmm_boot_vm};
 
 #[macro_use]
@@ -53,7 +53,6 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
         iommu_init();
     }
     cpu_init();
-    interrupt_init();
     timer_init();
     if cpu_id == 0 {
         mediated_dev_init();

@@ -55,6 +55,7 @@ pub fn bitmap_find_nth(bitmap: usize, start: usize, size: usize, nth: usize, set
 }
 
 pub fn ptr_read_write(addr: usize, width: usize, val: usize, read: bool) -> usize {
+    let width = width % 8;
     if read {
         if width == 1 {
             unsafe { ptr::read(addr as *const u8) as usize }
@@ -62,10 +63,9 @@ pub fn ptr_read_write(addr: usize, width: usize, val: usize, read: bool) -> usiz
             unsafe { ptr::read(addr as *const u16) as usize }
         } else if width == 4 {
             unsafe { ptr::read(addr as *const u32) as usize }
-        } else if width == 8 {
-            unsafe { ptr::read(addr as *const u64) as usize }
         } else {
-            panic!("ptr_read_write: illegal read len {}", width);
+            // width == 8
+            unsafe { ptr::read(addr as *const u64) as usize }
         }
     } else {
         if width == 1 {
@@ -80,12 +80,11 @@ pub fn ptr_read_write(addr: usize, width: usize, val: usize, read: bool) -> usiz
             unsafe {
                 ptr::write(addr as *mut u32, val as u32);
             }
-        } else if width == 8 {
+        } else {
+            // width == 8
             unsafe {
                 ptr::write(addr as *mut u64, val as u64);
             }
-        } else {
-            panic!("ptr_read_write: illegal write len {}", width);
         }
         0
     }

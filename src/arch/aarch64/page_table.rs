@@ -127,7 +127,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
 
     let page_num = round_up(size_of::<Cpu>(), PAGE_SIZE) / PAGE_SIZE;
     let guard_page_index = offset_of!(Cpu, _guard_page) / PAGE_SIZE;
-    for i in (0..page_num).into_iter() {
+    for i in 0..page_num {
         let pte = if i == guard_page_index {
             PTE_S1_RO
         } else {

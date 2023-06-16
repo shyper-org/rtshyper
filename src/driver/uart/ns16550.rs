@@ -326,6 +326,7 @@ register_structs! {
         (0x18 => pub MSR: ReadWrite<u8, MSR::Register>),
         (0x19 => _reserved_6),
         (0x1c => pub SPR: ReadWrite<u8, SPR::Register>),
+        (0x1d => _reserved_7),
         (0x20 => @END),
     }
 }

@@ -65,35 +65,3 @@ impl VcpuArray {
         self.array.iter_mut()
     }
 }
-
-pub fn restore_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: &Vcpu) {
-    // println!("restore_vcpu_gic");
-    match cur_vcpu {
-        None => {
-            // println!("None cur vmid trgt {}", trgt_vcpu.vm_id());
-            trgt_vcpu.gic_restore_context();
-        }
-        Some(active_vcpu) => {
-            if trgt_vcpu.vm_id() != active_vcpu.vm_id() {
-                // println!("different vm_id cur {}, trgt {}", active_vcpu.vm_id(), trgt_vcpu.vm_id());
-                active_vcpu.gic_save_context();
-                trgt_vcpu.gic_restore_context();
-            }
-        }
-    }
-}
-
-pub fn save_vcpu_gic(cur_vcpu: Option<Vcpu>, trgt_vcpu: &Vcpu) {
-    // println!("save_vcpu_gic");
-    match cur_vcpu {
-        None => {
-            trgt_vcpu.gic_save_context();
-        }
-        Some(active_vcpu) => {
-            if trgt_vcpu.vm_id() != active_vcpu.vm_id() {
-                trgt_vcpu.gic_save_context();
-                active_vcpu.gic_restore_context();
-            }
-        }
-    }
-}

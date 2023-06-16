@@ -5,10 +5,12 @@ use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE, TlbInvalidate};
 use crate::arch::ArchTrait;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
-// use core::ops::{Deref, DerefMut};
 use crate::arch::{cpu_interrupt_unmask, PageTable};
-use crate::board::{PLATFORM_CPU_NUM_MAX, SchedRule, PLAT_DESC};
-use crate::kernel::{Vcpu, VcpuArray, VcpuState, Vm, Scheduler, SchedulerRR};
+use crate::board::{PLATFORM_CPU_NUM_MAX, PLAT_DESC};
+use crate::kernel::{Vcpu, VcpuState, Vm};
+
+use super::sched::{Scheduler, get_scheduler};
+use super::vcpu_array::VcpuArray;
 
 pub const CPU_MASTER: usize = 0;
 const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
@@ -251,12 +253,9 @@ fn cpu_init_pt() {
 
 // Todo: add config for base slice
 fn cpu_sched_init() {
-    match PLAT_DESC.cpu_desc.core_list[current_cpu().id].sched {
-        SchedRule::RoundRobin => {
-            info!("cpu[{}] init Round Robin Scheduler", current_cpu().id);
-            current_cpu().sched.call_once(|| Box::new(SchedulerRR::new(1)));
-        }
-    }
+    let rule = PLAT_DESC.cpu_desc.core_list[current_cpu().id].sched;
+    info!("cpu[{}] init {rule:?} Scheduler", current_cpu().id);
+    current_cpu().sched.call_once(|| get_scheduler(rule));
 }
 
 pub fn cpu_init() {
@@ -268,6 +267,9 @@ pub fn cpu_init() {
         power_arch_init();
     }
     // crate::arch::Arch::disable_prefetch();
+    crate::kernel::interrupt_irqchip_init();
+    crate::kernel::ipi_init();
+    crate::arch::arch_pmu_init();
     cpu_init_pt();
     cpu_sched_init();
     current_cpu().cpu_state = CpuState::Idle;

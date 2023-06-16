@@ -47,17 +47,13 @@ impl ArchTrait for Aarch64Arch {
         let vttbr = (vmid << 48) | base;
         // println!("vttbr {:#x}", vttbr);
         msr!(VTTBR_EL2, vttbr);
-        unsafe {
-            core::arch::asm!("isb");
-        }
+        isb!();
     }
 
     #[inline]
     fn install_self_page_table(base: usize) {
         cortex_a::registers::TTBR0_EL2.set_baddr(base as u64);
-        unsafe {
-            core::arch::asm!("isb");
-        }
+        isb!();
     }
 
     fn disable_prefetch() {

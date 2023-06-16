@@ -1,11 +1,23 @@
-use crate::kernel::{Vcpu, Scheduler};
+use alloc::collections::LinkedList;
 
-pub struct SchedulerRT {}
+use crate::kernel::Vcpu;
+
+use super::Scheduler;
+
+#[derive(Default)]
+pub struct SchedulerRT {
+    run_queue: LinkedList<Vcpu>,      /* ordered list of runnable units */
+    depleted_queue: LinkedList<Vcpu>, /* unordered list of depleted units */
+}
+
+impl SchedulerRT {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 impl Scheduler for SchedulerRT {
-    fn init(&mut self) {
-        todo!()
-    }
+    fn init(&mut self) {}
 
     fn next(&mut self) -> Option<Vcpu> {
         todo!()

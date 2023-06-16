@@ -1,8 +1,9 @@
 mod sched_rr;
 // mod sched_rt;
 
-pub use self::sched_rr::SchedulerRR;
-// pub use self::sched_rt::SchedulerRT;
+use alloc::boxed::Box;
+
+use crate::board::SchedRule;
 
 use super::{current_cpu, Vcpu};
 
@@ -20,4 +21,13 @@ pub trait Scheduler {
     fn sleep(&mut self, vcpu: Vcpu);
     /* wake up vcpu from sleep status, remember to set_active_vcpu when it is none */
     fn wakeup(&mut self, vcpu: Vcpu);
+}
+
+// factory mode
+pub fn get_scheduler(rule: SchedRule) -> Box<dyn Scheduler> {
+    match rule {
+        SchedRule::RoundRobin => Box::new(sched_rr::SchedulerRR::new(1)),
+        // SchedRule::RealTime => Box::new(sched_rt::SchedulerRT::new()),
+        _ => todo!(),
+    }
 }

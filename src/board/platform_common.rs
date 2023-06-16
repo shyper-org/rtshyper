@@ -8,13 +8,13 @@ pub const PLATFORM_CPU_NUM_MAX: usize = 8;
 pub const ARM_CORTEX_A57: u8 = 0;
 // pub const ARM_NVIDIA_DENVER: u8 = 1;
 
-#[repr(C)]
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
 pub enum SchedRule {
     RoundRobin,
-    // None,
+    RealTime,
 }
 
-#[repr(C)]
 pub struct PlatMemoryConfig {
     pub base: usize,
     pub regions: &'static [Range<usize>],
@@ -26,19 +26,16 @@ pub struct PlatCpuCoreConfig {
     pub sched: SchedRule,
 }
 
-#[repr(C)]
 pub struct PlatCpuConfig {
     pub num: usize,
     pub core_list: &'static [PlatCpuCoreConfig],
 }
 
-#[repr(C)]
 pub struct ArchDesc {
     pub gic_desc: GicDesc,
     pub smmu_desc: SmmuDesc,
 }
 
-#[repr(C)]
 pub struct PlatformConfig {
     pub cpu_desc: PlatCpuConfig,
     pub mem_desc: PlatMemoryConfig,
@@ -122,4 +119,6 @@ pub trait PlatOperation {
     fn blk_write(sector: usize, count: usize, buf: usize);
 
     fn device_regions() -> &'static [Range<usize>];
+
+    fn pmu_irq_list() -> &'static [usize];
 }

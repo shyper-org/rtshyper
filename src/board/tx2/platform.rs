@@ -53,6 +53,7 @@ impl PlatOperation for Tx2Platform {
         todo!()
     }
 
+    #[inline]
     fn device_regions() -> &'static [core::ops::Range<usize>] {
         static DEVICES: &[core::ops::Range<usize>] = &[
             0x3000000..0x3200000,
@@ -62,6 +63,16 @@ impl PlatOperation for Tx2Platform {
             0x12000000..0x13000000,
         ];
         DEVICES
+    }
+
+    #[inline]
+    fn pmu_irq_list() -> &'static [usize] {
+        // arm-pmu {
+        //      compatible = "arm,armv8-pmuv3";
+        //      interrupts = <0x0 0x140 0x4 0x0 0x141 0x4 0x0 0x128 0x4 0x0 0x129 0x4 0x0 0x12a 0x4 0x0 0x12b 0x4>;
+        //      interrupt-affinity = <0x2 0x3 0x4 0x5 0x6 0x7>;
+        // };
+        &[32 + 0x128, 32 + 0x129, 32 + 0x12a, 32 + 0x12b]
     }
 }
 

@@ -10,7 +10,9 @@ register_structs! {
   pub Pl011MmioBlock {
     (0x000 => pub Data: ReadWrite<u32>),
     (0x004 => pub RecvStatusErrClr: ReadWrite<u32>),
+    (0x008 => _reserved_1),
     (0x018 => pub Flag: ReadOnly<u32>),
+    (0x01c => _reserved_2),
     (0x020 => pub IrDALowPower: ReadWrite<u32>),
     (0x024 => pub IntBaudRate: ReadWrite<u32>),
     (0x028 => pub FracBaudRate: ReadWrite<u32>),
@@ -22,6 +24,7 @@ register_structs! {
     (0x040 => pub MaskedIntStatus: ReadOnly<u32>),
     (0x044 => pub IntClear: WriteOnly<u32>),
     (0x048 => pub DmaControl: ReadWrite<u32>),
+    (0x04c => _reserved_3),
     (0x1000 => @END),
   }
 }

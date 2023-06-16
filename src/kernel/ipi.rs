@@ -8,10 +8,12 @@ use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
 use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::device::{VirtioMmio, Virtq};
+use crate::kernel::{interrupt_vm_inject, interrupt_reserve_int};
 use crate::kernel::{current_cpu, interrupt_cpu_ipi_send};
 use crate::vmm::VmmEvent;
 
 use super::Vm;
+use super::interrupt_cpu_enable;
 
 #[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
@@ -152,6 +154,43 @@ impl CpuIf {
     }
 }
 
+pub fn ipi_init() {
+    if current_cpu().id == 0 {
+        interrupt_reserve_int(INTERRUPT_IRQ_IPI, ipi_irq_handler);
+
+        ipi_register(IpiType::IpiTIntInject, interrupt_inject_ipi_handler);
+        use crate::arch::vgic_ipi_handler;
+        ipi_register(IpiType::IpiTIntc, vgic_ipi_handler);
+        use crate::device::ethernet_ipi_rev_handler;
+        ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler);
+        use crate::vmm::vmm_ipi_handler;
+        ipi_register(IpiType::IpiTVMM, vmm_ipi_handler);
+
+        println!("Interrupt init ok");
+    }
+    interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
+}
+
+fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
+    match &msg.ipi_message {
+        IpiInnerMsg::IntInjectMsg(int_msg) => {
+            let vm_id = int_msg.vm_id;
+            let int_id = int_msg.int_id;
+            match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
+                None => {
+                    panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
+                }
+                Some(vcpu) => {
+                    interrupt_vm_inject(&vcpu.vm().unwrap(), &vcpu, int_id);
+                }
+            }
+        }
+        _ => {
+            println!("interrupt_inject_ipi_handler: illegal ipi type");
+        }
+    }
+}
+
 static CPU_IF_LIST: [Mutex<CpuIf>; PLATFORM_CPU_NUM_MAX] = [const { Mutex::new(CpuIf::new()) }; PLATFORM_CPU_NUM_MAX];
 
 fn ipi_pop_message(cpu_id: usize) -> Option<IpiMessage> {
@@ -162,7 +201,7 @@ fn ipi_pop_message(cpu_id: usize) -> Option<IpiMessage> {
     msg
 }
 
-pub fn ipi_irq_handler() {
+fn ipi_irq_handler() {
     let cpu_id = current_cpu().id;
 
     while let Some(ipi_msg) = ipi_pop_message(cpu_id) {
@@ -178,13 +217,11 @@ pub fn ipi_irq_handler() {
     }
 }
 
-pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) -> bool {
+pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) {
     let mut ipi_handler_list = IPI_HANDLER_LIST.write();
     if ipi_handler_list.insert(ipi_type, handler).is_some() {
-        println!("ipi_register: try to cover exist ipi handler");
-        return false;
+        panic!("ipi_register: {ipi_type:#?} try to cover exist ipi handler");
     }
-    true
 }
 
 fn ipi_send(target_id: usize, msg: IpiMessage) -> bool {

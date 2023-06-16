@@ -132,17 +132,24 @@ pub fn init_vm0_dtb(dtb: *mut core::ffi::c_void) {
         assert_eq!(r, 0);
         // modify arm pmu
         // Hardcode: here, irq and affi are associated with clurster 1, cpu 0
-        let irq: [u32; 1] = [0x128];
-        let affi: [u32; 1] = [0x4];
-        let r = fdt_setup_pmu(
-            dtb,
-            "arm,armv8-pmuv3\0".as_ptr(),
-            irq.as_ptr(),
-            irq.len() as u32,
-            affi.as_ptr(),
-            affi.len() as u32,
-        );
-        assert_eq!(r, 0);
+        cfg_if::cfg_if! {
+            if #[cfg(any(feature = "memory-reservation"))] {
+                let r = fdt_disable_node(dtb, "/arm-pmu\0".as_ptr());
+                assert_eq!(r, 0);
+            } else {
+                let irq: [u32; 1] = [0x128];
+                let affi: [u32; 1] = [0x4];
+                let r = fdt_setup_pmu(
+                    dtb,
+                    "arm,armv8-pmuv3\0".as_ptr(),
+                    irq.as_ptr(),
+                    irq.len() as u32,
+                    affi.as_ptr(),
+                    affi.len() as u32,
+                );
+                assert_eq!(r, 0);
+            }
+        }
         let len = fdt_size(dtb);
         println!("fdt after patched size {}", len);
         let slice = core::slice::from_raw_parts(dtb as *const u8, len as usize);
@@ -213,6 +220,13 @@ pub fn init_vm0_dtb(dtb: *mut core::ffi::c_void) {
 
         assert_eq!(fdt_remove_node(dtb, "/intc@8000000/v2m@8020000\0".as_ptr()), 0);
         assert_eq!(fdt_remove_node(dtb, "/flash@0\0".as_ptr()), 0);
+
+        cfg_if::cfg_if! {
+            if #[cfg(any(feature = "memory-reservation"))] {
+                let r = fdt_disable_node(dtb, "/pmu\0".as_ptr());
+                assert_eq!(r, 0);
+            }
+        }
 
         let len = fdt_size(dtb) as usize;
         println!("fdt patched size {}", len);

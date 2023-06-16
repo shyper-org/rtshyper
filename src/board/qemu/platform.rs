@@ -54,10 +54,16 @@ impl PlatOperation for QemuPlatform {
         write(sector, count, buf);
     }
 
+    #[inline]
     fn device_regions() -> &'static [core::ops::Range<usize>] {
         debug_assert_eq!(PLAT_DESC.mem_desc.base, 0x40000000);
         static DEVICES: &[core::ops::Range<usize>] = &[0..PLAT_DESC.mem_desc.base];
         DEVICES
+    }
+
+    #[inline]
+    fn pmu_irq_list() -> &'static [usize] {
+        &[16 + 0x07; 4]
     }
 }
 

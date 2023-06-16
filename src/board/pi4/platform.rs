@@ -56,9 +56,15 @@ impl PlatOperation for Pi4Platform {
         todo!()
     }
 
+    #[inline]
     fn device_regions() -> &'static [core::ops::Range<usize>] {
         static DEVICES: &[core::ops::Range<usize>] = &[0x0_fc00_0000..0x1_0000_0000];
         DEVICES
+    }
+
+    #[inline]
+    fn pmu_irq_list() -> &'static [usize] {
+        &[]
     }
 }
 

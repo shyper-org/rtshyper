@@ -72,15 +72,15 @@ pub fn mvm_config_init() {
             emu_type: EmuDeviceType::EmuDeviceTShyper,
             mediated: false,
         },
-        VmEmulatedDeviceConfig {
-            name: String::from("virtio_balloon@a004000"),
-            base_ipa: 0xa004000,
-            length: 0x1000,
-            irq_id: 32 + 0x103,
-            cfg_list: vec![1 << 20], // 1MB
-            emu_type: EmuDeviceType::VirtioBalloon,
-            mediated: false,
-        },
+        // VmEmulatedDeviceConfig {
+        //     name: String::from("virtio_balloon@a004000"),
+        //     base_ipa: 0xa004000,
+        //     length: 0x1000,
+        //     irq_id: 32 + 0x103,
+        //     cfg_list: vec![1 << 20], // 1MB
+        //     emu_type: EmuDeviceType::VirtioBalloon,
+        //     mediated: false,
+        // },
     ];
 
     // vm0 passthrough
@@ -195,6 +195,18 @@ pub fn mvm_config_init() {
             PassthroughRegion { ipa: 0x40000000, pa: 0x40000000, length: 0x40000000, dev_property: true },
         ],
         // 146 is UART_INT
+        #[cfg(any(feature = "memory-reservation"))]
+        irqs: vec![
+            INTERRUPT_IRQ_GUEST_TIMER, 32, 33, 34, 35, 36, 37, 38, 39, 40, 48, 49, 56, 57, 58, 59, 60, 62, 63, 64, 65, 67, 68,
+            69, 70, 71, 72, 74, 76, 79, 82, 85, 88, 91, 92, 94, 95, 96, 97, 102, 103, 104, 105, 107,
+            108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
+            126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, Platform::UART_0_INT, 151, 152,
+            153, 154, 155, 156, 157, 158, 159, 165, 166, 167, 168, 173, 174, 175, 176, 177, 178, 179,
+            185, 186, 187, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 208,
+            212, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 229, 230, 233, 234, 235, 237, 238,
+            242, 255, 256, 295, 297, 315, 322, /*328, 329, 330, 331,*/ 352, 353, 366,
+        ],
+        #[cfg(not(feature = "memory-reservation"))]
         irqs: vec![
             INTERRUPT_IRQ_GUEST_TIMER, 32, 33, 34, 35, 36, 37, 38, 39, 40, 48, 49, 56, 57, 58, 59, 60, 62, 63, 64, 65, 67, 68,
             69, 70, 71, 72, 74, 76, 79, 82, 85, 88, 91, 92, 94, 95, 96, 97, 102, 103, 104, 105, 107,

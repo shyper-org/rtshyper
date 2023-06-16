@@ -121,9 +121,7 @@ impl MediatedBlk {
 }
 
 pub fn mediated_dev_init() {
-    if !ipi_register(IpiType::IpiTMediatedDev, mediated_ipi_handler) {
-        panic!("mediated_dev_init: failed to register ipi IpiTMediatedDev");
-    }
+    ipi_register(IpiType::IpiTMediatedDev, mediated_ipi_handler);
 }
 
 // only run in vm0

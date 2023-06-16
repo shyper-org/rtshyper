@@ -267,9 +267,9 @@ register_structs! {
         (0x07F0 => TLBSYNC: WriteOnly<u32>),
         (0x07F4 => TLBSTATUS: ReadOnly<u32>),
         (0x07F8 => reserved_5),
-        (0x0e00 => PMEVCNTRm: ReadWrite<u32>),   // what about 0xe04~0xe38
+        (0x0e00 => PMEVCNTR: [ReadWrite<u32>; 15]),
         (0x0e3c => reserved_6),
-        (0x0e80 => PMEVTYPERm: ReadWrite<u32>),   // what about 0xe84~0xeB8
+        (0x0e80 => PMEVTYPER: [ReadWrite<u32>; 15]),
         (0x0ebc => reserved_7),
         (0x0f00 => PMCFGR: ReadOnly<u32>),
         (0x0f04 => PMCR: ReadWrite<u32>),

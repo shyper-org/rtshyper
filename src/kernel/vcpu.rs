@@ -188,7 +188,6 @@ impl Vcpu {
     fn arch_ctx_reset(&self) {
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.sctlr_el1 = 0x30C50830;
-        inner.vm_ctx.pmcr_el0 = 0;
         inner.vm_ctx.vtcr_el2 = 0x80013540 + ((64 - VM_IPA_SIZE) & ((1 << 6) - 1));
         let mut vmpidr = 0;
         vmpidr |= 1 << 31;

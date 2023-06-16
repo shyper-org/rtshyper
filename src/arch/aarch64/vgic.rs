@@ -12,7 +12,7 @@ use spin::Mutex;
 use crate::board::{PlatOperation, Platform};
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext, EmuDev, EmuDeviceType};
-use crate::kernel::{active_vcpu_id, current_cpu, restore_vcpu_gic, save_vcpu_gic};
+use crate::kernel::{active_vcpu_id, current_cpu};
 use crate::kernel::{active_vm, active_vm_id, active_vm_ncpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiInitcMessage};
 use crate::kernel::{InitcEvent, Vcpu, Vm};
@@ -1935,7 +1935,15 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
         }
         Some(vcpu) => vcpu,
     };
-    restore_vcpu_gic(current_cpu().active_vcpu.clone(), &trgt_vcpu);
+    // restore_vcpu_gic
+    if let Some(active_vcpu) = &current_cpu().active_vcpu {
+        if trgt_vcpu.vm_id() != active_vcpu.vm_id() {
+            active_vcpu.gic_save_context();
+            trgt_vcpu.gic_restore_context();
+        }
+    } else {
+        trgt_vcpu.gic_restore_context();
+    }
 
     let vm = match trgt_vcpu.vm() {
         None => {
@@ -1996,7 +2004,15 @@ pub fn vgic_ipi_handler(msg: &IpiMessage) {
             }
         }
     }
-    save_vcpu_gic(current_cpu().active_vcpu.clone(), &trgt_vcpu);
+    // save_vcpu_gic
+    if let Some(active_vcpu) = &current_cpu().active_vcpu {
+        if trgt_vcpu.vm_id() != active_vcpu.vm_id() {
+            trgt_vcpu.gic_save_context();
+            active_vcpu.gic_restore_context();
+        }
+    } else {
+        trgt_vcpu.gic_save_context();
+    }
 }
 
 impl EmuDev for Vgic {

@@ -14,6 +14,7 @@ pub use self::timer::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 pub use self::cache::*;
+pub use pmuv3::{arch_pmu_init, cpu_cycle_count};
 
 #[macro_use]
 mod regs;
@@ -32,6 +33,7 @@ mod interrupt;
 mod mmu;
 #[allow(dead_code)]
 mod page_table;
+mod pmuv3;
 mod psci;
 mod smc;
 #[allow(dead_code)]
