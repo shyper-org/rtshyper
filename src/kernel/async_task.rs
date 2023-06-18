@@ -9,10 +9,8 @@ use alloc::sync::Arc;
 use alloc::task::Wake;
 use spin::mutex::Mutex;
 
-use crate::device::{
-    mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, IoAsyncMsg,
-};
-use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType, vm};
+use crate::device::{mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, ReadAsyncMsg, WriteAsyncMsg};
+use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType};
 use crate::util::{memcpy_safe, sleep};
 
 #[derive(Clone, Copy, Debug)]
@@ -96,22 +94,22 @@ impl Executor {
     }
 
     pub fn add_task(&self, task: AsyncTask, ipi: bool) {
+        while active_vm_id() != 0 && self.io_task_list.lock().len() >= 64 {
+            sleep(1);
+        }
         let mut ipi_list = self.ipi_task_list.lock();
         let mut io_list = self.io_task_list.lock();
+        let need_execute = active_vm_id() != 0
+            && ipi_list.is_empty()
+            && io_list.is_empty()
+            && self.status() == AsyncExeStatus::Pending;
         if ipi {
             ipi_list.push_back(Arc::new(task));
         } else {
             io_list.push_back(Arc::new(task));
         }
-        let need_execute = active_vm_id() != 0
-            && ipi_list.len() == 1
-            && io_list.is_empty()
-            && self.status() == AsyncExeStatus::Pending;
         drop(ipi_list);
         drop(io_list);
-        while active_vm_id() != 0 && self.ipi_task_list.lock().len() >= 1024 {
-            sleep(1);
-        }
         // if this is a normal VM and this is the first IO request
         // (which generate a ipi async task in `virtio_mediated_blk_notify_handler`)
         // invoke the executor to handle it
@@ -156,7 +154,6 @@ impl<T: TaskOwner> FairQueue<T> {
         self.map.is_empty()
     }
 
-    #[allow(dead_code)]
     fn len(&self) -> usize {
         self.len
     }
@@ -207,14 +204,13 @@ impl<T: TaskOwner> FairQueue<T> {
     fn remove(&mut self, owner: usize) {
         if let Some(sub_queue) = self.map.remove(&owner) {
             self.len -= sub_queue.len();
-            self.queue = self.queue.drain_filter(|x| *x == owner).collect();
+            self.queue.drain_filter(|x| *x == owner);
         }
     }
 }
 
 pub trait AsyncCallback {
-    #[inline]
-    fn preprocess(&self) {}
+    fn preprocess(&self);
     #[inline]
     fn finish(&self) {}
 }
@@ -223,7 +219,7 @@ impl AsyncCallback for IpiMediatedMsg {
     #[inline]
     fn preprocess(&self) {
         if active_vm_id() == 0 {
-            virtio_blk_notify_handler(self.vq.clone(), self.blk.clone(), vm(self.src_id).unwrap());
+            virtio_blk_notify_handler(self.vq.clone(), self.blk.clone(), self.src_vm.clone());
         } else {
             // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
             ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(self.clone()));
@@ -231,43 +227,41 @@ impl AsyncCallback for IpiMediatedMsg {
     }
 }
 
-impl AsyncCallback for IoAsyncMsg {
+impl AsyncCallback for ReadAsyncMsg {
     #[inline]
-    // inject an interrupt to service VM
     fn preprocess(&self) {
-        if self.io_type == VIRTIO_BLK_T_IN {
-            mediated_blk_read(self.blk_id, self.sector, self.count);
-        } else if self.io_type == VIRTIO_BLK_T_OUT {
-            let mut cache_ptr = self.cache;
-            for iov in self.iov_list.iter() {
-                let data_bg = iov.data_bg;
-                let len = iov.len as usize;
-                memcpy_safe(cache_ptr as *mut u8, data_bg as *mut u8, len);
-                cache_ptr += len;
-            }
-            mediated_blk_write(self.blk_id, self.sector, self.count);
-        }
+        mediated_blk_read(self.blk_id, self.sector, self.count);
     }
 
     #[inline]
     fn finish(&self) {
-        if self.io_type == VIRTIO_BLK_T_IN {
-            // let mut sum = 0;
-            let mut cache_ptr = self.cache;
-            for iov in self.iov_list.iter() {
-                let data_bg = iov.data_bg;
-                let len = iov.len as usize;
-                memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
-                // sum |= check_sum(data_bg, len);
-                cache_ptr += len;
-            }
-            // println!("read check_sum is {:x}", sum);
+        // let mut sum = 0;
+        let mut cache_ptr = self.cache;
+        for iov in self.iov_list.iter() {
+            let data_bg = iov.data_bg;
+            let len = iov.len as usize;
+            memcpy_safe(data_bg as *mut u8, cache_ptr as *mut u8, len);
+            // sum |= check_sum(data_bg, len);
+            cache_ptr += len;
         }
-
+        // println!("read check_sum is {:x}", sum);
         let info = &self.used_info;
         self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
-        let src_vm = vm(self.src_vmid).unwrap();
-        self.dev.notify(src_vm);
+        self.dev.notify(self.src_vm.clone());
+    }
+}
+
+impl AsyncCallback for WriteAsyncMsg {
+    #[inline]
+    fn preprocess(&self) {
+        // copy buffer to cache
+        let mut buffer = self.buffer.lock();
+        memcpy_safe(self.cache as *mut u8, buffer.as_ptr(), buffer.len());
+        mediated_blk_write(self.blk_id, self.sector, self.count);
+        buffer.clear();
+        let info = &self.used_info;
+        self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
+        self.dev.notify(self.src_vm.clone());
     }
 }
 
@@ -364,5 +358,5 @@ pub fn remove_vm_async_task(vm_id: usize) {
     let mut io_list = EXECUTOR.io_task_list.lock();
     let mut ipi_list = EXECUTOR.ipi_task_list.lock();
     io_list.remove(vm_id);
-    *ipi_list = ipi_list.drain_filter(|x| x.src_vmid == vm_id).collect();
+    ipi_list.drain_filter(|x| x.src_vmid == vm_id);
 }

@@ -280,7 +280,7 @@ pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
     Ok(0)
 }
 
-pub fn vmm_ipi_handler(msg: &IpiMessage) {
+pub fn vmm_ipi_handler(msg: IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::VmmMsg(vmm) => match vmm.event {
             VmmEvent::VmmBoot => {

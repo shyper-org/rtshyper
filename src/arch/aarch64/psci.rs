@@ -147,7 +147,7 @@ fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
 }
 
 // Todo: need to support more vcpu in one Core
-pub fn psci_ipi_handler(msg: &IpiMessage) {
+pub fn psci_ipi_handler(msg: IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::Power(power_msg) => {
             let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(power_msg.src) {

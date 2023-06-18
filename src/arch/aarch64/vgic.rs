@@ -1913,11 +1913,11 @@ pub fn partial_passthrough_intc_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result
     }
 }
 
-pub fn vgic_ipi_handler(msg: &IpiMessage) {
+pub fn vgic_ipi_handler(msg: IpiMessage) {
     let vm_id;
     let int_id;
     let val;
-    match &msg.ipi_message {
+    match msg.ipi_message {
         IpiInnerMsg::Initc(intc) => {
             vm_id = intc.vm_id;
             int_id = intc.int_id;

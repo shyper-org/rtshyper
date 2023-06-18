@@ -325,7 +325,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
     true
 }
 
-pub fn ethernet_ipi_rev_handler(msg: &IpiMessage) {
+pub fn ethernet_ipi_rev_handler(msg: IpiMessage) {
     match msg.ipi_message {
         IpiInnerMsg::EnternetMsg(ethernet_msg) => {
             let trgt_vmid = ethernet_msg.trgt_vmid;

@@ -459,8 +459,8 @@ pub fn hvc_guest_notify(vm_id: usize) {
     };
 }
 
-pub fn hvc_ipi_handler(msg: &IpiMessage) {
-    match &msg.ipi_message {
+pub fn hvc_ipi_handler(msg: IpiMessage) {
+    match msg.ipi_message {
         IpiInnerMsg::HvcMsg(msg) => {
             if current_cpu().vcpu_array.pop_vcpu_through_vmid(msg.trgt_vmid).is_none() {
                 println!(

@@ -1,9 +1,10 @@
 use alloc::ffi::CString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq, IoAsyncMsg, UsedInfo};
+use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq, ReadAsyncMsg, WriteAsyncMsg, UsedInfo};
 use crate::kernel::{async_blk_io_req, async_ipi_req, AsyncTask, IpiMediatedMsg, Vm, EXECUTOR};
 use crate::util::memcpy_safe;
 
@@ -214,11 +215,10 @@ fn generate_blk_req(
                 if req.mediated() {
                     // mediated blk read
                     let task = AsyncTask::new(
-                        IoAsyncMsg {
-                            src_vmid: vm.id(),
+                        ReadAsyncMsg {
+                            src_vm: vm.clone(),
                             vq: vq.clone(),
                             dev: dev.clone(),
-                            io_type: VIRTIO_BLK_T_IN,
                             blk_id: vm.med_blk_id(),
                             sector: sector + region_start,
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
@@ -249,18 +249,23 @@ fn generate_blk_req(
             }
             VIRTIO_BLK_T_OUT => {
                 if req.mediated() {
+                    let mut buffer = vec![];
+                    for iov in req_node.iov.iter() {
+                        let data_bg =
+                            unsafe { core::slice::from_raw_parts(iov.data_bg as *const u8, iov.len as usize) };
+                        buffer.extend_from_slice(data_bg);
+                    }
                     // mediated blk write
                     let task = AsyncTask::new(
-                        IoAsyncMsg {
-                            src_vmid: vm.id(),
+                        WriteAsyncMsg {
+                            src_vm: vm.clone(),
                             vq: vq.clone(),
                             dev: dev.clone(),
-                            io_type: VIRTIO_BLK_T_OUT,
                             blk_id: vm.med_blk_id(),
                             sector: sector + region_start,
                             count: req_node.iov_sum_up / SECTOR_BSIZE,
                             cache,
-                            iov_list: Arc::new(req_node.iov),
+                            buffer: Arc::new(Mutex::new(buffer)),
                             used_info: UsedInfo {
                                 desc_chain_head_idx: req_node.desc_chain_head_idx,
                                 used_len: req_node.iov_total as u32,
@@ -314,15 +319,8 @@ fn generate_blk_req(
 }
 
 pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
-    let task = AsyncTask::new(
-        IpiMediatedMsg {
-            src_id: vm.id(),
-            vq,
-            blk,
-        },
-        vm.id(),
-        async_ipi_req(),
-    );
+    let src_vmid = vm.id();
+    let task = AsyncTask::new(IpiMediatedMsg { src_vm: vm, vq, blk }, src_vmid, async_ipi_req());
     EXECUTOR.add_task(task, true);
     true
 }
@@ -391,7 +389,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Vm) -> bool {
                         println!("virtio_blk_notify_handler: failed to get vreq");
                         return false;
                     }
-                    let vreq = unsafe { &mut *(vreq_addr as *mut VirtioBlkReqNode) };
+                    let vreq = unsafe { &*(vreq_addr as *const VirtioBlkReqNode) };
                     req_node.req_type = vreq.req_type;
                     req_node.sector = vreq.sector;
                 } else {

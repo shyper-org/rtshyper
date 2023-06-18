@@ -74,7 +74,7 @@ pub struct IpiVmmMsg {
 // only support for mediated blk
 #[derive(Clone)]
 pub struct IpiMediatedMsg {
-    pub src_id: usize,
+    pub src_vm: Vm,
     pub vq: Virtq,
     pub blk: VirtioMmio,
     // pub avail_idx: u16,
@@ -130,7 +130,7 @@ pub struct IpiMessage {
     pub ipi_message: IpiInnerMsg,
 }
 
-pub type IpiHandlerFunc = fn(&IpiMessage);
+pub type IpiHandlerFunc = fn(IpiMessage);
 
 static IPI_HANDLER_LIST: RwLock<BTreeMap<IpiType, IpiHandlerFunc>> = RwLock::new(BTreeMap::new());
 
@@ -171,8 +171,8 @@ pub fn ipi_init() {
     interrupt_cpu_enable(INTERRUPT_IRQ_IPI, true);
 }
 
-fn interrupt_inject_ipi_handler(msg: &IpiMessage) {
-    match &msg.ipi_message {
+fn interrupt_inject_ipi_handler(msg: IpiMessage) {
+    match msg.ipi_message {
         IpiInnerMsg::IntInjectMsg(int_msg) => {
             let vm_id = int_msg.vm_id;
             let int_id = int_msg.int_id;
@@ -210,7 +210,7 @@ fn ipi_irq_handler() {
         let ipi_handler_list = IPI_HANDLER_LIST.read();
         if let Some(handler) = ipi_handler_list.get(&ipi_type).cloned() {
             drop(ipi_handler_list);
-            handler(&ipi_msg);
+            handler(ipi_msg);
         } else {
             println!("illegal ipi type {:?}", ipi_type)
         }
