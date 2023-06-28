@@ -318,7 +318,6 @@ pub fn vmm_boot() {
         vcpu_run(false);
     } else if !current_cpu().assigned() {
         // If there is no available vm(vcpu), just go idle
-        info!("Core {} idle", current_cpu().id);
         cpu_idle();
     }
 }

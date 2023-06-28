@@ -5,8 +5,7 @@ use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
 use crate::arch::{
-    PAGE_SIZE, PTE_S2_FIELD_AP_RO, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE, emu_intc_init,
-    partial_passthrough_intc_init, emu_smmu_init,
+    PAGE_SIZE, PTE_S2_FIELD_AP_RO, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE, emu_intc_init, emu_smmu_init,
 };
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
@@ -137,6 +136,7 @@ impl VmInterface {
 enum IntCtrlType {
     #[default]
     Emulated,
+    #[cfg(not(feature = "memory-reservation"))]
     Passthrough,
 }
 
@@ -206,7 +206,7 @@ impl VmInnerConst {
 
         let mut vcpu_list = vec![];
         for (vcpu_id, phys_id) in phys_id_list.into_iter().enumerate() {
-            vcpu_list.push(Vcpu::new(vm.clone(), vcpu_id, phys_id));
+            vcpu_list.push(Vcpu::new(vm.clone(), vcpu_id, phys_id, &config));
         }
         let mut this = Self {
             id,
@@ -233,9 +233,10 @@ impl VmInnerConst {
                         vgic
                     })
                 }
+                #[cfg(not(feature = "memory-reservation"))]
                 EmuDeviceTGPPT => {
                     self.intc_type = IntCtrlType::Passthrough;
-                    partial_passthrough_intc_init(emu_cfg)
+                    crate::arch::partial_passthrough_intc_init(emu_cfg)
                 }
                 EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet | VirtioBalloon => {
                     emu_virtio_mmio_init(self.id, emu_cfg)
@@ -248,7 +249,10 @@ impl VmInnerConst {
                     Err(())
                 }
                 _ => {
-                    warn!("vmm_init_emulated_device: unknown emulated device");
+                    warn!(
+                        "vmm_init_emulated_device: unknown emulated device {:?}",
+                        emu_cfg.emu_type
+                    );
                     return false;
                 }
             };
@@ -308,6 +312,7 @@ impl Vm {
                     vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);
                     vcpu.set_hcr(0x80080019);
                 }
+                #[cfg(not(feature = "memory-reservation"))]
                 IntCtrlType::Passthrough => {
                     vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT) as u32);
                     vcpu.set_hcr(0x80080001); // HCR_EL2_GIC_PASSTHROUGH_VAL

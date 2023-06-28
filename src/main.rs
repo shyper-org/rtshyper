@@ -6,6 +6,7 @@
 #![feature(inline_const)]
 #![feature(const_refs_to_cell)]
 #![feature(const_cmp)]
+#![feature(binary_heap_retain)]
 #![allow(unused_doc_comments)]
 
 #[macro_use]
@@ -70,6 +71,6 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     vmm_boot_vm(0);
 
     loop {
-        core::hint::spin_loop();
+        kernel::cpu_idle();
     }
 }

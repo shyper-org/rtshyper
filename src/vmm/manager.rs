@@ -105,7 +105,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
             }
             Some(vcpu) => {
                 interrupt_arch_deactive_irq(true);
-                current_cpu().scheduler().wakeup(vcpu);
+                current_cpu().vcpu_array.wakeup_vcpu(vcpu);
                 vmm_boot();
             }
         };
@@ -165,9 +165,9 @@ pub fn vmm_reboot() {
     }
 
     // Reset GVM.
-    let vcpu = current_cpu().active_vcpu.clone().unwrap();
+    let vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     println!("VM [{}] reset...", vm.id());
-    power_arch_vm_shutdown_secondary_cores(vm.clone());
+    power_arch_vm_shutdown_secondary_cores(&vm);
     println!(
         "Core {} (VM [{}] vcpu {}) shutdown ok",
         current_cpu().id,

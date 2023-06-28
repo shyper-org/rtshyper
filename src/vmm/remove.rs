@@ -38,11 +38,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
 }
 
 pub fn vmm_cpu_remove_vcpu(vmid: usize) {
-    let vcpu = current_cpu().vcpu_array.remove_vcpu(vmid);
-    if let Some(vcpu) = vcpu {
-        // remove vcpu from scheduler
-        current_cpu().scheduler().sleep(vcpu);
-    }
+    current_cpu().vcpu_array.remove_vcpu(vmid);
     if !current_cpu().assigned() {
         // hard code: remove el1 timer interrupt 27
         interrupt_cpu_enable(INTERRUPT_IRQ_GUEST_TIMER, false);

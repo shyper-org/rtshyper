@@ -19,6 +19,6 @@ pub fn vcpu_arch_init(config: &VmConfigEntry, vcpu: &Vcpu) {
 
     vcpu_inner.vcpu_ctx.set_exception_pc(config.kernel_entry_point());
     vcpu_inner.vcpu_ctx.spsr =
-        (SPSR_EL1::M::EL1h + SPSR_EL1::I::Masked + SPSR_EL1::F::Masked + SPSR_EL1::A::Masked + SPSR_EL1::D::Masked)
+        (SPSR_EL2::M::EL1h + SPSR_EL2::I::Masked + SPSR_EL2::F::Masked + SPSR_EL2::A::Masked + SPSR_EL2::D::Masked)
             .value;
 }

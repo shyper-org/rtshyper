@@ -20,8 +20,9 @@ pub trait CacheInfoTrait {
     fn num_colors(&self) -> usize;
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
 pub enum CacheType {
+    #[default]
     NoCache,
     Instruction,
     Data,
@@ -29,22 +30,11 @@ pub enum CacheType {
     Unified,
 }
 
-impl Default for CacheType {
-    fn default() -> Self {
-        Self::NoCache
-    }
-}
-
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum CacheIndexed {
+    #[default]
     Pipt,
     Vipt,
-}
-
-impl Default for CacheIndexed {
-    fn default() -> Self {
-        Self::Pipt
-    }
 }
 
 pub struct CpuCacheInfo<T: CacheInfoTrait> {

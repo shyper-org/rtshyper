@@ -1,4 +1,3 @@
-// TODO: move these core name to device
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 use crate::board::ARM_CORTEX_A57;

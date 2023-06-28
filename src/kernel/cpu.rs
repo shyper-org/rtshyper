@@ -1,5 +1,4 @@
-use alloc::boxed::Box;
-use spin::once::Once;
+use spin::Once;
 
 use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE, TlbInvalidate};
 use crate::arch::ArchTrait;
@@ -7,9 +6,10 @@ use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 use crate::arch::{cpu_interrupt_unmask, PageTable};
 use crate::board::{PLATFORM_CPU_NUM_MAX, PLAT_DESC};
-use crate::kernel::{Vcpu, VcpuState, Vm};
+use crate::kernel::{Vcpu, Vm};
+use crate::util::timer_list::{TimerTickValue, TimerList};
 
-use super::sched::{Scheduler, get_scheduler};
+use super::sched::get_scheduler;
 use super::vcpu_array::VcpuArray;
 
 pub const CPU_MASTER: usize = 0;
@@ -38,8 +38,11 @@ pub struct Cpu {
     pub active_vcpu: Option<Vcpu>,
     ctx: Option<usize>,
 
-    sched: Once<Box<dyn Scheduler>>,
     pub vcpu_array: VcpuArray,
+    // timer
+    pub(super) sys_tick: TimerTickValue,
+    pub(super) timer_list: Once<TimerList>,
+
     pub current_irq: usize,
     global_pt: Once<PageTable>,
     pub interrupt_nested: usize,
@@ -51,7 +54,6 @@ pub struct Cpu {
 // see start.S
 const_assert_eq!(offset_of!(Cpu, stack), 0x5000);
 
-#[allow(dead_code)]
 impl Cpu {
     const fn default() -> Cpu {
         Cpu {
@@ -59,8 +61,9 @@ impl Cpu {
             cpu_state: CpuState::Inv,
             active_vcpu: None,
             ctx: None,
-            sched: Once::new(),
             vcpu_array: VcpuArray::new(),
+            sys_tick: 0,
+            timer_list: Once::new(),
             current_irq: 0,
             interrupt_nested: 0,
             global_pt: Once::new(),
@@ -126,6 +129,7 @@ impl Cpu {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_spsr(&self) -> usize {
         match self.current_ctx() {
             Some(ctx_addr) => {
@@ -149,40 +153,8 @@ impl Cpu {
         }
     }
 
-    pub fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
+    pub(super) fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
         self.active_vcpu = active_vcpu;
-        if let Some(vcpu) = &self.active_vcpu {
-            vcpu.set_state(VcpuState::Running);
-        }
-    }
-
-    pub fn schedule_to(&mut self, next_vcpu: Vcpu) {
-        if let Some(prev_vcpu) = &self.active_vcpu {
-            if prev_vcpu.vm_id() != next_vcpu.vm_id() {
-                // println!(
-                //     "next vm{} vcpu {}, prev vm{} vcpu {}",
-                //     next_vcpu.vm_id(),
-                //     next_vcpu.id(),
-                //     prev_vcpu.vm_id(),
-                //     prev_vcpu.id()
-                // );
-                prev_vcpu.set_state(VcpuState::Runnable);
-                prev_vcpu.context_vm_store();
-            }
-        }
-        // NOTE: Must set active first and then restore context!!!
-        //      because context restore while inject pending interrupt for VM
-        //      and will judge if current active vcpu
-        self.set_active_vcpu(Some(next_vcpu.clone()));
-        next_vcpu.context_vm_restore();
-        crate::arch::Arch::install_vm_page_table(next_vcpu.vm_pt_dir(), next_vcpu.vm_id());
-    }
-
-    pub fn scheduler(&mut self) -> &mut dyn Scheduler {
-        match self.sched.get_mut() {
-            Some(scheduler) => scheduler.as_mut(),
-            None => panic!("scheduler is None"),
-        }
     }
 
     pub fn assigned(&self) -> bool {
@@ -255,7 +227,7 @@ fn cpu_init_pt() {
 fn cpu_sched_init() {
     let rule = PLAT_DESC.cpu_desc.core_list[current_cpu().id].sched;
     info!("cpu[{}] init {rule:?} Scheduler", current_cpu().id);
-    current_cpu().sched.call_once(|| get_scheduler(rule));
+    current_cpu().vcpu_array.sched.call_once(|| get_scheduler(rule));
 }
 
 pub fn cpu_init() {
@@ -272,6 +244,7 @@ pub fn cpu_init() {
     crate::arch::arch_pmu_init();
     cpu_init_pt();
     cpu_sched_init();
+    current_cpu().timer_list.call_once(TimerList::new);
     current_cpu().cpu_state = CpuState::Idle;
     let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;
     let size = core::mem::size_of::<ContextFrame>();
@@ -286,6 +259,7 @@ pub fn cpu_init() {
 }
 
 pub fn cpu_idle() -> ! {
+    debug!("Core {} idle", current_cpu().id);
     current_cpu().cpu_state = CpuState::Idle;
     cpu_interrupt_unmask();
     loop {
@@ -293,12 +267,12 @@ pub fn cpu_idle() -> ! {
     }
 }
 
-pub static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
+static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
 
 #[no_mangle]
 // #[link_section = ".text.boot"]
 pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
-    let mut cpu = unsafe { &mut CPU_LIST[cpu_id] };
+    let cpu = unsafe { &mut CPU_LIST[cpu_id] };
     cpu.id = cpu_id;
 
     pt_map_banked_cpu(cpu)

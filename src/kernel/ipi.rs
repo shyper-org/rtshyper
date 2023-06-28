@@ -181,7 +181,7 @@ fn interrupt_inject_ipi_handler(msg: IpiMessage) {
                     panic!("inject int {} to illegal cpu {}", int_id, current_cpu().id);
                 }
                 Some(vcpu) => {
-                    interrupt_vm_inject(&vcpu.vm().unwrap(), &vcpu, int_id);
+                    interrupt_vm_inject(&vcpu.vm().unwrap(), vcpu, int_id);
                 }
             }
         }
@@ -241,7 +241,7 @@ pub fn ipi_send_msg(target_id: usize, ipi_type: IpiType, ipi_message: IpiInnerMs
     ipi_send(target_id, msg)
 }
 
-pub fn ipi_intra_broadcast_msg(vm: Vm, ipi_type: IpiType, msg: IpiInnerMsg) -> bool {
+pub fn ipi_intra_broadcast_msg(vm: &Vm, ipi_type: IpiType, msg: IpiInnerMsg) -> bool {
     let mut i = 0;
     let mut n = 0;
     while n < (vm.cpu_num() - 1) {

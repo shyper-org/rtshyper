@@ -7,14 +7,13 @@ pub use self::interrupt::*;
 pub use self::mmu::*;
 pub use self::page_table::*;
 pub use self::psci::*;
-pub use self::smc::*;
 pub use self::smmu::*;
 pub use self::sync::*;
 pub use self::timer::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 pub use self::cache::*;
-pub use pmuv3::{arch_pmu_init, cpu_cycle_count};
+pub use pmuv3::{arch_pmu_init, vcpu_start_pmu, vcpu_stop_pmu, cpu_cycle_count};
 
 #[macro_use]
 mod regs;

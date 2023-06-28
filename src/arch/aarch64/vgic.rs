@@ -16,7 +16,7 @@ use crate::kernel::{active_vcpu_id, current_cpu};
 use crate::kernel::{active_vm, active_vm_id, active_vm_ncpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiInitcMessage};
 use crate::kernel::{InitcEvent, Vcpu, Vm};
-use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth, ptr_read_write};
+use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth};
 
 use super::gic::*;
 
@@ -709,7 +709,7 @@ impl Vgic {
                 val: 0,
             };
             vgic_int_yield_owner(vcpu, interrupt);
-            ipi_intra_broadcast_msg(active_vm().unwrap(), IpiType::IpiTIntc, IpiInnerMsg::Initc(ipi_msg));
+            ipi_intra_broadcast_msg(&active_vm().unwrap(), IpiType::IpiTIntc, IpiInnerMsg::Initc(ipi_msg));
         }
     }
 
@@ -1087,7 +1087,7 @@ impl Vgic {
                     int_id: 0,
                     val: enable as u8,
                 };
-                ipi_intra_broadcast_msg(active_vm().unwrap(), IpiType::IpiTIntc, IpiInnerMsg::Initc(m));
+                ipi_intra_broadcast_msg(&active_vm().unwrap(), IpiType::IpiTIntc, IpiInnerMsg::Initc(m));
             }
         } else {
             let idx = emu_ctx.reg;
@@ -1584,14 +1584,14 @@ impl Vgic {
             if has_pending {
                 if let Some(act_int) = act_head {
                     if !act_int.in_lr() {
-                        interrupt_opt = Some(act_int.clone());
+                        interrupt_opt = Some(act_int);
                     }
                 }
             }
             if interrupt_opt.is_none() {
                 if let Some(pend_int) = pend_head {
                     if !pend_int.in_lr() {
-                        interrupt_opt = Some(pend_int.clone());
+                        interrupt_opt = Some(pend_int);
                         prev_pend = true;
                     }
                 }
@@ -1863,53 +1863,57 @@ pub fn vgicd_emu_access_is_vaild(emu_ctx: &EmuContext) -> bool {
     true
 }
 
-pub struct PartialPassthroughIntc {
-    address_range: Range<usize>,
-}
-
-impl EmuDev for PartialPassthroughIntc {
-    fn emu_type(&self) -> EmuDeviceType {
-        EmuDeviceType::EmuDeviceTGPPT
-    }
-
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
-    }
-
-    fn address_range(&self) -> Range<usize> {
-        self.address_range.clone()
-    }
-
-    fn handler(&self, emu_ctx: &EmuContext) -> bool {
-        if !vgicd_emu_access_is_vaild(emu_ctx) {
-            return false;
-        }
-        let offset = emu_ctx.address & 0xfff;
-        // println!(
-        //     "partial_passthrough_intc_handler: {} offset_prefix {:#x}, offset {:#x}",
-        //     if emu_ctx.write { "write" } else { "read" }, offset_prefix, offset
-        // );
-        if emu_ctx.write {
-            // todo: add offset match
-            let val = current_cpu().get_gpr(emu_ctx.reg);
-            ptr_read_write(Platform::GICD_BASE + offset, emu_ctx.width, val, false);
-        } else {
-            let res = ptr_read_write(Platform::GICD_BASE + offset, emu_ctx.width, 0, true);
-            current_cpu().set_gpr(emu_ctx.reg, res);
+cfg_if::cfg_if! {
+    if #[cfg(not(feature = "memory-reservation"))] {
+        pub struct PartialPassthroughIntc {
+            address_range: Range<usize>,
         }
 
-        true
-    }
-}
+        impl EmuDev for PartialPassthroughIntc {
+            fn emu_type(&self) -> EmuDeviceType {
+                EmuDeviceType::EmuDeviceTGPPT
+            }
 
-pub fn partial_passthrough_intc_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
-    if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTGPPT {
-        let intc = PartialPassthroughIntc {
-            address_range: emu_cfg.base_ipa..emu_cfg.base_ipa + emu_cfg.length,
-        };
-        Ok(Box::new(intc))
-    } else {
-        Err(())
+            fn as_any(&self) -> &dyn core::any::Any {
+                self
+            }
+
+            fn address_range(&self) -> Range<usize> {
+                self.address_range.clone()
+            }
+
+            fn handler(&self, emu_ctx: &EmuContext) -> bool {
+                if !vgicd_emu_access_is_vaild(emu_ctx) {
+                    return false;
+                }
+                let offset = emu_ctx.address & 0xfff;
+                // println!(
+                //     "partial_passthrough_intc_handler: {} offset_prefix {:#x}, offset {:#x}",
+                //     if emu_ctx.write { "write" } else { "read" }, offset_prefix, offset
+                // );
+                if emu_ctx.write {
+                    // todo: add offset match
+                    let val = current_cpu().get_gpr(emu_ctx.reg);
+                    crate::util::ptr_read_write(Platform::GICD_BASE + offset, emu_ctx.width, val, false);
+                } else {
+                    let res = crate::util::ptr_read_write(Platform::GICD_BASE + offset, emu_ctx.width, 0, true);
+                    current_cpu().set_gpr(emu_ctx.reg, res);
+                }
+
+                true
+            }
+        }
+
+        pub fn partial_passthrough_intc_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
+            if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTGPPT {
+                let intc = PartialPassthroughIntc {
+                    address_range: emu_cfg.base_ipa..emu_cfg.base_ipa + emu_cfg.length,
+                };
+                Ok(Box::new(intc))
+            } else {
+                Err(())
+            }
+        }
     }
 }
 
@@ -1937,7 +1941,7 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
     };
     // restore_vcpu_gic
     if let Some(active_vcpu) = &current_cpu().active_vcpu {
-        if trgt_vcpu.vm_id() != active_vcpu.vm_id() {
+        if trgt_vcpu != active_vcpu {
             active_vcpu.gic_save_context();
             trgt_vcpu.gic_restore_context();
         }
@@ -1976,25 +1980,25 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
                 }
             }
             InitcEvent::VgicdSetEn => {
-                vgic.set_enable(&trgt_vcpu, int_id as usize, val != 0);
+                vgic.set_enable(trgt_vcpu, int_id as usize, val != 0);
             }
             InitcEvent::VgicdSetPend => {
-                vgic.set_pend(&trgt_vcpu, int_id as usize, val != 0);
+                vgic.set_pend(trgt_vcpu, int_id as usize, val != 0);
             }
             InitcEvent::VgicdSetPrio => {
-                vgic.set_prio(&trgt_vcpu, int_id as usize, val);
+                vgic.set_prio(trgt_vcpu, int_id as usize, val);
             }
             InitcEvent::VgicdSetTrgt => {
-                vgic.set_trgt(&trgt_vcpu, int_id as usize, val);
+                vgic.set_trgt(trgt_vcpu, int_id as usize, val);
             }
             InitcEvent::VgicdRoute => {
-                if let Some(interrupt) = vgic.get_int(&trgt_vcpu, bit_extract(int_id as usize, 0, 10)) {
+                if let Some(interrupt) = vgic.get_int(trgt_vcpu, bit_extract(int_id as usize, 0, 10)) {
                     let interrupt_lock = interrupt.0.lock.lock();
                     if vgic_int_get_owner(trgt_vcpu.clone(), interrupt) {
                         if (interrupt.targets() & (1 << current_cpu().id)) != 0 {
-                            vgic.add_lr(&trgt_vcpu, interrupt.clone());
+                            vgic.add_lr(trgt_vcpu, interrupt.clone());
                         }
-                        vgic_int_yield_owner(&trgt_vcpu, interrupt);
+                        vgic_int_yield_owner(trgt_vcpu, interrupt);
                     }
                     drop(interrupt_lock);
                 }
@@ -2006,7 +2010,7 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
     }
     // save_vcpu_gic
     if let Some(active_vcpu) = &current_cpu().active_vcpu {
-        if trgt_vcpu.vm_id() != active_vcpu.vm_id() {
+        if trgt_vcpu != active_vcpu {
             trgt_vcpu.gic_save_context();
             active_vcpu.gic_restore_context();
         }

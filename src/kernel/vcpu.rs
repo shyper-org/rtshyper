@@ -1,14 +1,13 @@
 use core::mem::size_of;
+use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::{ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, VmContext, VM_IPA_SIZE};
-use crate::board::{PlatOperation, Platform};
 use crate::config::VmConfigEntry;
-use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
-use crate::kernel::{active_vcpu_id, active_vm_id};
+use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state, active_vm_id};
 use crate::util::memcpy_safe;
 
 use super::{CpuState, Vm, WeakVm};
@@ -18,15 +17,41 @@ pub enum VcpuState {
     Inv = 0,
     Runnable = 1,
     Running = 2,
+    Blocked = 3,
 }
 
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Vcpu(pub Arc<VcpuInner>);
 
+impl core::cmp::PartialEq for Vcpu {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 pub struct VcpuInner {
     inner_const: VcpuConst,
+    reservation: MemoryBandwidth,
     pub inner_mut: Mutex<VcpuInnerMut>,
+}
+
+struct MemoryBandwidth {
+    budget: u32,
+    period: u64,
+    remaining_budget: AtomicU32,
+    replenish: AtomicBool,
+}
+
+impl MemoryBandwidth {
+    fn new(budget: u32, period: u64) -> Self {
+        Self {
+            budget,
+            period,
+            remaining_budget: AtomicU32::new(budget),
+            replenish: AtomicBool::new(false),
+        }
+    }
 }
 
 struct VcpuConst {
@@ -37,13 +62,14 @@ struct VcpuConst {
 
 #[allow(dead_code)]
 impl Vcpu {
-    pub(super) fn new(vm: WeakVm, vcpu_id: usize, phys_id: usize) -> Self {
+    pub(super) fn new(vm: WeakVm, vcpu_id: usize, phys_id: usize, config: &VmConfigEntry) -> Self {
         Self(Arc::new(VcpuInner {
             inner_const: VcpuConst {
                 id: vcpu_id,
                 vm,
                 phys_id,
             },
+            reservation: MemoryBandwidth::new(config.memory_budget(), config.memory_replenishment_period()),
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         }))
     }
@@ -53,19 +79,23 @@ impl Vcpu {
         self.reset_context();
     }
 
-    pub fn shutdown(&self) {
-        println!(
-            "Core {} (vm {} vcpu {}) shutdown ok",
-            current_cpu().id,
-            active_vm_id(),
-            active_vcpu_id()
-        );
-        Platform::cpu_shutdown();
-    }
+    // pub fn shutdown(&self) {
+    //     use crate::board::{PlatOperation, Platform};
+    //     println!(
+    //         "Core {} (vm {} vcpu {}) shutdown ok",
+    //         current_cpu().id,
+    //         active_vm_id(),
+    //         active_vcpu_id()
+    //     );
+    //     Platform::cpu_shutdown();
+    // }
 
     pub fn context_vm_store(&self) {
         self.vm().unwrap().update_vtimer();
         self.save_cpu_ctx();
+
+        #[cfg(any(feature = "memory-reservation"))]
+        crate::arch::vcpu_stop_pmu(self);
 
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.ext_regs_store();
@@ -77,6 +107,9 @@ impl Vcpu {
         // println!("context_vm_restore");
         let vtimer_offset = self.vm().unwrap().update_vtimer_offset();
         self.restore_cpu_ctx();
+
+        #[cfg(any(feature = "memory-reservation"))]
+        crate::arch::vcpu_start_pmu(self);
 
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.generic_timer.set_offset(vtimer_offset as u64);
@@ -146,7 +179,7 @@ impl Vcpu {
         inner.state
     }
 
-    pub fn set_state(&self, state: VcpuState) {
+    pub(super) fn set_state(&self, state: VcpuState) {
         let mut inner = self.0.inner_mut.lock();
         inner.state = state;
     }
@@ -248,6 +281,37 @@ impl Vcpu {
             }
         }
     }
+
+    pub fn remaining_budget(&self) -> u32 {
+        self.0.reservation.remaining_budget.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn period(&self) -> u64 {
+        self.0.reservation.period
+    }
+
+    pub fn update_remaining_budget(&self, remaining_budget: u32) {
+        self.0
+            .reservation
+            .remaining_budget
+            .store(remaining_budget, Ordering::Relaxed);
+    }
+
+    pub fn reset_remaining_budget(&self) {
+        let reservation = &self.0.reservation;
+        reservation.remaining_budget.store(0, Ordering::Relaxed);
+        reservation.replenish.store(true, Ordering::Relaxed);
+    }
+
+    pub fn supply_budget(&self) {
+        let reservation = &self.0.reservation;
+        if reservation.replenish.load(Ordering::Relaxed) {
+            reservation
+                .remaining_budget
+                .store(reservation.budget, Ordering::Relaxed);
+            reservation.replenish.store(false, Ordering::Relaxed);
+        }
+    }
 }
 
 pub struct VcpuInnerMut {
@@ -259,7 +323,7 @@ pub struct VcpuInnerMut {
 }
 
 impl VcpuInnerMut {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             state: VcpuState::Inv,
             int_list: vec![],

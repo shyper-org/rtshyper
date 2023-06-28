@@ -151,10 +151,11 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
         }
         // 0x1_0000_0000 ~ 0x2_0000_0000 --> normal memory (4GB)
         let normal_memory_2 = 0x1_0000_0000..0x2_0000_0000;
-        for (i, pa) in normal_memory_2.clone().step_by(1 << LVL1_SHIFT).enumerate() {
+        let invalid_start = normal_memory_2.end;
+        for (i, pa) in normal_memory_2.step_by(1 << LVL1_SHIFT).enumerate() {
             lvl1_pt.entry[i] = BlockDescriptor::new(pa, false);
         }
-        for i in pt_lvl1_idx(normal_memory_2.end)..512 {
+        for i in pt_lvl1_idx(invalid_start)..512 {
             lvl1_pt.entry[i] = BlockDescriptor::invalid();
         }
     } else if cfg!(feature = "qemu") {

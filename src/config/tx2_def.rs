@@ -255,6 +255,7 @@ pub fn mvm_config_init() {
         memory: VmMemoryConfig {
             region: vm_region,
             colors: HYPERVISOR_COLORS.get().unwrap().clone(),
+            ..Default::default()
         },
         cpu: VmCpuConfig {
             num: 1,
@@ -344,6 +345,7 @@ pub fn unishyper_config_init() {
         memory: VmMemoryConfig {
             region: vm_region,
             colors: vec![],
+            ..Default::default()
         },
         cpu: VmCpuConfig {
             num: 1,

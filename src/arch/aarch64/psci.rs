@@ -1,6 +1,6 @@
 use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
 use crate::board::PlatOperation;
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, timer_enable, Vcpu, VcpuState, Vm, active_vm_id};
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm, active_vm_id};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
@@ -31,7 +31,7 @@ pub fn power_arch_init() {
     ipi_register(IpiType::IpiTPower, psci_ipi_handler);
 }
 
-pub fn power_arch_vm_shutdown_secondary_cores(vm: Vm) {
+pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
     let m = IpiPowerMessage {
         src: vm.id(),
         event: PowerEvent::PsciIpiCpuReset,
@@ -51,10 +51,10 @@ pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0
 }
 
+#[allow(dead_code)]
 pub fn power_arch_cpu_shutdown() {
     gic_cpu_init();
     interrupt_arch_deactive_irq(true);
-    timer_enable(false);
     cpu_idle();
 }
 
@@ -125,7 +125,7 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     true
 }
 
-fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
+fn psci_vcpu_on(vcpu: &Vcpu, entry: usize, ctx: usize) {
     // println!("psci vcpu on， entry {:x}, ctx {:x}", entry, ctx);
     if vcpu.phys_id() != current_cpu().id {
         panic!(
@@ -135,15 +135,11 @@ fn psci_vcpu_on(vcpu: Vcpu, entry: usize, ctx: usize) {
         );
     }
     current_cpu().cpu_state = CpuState::Run;
-    // let vcpu = current_cpu().active_vcpu.clone().unwrap();
     vcpu.reset_context();
     vcpu.set_gpr(0, ctx);
     vcpu.set_elr(entry);
-    // Just wake up the vcpu and
-    // invoke current_cpu().sched.schedule()
-    // let the scheduler enable or disable timer
-    current_cpu().scheduler().wakeup(vcpu);
-    current_cpu().scheduler().do_schedule();
+    // Just wake up the vcpu
+    current_cpu().vcpu_array.wakeup_vcpu(vcpu);
 }
 
 // Todo: need to support more vcpu in one Core

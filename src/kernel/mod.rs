@@ -6,7 +6,7 @@ pub use self::iommu::*;
 pub use self::ipi::*;
 pub use self::ivc::*;
 pub use self::mem::*;
-pub use self::timer::*;
+pub use self::timer::timer_init;
 pub use self::vcpu::*;
 pub use self::vm::*;
 

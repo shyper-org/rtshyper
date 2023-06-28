@@ -78,10 +78,26 @@ impl VmRegion {
     }
 }
 
-#[derive(Clone, Default)]
+const DEFAULT_MEMORY_BUDGET: u32 = 10_0000_0000;
+const DEFAULT_MEMORY_REPLENISHMENT_PERIOD: u64 = 100; // replenishment timer period
+
+#[derive(Clone)]
 pub struct VmMemoryConfig {
     pub region: Vec<VmRegion>,
     pub colors: Vec<usize>,
+    pub budget: u32,
+    pub period: u64,
+}
+
+impl Default for VmMemoryConfig {
+    fn default() -> Self {
+        Self {
+            region: Default::default(),
+            colors: Default::default(),
+            budget: DEFAULT_MEMORY_BUDGET,
+            period: DEFAULT_MEMORY_REPLENISHMENT_PERIOD,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -213,6 +229,14 @@ impl VmConfigEntry {
             }
             color_bitmap
         }
+    }
+
+    pub fn memory_budget(&self) -> u32 {
+        self.memory.budget
+    }
+
+    pub fn memory_replenishment_period(&self) -> u64 {
+        self.memory.period
     }
 
     fn add_memory_cfg(&mut self, ipa_start: usize, length: usize) {

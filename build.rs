@@ -24,17 +24,17 @@ fn main() {
 
     // set the linker script
     let arch = var("CARGO_CFG_TARGET_ARCH").unwrap();
-    let platform = if cfg!(feature = "tx2") {
-        "tx2"
+    let (platform, text_start) = if cfg!(feature = "tx2") {
+        ("tx2", 0x83000000_u64)
     } else if cfg!(feature = "pi4") {
-        "pi4"
+        ("pi4", 0xf0080000_u64)
     } else if cfg!(feature = "qemu") {
-        "qemu"
+        ("qemu", 0x40080000_u64)
     } else {
         panic!("Unsupported platform!");
     };
-    let linker_ld = format!("{}-{}.ld", arch, platform);
-    println!("cargo:rustc-link-arg=-Tlinkers/{}", linker_ld);
+    println!("cargo:rustc-link-arg=-Tlinkers/{arch}.ld");
+    println!("cargo:rustc-link-arg=--defsym=TEXT_START={text_start}");
 
     // compile the startup file into a static library
     let start_file = format!("src/arch/{}/start.S", arch);
