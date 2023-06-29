@@ -71,6 +71,6 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     vmm_boot_vm(0);
 
     loop {
-        kernel::cpu_idle();
+        core::hint::spin_loop();
     }
 }

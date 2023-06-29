@@ -1,15 +1,17 @@
 use core::mem::size_of;
 use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
-use spin::Mutex;
+use spin::{Mutex, Lazy};
 
-use crate::arch::{ContextFrame, ContextFrameTrait, cpu_interrupt_unmask, GicContext, VmContext, VM_IPA_SIZE};
+use crate::arch::{ContextFrame, ContextFrameTrait, GicContext, VmContext, VM_IPA_SIZE};
 use crate::config::VmConfigEntry;
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state, active_vm_id};
 use crate::util::memcpy_safe;
 
+#[cfg(any(feature = "memory-reservation"))]
+use super::vcpu_array::PmuTimerEvent;
 use super::{CpuState, Vm, WeakVm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,9 +32,19 @@ impl core::cmp::PartialEq for Vcpu {
     }
 }
 
+pub(super) struct WeakVcpu(Weak<VcpuInner>);
+
+impl WeakVcpu {
+    pub(super) fn upgrade(&self) -> Option<Vcpu> {
+        self.0.upgrade().map(Vcpu)
+    }
+}
+
 pub struct VcpuInner {
     inner_const: VcpuConst,
     reservation: MemoryBandwidth,
+    #[cfg(any(feature = "memory-reservation"))]
+    pmu_event: Arc<PmuTimerEvent>,
     pub inner_mut: Mutex<VcpuInnerMut>,
 }
 
@@ -63,7 +75,19 @@ struct VcpuConst {
 #[allow(dead_code)]
 impl Vcpu {
     pub(super) fn new(vm: WeakVm, vcpu_id: usize, phys_id: usize, config: &VmConfigEntry) -> Self {
-        Self(Arc::new(VcpuInner {
+        #[cfg(any(feature = "memory-reservation"))]
+        let inner = Arc::new_cyclic(|weak| VcpuInner {
+            inner_const: VcpuConst {
+                id: vcpu_id,
+                vm,
+                phys_id,
+            },
+            reservation: MemoryBandwidth::new(config.memory_budget(), config.memory_replenishment_period()),
+            pmu_event: Arc::new(PmuTimerEvent(WeakVcpu(weak.clone()))),
+            inner_mut: Mutex::new(VcpuInnerMut::new()),
+        });
+        #[cfg(not(feature = "memory-reservation"))]
+        let inner = Arc::new(VcpuInner {
             inner_const: VcpuConst {
                 id: vcpu_id,
                 vm,
@@ -71,7 +95,13 @@ impl Vcpu {
             },
             reservation: MemoryBandwidth::new(config.memory_budget(), config.memory_replenishment_period()),
             inner_mut: Mutex::new(VcpuInnerMut::new()),
-        }))
+        });
+        Self(inner)
+    }
+
+    #[cfg(any(feature = "memory-reservation"))]
+    pub(super) fn pmu_event(&self) -> Arc<PmuTimerEvent> {
+        self.0.pmu_event.clone()
     }
 
     pub(super) fn init(&self, config: &VmConfigEntry) {
@@ -358,15 +388,6 @@ impl VcpuInnerMut {
     }
 }
 
-#[allow(dead_code)]
-pub fn vcpu_idle(_vcpu: Vcpu) -> ! {
-    cpu_interrupt_unmask();
-    loop {
-        use crate::arch::ArchTrait;
-        crate::arch::Arch::wait_for_interrupt();
-    }
-}
-
 // WARNING: No Auto `drop` in this function
 pub fn vcpu_run(announce: bool) {
     {
@@ -396,5 +417,39 @@ pub fn vcpu_run(announce: bool) {
     }
     unsafe {
         context_vm_entry(current_cpu().current_ctx().unwrap());
+    }
+}
+
+fn idle() -> ! {
+    loop {
+        use crate::arch::ArchTrait;
+        crate::arch::Arch::wait_for_interrupt();
+    }
+}
+
+struct IdleThread {
+    ctx: ContextFrame,
+}
+
+static IDLE_THREAD: Lazy<IdleThread> = Lazy::new(|| {
+    let mut ctx = ContextFrame::default();
+    use cortex_a::registers::SPSR_EL2;
+    ctx.spsr = (SPSR_EL2::M::EL2h + SPSR_EL2::F::Masked + SPSR_EL2::A::Masked + SPSR_EL2::D::Masked).value;
+    ctx.set_exception_pc(idle as usize);
+    IdleThread { ctx }
+});
+
+pub(super) fn run_idle_thread() {
+    match current_cpu().current_ctx() {
+        None => {
+            println!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
+        }
+        Some(ctx) => {
+            memcpy_safe(
+                ctx as *const u8,
+                &(IDLE_THREAD.ctx) as *const _ as *const u8,
+                size_of::<ContextFrame>(),
+            );
+        }
     }
 }

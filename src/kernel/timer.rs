@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
 use crate::kernel::current_cpu;
 use crate::util::timer_list::{TimerTickValue, TimerEvent};
@@ -48,28 +50,14 @@ pub fn timer_irq_handler() {
     timer_notify_after(10);
 }
 
-#[allow(dead_code)]
-pub fn start_timer_event_fn<F>(period: TimerTickValue, f: F)
-where
-    F: FnOnce(TimerTickValue) + 'static,
-{
-    use crate::util::timer_list::TimerEventFn;
-    let timeout_tick = current_cpu().sys_tick + period;
-    current_cpu()
-        .timer_list
-        .get_mut()
-        .unwrap()
-        .push(timeout_tick, TimerEventFn::new(f));
-}
-
-pub fn start_timer_event(period: TimerTickValue, event: impl TimerEvent + 'static) {
+pub fn start_timer_event(period: TimerTickValue, event: Arc<dyn TimerEvent>) {
     let timeout_tick = current_cpu().sys_tick + period;
     current_cpu().timer_list.get_mut().unwrap().push(timeout_tick, event);
 }
 
 pub fn remove_timer_event<F>(condition: F)
 where
-    F: Fn(&dyn TimerEvent) -> bool,
+    F: Fn(&Arc<dyn TimerEvent>) -> bool,
 {
     current_cpu().timer_list.get_mut().unwrap().remove_all(condition);
 }

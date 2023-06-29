@@ -1,6 +1,7 @@
 use alloc::{
     slice::{Iter, IterMut},
     boxed::Box,
+    sync::Arc,
 };
 use spin::Once;
 use crate::{
@@ -13,6 +14,7 @@ use super::{
     sched::Scheduler,
     VcpuState,
     timer::{timer_enable, start_timer_event},
+    WeakVcpu,
 };
 
 pub struct VcpuArray {
@@ -94,7 +96,7 @@ impl VcpuArray {
                 {
                     if vcpu.state() == VcpuState::Inv {
                         let period = vcpu.period();
-                        let event = PmuTimerEvent(vcpu.clone());
+                        let event = vcpu.pmu_event();
                         start_timer_event(period, event);
                     }
                 }
@@ -137,9 +139,14 @@ impl VcpuArray {
                 }
                 #[cfg(any(feature = "memory-reservation"))]
                 {
-                    // use super::timer::remove_timer_event;
-                    // TODO:
-                    // remove_timer_event(|event| )
+                    use super::timer::remove_timer_event;
+                    remove_timer_event(|event| {
+                        if let Some(event) = event.as_any().downcast_ref::<PmuTimerEvent>() {
+                            core::ptr::addr_of!(*event) == Arc::as_ptr(&vcpu.pmu_event())
+                        } else {
+                            false
+                        }
+                    });
                 }
                 // remove vcpu from scheduler
                 self.scheduler().remove(&vcpu);
@@ -156,6 +163,8 @@ impl VcpuArray {
     pub fn resched(&mut self) {
         if let Some(next_vcpu) = self.scheduler().next() {
             self.switch_to(next_vcpu);
+        } else if current_cpu().active_vcpu.is_none() {
+            super::run_idle_thread();
         }
     }
 
@@ -207,28 +216,31 @@ impl VcpuArray {
 }
 
 #[cfg(any(feature = "memory-reservation"))]
-#[derive(Clone)]
-struct PmuTimerEvent(Vcpu);
+pub(super) struct PmuTimerEvent(pub(super) WeakVcpu);
 
 #[cfg(any(feature = "memory-reservation"))]
 impl TimerEvent for PmuTimerEvent {
-    fn callback(self: Box<Self>, now: TimerTickValue) {
-        let event = self.clone();
-        let vcpu = &self.0;
-        let period = vcpu.period();
-        trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
-        vcpu.supply_budget();
-        match vcpu.state() {
-            VcpuState::Inv | VcpuState::Runnable => {}
-            VcpuState::Running => vcpu_start_pmu(vcpu),
-            VcpuState::Blocked => {
-                vcpu.set_state(VcpuState::Runnable);
-                current_cpu().vcpu_array.scheduler().put(self.0);
-                if current_cpu().active_vcpu.is_none() {
-                    current_cpu().vcpu_array.resched();
+    fn callback(self: Arc<Self>, now: TimerTickValue) {
+        if let Some(vcpu) = self.0.upgrade() {
+            let period = vcpu.period();
+            trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
+            vcpu.supply_budget();
+            match vcpu.state() {
+                VcpuState::Inv | VcpuState::Runnable => {}
+                VcpuState::Running => vcpu_start_pmu(&vcpu),
+                VcpuState::Blocked => {
+                    vcpu.set_state(VcpuState::Runnable);
+                    current_cpu().vcpu_array.scheduler().put(vcpu);
+                    if current_cpu().active_vcpu.is_none() {
+                        current_cpu().vcpu_array.resched();
+                    }
                 }
             }
+            start_timer_event(period, self);
         }
-        start_timer_event(period, *event);
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
