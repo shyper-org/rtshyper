@@ -1,21 +1,14 @@
 use alloc::{
     slice::{Iter, IterMut},
     boxed::Box,
-    sync::Arc,
 };
 use spin::Once;
 use crate::{
     kernel::{current_cpu, Vcpu, CONFIG_VM_NUM_MAX},
-    arch::{ArchTrait, vcpu_start_pmu},
-    util::timer_list::{TimerEvent, TimerTickValue},
+    arch::ArchTrait,
 };
 
-use super::{
-    sched::Scheduler,
-    VcpuState,
-    timer::{timer_enable, start_timer_event},
-    WeakVcpu,
-};
+use super::{sched::Scheduler, VcpuState, timer::timer_enable};
 
 pub struct VcpuArray {
     array: [Option<Vcpu>; CONFIG_VM_NUM_MAX],
@@ -97,7 +90,7 @@ impl VcpuArray {
                     if vcpu.state() == VcpuState::Inv {
                         let period = vcpu.period();
                         let event = vcpu.pmu_event();
-                        start_timer_event(period, event);
+                        super::timer::start_timer_event(period, event);
                     }
                 }
                 // set vcpu state
@@ -141,6 +134,7 @@ impl VcpuArray {
                 {
                     use super::timer::remove_timer_event;
                     remove_timer_event(|event| {
+                        use alloc::sync::Arc;
                         if let Some(event) = event.as_any().downcast_ref::<PmuTimerEvent>() {
                             core::ptr::addr_of!(*event) == Arc::as_ptr(&vcpu.pmu_event())
                         } else {
@@ -216,18 +210,18 @@ impl VcpuArray {
 }
 
 #[cfg(any(feature = "memory-reservation"))]
-pub(super) struct PmuTimerEvent(pub(super) WeakVcpu);
+pub(super) struct PmuTimerEvent(pub(super) super::WeakVcpu);
 
 #[cfg(any(feature = "memory-reservation"))]
-impl TimerEvent for PmuTimerEvent {
-    fn callback(self: Arc<Self>, now: TimerTickValue) {
+impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
+    fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerTickValue) {
         if let Some(vcpu) = self.0.upgrade() {
             let period = vcpu.period();
             trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
             vcpu.supply_budget();
             match vcpu.state() {
                 VcpuState::Inv | VcpuState::Runnable => {}
-                VcpuState::Running => vcpu_start_pmu(&vcpu),
+                VcpuState::Running => crate::arch::vcpu_start_pmu(&vcpu),
                 VcpuState::Blocked => {
                     vcpu.set_state(VcpuState::Runnable);
                     current_cpu().vcpu_array.scheduler().put(vcpu);
@@ -236,7 +230,7 @@ impl TimerEvent for PmuTimerEvent {
                     }
                 }
             }
-            start_timer_event(period, self);
+            super::timer::start_timer_event(period, self);
         }
     }
 
