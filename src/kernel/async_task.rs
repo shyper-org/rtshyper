@@ -10,7 +10,7 @@ use alloc::task::Wake;
 use spin::mutex::Mutex;
 
 use crate::device::{mediated_blk_read, mediated_blk_write, virtio_blk_notify_handler, ReadAsyncMsg, WriteAsyncMsg};
-use crate::kernel::{active_vm_id, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType};
+use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiMediatedMsg, IpiType};
 use crate::util::{memcpy_safe, sleep};
 
 #[derive(Clone, Copy, Debug)]
@@ -50,7 +50,7 @@ impl Executor {
     }
 
     pub fn exec(&self) {
-        if active_vm_id() == 0 {
+        if active_vm().unwrap().id() == 0 {
             match self.status() {
                 AsyncExeStatus::Pending => self.set_status(AsyncExeStatus::Scheduling),
                 AsyncExeStatus::Scheduling => return,
@@ -81,7 +81,7 @@ impl Executor {
                 return;
             }
             // not a service VM, end loop
-            if active_vm_id() != 0 {
+            if active_vm().unwrap().id() != 0 {
                 return;
             }
         }
@@ -94,12 +94,12 @@ impl Executor {
     }
 
     pub fn add_task(&self, task: AsyncTask, ipi: bool) {
-        while active_vm_id() != 0 && self.io_task_list.lock().len() >= 64 {
+        while active_vm().unwrap().id() != 0 && self.io_task_list.lock().len() >= 64 {
             sleep(1);
         }
         let mut ipi_list = self.ipi_task_list.lock();
         let mut io_list = self.io_task_list.lock();
-        let need_execute = active_vm_id() != 0
+        let need_execute = active_vm().unwrap().id() != 0
             && ipi_list.is_empty()
             && io_list.is_empty()
             && self.status() == AsyncExeStatus::Pending;
@@ -218,7 +218,7 @@ pub trait AsyncCallback {
 impl AsyncCallback for IpiMediatedMsg {
     #[inline]
     fn preprocess(&self) {
-        if active_vm_id() == 0 {
+        if active_vm().unwrap().id() == 0 {
             virtio_blk_notify_handler(self.vq.clone(), self.blk.clone(), self.src_vm.clone());
         } else {
             // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
@@ -247,7 +247,7 @@ impl AsyncCallback for ReadAsyncMsg {
         // println!("read check_sum is {:x}", sum);
         let info = &self.used_info;
         self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
-        self.dev.notify(self.src_vm.clone());
+        self.dev.notify(&self.src_vm);
     }
 }
 
@@ -261,7 +261,7 @@ impl AsyncCallback for WriteAsyncMsg {
         buffer.clear();
         let info = &self.used_info;
         self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
-        self.dev.notify(self.src_vm.clone());
+        self.dev.notify(&self.src_vm);
     }
 }
 

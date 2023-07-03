@@ -148,7 +148,7 @@ pub fn net_features() -> usize {
 const VIRTIO_NET_CTRL_ANNOUNCE: u8 = 3;
 const VIRTIO_NET_CTRL_ANNOUNCE_ACK: u8 = 0;
 
-pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
+pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
     if vq.ready() == 0 {
         println!("virtio net control queue is not ready!");
         return false;
@@ -208,11 +208,11 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         }
         next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
-    nic.notify(vm);
+    nic.notify(&vm);
     true
 }
 
-pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
+pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
     if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
         return false;
@@ -267,7 +267,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
         return false;
     }
 
-    nic.notify(vm);
+    nic.notify(&vm);
     let mut trgt_vmid = 0;
     while vms_to_notify > 0 {
         if vms_to_notify & 1 != 0 {
@@ -302,7 +302,7 @@ pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: Vm) -> bool {
                     }
                 };
                 if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                    nic.notify(vm.clone());
+                    nic.notify(&vm);
                 }
             } else {
                 let msg = IpiEthernetMsg {
@@ -362,7 +362,7 @@ pub fn ethernet_ipi_rev_handler(msg: IpiMessage) {
             };
 
             if rx_vq.ready() != 0 && rx_vq.avail_flags() == 0 {
-                nic.notify(vm);
+                nic.notify(&vm);
             }
         }
         _ => {
@@ -533,7 +533,7 @@ fn ethernet_mac_to_vm_id(frame: &[u8]) -> Result<usize, ()> {
     super::mac::mac_to_vmid(frame_mac).ok_or(())
 }
 
-pub fn virtio_net_announce(vm: Vm) {
+pub fn virtio_net_announce(vm: &Vm) {
     // 这个就是纯纯小丑了，改成遍历整个网卡列表找到哪个网卡属于这个vm
     if let Some(nic) = vm.emu_net_dev(0) {
         if let DevDesc::NetDesc(desc) = nic.dev().desc() {

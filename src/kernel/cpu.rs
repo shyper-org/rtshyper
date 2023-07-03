@@ -198,22 +198,10 @@ pub fn active_vcpu_id() -> usize {
     active_vcpu.id()
 }
 
-pub fn active_vm_id() -> usize {
-    let vm = active_vm().unwrap();
-    vm.id()
-}
-
-pub fn active_vm() -> Option<Vm> {
+pub fn active_vm() -> Option<alloc::sync::Arc<Vm>> {
     match current_cpu().active_vcpu.as_ref() {
         None => None,
         Some(active_vcpu) => active_vcpu.vm(),
-    }
-}
-
-pub fn active_vm_ncpu() -> usize {
-    match active_vm() {
-        Some(vm) => vm.ncpu(),
-        None => 0,
     }
 }
 

@@ -7,8 +7,8 @@ use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
-    active_vm, active_vm_id, current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg,
-    IpiMessage, IpiType, ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm,
+    active_vm, current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage,
+    IpiType, ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm,
 };
 use crate::util::memcpy_safe;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
@@ -241,7 +241,7 @@ fn hvc_sys_handler(event: usize, _x0: usize) -> Result<usize, ()> {
         }
         HVC_SYS_TEST => {
             let vm = active_vm().unwrap();
-            crate::device::virtio_net_announce(vm);
+            crate::device::virtio_net_announce(&vm);
             Ok(0)
         }
         _ => Err(()),
@@ -311,7 +311,7 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             add_share_mem(x0, base);
             info!(
                 "VM{} add share mem type {:#x} base {:#x} len {:#x}",
-                active_vm_id(),
+                active_vm().unwrap().id(),
                 x0,
                 base,
                 x1

@@ -218,7 +218,7 @@ fn vmm_init_hardware(vm: &Vm) -> bool {
  *
  * @param[in] vm_id: target VM id to set up config.
  */
-pub fn vmm_setup_config(vm: Vm) {
+pub fn vmm_setup_config(vm: &Vm) {
     println!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
         vm.id(),
@@ -226,16 +226,16 @@ pub fn vmm_setup_config(vm: Vm) {
         current_cpu().id
     );
     // need ipi, must after push to global list
-    vmm_init_cpu(&vm);
+    vmm_init_cpu(vm);
     // need ipi, must after push to global list
-    if !vmm_init_memory(&vm) {
+    if !vmm_init_memory(vm) {
         panic!("vmm_setup_config: vmm_init_memory failed");
     }
     // need memory, must after init memory
-    if !vmm_init_image(&vm) {
+    if !vmm_init_image(vm) {
         panic!("vmm_setup_config: vmm_init_image failed");
     }
-    if !vmm_init_hardware(&vm) {
+    if !vmm_init_hardware(vm) {
         panic!("vmm_setup_config: vmm_init_hardware failed");
     }
 

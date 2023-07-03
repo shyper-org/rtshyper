@@ -234,7 +234,7 @@ pub struct UsedInfo {
 }
 
 pub struct ReadAsyncMsg {
-    pub src_vm: Vm,
+    pub src_vm: Arc<Vm>,
     pub vq: Virtq,
     pub dev: VirtioMmio,
     pub blk_id: usize,
@@ -246,7 +246,7 @@ pub struct ReadAsyncMsg {
 }
 
 pub struct WriteAsyncMsg {
-    pub src_vm: Vm,
+    pub src_vm: Arc<Vm>,
     pub vq: Virtq,
     pub dev: VirtioMmio,
     pub blk_id: usize,

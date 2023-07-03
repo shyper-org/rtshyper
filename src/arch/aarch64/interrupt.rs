@@ -47,7 +47,7 @@ pub fn interrupt_arch_vm_register(vm: &Vm, id: usize) {
 
 pub fn interrupt_arch_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize) {
     let vgic = vm.vgic();
-    // println!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm_id(), vcpu.vm_id());
+    // println!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm().unwrap().id(), vcpu.vm_id());
     if let Some(cur_vcpu) = current_cpu().active_vcpu.as_ref() {
         if cur_vcpu == vcpu {
             vgic.inject(vcpu, int_id);

@@ -16,7 +16,7 @@ use crate::device::EmuDev;
 use crate::device::EmuDeviceType;
 use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::Vm;
-use crate::kernel::{active_vm, active_vm_id, current_cpu};
+use crate::kernel::{active_vm, current_cpu};
 use crate::util::{bit_extract, FlexBitmap};
 
 pub struct SmmuDesc {
@@ -740,7 +740,7 @@ impl EmuDev for EmuSmmu {
             } else {
                 info!(
                     "emu_smmu_handler: vm {} is not allowed to access context[{}]",
-                    active_vm_id(),
+                    active_vm().unwrap().id(),
                     (address - smmu_v2.context_bank.first().unwrap().base_addr as usize) / 0x10000,
                 );
             }

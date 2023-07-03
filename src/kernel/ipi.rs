@@ -74,7 +74,7 @@ pub struct IpiVmmMsg {
 // only support for mediated blk
 #[derive(Clone)]
 pub struct IpiMediatedMsg {
-    pub src_vm: Vm,
+    pub src_vm: alloc::sync::Arc<Vm>,
     pub vq: Virtq,
     pub blk: VirtioMmio,
     // pub avail_idx: u16,

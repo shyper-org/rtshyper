@@ -7,8 +7,7 @@ use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, push_vm, vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
     vm_id_list,
 };
-use crate::kernel::{active_vm_id, vm_if_get_cpu_id};
-use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
+use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg, vm_if_get_cpu_id};
 use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcManageMsg};
 use crate::kernel::HVC_CONFIG;
 use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
@@ -39,7 +38,7 @@ fn vmm_shutdown_secondary_vm() {
  *
  * @param[in]  vm_id: new added VM id.
  */
-fn vmm_push_vm(vm_id: usize) -> Result<Vm, ()> {
+fn vmm_push_vm(vm_id: usize) -> Result<alloc::sync::Arc<Vm>, ()> {
     info!("vmm_push_vm: add vm {} on cpu {}", vm_id, current_cpu().id);
     let vm_cfg = match vm_cfg_entry(vm_id) {
         Some(vm_cfg) => vm_cfg,
@@ -58,16 +57,17 @@ fn vmm_push_vm(vm_id: usize) -> Result<Vm, ()> {
  */
 pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
-    if current_cpu().id == 0 || (active_vm_id() == 0 && active_vm_id() != vm_id) {
+    let current_vm_id = active_vm().unwrap().id();
+    if current_cpu().id == 0 || (current_vm_id == 0 && current_vm_id != vm_id) {
         if let Ok(vm) = vmm_push_vm(vm_id) {
-            vmm_setup_config(vm);
+            vmm_setup_config(&vm);
         } else {
             error!("VM[{}] alloc failed", vm_id);
         }
     } else {
         error!(
             "VM[{}] Core {} should not init VM [{}]",
-            active_vm_id(),
+            current_vm_id,
             current_cpu().id,
             vm_id
         );

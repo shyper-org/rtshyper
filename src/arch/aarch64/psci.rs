@@ -1,6 +1,6 @@
 use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
 use crate::board::PlatOperation;
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm, active_vm_id};
+use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
@@ -71,11 +71,12 @@ fn psci_guest_sys_reset() {
 }
 
 fn psci_guest_sys_off() {
-    if active_vm_id() == 0 {
+    let vm_id = active_vm().unwrap().id();
+    if vm_id == 0 {
         crate::board::Platform::sys_shutdown();
     } else {
-        info!("VM[{}] system off, please remove it on MVM", active_vm_id());
-        // vmm_remove_vm(active_vm_id());
+        info!("VM[{}] system off, please remove it on MVM", vm_id);
+        // vmm_remove_vm(vm_id);
     }
 }
 

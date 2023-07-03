@@ -7,8 +7,7 @@ use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext};
 use crate::device::{EmuDev, EmuDeviceType};
 use crate::device::Virtq;
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
-use crate::kernel::{active_vm, active_vm_id};
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, active_vm};
 use crate::kernel::Vm;
 
 use super::balloon::virtio_balloon_notify_handler;
@@ -180,7 +179,7 @@ impl VirtioInner {
 pub struct VirtioMmio(Arc<VirtioInner>);
 
 impl VirtioMmio {
-    pub fn notify_config(&self, vm: Vm) {
+    pub fn notify_config(&self, vm: &Vm) {
         let mut inner = self.0.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_CONFIG;
         let int_id = self.dev().int_id();
@@ -188,7 +187,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(&vm, vm.vcpu(0).unwrap(), int_id);
+            interrupt_vm_inject(vm, vm.vcpu(0).unwrap(), int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -197,7 +196,7 @@ impl VirtioMmio {
         }
     }
 
-    pub fn notify(&self, vm: Vm) {
+    pub fn notify(&self, vm: &Vm) {
         let mut inner = self.0.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_VRING;
         let int_id = self.dev().int_id();
@@ -205,7 +204,7 @@ impl VirtioMmio {
         drop(inner);
         use crate::kernel::interrupt_vm_inject;
         if trgt_id == current_cpu().id {
-            interrupt_vm_inject(&vm, vm.vcpu(0).unwrap(), int_id);
+            interrupt_vm_inject(vm, vm.vcpu(0).unwrap(), int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
@@ -421,10 +420,18 @@ fn virtio_mmio_prologue_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: 
                 mmio.set_dev_stat(value);
                 if mmio.dev_stat() == 0 {
                     mmio.dev_reset();
-                    info!("VM {} virtio device {:x} is reset", active_vm_id(), mmio.base());
+                    info!(
+                        "VM {} virtio device {:x} is reset",
+                        active_vm().unwrap().id(),
+                        mmio.base()
+                    );
                 } else if mmio.dev_stat() == 0xf {
                     mmio.dev().set_activated(true);
-                    info!("VM {} virtio device {:x} init ok", active_vm_id(), mmio.base());
+                    info!(
+                        "VM {} virtio device {:x} init ok",
+                        active_vm().unwrap().id(),
+                        mmio.base()
+                    );
                 }
             }
             _ => {
@@ -491,14 +498,14 @@ fn virtio_mmio_queue_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usi
                     if value == VIRTQ_READY {
                         info!(
                             "VM {} virtio device {:x} queue {} ready",
-                            active_vm_id(),
+                            active_vm().unwrap().id(),
                             mmio.base(),
                             q_sel
                         );
                     } else {
                         warn!(
                             "VM {} virtio device {:x} queue {} init failed",
-                            active_vm_id(),
+                            active_vm().unwrap().id(),
                             mmio.base(),
                             q_sel
                         );

@@ -7,7 +7,7 @@ use tock_registers::interfaces::*;
 use crate::arch::{
     ContextFrame, ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler, InterruptController,
 };
-use crate::kernel::{active_vm_id, current_cpu};
+use crate::kernel::{current_cpu, active_vm};
 use crate::kernel::interrupt_handler;
 
 use super::{interrupt_arch_deactive_irq, IntCtrl};
@@ -214,7 +214,7 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             panic!(
                 "core {} vm {}: handler not presents for EC_{} @ipa {:#x}, @pc {:#x}",
                 current_cpu().id,
-                active_vm_id(),
+                active_vm().unwrap().id(),
                 exception_class(),
                 exception_fault_addr(),
                 (*ctx).exception_pc()

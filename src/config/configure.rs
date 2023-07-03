@@ -706,7 +706,7 @@ pub fn vm_cfg_add_dtb_dev(
  * Set up GVM configuration;
  * Set VM kernel image load region;
  */
-fn vm_cfg_finish_configuration(vmid: usize, _img_size: usize) -> Vm {
+fn vm_cfg_finish_configuration(vmid: usize, _img_size: usize) -> alloc::sync::Arc<Vm> {
     // Set up GVM configuration.
     vmm_init_gvm(vmid);
 

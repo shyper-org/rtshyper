@@ -53,12 +53,12 @@ struct VringUsed {
 #[derive(Clone)]
 pub struct Virtq {
     vq_index: usize,
-    notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool,
+    notify_handler: fn(Virtq, VirtioMmio, Arc<Vm>) -> bool,
     inner: Arc<Mutex<VirtqInner<'static>>>,
 }
 
 impl Virtq {
-    pub fn new(vq_index: usize, notify_handler: fn(Virtq, VirtioMmio, Vm) -> bool) -> Virtq {
+    pub fn new(vq_index: usize, notify_handler: fn(Virtq, VirtioMmio, Arc<Vm>) -> bool) -> Virtq {
         Virtq {
             vq_index,
             notify_handler,

@@ -7,12 +7,12 @@ use spin::{Mutex, Lazy};
 
 use crate::arch::{ContextFrame, ContextFrameTrait, GicContext, VmContext, VM_IPA_SIZE};
 use crate::config::VmConfigEntry;
-use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state, active_vm_id};
+use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::util::memcpy_safe;
 
 #[cfg(any(feature = "memory-reservation"))]
 use super::vcpu_array::PmuTimerEvent;
-use super::{CpuState, Vm, WeakVm};
+use super::{CpuState, Vm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VcpuState {
@@ -68,13 +68,13 @@ impl MemoryBandwidth {
 
 struct VcpuConst {
     id: usize,      // vcpu_id
-    vm: WeakVm,     // weak pointer to related Vm
+    vm: Weak<Vm>,   // weak pointer to related Vm
     phys_id: usize, // related physical CPU id
 }
 
 #[allow(dead_code)]
 impl Vcpu {
-    pub(super) fn new(vm: WeakVm, vcpu_id: usize, phys_id: usize, config: &VmConfigEntry) -> Self {
+    pub(super) fn new(vm: Weak<Vm>, vcpu_id: usize, phys_id: usize, config: &VmConfigEntry) -> Self {
         #[cfg(any(feature = "memory-reservation"))]
         let inner = Arc::new_cyclic(|weak| VcpuInner {
             inner_const: VcpuConst {
@@ -114,7 +114,7 @@ impl Vcpu {
     //     println!(
     //         "Core {} (vm {} vcpu {}) shutdown ok",
     //         current_cpu().id,
-    //         active_vm_id(),
+    //         active_vm().unwrap().id(),
     //         active_vcpu_id()
     //     );
     //     Platform::cpu_shutdown();
@@ -220,8 +220,8 @@ impl Vcpu {
     }
 
     #[inline]
-    pub fn vm(&self) -> Option<Vm> {
-        self.0.inner_const.vm.get_vm()
+    pub fn vm(&self) -> Option<Arc<Vm>> {
+        self.0.inner_const.vm.upgrade()
     }
 
     #[inline]
@@ -394,10 +394,10 @@ pub fn vcpu_run(announce: bool) {
         let vcpu = current_cpu().active_vcpu.clone().unwrap();
         let vm = vcpu.vm().unwrap();
 
-        vm_if_set_state(active_vm_id(), super::VmState::Active);
+        vm_if_set_state(vm.id(), super::VmState::Active);
 
         if announce {
-            crate::device::virtio_net_announce(vm);
+            crate::device::virtio_net_announce(&vm);
         }
         // if the cpu is already running (a vcpu in scheduling queue),
         // just return, no `context_vm_entry` required
@@ -420,7 +420,7 @@ pub fn vcpu_run(announce: bool) {
     }
 }
 
-fn idle() -> ! {
+fn idle_thread() -> ! {
     loop {
         use crate::arch::ArchTrait;
         crate::arch::Arch::wait_for_interrupt();
@@ -435,7 +435,7 @@ static IDLE_THREAD: Lazy<IdleThread> = Lazy::new(|| {
     let mut ctx = ContextFrame::default();
     use cortex_a::registers::SPSR_EL2;
     ctx.spsr = (SPSR_EL2::M::EL2h + SPSR_EL2::F::Masked + SPSR_EL2::A::Masked + SPSR_EL2::D::Masked).value;
-    ctx.set_exception_pc(idle as usize);
+    ctx.set_exception_pc(idle_thread as usize);
     IdleThread { ctx }
 });
 

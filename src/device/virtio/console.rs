@@ -92,7 +92,7 @@ pub fn console_features() -> usize {
     VIRTIO_F_VERSION_1 | VIRTIO_CONSOLE_F_SIZE
 }
 
-pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> bool {
+pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
     if vq.vq_indx() % 4 != 1 {
         // println!("console rx queue notified!");
         return true;
@@ -151,7 +151,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: Vm) -> 
         return false;
     }
 
-    console.notify(vm);
+    console.notify(&vm);
 
     true
 }
@@ -263,6 +263,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    console.notify(trgt_vm);
+    console.notify(&trgt_vm);
     true
 }
