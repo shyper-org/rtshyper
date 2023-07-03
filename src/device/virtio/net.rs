@@ -179,7 +179,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<V
             idx = vq.desc_next(idx) as usize;
         }
         let ctrl = VirtioNetCtrlHdr::default();
-        out_iov.to_buf(&ctrl as *const _ as usize, size_of::<VirtioNetCtrlHdr>());
+        out_iov.copy_to_buf(&ctrl as *const _ as usize, size_of::<VirtioNetCtrlHdr>());
         match ctrl.class {
             VIRTIO_NET_CTRL_ANNOUNCE => {
                 let status: u8 = if ctrl.command == VIRTIO_NET_CTRL_ANNOUNCE_ACK {
@@ -195,7 +195,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<V
                 } else {
                     VIRTIO_NET_ERR
                 };
-                in_iov.from_buf(&status as *const _ as usize, size_of::<u8>());
+                in_iov.copy_from_buf(&status as *const _ as usize, size_of::<u8>());
             }
             _ => {
                 println!("Control queue header class can't match {}", ctrl.class);

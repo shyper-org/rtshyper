@@ -15,6 +15,7 @@ use crate::vmm::VmmEvent;
 use super::Vm;
 use super::interrupt_cpu_enable;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
     VgicdGichEn,
@@ -27,6 +28,7 @@ pub enum InitcEvent {
     VgicdRoute,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Copy, Clone)]
 pub enum PowerEvent {
     PsciIpiCpuOn,

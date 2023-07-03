@@ -57,8 +57,7 @@ fn vmm_push_vm(vm_id: usize) -> Result<alloc::sync::Arc<Vm>, ()> {
  */
 pub fn vmm_init_gvm(vm_id: usize) {
     // Before boot, we need to set up the VM config.
-    let current_vm_id = active_vm().unwrap().id();
-    if current_cpu().id == 0 || (current_vm_id == 0 && current_vm_id != vm_id) {
+    if current_cpu().id == 0 || (active_vm().unwrap().id() == 0 && active_vm().unwrap().id() != vm_id) {
         if let Ok(vm) = vmm_push_vm(vm_id) {
             vmm_setup_config(&vm);
         } else {
@@ -67,7 +66,7 @@ pub fn vmm_init_gvm(vm_id: usize) {
     } else {
         error!(
             "VM[{}] Core {} should not init VM [{}]",
-            current_vm_id,
+            active_vm().unwrap().id(),
             current_cpu().id,
             vm_id
         );

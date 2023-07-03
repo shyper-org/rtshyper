@@ -28,7 +28,7 @@ impl VirtioIov {
         self.vector[idx].buf
     }
 
-    pub fn to_buf(&self, addr: usize, len: usize) {
+    pub fn copy_to_buf(&self, addr: usize, len: usize) {
         let mut size = len;
         for iov_data in &self.vector {
             let offset = len - size;
@@ -43,7 +43,7 @@ impl VirtioIov {
         }
     }
 
-    pub fn from_buf(&self, addr: usize, len: usize) {
+    pub fn copy_from_buf(&mut self, addr: usize, len: usize) {
         let mut size = len;
         for iov_data in &self.vector {
             let offset = len - size;
