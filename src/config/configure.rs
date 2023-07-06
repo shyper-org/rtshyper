@@ -415,7 +415,7 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
 }
 
 /* Generate a new VM Config Entry, set basic value */
-pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
+pub fn add_vm(config_ipa: usize) -> Result<usize, ()> {
     let vm = active_vm().unwrap();
     let config_pa = vm.ipa2hva(config_ipa);
     let (
@@ -467,7 +467,7 @@ pub fn vm_cfg_add_vm(config_ipa: usize) -> Result<usize, ()> {
 }
 
 /* Delete a VM config entry */
-pub fn vm_cfg_del_vm(vmid: usize) -> Result<usize, ()> {
+pub fn del_vm(vmid: usize) -> Result<usize, ()> {
     let mut vm_config = DEF_VM_CONFIG_TABLE.lock();
     for (idx, vm_cfg_entry) in vm_config.entries.iter().enumerate() {
         if vm_cfg_entry.id == vmid {
@@ -484,7 +484,7 @@ pub fn vm_cfg_del_vm(vmid: usize) -> Result<usize, ()> {
 }
 
 /* Add VM memory region according to VM id */
-pub fn vm_cfg_add_mem_region(vmid: usize, ipa_start: usize, length: usize) -> Result<usize, ()> {
+pub fn add_mem_region(vmid: usize, ipa_start: usize, length: usize) -> Result<usize, ()> {
     vm_cfg_editor(vmid, |vm_cfg| {
         vm_cfg.add_memory_cfg(ipa_start, length);
         println!(
@@ -496,7 +496,7 @@ pub fn vm_cfg_add_mem_region(vmid: usize, ipa_start: usize, length: usize) -> Re
 }
 
 /* Set VM cpu config according to VM id */
-pub fn vm_cfg_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: usize) -> Result<usize, ()> {
+pub fn set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: usize) -> Result<usize, ()> {
     vm_cfg_editor(vmid, |vm_cfg| {
         vm_cfg.set_cpu_cfg(num, allocate_bitmap, master);
 
@@ -513,7 +513,7 @@ pub fn vm_cfg_set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: u
 }
 
 /* Add emulated device config for VM */
-pub fn vm_cfg_add_emu_dev(
+pub fn add_emu_dev(
     vmid: usize,
     name_ipa: usize,
     base_ipa: usize,
@@ -581,12 +581,7 @@ pub fn vm_cfg_add_emu_dev(
 }
 
 /* Add passthrough device config region for VM */
-pub fn vm_cfg_add_passthrough_device_region(
-    vmid: usize,
-    base_ipa: usize,
-    base_pa: usize,
-    length: usize,
-) -> Result<usize, ()> {
+pub fn add_passthrough_device_region(vmid: usize, base_ipa: usize, base_pa: usize, length: usize) -> Result<usize, ()> {
     // Get VM config entry.
     vm_cfg_editor(vmid, |vm_cfg| {
         println!(
@@ -603,7 +598,7 @@ pub fn vm_cfg_add_passthrough_device_region(
 }
 
 /* Add passthrough device config irqs for VM */
-pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irqs_length: usize) -> Result<usize, ()> {
+pub fn add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irqs_length: usize) -> Result<usize, ()> {
     println!(
         "\nVM[{}] vm_cfg_add_pt_dev irqs:\n     base_ipa {:x} length {:x}",
         vmid, irqs_base_ipa, irqs_length
@@ -622,7 +617,7 @@ pub fn vm_cfg_add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irq
 }
 
 /* Add passthrough device config streams ids for VM */
-pub fn vm_cfg_add_passthrough_device_streams_ids(
+pub fn add_passthrough_device_streams_ids(
     vmid: usize,
     streams_ids_base_ipa: usize,
     streams_ids_length: usize,
@@ -646,7 +641,7 @@ pub fn vm_cfg_add_passthrough_device_streams_ids(
 }
 
 /* Add device tree device config for VM */
-pub fn vm_cfg_add_dtb_dev(
+pub fn add_dtb_dev(
     vmid: usize,
     name_ipa: usize,
     dev_type: usize,
@@ -701,6 +696,30 @@ pub fn vm_cfg_add_dtb_dev(
     })
 }
 
+pub fn set_memory_color_budget(
+    vmid: usize,
+    color_num: usize,
+    color_array_addr: usize,
+    budget: usize,
+    period: usize,
+) -> Result<usize, ()> {
+    vm_cfg_editor(vmid, |vm_cfg| {
+        let color_array_hva = active_vm().unwrap().ipa2hva(color_array_addr);
+        let color_array = unsafe { core::slice::from_raw_parts(color_array_hva as *const _, color_num) };
+        vm_cfg.memory.colors.extend_from_slice(color_array);
+        println!("VM[{vmid}] memory colors {:?}", vm_cfg.memory.colors);
+        if budget != 0 {
+            vm_cfg.memory.budget = budget as u32;
+            println!("VM[{vmid}] memory budget {}", vm_cfg.memory.budget);
+        }
+        if period != 0 {
+            vm_cfg.memory.period = period as u64;
+            println!("VM[{vmid}] memory period {}", vm_cfg.memory.period);
+        }
+        Ok(0)
+    })
+}
+
 /**
  * Final Step for GVM configuration.
  * Set up GVM configuration;
@@ -724,7 +743,7 @@ fn vm_cfg_finish_configuration(vmid: usize, _img_size: usize) -> alloc::sync::Ar
  * Load kernel image file from MVM user space.
  * It's the last step in GVM configuration.
  */
-pub fn vm_cfg_upload_kernel_image(
+pub fn upload_kernel_image(
     vmid: usize,
     img_size: usize,
     cache_ipa: usize,

@@ -1,5 +1,4 @@
 use crate::arch::{interrupt_arch_deactive_irq, INTERRUPT_IRQ_GUEST_TIMER};
-use crate::config::vm_cfg_del_vm;
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_vm, remove_vm_async_task,
     Vm, cpu_idle, vm, interrupt_cpu_enable,
@@ -27,7 +26,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     remove_vm_async_task(vm_id);
     crate::device::remove_virtio_nic(vm_id);
     // remove vm cfg
-    let _ = vm_cfg_del_vm(vm_id);
+    let _ = crate::config::del_vm(vm_id);
     #[cfg(feature = "unilib")]
     // remove vm unilib
     crate::util::unilib::unilib_fs_remove(vm_id);

@@ -5,7 +5,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use spin::{Mutex, Lazy};
 
-use crate::arch::{ContextFrame, ContextFrameTrait, GicContext, VmContext, VM_IPA_SIZE};
+use crate::arch::{ContextFrame, ContextFrameTrait, VmContext, VM_IPA_SIZE};
 use crate::config::VmConfigEntry;
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::util::memcpy_safe;
@@ -345,11 +345,10 @@ impl Vcpu {
 }
 
 pub struct VcpuInnerMut {
-    pub state: VcpuState,
-    pub int_list: Vec<usize>,
+    state: VcpuState,
+    int_list: Vec<usize>,
     pub vcpu_ctx: ContextFrame,
-    pub vm_ctx: VmContext,
-    pub gic_ctx: GicContext,
+    vm_ctx: VmContext,
 }
 
 impl VcpuInnerMut {
@@ -359,7 +358,6 @@ impl VcpuInnerMut {
             int_list: vec![],
             vcpu_ctx: ContextFrame::default(),
             vm_ctx: VmContext::default(),
-            gic_ctx: GicContext::default(),
         }
     }
 

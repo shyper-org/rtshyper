@@ -118,6 +118,7 @@ pub fn mvm_config_init() {
         memory: VmMemoryConfig {
             region: vm_region,
             colors: HYPERVISOR_COLORS.get().unwrap().clone(),
+            ..Default::default()
         },
         vm_emu_dev_confg: VmEmulatedDeviceConfigList { emu_dev_list: emu_dev_config },
         vm_pt_dev_confg: pt_dev_config,

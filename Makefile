@@ -4,6 +4,7 @@ DISK = ../rust_hypervisor/vm0.img
 # Compile
 ARCH ?= aarch64
 PROFILE ?= release
+BOARD ?= tx2
 # features, seperate with comma `,`
 FEATURES =
 
@@ -19,31 +20,31 @@ IMAGE=rtshyper_rs
 TARGET_DIR=target/${ARCH}/${PROFILE}
 
 # Cargo flags.
+CARGO_FLAGS ?= --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
 ifeq (${PROFILE}, release)
-CARGO_FLAGS := ${CARGO_FLAGS} --release --no-default-features
-else
-CARGO_FLAGS := ${CARGO_FLAGS} --no-default-features
+CARGO_FLAGS := ${CARGO_FLAGS} --release
 endif
 
-.PHONY: qemu tx2 pi4 clippy fmt run debug clean gdb
+.PHONY: build qemu tx2 pi4 clippy fmt run debug clean gdb
+
+build:
+	cargo build ${CARGO_FLAGS}
+	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 qemu:
-	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@
+	$(MAKE) build BOARD=qemu
 	${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 tx2:
-	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@,${FEATURES}
+	$(MAKE) build BOARD=tx2
 	bash upload ${PROFILE}
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 pi4:
-	cargo build --target ${ARCH}.json ${CARGO_FLAGS} --features $@
+	$(MAKE) build BOARD=pi4
 	bash pi4_upload ${PROFILE}
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 clippy:
-	cargo clippy --target ${ARCH}.json ${CARGO_FLAGS} --features tx2 # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
+	cargo clippy ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
 	cargo fmt
 
 fmt:

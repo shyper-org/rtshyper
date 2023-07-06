@@ -4,7 +4,6 @@ use core::mem::size_of;
 use spin::Mutex;
 
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
-use crate::config::*;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
     active_vm, current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage,
@@ -111,6 +110,7 @@ pub const HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS: usize = 6;
 pub const HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS: usize = 7;
 pub const HVC_CONFIG_DTB_DEVICE: usize = 8;
 pub const HVC_CONFIG_UPLOAD_KERNEL_IMAGE: usize = 9;
+pub const HVC_CONFIG_MEMORY_COLOR_BUDGET: usize = 10;
 
 #[cfg(feature = "tx2")]
 pub const HVC_IRQ: usize = 32 + 0x20;
@@ -216,17 +216,19 @@ fn hvc_config_handler(
     x5: usize,
     x6: usize,
 ) -> Result<usize, ()> {
+    use crate::config;
     match event {
-        HVC_CONFIG_ADD_VM => vm_cfg_add_vm(x0),
-        HVC_CONFIG_DELETE_VM => vm_cfg_del_vm(x0),
-        HVC_CONFIG_CPU => vm_cfg_set_cpu(x0, x1, x2, x3),
-        HVC_CONFIG_MEMORY_REGION => vm_cfg_add_mem_region(x0, x1, x2),
-        HVC_CONFIG_EMULATED_DEVICE => vm_cfg_add_emu_dev(x0, x1, x2, x3, x4, x5, x6),
-        HVC_CONFIG_PASSTHROUGH_DEVICE_REGION => vm_cfg_add_passthrough_device_region(x0, x1, x2, x3),
-        HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS => vm_cfg_add_passthrough_device_irqs(x0, x1, x2),
-        HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS => vm_cfg_add_passthrough_device_streams_ids(x0, x1, x2),
-        HVC_CONFIG_DTB_DEVICE => vm_cfg_add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
-        HVC_CONFIG_UPLOAD_KERNEL_IMAGE => vm_cfg_upload_kernel_image(x0, x1, x2, x3, x4),
+        HVC_CONFIG_ADD_VM => config::add_vm(x0),
+        HVC_CONFIG_DELETE_VM => config::del_vm(x0),
+        HVC_CONFIG_CPU => config::set_cpu(x0, x1, x2, x3),
+        HVC_CONFIG_MEMORY_REGION => config::add_mem_region(x0, x1, x2),
+        HVC_CONFIG_EMULATED_DEVICE => config::add_emu_dev(x0, x1, x2, x3, x4, x5, x6),
+        HVC_CONFIG_PASSTHROUGH_DEVICE_REGION => config::add_passthrough_device_region(x0, x1, x2, x3),
+        HVC_CONFIG_PASSTHROUGH_DEVICE_IRQS => config::add_passthrough_device_irqs(x0, x1, x2),
+        HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS => config::add_passthrough_device_streams_ids(x0, x1, x2),
+        HVC_CONFIG_DTB_DEVICE => config::add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
+        HVC_CONFIG_UPLOAD_KERNEL_IMAGE => config::upload_kernel_image(x0, x1, x2, x3, x4),
+        HVC_CONFIG_MEMORY_COLOR_BUDGET => config::set_memory_color_budget(x0, x1, x2, x3, x4),
         _ => {
             println!("hvc_config_handler unknown event {}", event);
             Err(())
