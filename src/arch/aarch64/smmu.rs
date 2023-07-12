@@ -389,7 +389,7 @@ impl SmmuV2 {
         rs0.NSGFSR.set(rs0.NSGFSR.get());
 
         let stage2_context_bank_num = bit_extract(idr1, SMMUV2_IDR1_NUMS2CB_OFF, SMMUV2_IDR1_NUMS2CB_LEN);
-        println!(
+        info!(
             concat!(
                 "SMMU info:\n",
                 "  page size {:#x}, num pages {}, context base {:#x}\n",

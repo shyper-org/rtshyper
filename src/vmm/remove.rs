@@ -64,6 +64,6 @@ fn vmm_remove_vcpu(vm: &Vm) {
 fn vmm_remove_passthrough_device(vm: &Vm) {
     for irq in vm.config().passthrough_device_irqs() {
         interrupt_vm_remove(vm, *irq);
-        // println!("VM[{}] remove irq {}", vm.id(), irq);
+        debug!("VM[{}] remove irq {}", vm.id(), irq);
     }
 }

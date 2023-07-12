@@ -199,7 +199,6 @@ impl FlexBitmap {
                 return first;
             }
         }
-        println!("all is 0");
         first
     }
 }

@@ -31,7 +31,7 @@ pub enum VmmEvent {
 }
 
 fn vmm_shutdown_secondary_vm() {
-    println!("Shutting down all VMs...");
+    info!("Shutting down all VMs...");
 }
 
 /* Generate VM structure and push it to VM.
@@ -43,7 +43,7 @@ fn vmm_push_vm(vm_id: usize) -> Result<alloc::sync::Arc<Vm>, ()> {
     let vm_cfg = match vm_cfg_entry(vm_id) {
         Some(vm_cfg) => vm_cfg,
         None => {
-            println!("vmm_push_vm: failed to find config for vm {}", vm_id);
+            error!("vmm_push_vm: failed to find config for vm {}", vm_id);
             return Err(());
         }
     };
@@ -79,19 +79,14 @@ pub fn vmm_init_gvm(vm_id: usize) {
  */
 pub fn vmm_boot_vm(vm_id: usize) {
     if let Some(phys_id) = vm_if_get_cpu_id(vm_id) {
-        // println!(
-        //     "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
-        //     current_cpu().id,
-        //     vm_id,
-        //     phys_id
-        // );
+        trace!("vmm_boot_vm: target vm {} get phys_id {}", vm_id, phys_id);
         if phys_id != current_cpu().id {
             let m = IpiVmmMsg {
                 vmid: vm_id,
                 event: VmmEvent::VmmBoot,
             };
             if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
+                error!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
             }
         } else {
             match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
@@ -129,7 +124,7 @@ pub fn vmm_reboot_vm(arg: usize) {
     let force = bit_extract(arg, 16, 16) != 0;
     let cur_vm = active_vm().unwrap();
 
-    println!("vmm_reboot VM [{}] force:{}", vm_id, force);
+    info!("vmm_reboot VM [{}] force:{}", vm_id, force);
 
     if force {
         if cur_vm.id() == vm_id {
@@ -141,7 +136,7 @@ pub fn vmm_reboot_vm(arg: usize) {
                 event: VmmEvent::VmmReboot,
             };
             if !ipi_send_msg(cpu_trgt, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                println!("vmm_reboot_vm: failed to send ipi to Core {}", cpu_trgt);
+                error!("vmm_reboot_vm: failed to send ipi to Core {}", cpu_trgt);
             }
         }
         return;
@@ -153,7 +148,7 @@ pub fn vmm_reboot_vm(arg: usize) {
         vm_id,
     };
     if !hvc_send_msg_to_vm(vm_id, &HvcGuestMsg::Manage(msg)) {
-        println!("vmm_reboot_vm: failed to notify VM 0");
+        error!("vmm_reboot_vm: failed to notify VM 0");
     }
 }
 
@@ -172,9 +167,9 @@ pub fn vmm_reboot() {
 
     // Reset GVM.
     let vcpu = current_cpu().active_vcpu.as_ref().unwrap();
-    println!("VM [{}] reset...", vm.id());
+    info!("VM [{}] reset...", vm.id());
     power_arch_vm_shutdown_secondary_cores(&vm);
-    println!(
+    info!(
         "Core {} (VM [{}] vcpu {}) shutdown ok",
         current_cpu().id,
         vm.id(),
@@ -182,7 +177,7 @@ pub fn vmm_reboot() {
     );
 
     // Clear memory region.
-    println!(
+    info!(
         "Core {} (VM [{}] vcpu {}) reset mem region",
         current_cpu().id,
         vm.id(),
@@ -213,9 +208,9 @@ fn vmm_load_image_from_mvm(vm: &Vm) {
         event: HVC_CONFIG_UPLOAD_KERNEL_IMAGE,
         vm_id,
     };
-    // println!("mediated_blk_write send msg to vm0");
+    trace!("mediated_blk_write send msg to vm0");
     if !hvc_send_msg_to_vm(0, &HvcGuestMsg::Manage(msg)) {
-        println!("vmm_load_image_from_mvm: failed to notify VM 0");
+        error!("vmm_load_image_from_mvm: failed to notify VM 0");
     }
 }
 
@@ -227,7 +222,7 @@ pub fn get_vm_id(id_ipa: usize) -> bool {
     let vm = active_vm().unwrap();
     let id_pa = vm.ipa2hva(id_ipa);
     if id_pa == 0 {
-        println!("illegal id_pa {:x}", id_pa);
+        error!("illegal id_pa {:x}", id_pa);
         return false;
     }
     unsafe {
@@ -249,7 +244,7 @@ struct VMInfoList {
 pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
     let vm_info_pa = active_vm().unwrap().ipa2hva(vm_info_ipa);
     if vm_info_pa == 0 {
-        println!("illegal vm_info_ipa {:x}", vm_info_ipa);
+        error!("illegal vm_info_ipa {:x}", vm_info_ipa);
         return Err(());
     }
 
@@ -263,7 +258,7 @@ pub fn vmm_list_vm(vm_info_ipa: usize) -> Result<usize, ()> {
         let vm = match vm(vmid) {
             Some(vm) => vm,
             None => {
-                println!("Failed to get VM config entry for VM[{}]", vmid);
+                error!("Failed to get VM config entry for VM[{}]", vmid);
                 continue;
             }
         };
@@ -296,7 +291,7 @@ pub fn vmm_ipi_handler(msg: IpiMessage) {
                 vmm_reboot();
             }
             VmmEvent::VmmAssignCpu => {
-                println!(
+                debug!(
                     "vmm_ipi_handler: core {} receive assign vcpu request for vm[{}]",
                     current_cpu().id,
                     vmm.vmid
@@ -304,7 +299,7 @@ pub fn vmm_ipi_handler(msg: IpiMessage) {
                 vmm_cpu_assign_vcpu(vmm.vmid);
             }
             VmmEvent::VmmRemoveCpu => {
-                println!(
+                debug!(
                     "vmm_ipi_handler: core {} remove vcpu for vm[{}]",
                     current_cpu().id,
                     vmm.vmid
@@ -332,7 +327,7 @@ pub fn vmm_ipi_handler(msg: IpiMessage) {
             }
         },
         _ => {
-            println!("vmm_ipi_handler: illegal ipi type");
+            error!("vmm_ipi_handler: illegal ipi type");
         }
     }
 }

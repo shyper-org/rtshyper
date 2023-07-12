@@ -431,7 +431,7 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
             event,
         };
         if !ipi_send_msg(cpu_trgt, IpiType::IpiTHvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
-            println!(
+            error!(
                 "hvc_send_msg_to_vm: Failed to send ipi message, target {} type {:#?}",
                 cpu_trgt,
                 IpiType::IpiTHvc
@@ -525,7 +525,7 @@ pub fn send_hvc_ipi(src_vmid: usize, trgt_vmid: usize, fid: usize, event: usize,
         event,
     };
     if !ipi_send_msg(trgt_cpuid, IpiType::IpiTHvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
-        println!(
+        error!(
             "send_hvc_ipi: Failed to send ipi message, target {} type {:#?}",
             0,
             IpiType::IpiTHvc

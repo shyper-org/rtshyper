@@ -15,8 +15,8 @@ pub fn heap_init() {
     static mut HEAP_REGION: HeapRegion = HeapRegion([0; HEAP_SIZE]);
 
     unsafe {
-        println!(
-            ">>> init buddy system: {:#p}..{:#p}",
+        info!(
+            "init buddy system: {:#p}..{:#p}",
             HEAP_REGION.0.as_ptr_range().start,
             HEAP_REGION.0.as_ptr_range().end
         );

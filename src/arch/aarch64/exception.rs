@@ -77,7 +77,7 @@ pub fn exception_fault_addr() -> usize {
     let far = exception_far();
     let hpfar = if (exception_esr() & ESR_ELx_S1PTW) == 0 && exception_data_abort_is_permission_fault() {
         translate_far_to_hpfar(far).unwrap_or_else(|_| {
-            println!("error happen in translate_far_to_hpfar");
+            error!("error happen in translate_far_to_hpfar");
             0
         })
     } else {
@@ -166,7 +166,7 @@ extern "C" fn current_el_sp0_serror() {
 #[no_mangle]
 #[inline(never)]
 extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
-    println!("{}", unsafe { *ctx });
+    info!("{}", unsafe { *ctx });
     panic!(
         "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
         current_cpu().id,
@@ -179,7 +179,7 @@ extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
 
 #[no_mangle]
 extern "C" fn current_el_spx_irq(ctx: *mut ContextFrame) {
-    // println!(">>> core {} current_el_spx_irq", current_cpu().id);
+    trace!(">>> core {} current_el_spx_irq", current_cpu().id);
     lower_aarch64_irq(ctx);
 }
 
@@ -190,11 +190,11 @@ extern "C" fn current_el_spx_serror() {
 
 #[no_mangle]
 extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
-    // println!("lower_aarch64_synchronous");
+    trace!("lower_aarch64_synchronous");
     let prev_ctx = current_cpu().set_ctx(ctx);
     match exception_class() {
         0x24 => {
-            // println!("Core[{}] data_abort_handler", cpu_id());
+            trace!("Core[{}] data_abort_handler", current_cpu().id);
             data_abort_handler();
         }
         0x17 => {
@@ -205,7 +205,7 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
         }
         0x18 => sysreg_handler(exception_iss() as u32),
         _ => unsafe {
-            println!(
+            info!(
                 "x0 {:x}, x1 {:x}, x29 {:x}",
                 (*ctx).gpr(0),
                 (*ctx).gpr(1),

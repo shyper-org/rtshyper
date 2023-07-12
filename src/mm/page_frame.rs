@@ -61,7 +61,7 @@ impl PageFrame {
 
 impl Drop for PageFrame {
     fn drop(&mut self) {
-        // println!("<<< free page frame {:#x}, {}", self.pa, self.page_num);
+        trace!("<<< free page frame {:#x}, {}", self.pa, self.page_num);
         let layout = Layout::from_size_align(self.page_num * PAGE_SIZE, PAGE_SIZE).unwrap();
         unsafe { HEAP_ALLOCATOR.dealloc(self.hva as *mut _, layout) }
     }

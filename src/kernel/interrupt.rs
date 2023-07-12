@@ -34,11 +34,11 @@ pub fn interrupt_irqchip_init() {
 }
 
 pub fn interrupt_vm_register(vm: &Vm, id: usize, hw: bool) -> bool {
-    // println!("VM {} register interrupt {}", vm.id(), id);
+    trace!("VM {} register interrupt {}", vm.id(), id);
     if hw {
         let mut glb_bitmap_lock = INTERRUPT_GLB_BITMAP.lock();
         if glb_bitmap_lock.get(id) != 0 && id >= GIC_PRIVINT_NUM {
-            println!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);
+            error!("interrupt_vm_register: VM {} interrupts conflict, id = {}", vm.id(), id);
             return false;
         }
         glb_bitmap_lock.set(id);
@@ -61,7 +61,7 @@ pub fn interrupt_vm_remove(_vm: &Vm, id: usize) {
 
 pub fn interrupt_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize) {
     if vcpu.phys_id() != current_cpu().id {
-        println!(
+        error!(
             "interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})",
             current_cpu().id,
             vcpu.id(),
@@ -107,7 +107,7 @@ pub fn interrupt_handler(int_id: usize) -> bool {
         }
     }
 
-    println!(
+    error!(
         "interrupt_handler: core {} receive unsupported int {}",
         current_cpu().id,
         int_id

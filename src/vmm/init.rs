@@ -64,7 +64,7 @@ fn vmm_init_memory(vm: &Vm) -> bool {
                 vm.append_color_regions(vm_color_regions);
             }
             Err(_) => {
-                println!(
+                error!(
                     "vmm_init_memory: mem_vm_region_alloc_by_colors failed, length {}, color bitmap {:#x}",
                     vm_region.length,
                     config.memory_color_bitmap()
@@ -87,7 +87,7 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
     let config = vm.config();
 
     if config.kernel_load_ipa() == 0 {
-        println!("vmm_init_image: kernel load ipa is null");
+        error!("vmm_init_image: kernel load ipa is null");
         return false;
     }
 
@@ -99,13 +99,13 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
                 #[cfg(feature = "tx2")]
                 {
                     if name == "L4T" {
-                        println!("MVM {} loading Image", vm.id());
+                        info!("MVM {} loading Image", vm.id());
                         vmm_load_image(vm, include_bytes!("../../image/L4T"));
                     } else {
                         cfg_if::cfg_if! {
                             if #[cfg(feature = "static-config")] {
                                 if name == "Image_vanilla" {
-                                    println!("VM {} loading default Linux Image", vm.id());
+                                    info!("VM {} loading default Linux Image", vm.id());
                                     vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
                                 } else {
                                     warn!("Image {} is not supported", name);
@@ -168,7 +168,7 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
             }
         }
     } else {
-        println!("VM {} id {} device tree load ipa is not set", vm_id, vm.config().name);
+        warn!("VM {} id {} device tree load ipa is not set", vm_id, vm.config().name);
     }
 
     // ...
@@ -176,7 +176,7 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
     // ...
     #[cfg(feature = "ramdisk")]
     if config.ramdisk_load_ipa() != 0 {
-        println!("VM {} use ramdisk CPIO_RAMDISK", vm_id);
+        info!("VM {} use ramdisk CPIO_RAMDISK", vm_id);
         copy_segment_to_vm(vm, config.ramdisk_load_ipa(), CPIO_RAMDISK);
     }
 
@@ -218,7 +218,7 @@ fn vmm_init_hardware(vm: &Vm) -> bool {
  * @param[in] vm_id: target VM id to set up config.
  */
 pub fn vmm_setup_config(vm: &Vm) {
-    println!(
+    info!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
         vm.id(),
         vm.config().name,
@@ -243,8 +243,8 @@ pub fn vmm_setup_config(vm: &Vm) {
 
 fn vmm_init_cpu(vm: &Vm) {
     let vm_id = vm.id();
-    println!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
-    println!(
+    info!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
+    info!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
         vm.id(),
         vm.config().cpu_num(),
@@ -259,13 +259,13 @@ fn vmm_init_cpu(vm: &Vm) {
                 event: VmmEvent::VmmAssignCpu,
             };
             if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-                println!("vmm_init_cpu: failed to send ipi to Core {}", target_cpu_id);
+                error!("vmm_init_cpu: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
             vmm_cpu_assign_vcpu(vm_id);
         }
     }
-    println!("vmm_init_cpu: VM [{}] is ready", vm_id);
+    info!("vmm_init_cpu: VM [{}] is ready", vm_id);
 }
 
 pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
@@ -279,9 +279,9 @@ pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     for vcpu in vm.vcpu_list() {
         if vcpu.phys_id() == current_cpu().id {
             if vcpu.id() == 0 {
-                println!("* Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
+                info!("* Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
             } else {
-                println!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
+                info!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
             }
             current_cpu().vcpu_array.append_vcpu(vcpu.clone());
             break;

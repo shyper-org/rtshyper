@@ -738,7 +738,7 @@ impl Vgic {
                         val: en as u8,
                     };
                     if !ipi_send_msg(int_phys_id, IpiType::IpiTIntc, IpiInnerMsg::Initc(ipi_msg)) {
-                        println!(
+                        error!(
                             "vgicd_set_enable: Failed to send ipi message, target {} type {}",
                             int_phys_id, 0
                         );
@@ -798,7 +798,7 @@ impl Vgic {
 
                         drop(interrupt_lock);
                         if !ipi_send_msg(phys_id, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
-                            println!(
+                            error!(
                                 "vgicd_set_pend: Failed to send ipi message, target {} type {}",
                                 phys_id, 0
                             );
@@ -847,7 +847,7 @@ impl Vgic {
                 };
                 let phys_id = interrupt.owner_phys_id().unwrap();
                 if !ipi_send_msg(phys_id, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
-                    println!(
+                    error!(
                         "vgicd_set_active: Failed to send ipi message, target {} type {}",
                         phys_id, 0
                     );
@@ -878,7 +878,7 @@ impl Vgic {
                     IpiType::IpiTIntc,
                     IpiInnerMsg::Initc(m),
                 ) {
-                    println!(
+                    error!(
                         "set_icfgr: Failed to send ipi message, target {} type {}",
                         interrupt.owner_phys_id().unwrap(),
                         0
@@ -982,7 +982,7 @@ impl Vgic {
                     IpiType::IpiTIntc,
                     IpiInnerMsg::Initc(m),
                 ) {
-                    println!(
+                    error!(
                         "set_prio: Failed to send ipi message, target {} type {}",
                         interrupt.owner_phys_id().unwrap(),
                         0
@@ -1030,7 +1030,7 @@ impl Vgic {
                     IpiType::IpiTIntc,
                     IpiInnerMsg::Initc(m),
                 ) {
-                    println!(
+                    error!(
                         "set_trgt: Failed to send ipi message, target {} type {}",
                         interrupt.owner_phys_id().unwrap(),
                         0
@@ -1416,7 +1416,7 @@ impl Vgic {
                             val: true as u8,
                         };
                         if !ipi_send_msg(i, IpiType::IpiTIntc, IpiInnerMsg::Initc(m)) {
-                            println!(
+                            error!(
                                 "emu_sgiregs_access: Failed to send ipi message, target {} type {}",
                                 i, 0
                             );

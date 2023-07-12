@@ -81,9 +81,10 @@ impl VirtioIov {
             }
         }
 
-        println!("iov get_ptr failed");
-        println!("get_ptr iov {:#?}", self.vector);
-        println!("size {}, idx {}", size, idx);
+        error!(
+            "iov get_ptr failed, get_ptr iov {:#?} size {}, idx {}",
+            self.vector, size, idx
+        );
         &[0]
     }
 
@@ -95,10 +96,6 @@ impl VirtioIov {
         let mut dst_vlen_remain = dst.get_len(0);
         let mut src_vlen_remain = self.vector[0].len;
         let mut remain = remain;
-        // println!(
-        //     "dst_vlen_remain {}, src_vlen_remain {}, remain {}",
-        //     dst_vlen_remain, src_vlen_remain, remain
-        // );
 
         while remain > 0 {
             if dst_iov_idx == dst.num() || src_iov_idx == self.vector.len() {
@@ -145,10 +142,6 @@ impl VirtioIov {
                     }
                 }
             }
-            // if remain < written {
-            //     println!("remain {} less than writter {}", remain, written);
-            //     return 1;
-            // }
             remain -= written;
         }
 

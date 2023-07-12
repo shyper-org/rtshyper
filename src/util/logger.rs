@@ -32,18 +32,19 @@ impl log::Log for SimpleLogger {
             // print!("[{:04}.{:03}]", s, ms);
 
             let level = match record.level() {
-                Level::Error => "[E]",
-                Level::Warn => "[W]",
-                Level::Info => "[I]",
-                Level::Debug => "[D]",
-                Level::Trace => "[T]",
+                Level::Error => "E>",
+                Level::Warn => "W>",
+                Level::Info => "I>",
+                Level::Debug => "D>",
+                Level::Trace => "T>",
             };
             println!(
                 "{}",
                 with_color!(
                     level2color(record.level()),
-                    "{}[{}] {}",
+                    "{}{}[{}] {}",
                     level,
+                    crate::kernel::current_cpu().id,
                     record.target(),
                     record.args()
                 )

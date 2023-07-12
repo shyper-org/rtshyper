@@ -10,7 +10,7 @@ pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
     let cfg_pa = vm.ipa2hva(cfg_ipa);
 
     if receive_pa == 0 {
-        println!("ivc_update_mq: invalid receive_pa");
+        error!("ivc_update_mq: invalid receive_pa");
         return false;
     }
 
@@ -20,7 +20,7 @@ pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
     let idx = 0;
     let val = vm_id;
     current_cpu().set_gpr(idx, val);
-    // println!("VM {} update message", vm_id);
+    trace!("VM {} update message", vm_id);
     true
 }
 

@@ -465,7 +465,6 @@ impl Vm {
     }
 
     pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
-        // println!("vcpuid_to_pcpuid");
         if let Some(vcpu) = self.vcpu_list().get(vcpuid) {
             Ok(vcpu.phys_id())
         } else {
@@ -531,21 +530,21 @@ impl Vm {
     // Only used in Vcpu::context_vm_store
     pub(super) fn update_vtimer(&self) {
         let mut inner = self.inner_mut.lock();
-        // println!(">>> update_vtimer: VM[{}] running {}", inner.id, inner.running);
+        trace!(">>> update_vtimer: VM[{}] running {}", self.id(), inner.running);
         inner.running -= 1;
         if inner.running == 0 {
             inner.vtimer = timer_arch_get_counter() - inner.vtimer_offset;
-            // info!("VM[{}] set vtimer {:#x}", inner.id, inner.vtimer);
+            trace!("VM[{}] set vtimer {:#x}", self.id(), inner.vtimer);
         }
     }
 
     // Only used in Vcpu::context_vm_restore
     pub(super) fn update_vtimer_offset(&self) -> usize {
         let mut inner = self.inner_mut.lock();
-        // println!(">>> update_vtimer_offset: VM[{}] running {}", inner.id, inner.running);
+        trace!(">>> update_vtimer_offset: VM[{}] running {}", self.id(), inner.running);
         if inner.running == 0 {
             inner.vtimer_offset = timer_arch_get_counter() - inner.vtimer;
-            // info!("VM[{}] set offset {:#x}", inner.id, inner.vtimer_offset);
+            trace!("VM[{}] set offset {:#x}", self.id(), inner.vtimer_offset);
         }
         inner.running += 1;
         inner.vtimer_offset
@@ -555,7 +554,7 @@ impl Vm {
         let mask = (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1;
         let prefix = mask << VM_IPA_SIZE;
         if ipa == 0 || ipa & prefix != 0 {
-            println!("ipa2hva: VM {} access invalid ipa {:x}", self.id(), ipa);
+            error!("ipa2hva: VM {} access invalid ipa {:x}", self.id(), ipa);
             return 0;
         }
         let prefix = prefix - ((self.id() & mask) << VM_IPA_SIZE);
@@ -646,7 +645,7 @@ pub fn vm_id_list() -> Vec<usize> {
 pub fn push_vm(id: usize, config: VmConfigEntry) -> Result<Arc<Vm>, ()> {
     let mut vm_list = VM_LIST.lock();
     if id >= CONFIG_VM_NUM_MAX || vm_list.iter().any(|x| x.id() == id) {
-        println!("push_vm: vm {} already exists", id);
+        error!("push_vm: vm {} already exists", id);
         Err(())
     } else {
         let vm = Vm::new(id, config);

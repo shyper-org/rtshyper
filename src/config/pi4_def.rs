@@ -14,7 +14,7 @@ use super::{
 
 #[rustfmt::skip]
 pub fn mvm_config_init() {
-    println!("mvm_config_init() init config for VM0, which is manager VM");
+    info!("mvm_config_init() init config for VM0, which is manager VM");
 
     // vm0 emu
     let emu_dev_config = vec![

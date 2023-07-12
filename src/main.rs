@@ -48,10 +48,10 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     if cpu_id == 0 {
         driver::init();
         banner::init();
-        println!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
-        println!("Built At {}", env!("BUILD_TIME"));
-
         util::logger::logger_init().unwrap();
+        info!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
+        info!("Built At {}", env!("BUILD_TIME"));
+
         mm::init(); // including heap and hypervisor VA space
         physical_mem_init();
         dtb::init_vm0_dtb(dtb);
@@ -65,7 +65,7 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     kernel::hypervisor_self_coloring();
     if cpu_id == 0 {
         vm_init();
-        println!(
+        info!(
             "{} Hypervisor init ok\n\nStart booting Monitor VM ...",
             env!("CARGO_PKG_NAME")
         );

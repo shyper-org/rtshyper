@@ -17,7 +17,7 @@ const CFG_MAX_NUM: usize = 0x10;
 // const PASSTHROUGH_DEV_MAX_NUM: usize = 128;
 // const EMULATED_DEV_MAX_NUM: usize = 16;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DtbDevType {
     Serial = 0,
     Gicd = 1,
@@ -35,7 +35,7 @@ impl From<usize> for DtbDevType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VmEmulatedDeviceConfig {
     pub name: String,
     pub base_ipa: usize,
@@ -132,7 +132,7 @@ pub struct VmCpuConfig {
     pub master: Option<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VmDtbDevConfig {
     pub name: String,
     pub dev_type: DtbDevType,
@@ -285,13 +285,7 @@ impl VmConfigEntry {
         &self.vm_pt_dev_confg.streams_ids
     }
 
-    fn add_passthrough_device_region(&mut self, base_ipa: usize, base_pa: usize, length: usize) {
-        let pt_region_cfg = PassthroughRegion {
-            ipa: base_ipa,
-            pa: base_pa,
-            length,
-            dev_property: true,
-        };
+    fn add_passthrough_device_region(&mut self, pt_region_cfg: PassthroughRegion) {
         self.vm_pt_dev_confg.regions.push(pt_region_cfg)
     }
 
@@ -355,9 +349,10 @@ impl VmConfigTable {
 
     fn remove_vm_id(&mut self, vm_id: usize) {
         if vm_id >= CONFIG_VM_NUM_MAX || self.vm_bitmap.get(vm_id) == 0 {
-            println!("illegal vm id {}", vm_id);
+            error!("illegal vm id {}", vm_id);
+        } else {
+            self.vm_bitmap.clear(vm_id);
         }
-        self.vm_bitmap.clear(vm_id);
     }
 }
 
@@ -370,7 +365,7 @@ pub fn vm_cfg_entry(vmid: usize) -> Option<VmConfigEntry> {
             return Some(vm_cfg_entry.clone());
         }
     }
-    println!("failed to find VM[{}] in vm cfg entry list", vmid);
+    error!("failed to find VM[{}] in vm cfg entry list", vmid);
     None
 }
 
@@ -397,8 +392,8 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
                 panic!("error in mvm config init, the def vm config table is not empty");
             }
             vm_cfg_entry.id = vm_id;
-            println!(
-                "\nSuccessfully add VM[{}]: {}, currently vm_num {}",
+            info!(
+                "Successfully add VM[{}]: {}, currently vm_num {}",
                 vm_cfg_entry.id,
                 vm_cfg_entry.name,
                 vm_config.entries.len() + 1
@@ -408,7 +403,7 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
             Ok(vm_id)
         }
         Err(_) => {
-            println!("vm_cfg_add_vm_entry, vm num reached max value");
+            error!("vm_cfg_add_vm_entry, vm num reached max value");
             Err(())
         }
     }
@@ -428,12 +423,12 @@ pub fn add_vm(config_ipa: usize) -> Result<usize, ()> {
         device_tree_load_ipa,
         ramdisk_load_ipa,
     ): (usize, usize, usize, usize, usize, usize, usize, usize) = unsafe { *(config_pa as *const _) };
-    println!("\n\nStart to prepare configuration for new VM");
+    info!("\n\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.
     let vm_name_pa = vm.ipa2hva(vm_name_ipa);
     if vm_name_pa == 0 {
-        println!("illegal vm_name_ipa {:x}", vm_name_ipa);
+        error!("illegal vm_name_ipa {:x}", vm_name_ipa);
         return Err(());
     }
     let vm_name_str = unsafe { CStr::from_ptr(vm_name_pa as *const _) }
@@ -443,7 +438,7 @@ pub fn add_vm(config_ipa: usize) -> Result<usize, ()> {
     // Copy VM cmdline from user ipa.
     let cmdline_pa = vm.ipa2hva(cmdline_ipa);
     if cmdline_pa == 0 {
-        println!("illegal cmdline_ipa {:x}", cmdline_ipa);
+        error!("illegal cmdline_ipa {:x}", cmdline_ipa);
         return Err(());
     }
     let cmdline_str = unsafe { CStr::from_ptr(cmdline_pa as *const _) }
@@ -460,9 +455,9 @@ pub fn add_vm(config_ipa: usize) -> Result<usize, ()> {
         ramdisk_load_ipa,
     );
 
-    println!("      VM name is [{:?}]", new_vm_cfg.name);
-    println!("      cmdline is [{:?}]", new_vm_cfg.cmdline);
-    println!("      ramdisk is [{:#x}]", new_vm_cfg.ramdisk_load_ipa());
+    info!("VM name is [{:?}]", new_vm_cfg.name);
+    info!("cmdline is [{:?}]", new_vm_cfg.cmdline);
+    info!("ramdisk is [{:#x}]", new_vm_cfg.ramdisk_load_ipa());
     vm_cfg_add_vm_entry(new_vm_cfg)
 }
 
@@ -476,7 +471,7 @@ pub fn del_vm(vmid: usize) -> Result<usize, ()> {
             }
             vm_config.remove_vm_id(vmid);
             vm_config.entries.remove(idx);
-            println!("delete VM[{}] config entry from vm-config-table", vmid);
+            info!("delete VM[{}] config entry from vm-config-table", vmid);
             break;
         }
     }
@@ -487,8 +482,8 @@ pub fn del_vm(vmid: usize) -> Result<usize, ()> {
 pub fn add_mem_region(vmid: usize, ipa_start: usize, length: usize) -> Result<usize, ()> {
     vm_cfg_editor(vmid, |vm_cfg| {
         vm_cfg.add_memory_cfg(ipa_start, length);
-        println!(
-            "\nVM[{}] vm_cfg_add_mem_region: add region start_ipa {:x} length {:x}",
+        info!(
+            "VM[{}] vm_cfg_add_mem_region: add region start_ipa {:x} length {:x}",
             vmid, ipa_start, length
         );
         Ok(0)
@@ -500,8 +495,8 @@ pub fn set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: usize) -
     vm_cfg_editor(vmid, |vm_cfg| {
         vm_cfg.set_cpu_cfg(num, allocate_bitmap, master);
 
-        println!(
-            "\nVM[{}] vm_cfg_set_cpu: num {} allocate_bitmap {} master {:?}",
+        info!(
+            "VM[{}] vm_cfg_set_cpu: num {} allocate_bitmap {} master {:?}",
             vmid,
             vm_cfg.cpu_num(),
             vm_cfg.cpu_allocated_bitmap(),
@@ -526,7 +521,7 @@ pub fn add_emu_dev(
         // Copy emu device name from user ipa.
         let name_pa = active_vm().unwrap().ipa2hva(name_ipa);
         if name_pa == 0 {
-            println!("illegal emulated device name_ipa {:x}", name_ipa);
+            info!("illegal emulated device name_ipa {:x}", name_ipa);
             return Err(());
         }
         let name_str = unsafe { CStr::from_ptr(name_pa as *const _) }
@@ -535,16 +530,6 @@ pub fn add_emu_dev(
         // Copy emu device cfg list from user ipa.
         let mut cfg_list = vec![0_usize; CFG_MAX_NUM];
         copy_segment_from_vm(&active_vm().unwrap(), cfg_list.as_mut_slice(), cfg_list_ipa);
-
-        println!(
-            concat!(
-                "\nVM[{}] vm_cfg_add_emu_dev:\n",
-                "    name {:?}\n",
-                "     cfg_list {:?}\n",
-                "     base ipa {:x} length {:x} irq_id {} emu_type {}"
-            ),
-            vmid, name_str, cfg_list, base_ipa, length, irq_id, emu_type
-        );
 
         let emu_dev_type = EmuDeviceType::from(emu_type);
         let emu_dev_cfg = VmEmulatedDeviceConfig {
@@ -562,6 +547,7 @@ pub fn add_emu_dev(
                 EmuDeviceType::EmuDeviceTVirtioBlkMediated
             ),
         };
+        info!("VM[{}] vm_cfg_add_emu_dev: {:?}", vmid, emu_dev_cfg);
         vm_cfg.add_emulated_device_cfg(emu_dev_cfg);
 
         // Set GVM Mediated Blk Index Here.
@@ -569,7 +555,7 @@ pub fn add_emu_dev(
             let med_blk_index = match mediated_blk_request() {
                 Ok(idx) => idx,
                 Err(_) => {
-                    println!("no more medaited blk for vm {}", vmid);
+                    error!("no more medaited blk for vm {}", vmid);
                     return Err(());
                 }
             };
@@ -584,31 +570,26 @@ pub fn add_emu_dev(
 pub fn add_passthrough_device_region(vmid: usize, base_ipa: usize, base_pa: usize, length: usize) -> Result<usize, ()> {
     // Get VM config entry.
     vm_cfg_editor(vmid, |vm_cfg| {
-        println!(
-            concat!(
-                "\nVM[{}] vm_cfg_add_pt_dev:\n",
-                "     base_ipa {:x} base_pa {:x} length {:x}"
-            ),
-            vmid, base_ipa, base_pa, length
-        );
+        let pt_region_cfg = PassthroughRegion {
+            ipa: base_ipa,
+            pa: base_pa,
+            length,
+            dev_property: true,
+        };
+        info!("VM[{}] vm_cfg_add_pt_dev: {:?}", vmid, pt_region_cfg);
 
-        vm_cfg.add_passthrough_device_region(base_ipa, base_pa, length);
+        vm_cfg.add_passthrough_device_region(pt_region_cfg);
         Ok(0)
     })
 }
 
 /* Add passthrough device config irqs for VM */
 pub fn add_passthrough_device_irqs(vmid: usize, irqs_base_ipa: usize, irqs_length: usize) -> Result<usize, ()> {
-    println!(
-        "\nVM[{}] vm_cfg_add_pt_dev irqs:\n     base_ipa {:x} length {:x}",
-        vmid, irqs_base_ipa, irqs_length
-    );
-
     let mut irqs = vec![0_usize; irqs_length];
     if irqs_length > 0 {
         copy_segment_from_vm(&active_vm().unwrap(), irqs.as_mut_slice(), irqs_base_ipa);
     }
-    println!("      irqs {:?}", irqs);
+    info!("VM[{}] vm_cfg_add_pt_dev irqs: {:?}", vmid, irqs);
 
     vm_cfg_editor(vmid, |vm_cfg| {
         vm_cfg.add_passthrough_device_irqs(&mut irqs);
@@ -622,17 +603,12 @@ pub fn add_passthrough_device_streams_ids(
     streams_ids_base_ipa: usize,
     streams_ids_length: usize,
 ) -> Result<usize, ()> {
-    println!(
-        "\nVM[{}] vm_cfg_add_pt_dev streams ids:\n     streams_ids_base_ipa {:x} streams_ids_length {:x}",
-        vmid, streams_ids_base_ipa, streams_ids_length
-    );
-
     // Copy passthrough device streams ids from user ipa.
     let mut streams_ids = vec![0_usize; streams_ids_length];
     if streams_ids_length > 0 {
         copy_segment_from_vm(&active_vm().unwrap(), streams_ids.as_mut_slice(), streams_ids_base_ipa)
     }
-    println!("      get streams_ids {:?}", streams_ids);
+    info!("VM[{}] vm_cfg_add_pt_dev streams ids {:?}", vmid, streams_ids);
 
     vm_cfg_editor(vmid, |vm_cfg| {
         vm_cfg.add_passthrough_device_streams_ids(&mut streams_ids);
@@ -650,21 +626,15 @@ pub fn add_dtb_dev(
     addr_region_ipa: usize,
     addr_region_length: usize,
 ) -> Result<usize, ()> {
-    println!(
-        "\nVM[{}] vm_cfg_add_dtb_dev:\n     dev_type {} irq_list_length {} addr_region_ipa {:x} addr_region_length {:x}",
-        vmid, dev_type, irq_list_length, addr_region_ipa, addr_region_length
-    );
-
     // Copy DTB device name from user ipa.
     let name_pa = active_vm().unwrap().ipa2hva(name_ipa);
     if name_pa == 0 {
-        println!("illegal dtb_dev name ipa {:x}", name_ipa);
+        error!("illegal dtb_dev name ipa {:x}", name_ipa);
         return Err(());
     }
     let dtb_dev_name_str = unsafe { CStr::from_ptr(name_pa as *const _) }
         .to_string_lossy()
         .to_string();
-    println!("      get dtb dev name {:?}", dtb_dev_name_str);
 
     // Copy DTB device irq list from user ipa.
     let mut dtb_irq_list = vec![0_usize; irq_list_length];
@@ -672,7 +642,6 @@ pub fn add_dtb_dev(
     if irq_list_length > 0 {
         copy_segment_from_vm(&active_vm().unwrap(), dtb_irq_list.as_mut_slice(), irq_list_ipa);
     }
-    println!("      get dtb dev dtb_irq_list {:?}", dtb_irq_list);
 
     let vm_dtb_dev = VmDtbDevConfig {
         name: dtb_dev_name_str,
@@ -683,6 +652,7 @@ pub fn add_dtb_dev(
             length: addr_region_length,
         },
     };
+    info!("VM[{}] vm_cfg_add_dtb_dev: {:?}", vmid, vm_dtb_dev);
     vm_cfg_editor(vmid, |vm_cfg| {
         // Get DTB device config list.
 
@@ -703,14 +673,14 @@ pub fn set_memory_color_budget(
         let color_array_hva = active_vm().unwrap().ipa2hva(color_array_addr);
         let color_array = unsafe { core::slice::from_raw_parts(color_array_hva as *const _, color_num) };
         vm_cfg.memory.colors.extend_from_slice(color_array);
-        println!("VM[{vmid}] memory colors {:?}", vm_cfg.memory.colors);
+        info!("VM[{vmid}] memory colors {:?}", vm_cfg.memory.colors);
         if budget != 0 {
             vm_cfg.memory.budget = budget as u32;
-            println!("VM[{vmid}] memory budget {}", vm_cfg.memory.budget);
+            info!("VM[{vmid}] memory budget {}", vm_cfg.memory.budget);
         }
         if period != 0 {
             vm_cfg.memory.period = period as u64;
-            println!("VM[{vmid}] memory period {}", vm_cfg.memory.period);
+            info!("VM[{vmid}] memory period {}", vm_cfg.memory.period);
         }
         Ok(0)
     })
@@ -749,8 +719,8 @@ pub fn upload_kernel_image(
     // Before upload kernel image, set GVM.
     let vm = match vm(vmid) {
         None => {
-            println!(
-                "\nSuccessfully add configuration file for VM [{}]\nStart to init...",
+            info!(
+                "Successfully add configuration file for VM [{}]\n>>> Start to init...",
                 vmid
             );
             // This code should only run once.
@@ -760,7 +730,7 @@ pub fn upload_kernel_image(
     };
     let config = vm.config();
 
-    println!(
+    info!(
         "VM[{}] Upload kernel image. cache_ipa:{:x} load_offset:{:x} load_size:{:x}",
         vmid, cache_ipa, load_offset, load_size
     );

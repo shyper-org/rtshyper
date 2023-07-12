@@ -231,7 +231,6 @@ impl VmContext {
         // MRS!(self.far_el2, FAR_EL2);
         // MRS!(self.hpfar_el2, HPFAR_EL2);
         mrs!(self.actlr_el1, ACTLR_EL1);
-        // println!("save sctlr {:x}", self.sctlr_el1);
         self.generic_timer.save();
     }
 

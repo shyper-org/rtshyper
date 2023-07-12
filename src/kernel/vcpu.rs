@@ -111,7 +111,7 @@ impl Vcpu {
 
     // pub fn shutdown(&self) {
     //     use crate::board::{PlatOperation, Platform};
-    //     println!(
+    //     info!(
     //         "Core {} (vm {} vcpu {}) shutdown ok",
     //         current_cpu().id,
     //         active_vm().unwrap().id(),
@@ -134,7 +134,6 @@ impl Vcpu {
     }
 
     pub fn context_vm_restore(&self) {
-        // println!("context_vm_restore");
         let vtimer_offset = self.vm().unwrap().update_vtimer_offset();
         self.restore_cpu_ctx();
 
@@ -166,7 +165,7 @@ impl Vcpu {
         let inner = self.0.inner_mut.lock();
         match current_cpu().current_ctx() {
             None => {
-                println!("save_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
+                error!("save_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
             }
             Some(ctx) => {
                 memcpy_safe(
@@ -182,7 +181,7 @@ impl Vcpu {
         let inner = self.0.inner_mut.lock();
         match current_cpu().current_ctx() {
             None => {
-                println!("restore_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
+                error!("restore_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
             }
             Some(ctx) => {
                 memcpy_safe(
@@ -242,7 +241,7 @@ impl Vcpu {
         let mut inner = self.0.inner_mut.lock();
         inner.gic_ctx_reset();
         // if self.vm().vm_type() == VmType::VmTBma {
-        //     println!("vm {} bma ctx restore", self.vm_id());
+        //     info!("vm {} bma ctx restore", self.vm_id());
         //     self.reset_vm_ctx();
         //     self.context_ext_regs_store(); // what the fuck ?? why store here ???
         // }
@@ -304,8 +303,8 @@ impl Vcpu {
                 let mut inner = self.0.inner_mut.lock();
                 let int_list = core::mem::take(&mut inner.int_list);
                 drop(inner);
+                trace!("schedule: inject int {:?} for vm {}", int_list, vm.id());
                 for int in int_list {
-                    // println!("schedule: inject int {} for vm {}", int, vm.id());
                     interrupt_vm_inject(&vm, self, int);
                 }
             }
@@ -429,7 +428,7 @@ static IDLE_THREAD: Lazy<IdleThread> = Lazy::new(|| {
 pub(super) fn run_idle_thread() {
     match current_cpu().current_ctx() {
         None => {
-            println!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
+            error!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
         }
         Some(ctx) => {
             debug!("Core {} idle", current_cpu().id);

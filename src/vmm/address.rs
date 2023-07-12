@@ -23,7 +23,7 @@ pub(super) fn vmm_setup_ipa2hva(vm: &Vm) {
                 event: VmmEvent::VmmMapIPA,
             };
             if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(msg)) {
-                println!("vmm_setup_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
+                error!("vmm_setup_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
             flag = true;
@@ -46,7 +46,7 @@ pub(super) fn vmm_unmap_ipa2hva(vm: &Vm) {
                 event: VmmEvent::VmmUnmapIPA,
             };
             if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(msg)) {
-                println!("vmm_unmap_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
+                error!("vmm_unmap_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
             flag = true;

@@ -288,7 +288,7 @@ fn mem_region_init_by_colors() {
             }
         };
         if plat_mem_region_size == 0 {
-            println!("PLAT_DESC.mem_desc.regions[{}] is empty.", i);
+            warn!("PLAT_DESC.mem_desc.regions[{}] is empty.", i);
             continue;
         }
         // NOTE: `plat_mem_region_base` might not align to `step`

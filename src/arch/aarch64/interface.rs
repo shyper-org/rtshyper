@@ -45,7 +45,7 @@ impl ArchTrait for Aarch64Arch {
     fn install_vm_page_table(base: usize, vmid: usize) {
         // restore vm's Stage2 MMU context
         let vttbr = (vmid << 48) | base;
-        // println!("vttbr {:#x}", vttbr);
+        trace!("vttbr {:#x}", vttbr);
         msr!(VTTBR_EL2, vttbr);
         isb!();
     }

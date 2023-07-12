@@ -219,7 +219,7 @@ pub fn cache_init() {
             first_unified = true;
             min_share_level = i;
         }
-        println!("{}", cache_info);
+        info!("{}", cache_info);
     }
 
     CPU_CACHE.call_once(|| CpuCacheInfo {
@@ -244,7 +244,7 @@ pub fn cache_init() {
 pub fn vcache_ccsidr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
     match emu_ctx.write {
         true => {
-            println!("Core{} cannot write CCSIDR_EL1", current_cpu().id);
+            warn!("Core{} cannot write CCSIDR_EL1", current_cpu().id);
             false
         }
         false => {
@@ -257,7 +257,7 @@ pub fn vcache_ccsidr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
             };
             current_cpu().set_gpr(emu_ctx.reg, val as usize);
 
-            println!(
+            debug!(
                 "Core{} {} CCSIDR_EL1 with x{}={:#x}",
                 current_cpu().id,
                 if emu_ctx.write { "write" } else { "read" },
@@ -274,14 +274,14 @@ pub fn vcache_ccsidr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
 pub fn vcache_clidr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
     match emu_ctx.write {
         true => {
-            println!("Core{} cannot write CLIDR_EL1", current_cpu().id);
+            warn!("Core{} cannot write CLIDR_EL1", current_cpu().id);
             false
         }
         false => {
             let val = CLIDR_EL1.get();
             current_cpu().set_gpr(emu_ctx.reg, val as usize);
 
-            println!(
+            debug!(
                 "Core{} {} CLIDR_EL1 with x{}={:#x}",
                 current_cpu().id,
                 if emu_ctx.write { "write" } else { "read" },
@@ -300,7 +300,7 @@ pub fn vcache_csselr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
         true => {
             let val = current_cpu().get_gpr(emu_ctx.reg);
             CSSELR_EL1.set(val as u64);
-            println!(
+            debug!(
                 "Core{} {} CSSELR_EL1 with x{}={:#x}",
                 current_cpu().id,
                 if emu_ctx.write { "write" } else { "read" },
@@ -312,7 +312,7 @@ pub fn vcache_csselr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
             let val = CSSELR_EL1.get();
             current_cpu().set_gpr(emu_ctx.reg, val as usize);
 
-            println!(
+            debug!(
                 "Core{} {} CSSELR_EL1 with x{}={:#x}",
                 current_cpu().id,
                 if emu_ctx.write { "write" } else { "read" },
@@ -327,21 +327,9 @@ pub fn vcache_csselr_el1_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
 /// Cache Type Register
 /// no more operation
 pub fn vcache_ctr_el0_handler(_id: usize, emu_ctx: &EmuContext) -> bool {
-    // unsafe {
-    //     static mut times: usize = 0;
-    //     times += 1;
-    //     if times % 100 == 0 {
-    //         println!(
-    //             "Core{} {} CTR_EL0, times {}",
-    //             current_cpu().id,
-    //             if emu_ctx.write { "write" } else { "read" },
-    //             times
-    //         );
-    //     }
-    // }
     match emu_ctx.write {
         true => {
-            println!("Core{} cannot write CTR_EL0", current_cpu().id);
+            warn!("Core{} cannot write CTR_EL0", current_cpu().id);
             false
         }
         false => {

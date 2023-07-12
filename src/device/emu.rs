@@ -64,7 +64,7 @@ pub fn emu_handler(emu_ctx: &EmuContext) -> bool {
         return emu_dev.handler(emu_ctx);
     }
 
-    println!(
+    error!(
         "emu_handler: no emul handler for Core {} data abort ipa {:#x}",
         current_cpu().id,
         ipa
@@ -88,7 +88,7 @@ pub fn emu_reg_handler(emu_ctx: &EmuContext) -> bool {
             return handler(vm_id, emu_ctx);
         }
     }
-    println!(
+    error!(
         "emu_reg_handler: no handler for Core{} {} reg ({:#x})",
         current_cpu().id,
         if emu_ctx.write { "write" } else { "read" },

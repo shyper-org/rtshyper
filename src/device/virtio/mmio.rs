@@ -191,7 +191,7 @@ impl VirtioMmio {
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
-                println!("notify_config: failed to send ipi to Core {}", trgt_id);
+                error!("notify_config: failed to send ipi to Core {}", trgt_id);
             }
         }
     }
@@ -208,7 +208,7 @@ impl VirtioMmio {
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
             if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
-                println!("notify_config: failed to send ipi to Core {}", trgt_id);
+                error!("notify_config: failed to send ipi to Core {}", trgt_id);
             }
         }
     }
