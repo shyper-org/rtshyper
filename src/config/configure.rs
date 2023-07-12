@@ -667,14 +667,10 @@ pub fn add_dtb_dev(
     println!("      get dtb dev name {:?}", dtb_dev_name_str);
 
     // Copy DTB device irq list from user ipa.
-    let mut dtb_irq_list: Vec<usize> = Vec::new();
+    let mut dtb_irq_list = vec![0_usize; irq_list_length];
 
     if irq_list_length > 0 {
-        let mut tmp_dtb_irq_list = vec![0_usize; irq_list_length];
-        copy_segment_from_vm(&active_vm().unwrap(), tmp_dtb_irq_list.as_mut_slice(), irq_list_ipa);
-        for irq in tmp_dtb_irq_list.into_iter().take(irq_list_length) {
-            dtb_irq_list.push(irq);
-        }
+        copy_segment_from_vm(&active_vm().unwrap(), dtb_irq_list.as_mut_slice(), irq_list_ipa);
     }
     println!("      get dtb dev dtb_irq_list {:?}", dtb_irq_list);
 

@@ -4,7 +4,7 @@ use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE, TlbInvalidate};
 use crate::arch::ArchTrait;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
-use crate::arch::{cpu_interrupt_unmask, PageTable};
+use crate::arch::PageTable;
 use crate::board::{PLATFORM_CPU_NUM_MAX, PLAT_DESC};
 use crate::kernel::{Vcpu, Vm};
 use crate::util::timer_list::{TimerTickValue, TimerList};
@@ -13,7 +13,7 @@ use super::sched::get_scheduler;
 use super::vcpu_array::VcpuArray;
 
 pub const CPU_MASTER: usize = 0;
-const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
 const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C, align(4096))]
@@ -51,8 +51,7 @@ pub struct Cpu {
     stack: [u8; CPU_STACK_SIZE],
 }
 
-// see start.S
-const_assert_eq!(offset_of!(Cpu, stack), 0x5000);
+pub const CPU_STACK_OFFSET: usize = offset_of!(Cpu, stack);
 
 impl Cpu {
     const fn default() -> Cpu {
@@ -243,15 +242,6 @@ pub fn cpu_init() {
     if cpu_id == 0 {
         println!("Bring up {} cores", PLAT_DESC.cpu_desc.num);
         println!("Cpu init ok");
-    }
-}
-
-pub fn cpu_idle() -> ! {
-    debug!("Core {} idle", current_cpu().id);
-    current_cpu().cpu_state = CpuState::Idle;
-    cpu_interrupt_unmask();
-    loop {
-        crate::arch::Arch::wait_for_interrupt();
     }
 }
 

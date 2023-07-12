@@ -3,22 +3,21 @@ use std::env::var;
 fn main() {
     // compile libfdt-bingding
     let c_compiler = "aarch64-none-elf-gcc";
-    let files = std::fs::read_dir("deps/libfdt")
-        .unwrap()
-        .into_iter()
-        .chain(std::fs::read_dir("libfdt-binding").unwrap().into_iter())
-        .filter_map(|f| {
-            let f = f.as_ref().unwrap();
+    let fdt_dirs = ["libfdt-binding", "deps/libfdt"];
+    let c_files = fdt_dirs.iter().flat_map(|path| {
+        std::fs::read_dir(path).unwrap().filter_map(|f| {
+            let f = f.unwrap();
             if f.file_type().unwrap().is_file() && matches!(f.path().extension(), Some(ext) if ext == "c") {
                 Some(f.path())
             } else {
                 None
             }
-        });
+        })
+    });
     cc::Build::new()
         .compiler(c_compiler)
-        .includes(["libfdt-binding", "deps/libfdt"])
-        .files(files)
+        .includes(fdt_dirs)
+        .files(c_files)
         .flag("-w")
         .compile("fdt-binding");
 
@@ -36,14 +35,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tlinkers/{arch}.ld");
     println!("cargo:rustc-link-arg=--defsym=TEXT_START={text_start}");
 
-    // compile the startup file into a static library
-    let start_file = format!("src/arch/{}/start.S", arch);
     println!("cargo:rerun-if-changed=src/");
-    cc::Build::new()
-        .compiler(c_compiler)
-        .file(start_file)
-        .define(&format!("PLATFORM_{}", platform.to_uppercase()), None)
-        .compile("start");
 
     // set envs
     let build_time = chrono::offset::Local::now().format("%Y-%m-%d %H:%M:%S %Z");

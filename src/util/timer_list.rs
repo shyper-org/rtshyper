@@ -40,6 +40,7 @@ pub struct TimerList {
     events: BinaryHeap<Reverse<TimerEventWrapper>>, // reverse ordering for Min-heap
 }
 
+#[allow(dead_code)]
 impl TimerList {
     pub fn new() -> Self {
         Self {

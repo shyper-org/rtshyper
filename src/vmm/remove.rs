@@ -1,7 +1,7 @@
 use crate::arch::{interrupt_arch_deactive_irq, INTERRUPT_IRQ_GUEST_TIMER};
 use crate::kernel::{
     current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_vm, remove_vm_async_task,
-    Vm, cpu_idle, vm, interrupt_cpu_enable,
+    Vm, vm, interrupt_cpu_enable,
 };
 use crate::kernel::vm_if_reset;
 use crate::vmm::VmmEvent;
@@ -42,7 +42,6 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
         // hard code: remove el1 timer interrupt 27
         interrupt_cpu_enable(INTERRUPT_IRQ_GUEST_TIMER, false);
         interrupt_arch_deactive_irq(true);
-        cpu_idle();
     }
 }
 

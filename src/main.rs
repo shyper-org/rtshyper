@@ -7,6 +7,9 @@
 #![feature(const_refs_to_cell)]
 #![feature(const_cmp)]
 #![feature(binary_heap_retain)]
+#![feature(naked_functions)]
+#![feature(asm_sym)]
+#![feature(asm_const)]
 #![allow(unused_doc_comments)]
 
 #[macro_use]
@@ -21,13 +24,14 @@ extern crate memoffset;
 extern crate derive_more;
 
 use device::mediated_dev_init;
-use kernel::{cpu_init, physical_mem_init, timer_init, hvc_init, iommu_init};
+use kernel::{cpu_init, physical_mem_init, timer_init, hvc_init, iommu_init, current_cpu};
 use vmm::{vm_init, vmm_boot_vm};
 
 #[macro_use]
 mod macros;
 
 mod arch;
+mod banner;
 mod board;
 mod config;
 mod device;
@@ -43,6 +47,7 @@ mod vmm;
 pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     if cpu_id == 0 {
         driver::init();
+        banner::init();
         println!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
         println!("Built At {}", env!("BUILD_TIME"));
 
@@ -52,25 +57,26 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
         dtb::init_vm0_dtb(dtb);
         hvc_init();
         iommu_init();
+        mediated_dev_init();
     }
     cpu_init();
     timer_init();
-    if cpu_id == 0 {
-        mediated_dev_init();
-    }
     util::barrier();
     kernel::hypervisor_self_coloring();
-    if cpu_id != 0 {
-        kernel::cpu_idle();
+    if cpu_id == 0 {
+        vm_init();
+        println!(
+            "{} Hypervisor init ok\n\nStart booting Monitor VM ...",
+            env!("CARGO_PKG_NAME")
+        );
+        vmm_boot_vm(0);
     }
-    vm_init();
-    println!(
-        "{} Hypervisor init ok\n\nStart booting Monitor VM ...",
-        env!("CARGO_PKG_NAME")
-    );
-    vmm_boot_vm(0);
 
-    loop {
-        core::hint::spin_loop();
+    current_cpu().vcpu_array.resched();
+    extern "C" {
+        fn context_vm_entry(ctx: usize) -> !;
+    }
+    unsafe {
+        context_vm_entry(current_cpu().current_ctx().unwrap());
     }
 }

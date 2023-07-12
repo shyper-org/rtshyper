@@ -8,13 +8,13 @@ use crate::kernel::{
     vm_id_list,
 };
 use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg, vm_if_get_cpu_id};
-use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcManageMsg};
+use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcManageMsg, vcpu_run};
 use crate::kernel::HVC_CONFIG;
 use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
 use crate::util::bit_extract;
-use crate::vmm::{vmm_cpu_assign_vcpu, vmm_boot, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
+use crate::vmm::{vmm_cpu_assign_vcpu, vmm_init_image, vmm_setup_config, vmm_cpu_remove_vcpu};
 
 use shyper::{VM_NUM_MAX, VMInfo};
 
@@ -78,36 +78,43 @@ pub fn vmm_init_gvm(vm_id: usize) {
  * @param[in] vm_id: target VM id to boot.
  */
 pub fn vmm_boot_vm(vm_id: usize) {
-    let phys_id = vm_if_get_cpu_id(vm_id).unwrap();
-    // println!(
-    //     "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
-    //     current_cpu().id,
-    //     vm_id,
-    //     phys_id
-    // );
-    if phys_id != current_cpu().id {
-        let m = IpiVmmMsg {
-            vmid: vm_id,
-            event: VmmEvent::VmmBoot,
-        };
-        if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
-            println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
+    if let Some(phys_id) = vm_if_get_cpu_id(vm_id) {
+        // println!(
+        //     "vmm_boot_vm: current_cpu {} target vm {} get phys_id {}",
+        //     current_cpu().id,
+        //     vm_id,
+        //     phys_id
+        // );
+        if phys_id != current_cpu().id {
+            let m = IpiVmmMsg {
+                vmid: vm_id,
+                event: VmmEvent::VmmBoot,
+            };
+            if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+                println!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
+            }
+        } else {
+            match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
+                None => {
+                    panic!(
+                        "vmm_boot_vm: VM[{}] does not have vcpu on Core {}",
+                        vm_id,
+                        current_cpu().id
+                    );
+                }
+                Some(vcpu) => {
+                    interrupt_arch_deactive_irq(true);
+                    current_cpu().vcpu_array.wakeup_vcpu(vcpu);
+                    if current_cpu().assigned() && active_vcpu_id() == 0 {
+                        // active_vm().unwrap().set_migration_state(false);
+                        info!("Core {} start running", current_cpu().id);
+                        vcpu_run(false);
+                    }
+                }
+            };
         }
     } else {
-        match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
-            None => {
-                panic!(
-                    "vmm_boot_vm: VM[{}] does not have vcpu on Core {}",
-                    vm_id,
-                    current_cpu().id
-                );
-            }
-            Some(vcpu) => {
-                interrupt_arch_deactive_irq(true);
-                current_cpu().vcpu_array.wakeup_vcpu(vcpu);
-                vmm_boot();
-            }
-        };
+        error!("VM [{vm_id}] is not configured");
     }
 }
 

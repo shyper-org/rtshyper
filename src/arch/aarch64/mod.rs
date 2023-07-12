@@ -37,6 +37,7 @@ mod psci;
 mod smc;
 #[allow(dead_code)]
 mod smmu;
+mod start;
 mod sync;
 mod timer;
 mod tlb;

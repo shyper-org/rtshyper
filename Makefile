@@ -20,7 +20,7 @@ IMAGE=rtshyper_rs
 TARGET_DIR=target/${ARCH}/${PROFILE}
 
 # Cargo flags.
-CARGO_FLAGS ?= --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
+CARGO_FLAGS ?= -Z build-std=core,alloc --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
 ifeq (${PROFILE}, release)
 CARGO_FLAGS := ${CARGO_FLAGS} --release
 endif

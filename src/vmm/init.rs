@@ -4,11 +4,10 @@ use crate::config::VmRegion;
 use crate::dtb::{create_fdt, setup_fdt_vm0};
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
-    cpu_idle, current_cpu, iommmu_vm_init, VmType, iommu_add_device, mem_region_alloc_colors, ColorMemRegion,
-    count_missing_num, IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
+    current_cpu, iommmu_vm_init, VmType, iommu_add_device, mem_region_alloc_colors, ColorMemRegion, count_missing_num,
+    IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
 };
 use crate::kernel::{vm, Vm};
-use crate::kernel::{active_vcpu_id, vcpu_run};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::access::copy_segment_to_vm;
 use crate::vmm::VmmEvent;
@@ -308,16 +307,5 @@ pub fn vm_init() {
             super::vmm_init_gvm(1);
             super::vmm_init_gvm(2);
         }
-    }
-}
-
-pub fn vmm_boot() {
-    if current_cpu().assigned() && active_vcpu_id() == 0 {
-        // active_vm().unwrap().set_migration_state(false);
-        info!("Core {} start running", current_cpu().id);
-        vcpu_run(false);
-    } else if !current_cpu().assigned() {
-        // If there is no available vm(vcpu), just go idle
-        cpu_idle();
     }
 }

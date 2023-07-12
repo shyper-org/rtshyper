@@ -92,6 +92,13 @@ pub(super) struct PageTables {
     entry: [BlockDescriptor; ENTRY_PER_PAGE],
 }
 
+pub(super) static mut LVL1_PAGE_TABLE: PageTables = PageTables {
+    entry: [BlockDescriptor(0); ENTRY_PER_PAGE],
+};
+pub(super) static mut LVL2_PAGE_TABLE: PageTables = PageTables {
+    entry: [BlockDescriptor(0); ENTRY_PER_PAGE],
+};
+
 #[no_mangle]
 // #[link_section = ".text.boot"]
 pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {

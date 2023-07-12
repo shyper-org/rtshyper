@@ -1,6 +1,6 @@
 use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
 use crate::board::PlatOperation;
-use crate::kernel::{cpu_idle, current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
+use crate::kernel::{current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
@@ -55,7 +55,7 @@ pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
 pub fn power_arch_cpu_shutdown() {
     gic_cpu_init();
     interrupt_arch_deactive_irq(true);
-    cpu_idle();
+    current_cpu().vcpu_array.resched();
 }
 
 pub fn power_arch_sys_reset() {

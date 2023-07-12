@@ -309,10 +309,9 @@ fn mem_region_init_by_colors() {
         }
     }
 
-    println!("mem_vm_region_init_by_colors:");
-    for color in 0..num_colors {
-        let color_region_list = mem_region_by_color.get(color).unwrap();
-        println!(" Color {:#04x}: {:x?}", color, color_region_list,);
+    debug!("mem_vm_region_init_by_colors:");
+    for (color, color_region_list) in mem_region_by_color.iter().enumerate() {
+        debug!("Color {:#04x}: {:x?}", color, color_region_list);
     }
 }
 

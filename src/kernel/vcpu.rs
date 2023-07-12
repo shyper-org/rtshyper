@@ -388,34 +388,25 @@ impl VcpuInnerMut {
 
 // WARNING: No Auto `drop` in this function
 pub fn vcpu_run(announce: bool) {
-    {
-        let vcpu = current_cpu().active_vcpu.clone().unwrap();
-        let vm = vcpu.vm().unwrap();
+    let vcpu = current_cpu().active_vcpu.clone().unwrap();
+    let vm = vcpu.vm().unwrap();
 
-        vm_if_set_state(vm.id(), super::VmState::Active);
+    vm_if_set_state(vm.id(), super::VmState::Active);
 
-        if announce {
-            crate::device::virtio_net_announce(&vm);
-        }
-        // if the cpu is already running (a vcpu in scheduling queue),
-        // just return, no `context_vm_entry` required
-        if current_cpu().cpu_state == CpuState::Run {
-            return;
-        }
-        current_cpu().cpu_state = CpuState::Run;
-        // tlb_invalidate_guest_all();
-        // for i in 0..vm.mem_region_num() {
-        //     unsafe {
-        //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
-        //     }
-        // }
+    if announce {
+        crate::device::virtio_net_announce(&vm);
     }
-    extern "C" {
-        fn context_vm_entry(ctx: usize) -> !;
+    // if the cpu is already running (a vcpu in scheduling queue), just return
+    if current_cpu().cpu_state == CpuState::Run {
+        return;
     }
-    unsafe {
-        context_vm_entry(current_cpu().current_ctx().unwrap());
-    }
+    current_cpu().cpu_state = CpuState::Run;
+    // tlb_invalidate_guest_all();
+    // for i in 0..vm.mem_region_num() {
+    //     unsafe {
+    //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
+    //     }
+    // }
 }
 
 fn idle_thread() -> ! {
@@ -430,9 +421,7 @@ struct IdleThread {
 }
 
 static IDLE_THREAD: Lazy<IdleThread> = Lazy::new(|| {
-    let mut ctx = ContextFrame::default();
-    use cortex_a::registers::SPSR_EL2;
-    ctx.spsr = (SPSR_EL2::M::EL2h + SPSR_EL2::F::Masked + SPSR_EL2::A::Masked + SPSR_EL2::D::Masked).value;
+    let mut ctx = ContextFrame::new_privileged();
     ctx.set_exception_pc(idle_thread as usize);
     IdleThread { ctx }
 });
@@ -443,6 +432,8 @@ pub(super) fn run_idle_thread() {
             println!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
         }
         Some(ctx) => {
+            debug!("Core {} idle", current_cpu().id);
+            current_cpu().cpu_state = CpuState::Idle;
             memcpy_safe(
                 ctx as *const u8,
                 &(IDLE_THREAD.ctx) as *const _ as *const u8,

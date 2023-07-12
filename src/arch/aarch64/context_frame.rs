@@ -68,6 +68,15 @@ impl crate::arch::ContextFrameTrait for Aarch64ContextFrame {
     }
 }
 
+impl Aarch64ContextFrame {
+    pub fn new_privileged() -> Self {
+        Self {
+            spsr: (SPSR_EL2::M::EL2h + SPSR_EL2::F::Masked + SPSR_EL2::A::Masked + SPSR_EL2::D::Masked).value,
+            ..Default::default()
+        }
+    }
+}
+
 impl Default for Aarch64ContextFrame {
     fn default() -> Self {
         Self {
