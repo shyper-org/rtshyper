@@ -108,7 +108,7 @@ fn pt_lvl3_offset(va: usize) -> usize {
 pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     use crate::mm::vpage_allocator::CPU_BANKED_ADDRESS;
 
-    let addr = unsafe { &super::LVL1_PAGE_TABLE as *const _ } as usize;
+    let addr = unsafe { &super::mmu::LVL1_PAGE_TABLE as *const _ } as usize;
 
     memcpy_safe(cpu.cpu_pt.lvl1.as_ptr() as *const _, addr as *mut _, PAGE_SIZE);
     memset_safe(cpu.cpu_pt.lvl2.as_ptr() as *mut _, 0, PAGE_SIZE);

@@ -294,7 +294,7 @@ fn mem_region_init_by_colors() {
         // NOTE: `plat_mem_region_base` might not align to `step`
         let color_mask = (num_colors - 1) << PAGE_SHIFT;
         let base_color = (plat_mem_region_base & color_mask) >> PAGE_SHIFT;
-        info!("region[{i}] {plat_mem_region_base:#x} base color {base_color:#x}");
+        debug!("region[{i}] {plat_mem_region_base:#x} base color {base_color:#x}");
         for color in 0..num_colors {
             let base = if color >= base_color {
                 plat_mem_region_base & (!color_mask)
@@ -347,10 +347,10 @@ fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> 
     debug!("space_remapping: color_regions {:x?}", color_regions);
     // alloc va space
     let va_pages = vpage_alloc(len, None).unwrap_or_else(|err| panic!("vpage_alloc: {err:?}"));
-    info!("space_remapping: va pages {:?}", va_pages);
+    debug!("space_remapping: va pages {:?}", va_pages);
     let dest_va = va_pages.start().start_address().as_ptr();
     let range = va_pages.as_range_incluesive();
-    info!("space_remapping: dest va {:x?}", range);
+    debug!("space_remapping: dest va {:x?}", range);
     // map va with pa
     cpu_map_va2color_regions(current_cpu(), range, &color_regions);
     // copy src to va
@@ -430,7 +430,7 @@ pub fn hypervisor_self_coloring() {
     device_mapping(cpu_new);
     // never drop the heap physical memory
     core::mem::forget(cpu_pa_regions);
-    info!("new cpu {} page table init OK", cpu_new.id);
+    debug!("new cpu {} page table init OK", cpu_new.id);
 
     static NEW_IMAGE_SHARED_PTE: Once<usize> = Once::new();
     static NEW_IMAGE_START: Once<usize> = Once::new();
@@ -438,7 +438,7 @@ pub fn hypervisor_self_coloring() {
     let image_size = _image_end as usize - image_start;
     // Copy the hypervisor image
     if current_cpu().id == CPU_MASTER {
-        info!("image size: {image_size:#x}");
+        debug!("image size: {image_size:#x}");
         let image = unsafe { core::slice::from_raw_parts(image_start as *const u8, image_size) };
         let (new_start, pa_regions) = space_remapping(image.as_ptr(), image.len(), self_color_bitmap);
         NEW_IMAGE_START.call_once(|| new_start as *const _ as usize);

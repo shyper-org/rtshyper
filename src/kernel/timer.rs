@@ -50,11 +50,13 @@ pub fn timer_irq_handler() {
     timer_notify_after(10);
 }
 
+#[allow(dead_code)]
 pub fn start_timer_event(period: TimerTickValue, event: Arc<dyn TimerEvent>) {
     let timeout_tick = current_cpu().sys_tick + period;
     current_cpu().timer_list.get_mut().unwrap().push(timeout_tick, event);
 }
 
+#[allow(dead_code)]
 pub fn remove_timer_event<F>(condition: F)
 where
     F: Fn(&Arc<dyn TimerEvent>) -> bool,

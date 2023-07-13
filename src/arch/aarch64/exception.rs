@@ -3,30 +3,25 @@ use core::arch::global_asm;
 // use alloc::collections::BinaryHeap;
 // use spin::{Mutex, Lazy};
 use tock_registers::interfaces::*;
+use cortex_a::registers::ESR_EL2;
 
-use crate::arch::{
-    ContextFrame, ContextFrameTrait, data_abort_handler, hvc_handler, smc_handler, sysreg_handler, InterruptController,
-};
+use crate::arch::{ContextFrame, ContextFrameTrait, InterruptController};
 use crate::kernel::{current_cpu, active_vm};
 use crate::kernel::interrupt_handler;
 
 use super::{interrupt_arch_deactive_irq, IntCtrl};
+use super::sync::{data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
 
 global_asm!(include_str!("exception.S"));
 
 #[inline(always)]
 pub fn exception_esr() -> usize {
-    cortex_a::registers::ESR_EL2.get() as usize
-}
-
-#[inline(always)]
-pub fn exception_esr_el1() -> usize {
-    cortex_a::registers::ESR_EL1.get() as usize
+    ESR_EL2.get() as usize
 }
 
 #[inline(always)]
 fn exception_class() -> usize {
-    (exception_esr() >> 26) & 0b111111
+    ESR_EL2.read(ESR_EL2::EC) as usize
 }
 
 #[inline(always)]
@@ -75,7 +70,7 @@ fn translate_far_to_hpfar(far: usize) -> Result<usize, ()> {
 #[inline(always)]
 pub fn exception_fault_addr() -> usize {
     let far = exception_far();
-    let hpfar = if (exception_esr() & ESR_ELx_S1PTW) == 0 && exception_data_abort_is_permission_fault() {
+    let hpfar = if (exception_iss() & ESR_ELx_S1PTW) == 0 && exception_data_abort_is_permission_fault() {
         translate_far_to_hpfar(far).unwrap_or_else(|_| {
             error!("error happen in translate_far_to_hpfar");
             0
@@ -89,7 +84,7 @@ pub fn exception_fault_addr() -> usize {
 /// \return 1 means 32-bit instruction, 0 means 16-bit instruction
 #[inline(always)]
 fn exception_instruction_length() -> usize {
-    (exception_esr() >> 25) & 1
+    ESR_EL2.read(ESR_EL2::IL) as usize
 }
 
 #[inline(always)]
@@ -99,7 +94,7 @@ pub fn exception_next_instruction_step() -> usize {
 
 #[inline(always)]
 pub fn exception_iss() -> usize {
-    exception_esr() & ((1 << 25) - 1)
+    ESR_EL2.read(ESR_EL2::ISS) as usize
 }
 
 #[inline(always)]

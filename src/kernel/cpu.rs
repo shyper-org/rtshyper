@@ -165,7 +165,7 @@ impl Cpu {
     }
 
     fn init_pt(&self, directory: usize) {
-        info!("cpu {} init_pt() pa {:#x}", self.id, directory);
+        debug!("cpu {} init_pt() pa {:#x}", self.id, directory);
         let pt = PageTable::from_pa(directory, false);
         self.global_pt.call_once(|| pt);
         crate::arch::Arch::invalid_hypervisor_all();
@@ -213,7 +213,7 @@ fn cpu_init_pt() {
 // Todo: add config for base slice
 fn cpu_sched_init() {
     let rule = PLAT_DESC.cpu_desc.core_list[current_cpu().id].sched;
-    info!("cpu[{}] init {rule:?} Scheduler", current_cpu().id);
+    trace!("cpu[{}] init {rule:?} Scheduler", current_cpu().id);
     current_cpu().vcpu_array.sched.call_once(|| get_scheduler(rule));
 }
 
@@ -240,8 +240,7 @@ pub fn cpu_init() {
 
     crate::util::barrier();
     if cpu_id == 0 {
-        info!("Bring up {} cores", PLAT_DESC.cpu_desc.num);
-        info!("Cpu init ok");
+        info!("Cpu init ok, Bring up {} cores", PLAT_DESC.cpu_desc.num);
     }
 }
 

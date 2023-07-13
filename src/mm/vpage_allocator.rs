@@ -424,11 +424,11 @@ pub fn vpage_alloc(len: usize, align: Option<usize>) -> Result<AllocatedPages, A
     }
     .map(|(ap, action)| {
         if action.free1.size_in_pages() > 0 {
-            info!("DeferredAllocAction insert free1 {:?}", action.free1);
+            trace!("DeferredAllocAction insert free1 {:?}", action.free1);
             locked_list.insert(action.free1).unwrap();
         }
         if action.free2.size_in_pages() > 0 {
-            info!("DeferredAllocAction insert free2 {:?}", action.free2);
+            trace!("DeferredAllocAction insert free2 {:?}", action.free2);
             locked_list.insert(action.free2).unwrap();
         }
         ap

@@ -9,7 +9,6 @@ use crate::util::round_up;
 
 use super::interface::*;
 
-// const PHYSICAL_ADDRESS_LIMIT_GB: usize = BOARD_PHYSICAL_ADDRESS_LIMIT >> 30;
 pub const PLATFORM_PHYSICAL_LIMIT_GB: usize = 16;
 
 register_bitfields! {u64,
@@ -88,20 +87,18 @@ impl BlockDescriptor {
 }
 
 #[repr(C, align(4096))]
-pub(super) struct PageTables {
+pub struct PageTables {
     entry: [BlockDescriptor; ENTRY_PER_PAGE],
 }
 
-pub(super) static mut LVL1_PAGE_TABLE: PageTables = PageTables {
+pub static mut LVL1_PAGE_TABLE: PageTables = PageTables {
     entry: [BlockDescriptor(0); ENTRY_PER_PAGE],
 };
-pub(super) static mut LVL2_PAGE_TABLE: PageTables = PageTables {
+pub static mut LVL2_PAGE_TABLE: PageTables = PageTables {
     entry: [BlockDescriptor(0); ENTRY_PER_PAGE],
 };
 
-#[no_mangle]
-// #[link_section = ".text.boot"]
-pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
+pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl2_base = lvl2_pt as *const _ as usize;
     let image_end_align_gb = round_up(_image_end as usize, 1 << LVL1_SHIFT);
 
@@ -193,8 +190,6 @@ pub(super) extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut Pag
     }
 }
 
-#[no_mangle]
-// #[link_section = ".text.boot"]
 pub(super) extern "C" fn mmu_init(pt: &PageTables) {
     use cortex_a::registers::*;
     MAIR_EL2.write(

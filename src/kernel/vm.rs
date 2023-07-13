@@ -291,7 +291,7 @@ impl Vm {
 
     fn init_intc_mode(&self, intc_type: IntCtrlType) {
         for vcpu in self.vcpu_list() {
-            info!("vm {} vcpu {} set {:?} hcr", self.id(), vcpu.id(), intc_type);
+            debug!("vm {} vcpu {} set {:?} hcr", self.id(), vcpu.id(), intc_type);
             match intc_type {
                 IntCtrlType::Emulated => {
                     vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);

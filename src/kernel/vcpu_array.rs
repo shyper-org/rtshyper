@@ -56,7 +56,7 @@ impl VcpuArray {
                 Some(_) => error!("self.array[{vm_id}].is_some()"),
                 None => {
                     debug_assert_eq!(current_cpu().id, vcpu.phys_id());
-                    info!(
+                    debug!(
                         "append_vcpu: append VM[{}] vcpu {} on core {}",
                         vm_id,
                         vcpu.id(),
@@ -189,6 +189,7 @@ impl VcpuArray {
         crate::arch::Arch::install_vm_page_table(next_vcpu.vm_pt_dir(), next_vcpu.vm_id());
     }
 
+    #[allow(dead_code)]
     pub fn block_current(&mut self) {
         if let Some(vcpu) = current_cpu().active_vcpu.take() {
             debug!("core {} VM {} vcpu {} block", current_cpu().id, vcpu.vm_id(), vcpu.id());

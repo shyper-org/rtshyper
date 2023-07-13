@@ -3,8 +3,6 @@ use tock_registers::interfaces::{Writeable, ReadWriteable};
 use crate::arch::PAGE_SIZE;
 use crate::kernel::{cpu_map_self, CPU_STACK_OFFSET, CPU_STACK_SIZE};
 
-use super::{pt_populate, mmu_init};
-
 #[link_section = ".data.boot"]
 static mut BOOT_STACK: [u8; PAGE_SIZE * 8] = [0; PAGE_SIZE * 8];
 
@@ -116,10 +114,10 @@ unsafe extern "C" fn _start() -> ! {
         "#,
         cache_invalidate = sym cache_invalidate,
         boot_stack = sym BOOT_STACK,
-        lvl1_page_table = sym super::LVL1_PAGE_TABLE,
-        lvl2_page_table = sym super::LVL2_PAGE_TABLE,
-        pt_populate = sym pt_populate,
-        mmu_init = sym mmu_init,
+        lvl1_page_table = sym super::mmu::LVL1_PAGE_TABLE,
+        lvl2_page_table = sym super::mmu::LVL2_PAGE_TABLE,
+        pt_populate = sym super::mmu::pt_populate,
+        mmu_init = sym super::mmu::mmu_init,
         cpu_map_self = sym cpu_map_self,
         CPU = sym crate::kernel::CPU,
         CPU_STACK_OFFSET = const CPU_STACK_OFFSET,

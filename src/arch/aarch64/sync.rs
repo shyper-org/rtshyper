@@ -1,13 +1,13 @@
-use crate::arch::{
-    exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write, exception_data_abort_access_reg,
-    exception_data_abort_access_reg_width, exception_data_abort_access_width, exception_data_abort_handleable,
-    exception_data_abort_is_permission_fault, exception_data_abort_is_translate_fault, exception_iss,
-};
-use crate::arch::{exception_esr, exception_fault_addr};
-use crate::arch::exception_next_instruction_step;
 use crate::arch::smc_guest_handler;
 use crate::device::{emu_handler, emu_reg_handler, EmuContext};
 use crate::kernel::{active_vm, current_cpu, hvc_guest_handler};
+
+use super::exception::{
+    exception_data_abort_access_is_sign_ext, exception_data_abort_access_is_write, exception_data_abort_access_reg,
+    exception_data_abort_access_reg_width, exception_data_abort_access_width, exception_data_abort_handleable,
+    exception_data_abort_is_permission_fault, exception_data_abort_is_translate_fault, exception_iss, exception_esr,
+    exception_fault_addr, exception_next_instruction_step,
+};
 
 pub const HVC_RETURN_REG: usize = 0;
 

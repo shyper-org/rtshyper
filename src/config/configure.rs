@@ -423,7 +423,7 @@ pub fn add_vm(config_ipa: usize) -> Result<usize, ()> {
         device_tree_load_ipa,
         ramdisk_load_ipa,
     ): (usize, usize, usize, usize, usize, usize, usize, usize) = unsafe { *(config_pa as *const _) };
-    info!("\n\nStart to prepare configuration for new VM");
+    info!("\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.
     let vm_name_pa = vm.ipa2hva(vm_name_ipa);

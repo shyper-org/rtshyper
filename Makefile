@@ -19,6 +19,17 @@ IMAGE=rtshyper_rs
 
 TARGET_DIR=target/${ARCH}/${PROFILE}
 
+TFTP_SERVER ?= root@192.168.106.153:/tftp
+
+UBOOT_IMAGE ?= RTShyperImage
+
+define tftp_upload
+	@${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
+	@mkimage -n ${IMAGE} -A arm64 -O linux -T kernel -C none -a $(1) -e $(1) -d ${TARGET_DIR}/${IMAGE}.bin ${TARGET_DIR}/${UBOOT_IMAGE}
+	@echo "*** Upload Image ${UBOOT_IMAGE} ***"
+	@scp ${TARGET_DIR}/${UBOOT_IMAGE} ${TFTP_SERVER}/${UBOOT_IMAGE}
+endef
+
 # Cargo flags.
 CARGO_FLAGS ?= -Z build-std=core,alloc --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
 ifeq (${PROFILE}, release)
@@ -37,11 +48,12 @@ qemu:
 
 tx2:
 	$(MAKE) build BOARD=tx2
-	bash upload ${PROFILE}
+	$(call tftp_upload,0x83000000) 
 
 pi4:
 	$(MAKE) build BOARD=pi4
-	bash pi4_upload ${PROFILE}
+	$(call tftp_upload,0xF0080000)
+	scp ./image/pi4_fin.dtb ${TFTP_SERVER}/pi4_dtb
 
 clippy:
 	cargo clippy ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>

@@ -59,7 +59,7 @@ fn vmm_init_memory(vm: &Vm) -> bool {
         match mem_region_alloc_colors(vm_region.length, config.memory_color_bitmap()) {
             Ok(vm_color_regions) => {
                 assert!(!vm_color_regions.is_empty());
-                info!("{:x?}", vm_color_regions);
+                debug!("{:x?}", vm_color_regions);
                 vm_map_ipa2color_regions(vm, vm_region, &vm_color_regions);
                 vm.append_color_regions(vm_color_regions);
             }
@@ -99,13 +99,13 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
                 #[cfg(feature = "tx2")]
                 {
                     if name == "L4T" {
-                        info!("MVM {} loading Image", vm.id());
+                        trace!("MVM {} loading Image", vm.id());
                         vmm_load_image(vm, include_bytes!("../../image/L4T"));
                     } else {
                         cfg_if::cfg_if! {
                             if #[cfg(feature = "static-config")] {
                                 if name == "Image_vanilla" {
-                                    info!("VM {} loading default Linux Image", vm.id());
+                                    trace!("VM {} loading default Linux Image", vm.id());
                                     vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
                                 } else {
                                     warn!("Image {} is not supported", name);
@@ -218,7 +218,7 @@ fn vmm_init_hardware(vm: &Vm) -> bool {
  * @param[in] vm_id: target VM id to set up config.
  */
 pub fn vmm_setup_config(vm: &Vm) {
-    info!(
+    trace!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
         vm.id(),
         vm.config().name,
@@ -243,7 +243,7 @@ pub fn vmm_setup_config(vm: &Vm) {
 
 fn vmm_init_cpu(vm: &Vm) {
     let vm_id = vm.id();
-    info!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
+    trace!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
     info!(
         "VM {} init cpu: cores=<{}>, allocat_bits=<{:#b}>",
         vm.id(),
@@ -271,7 +271,7 @@ fn vmm_init_cpu(vm: &Vm) {
 pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
     let cpu_id = current_cpu().id;
     if current_cpu().assigned() {
-        debug!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
+        trace!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
     }
 
     let vm = vm(vm_id).unwrap();

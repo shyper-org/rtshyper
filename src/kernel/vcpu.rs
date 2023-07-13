@@ -32,8 +32,10 @@ impl core::cmp::PartialEq for Vcpu {
     }
 }
 
+#[allow(dead_code)]
 pub(super) struct WeakVcpu(Weak<VcpuInner>);
 
+#[allow(dead_code)]
 impl WeakVcpu {
     pub(super) fn upgrade(&self) -> Option<Vcpu> {
         self.0.upgrade().map(Vcpu)

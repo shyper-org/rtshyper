@@ -26,7 +26,7 @@ pub fn ivc_update_mq(receive_ipa: usize, cfg_ipa: usize) -> bool {
 
 pub fn shyper_init(vmid: usize, base_ipa: usize, len: usize) -> bool {
     if base_ipa == 0 || len == 0 {
-        info!("vm{} shyper base ipa {:x}, len {:x}", vmid, base_ipa, len);
+        debug!("vm{} shyper base ipa {:x}, len {:x}", vmid, base_ipa, len);
         return true;
     }
     false

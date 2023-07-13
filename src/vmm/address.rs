@@ -73,7 +73,7 @@ pub(super) fn vmm_map_ipa_percore(vm_id: usize, is_master: bool) {
         }
         Some(vm) => vm,
     };
-    info!("vmm_map_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
+    trace!("vmm_map_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
     let config = vm.config();
     if is_master {
         let mut shared_pte_list = SHARED_PTE.write();
@@ -119,7 +119,7 @@ pub(super) fn vmm_unmap_ipa_percore(vm_id: usize) {
         }
         Some(vm) => vm,
     };
-    info!("vmm_unmap_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
+    trace!("vmm_unmap_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
     let config = vm.config();
     for region in config.memory_region().iter() {
         let hva = vm.ipa2hva(region.ipa_start);
