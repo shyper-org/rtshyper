@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use spin::Mutex;
 
@@ -9,6 +9,7 @@ use crate::device::{EmuDev, EmuDeviceType};
 use crate::device::Virtq;
 use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, active_vm};
 use crate::kernel::Vm;
+use crate::kernel::interrupt_vm_inject;
 
 use super::balloon::virtio_balloon_notify_handler;
 use super::queue::VIRTQ_READY;
@@ -101,6 +102,7 @@ struct VirtioInnerConst {
     emu_type: EmuDeviceType,
     vq: Vec<Virtq>,
     dev: VirtDev,
+    vm: Weak<Vm>,
 }
 
 struct VirtioInner {
@@ -109,7 +111,7 @@ struct VirtioInner {
 }
 
 impl VirtioInner {
-    fn new(dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) -> Self {
+    fn new(vm: Weak<Vm>, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) -> Self {
         Self {
             inner_const: VirtioInnerConst {
                 base: config.base_ipa,
@@ -117,6 +119,7 @@ impl VirtioInner {
                 emu_type: config.emu_type,
                 vq: vec![],
                 dev: VirtDev::new(dev_type, config),
+                vm,
             },
             inner: Mutex::new(VirtioMmioInnerMut::new()),
         }
@@ -179,36 +182,48 @@ impl VirtioInner {
 pub struct VirtioMmio(Arc<VirtioInner>);
 
 impl VirtioMmio {
-    pub fn notify_config(&self, vm: &Vm) {
+    pub fn upper_vm(&self) -> Option<Arc<Vm>> {
+        self.0.inner_const.vm.upgrade()
+    }
+
+    pub fn notify_config(&self) {
         let mut inner = self.0.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_CONFIG;
-        let int_id = self.dev().int_id();
-        let trgt_id = vm.vcpu(0).unwrap().phys_id();
         drop(inner);
-        use crate::kernel::interrupt_vm_inject;
-        if trgt_id == current_cpu().id {
-            interrupt_vm_inject(vm, vm.vcpu(0).unwrap(), int_id);
+        let vm = self.upper_vm().unwrap();
+        let int_id = self.dev().int_id();
+        let target_vcpu = vm.vcpu(0).unwrap();
+        if target_vcpu.phys_id() == current_cpu().id {
+            interrupt_vm_inject(&vm, target_vcpu, int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
-            if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
-                error!("notify_config: failed to send ipi to Core {}", trgt_id);
+            if !ipi_send_msg(
+                target_vcpu.phys_id(),
+                IpiType::IpiTIntInject,
+                IpiInnerMsg::IntInjectMsg(m),
+            ) {
+                error!("notify_config: failed to send ipi to Core {}", target_vcpu.phys_id());
             }
         }
     }
 
-    pub fn notify(&self, vm: &Vm) {
+    pub fn notify(&self) {
         let mut inner = self.0.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_VRING;
-        let int_id = self.dev().int_id();
-        let trgt_id = vm.vcpu(0).unwrap().phys_id();
         drop(inner);
-        use crate::kernel::interrupt_vm_inject;
-        if trgt_id == current_cpu().id {
-            interrupt_vm_inject(vm, vm.vcpu(0).unwrap(), int_id);
+        let vm = self.upper_vm().unwrap();
+        let int_id = self.dev().int_id();
+        let target_vcpu = vm.vcpu(0).unwrap();
+        if target_vcpu.phys_id() == current_cpu().id {
+            interrupt_vm_inject(&vm, target_vcpu, int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
-            if !ipi_send_msg(trgt_id, IpiType::IpiTIntInject, IpiInnerMsg::IntInjectMsg(m)) {
-                error!("notify_config: failed to send ipi to Core {}", trgt_id);
+            if !ipi_send_msg(
+                target_vcpu.phys_id(),
+                IpiType::IpiTIntInject,
+                IpiInnerMsg::IntInjectMsg(m),
+            ) {
+                error!("notify_config: failed to send ipi to Core {}", target_vcpu.phys_id());
             }
         }
     }
@@ -643,7 +658,7 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
     }
 }
 
-pub fn emu_virtio_mmio_init(vmid: usize, emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
+pub fn emu_virtio_mmio_init(vm: Weak<Vm>, emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
     let virt_dev_type = match emu_cfg.emu_type {
         EmuDeviceType::EmuDeviceTVirtioBlk => VirtioDeviceType::Block,
         EmuDeviceType::EmuDeviceTVirtioNet => VirtioDeviceType::Net,
@@ -654,14 +669,14 @@ pub fn emu_virtio_mmio_init(vmid: usize, emu_cfg: &VmEmulatedDeviceConfig) -> Re
             return Err(());
         }
     };
-    let mut mmio = VirtioInner::new(virt_dev_type, emu_cfg);
+    let mut mmio = VirtioInner::new(vm, virt_dev_type, emu_cfg);
     mmio.init(virt_dev_type);
     mmio.virtio_queue_init(virt_dev_type);
     let mmio = VirtioMmio(Arc::new(mmio));
     if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTVirtioNet {
         let nic = mmio.clone();
         let mac = emu_cfg.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
-        super::mac::set_mac_info(&mac, vmid, nic);
+        super::mac::set_mac_info(&mac, nic);
     }
     Ok(Box::new(mmio))
 }

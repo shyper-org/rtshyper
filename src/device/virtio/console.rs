@@ -151,7 +151,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: alloc::
         return false;
     }
 
-    console.notify(&vm);
+    console.notify();
 
     true
 }
@@ -263,6 +263,6 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
         return false;
     }
 
-    console.notify(&trgt_vm);
+    console.notify();
     true
 }

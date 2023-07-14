@@ -4,7 +4,7 @@ use spin::Mutex;
 
 use super::VirtioMmio;
 
-static MAC2NIC_INFO: Mutex<BTreeMap<MacAddress, (usize, VirtioMmio)>> = Mutex::new(BTreeMap::new());
+static MAC2NIC_INFO: Mutex<BTreeMap<MacAddress, VirtioMmio>> = Mutex::new(BTreeMap::new());
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct MacAddress([u8; 6]);
@@ -17,14 +17,29 @@ impl MacAddress {
     }
 }
 
-pub(super) fn set_mac_info(mac: &[u8], vmid: usize, nic: VirtioMmio) {
-    MAC2NIC_INFO.lock().insert(MacAddress::new(mac), (vmid, nic));
+pub fn set_mac_info(mac: &[u8], nic: VirtioMmio) {
+    MAC2NIC_INFO.lock().insert(MacAddress::new(mac), nic);
 }
 
-pub(super) fn mac_to_vmid(mac: &[u8]) -> Option<usize> {
-    MAC2NIC_INFO.lock().get(&MacAddress::new(mac)).map(|info| info.0)
+pub fn mac_to_nic(mac: &[u8]) -> Option<VirtioMmio> {
+    MAC2NIC_INFO.lock().get(&MacAddress::new(mac)).cloned()
+}
+
+pub fn virtio_nic_list_walker<F>(mut f: F)
+where
+    F: FnMut(&VirtioMmio),
+{
+    for nic in MAC2NIC_INFO.lock().values() {
+        f(nic);
+    }
 }
 
 pub fn remove_virtio_nic(vmid: usize) {
-    MAC2NIC_INFO.lock().retain(|_mac, info| info.0 != vmid);
+    MAC2NIC_INFO.lock().retain(|_mac, nic| {
+        if let Some(vm) = nic.upper_vm() {
+            vm.id() != vmid
+        } else {
+            false // if the vm is gone, the nic should be removed
+        }
+    });
 }

@@ -243,7 +243,7 @@ fn hvc_sys_handler(event: usize, _x0: usize) -> Result<usize, ()> {
         }
         HVC_SYS_TEST => {
             let vm = active_vm().unwrap();
-            crate::device::virtio_net_announce(&vm);
+            crate::device::virtio_net_announce(vm);
             Ok(0)
         }
         _ => Err(()),

@@ -247,7 +247,7 @@ impl AsyncCallback for ReadAsyncMsg {
         // println!("read check_sum is {:x}", sum);
         let info = &self.used_info;
         self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
-        self.dev.notify(&self.src_vm);
+        self.dev.notify();
     }
 }
 
@@ -261,7 +261,7 @@ impl AsyncCallback for WriteAsyncMsg {
         buffer.clear();
         let info = &self.used_info;
         self.vq.update_used_ring(info.used_len, info.desc_chain_head_idx);
-        self.dev.notify(&self.src_vm);
+        self.dev.notify();
     }
 }
 

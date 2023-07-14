@@ -100,7 +100,7 @@ pub fn virtio_balloon_notify_handler(vq: Virtq, balloon: VirtioMmio, vm: alloc::
             return false;
         }
     }
-    balloon.notify(&vm);
+    balloon.notify();
     true
 }
 

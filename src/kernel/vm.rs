@@ -12,7 +12,7 @@ use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::board::{PlatOperation, Platform};
 use crate::config::VmConfigEntry;
-use crate::device::{EmuDev, emu_virtio_mmio_init, VirtioMmio, EmuDeviceType};
+use crate::device::{EmuDev, emu_virtio_mmio_init, VirtioMmio};
 use crate::kernel::{mem_color_region_free, shyper_init};
 use crate::util::*;
 
@@ -208,11 +208,11 @@ impl VmInnerConst {
             emu_devs: vec![],
             intc_type: IntCtrlType::Emulated,
         };
-        this.init_devices();
+        this.init_devices(vm);
         this
     }
 
-    fn init_devices(&mut self) -> bool {
+    fn init_devices(&mut self, vm: Weak<Vm>) -> bool {
         // emulated devices
         use crate::device::EmuDeviceType::*;
         for (idx, emu_cfg) in self.config.emulated_device_list().iter().enumerate() {
@@ -230,7 +230,7 @@ impl VmInnerConst {
                     crate::arch::partial_passthrough_intc_init(emu_cfg)
                 }
                 EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet | VirtioBalloon => {
-                    emu_virtio_mmio_init(self.id, emu_cfg)
+                    emu_virtio_mmio_init(vm.clone(), emu_cfg)
                 }
                 EmuDeviceTIOMMU => emu_smmu_init(emu_cfg), // Do IOMMU init later, after add VM to global list
                 EmuDeviceTShyper => {
@@ -428,19 +428,6 @@ impl Vm {
 
     pub fn has_vgic(&self) -> bool {
         self.inner_const.arch_intc_dev.is_some()
-    }
-
-    pub fn emu_net_dev(&self, id: usize) -> Option<VirtioMmio> {
-        match self
-            .inner_const
-            .emu_devs
-            .iter()
-            .filter(|dev| dev.emu_type() == EmuDeviceType::EmuDeviceTVirtioNet)
-            .nth(id)
-        {
-            Some(dev) => dev.as_any().downcast_ref::<VirtioMmio>().cloned(),
-            None => None,
-        }
     }
 
     // Get console dev by ipa.

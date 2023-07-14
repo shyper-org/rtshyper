@@ -61,10 +61,9 @@ pub struct IpiPowerMessage {
 //     pub succeed: bool,
 // }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct IpiEthernetMsg {
-    pub src_vmid: usize,
-    pub trgt_vmid: usize,
+    pub trgt_nic: VirtioMmio,
 }
 
 #[derive(Copy, Clone)]

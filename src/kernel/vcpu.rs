@@ -395,7 +395,7 @@ pub fn vcpu_run(announce: bool) {
     vm_if_set_state(vm.id(), super::VmState::Active);
 
     if announce {
-        crate::device::virtio_net_announce(&vm);
+        crate::device::virtio_net_announce(vm);
     }
     // if the cpu is already running (a vcpu in scheduling queue), just return
     if current_cpu().cpu_state == CpuState::Run {

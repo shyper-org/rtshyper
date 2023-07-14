@@ -300,7 +300,7 @@ fn generate_blk_req(
                 if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32) {
                     println!("blk_req_handler: fail to update used ring");
                 }
-                dev.notify(&vm);
+                dev.notify();
             }
             _ => {
                 println!("Wrong block request type {} ", req_node.req_type);
@@ -380,7 +380,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> boo
                             next_desc_idx,
                             vq.desc_flags(next_desc_idx)
                         );
-                        blk.notify(&vm);
+                        blk.notify();
                         return false;
                     }
                     head = false;
@@ -401,7 +401,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> boo
                             req_node.req_type,
                             vq.desc_flags(next_desc_idx)
                         );
-                        blk.notify(&vm);
+                        blk.notify();
                         return false;
                     }
                     let data_bg = vm.ipa2hva(vq.desc_addr(next_desc_idx));
@@ -421,7 +421,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> boo
                 /*state handler*/
                 if !vq.desc_is_writable(next_desc_idx) {
                     println!("Failed to get virt blk queue desc status, idx = {}", next_desc_idx);
-                    blk.notify(&vm);
+                    blk.notify();
                     return false;
                 }
                 let vstatus_addr = vm.ipa2hva(vq.desc_addr(next_desc_idx));
@@ -460,7 +460,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> boo
 
     if vq.avail_flags() == 0 && process_count > 0 && !req.mediated() {
         println!("virtio blk notify");
-        blk.notify(&vm);
+        blk.notify();
     }
 
     // let end = time_current_us();
