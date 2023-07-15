@@ -8,6 +8,7 @@ pub use self::utility::*;
 mod barrier;
 #[allow(dead_code)]
 mod bitmap;
+pub mod downcast;
 pub mod logger;
 mod print;
 mod string;

@@ -1869,10 +1869,6 @@ cfg_if::cfg_if! {
                 EmuDeviceType::EmuDeviceTGPPT
             }
 
-            fn as_any(&self) -> &dyn core::any::Any {
-                self
-            }
-
             fn address_range(&self) -> Range<usize> {
                 self.address_range.clone()
             }
@@ -2017,10 +2013,6 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
 impl EmuDev for Vgic {
     fn emu_type(&self) -> EmuDeviceType {
         EmuDeviceType::EmuDeviceTGicd
-    }
-
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
     }
 
     fn address_range(&self) -> Range<usize> {

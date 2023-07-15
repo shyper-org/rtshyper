@@ -164,7 +164,7 @@ pub fn mvm_config_init() {
         String::from("coherent_pool=1M snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1 console=ttyAMA0,115200n8 root=/dev/sda1 rootfstype=ext4 rw audit=0 rootwait default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
 
         image: VmImageConfig {
-            kernel_img_name: Some("Raspi4"),
+            kernel_img_name: Some(env!("VM0_IMAGE_PATH")),
             kernel_load_ipa: 0x280000,
             kernel_entry_point: 0x280000,
             device_tree_load_ipa: 0x10000000,

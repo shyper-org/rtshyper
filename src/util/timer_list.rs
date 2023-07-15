@@ -3,11 +3,12 @@ use core::cmp::{PartialOrd, Ord, PartialEq, Ordering, Reverse};
 use alloc::collections::BinaryHeap;
 use alloc::sync::Arc;
 
+use super::downcast::Downcast;
+
 pub type TimerTickValue = u64;
 
-pub trait TimerEvent {
+pub trait TimerEvent: Downcast {
     fn callback(self: Arc<Self>, now: TimerTickValue);
-    fn as_any(&self) -> &dyn core::any::Any;
 }
 
 struct TimerEventWrapper {

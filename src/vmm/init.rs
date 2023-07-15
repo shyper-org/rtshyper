@@ -96,45 +96,28 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
     if config.os_type == VmType::VmTOs {
         match vm.config().kernel_img_name() {
             Some(name) => {
-                #[cfg(feature = "tx2")]
-                {
-                    if name == "L4T" {
-                        trace!("MVM {} loading Image", vm.id());
-                        vmm_load_image(vm, include_bytes!("../../image/L4T"));
-                    } else {
-                        cfg_if::cfg_if! {
-                            if #[cfg(feature = "static-config")] {
-                                if name == "Image_vanilla" {
-                                    trace!("VM {} loading default Linux Image", vm.id());
-                                    vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
-                                } else {
-                                    warn!("Image {} is not supported", name);
-                                }
-                            } else if #[cfg(feature = "unishyper")] {
-                                if name == "Image_Unishyper" {
-                                    vmm_load_image(vm, include_bytes!("../../image/Image_Unishyper"));
-                                } else {
-                                    warn!("Image {} is not supported", name);
-                                }
+                if name == env!("VM0_IMAGE_PATH") {
+                    trace!("MVM {} loading Image", vm.id());
+                    vmm_load_image(vm, include_bytes!(env!("VM0_IMAGE_PATH")));
+                } else {
+                    cfg_if::cfg_if! {
+                        if #[cfg(feature = "static-config")] {
+                            if name == "Image_vanilla" {
+                                trace!("VM {} loading default Linux Image", vm.id());
+                                vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
                             } else {
                                 warn!("Image {} is not supported", name);
                             }
+                        } else if #[cfg(feature = "unishyper")] {
+                            if name == "Image_Unishyper" {
+                                vmm_load_image(vm, include_bytes!("../../image/Image_Unishyper"));
+                            } else {
+                                warn!("Image {} is not supported", name);
+                            }
+                        } else {
+                            panic!("Image {} is not supported", name);
                         }
                     }
-                }
-                #[cfg(feature = "pi4")]
-                if name.is_empty() {
-                    panic!("kernel image name empty")
-                } else {
-                    vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.83_tlb"));
-                }
-                // vmm_load_image(vm, include_bytes!("../../image/Image_pi4_5.4.78"));
-                // vmm_load_image(vm, include_bytes!("../../image/Image_pi4"));
-                #[cfg(feature = "qemu")]
-                if name.is_empty() {
-                    panic!("kernel image name empty")
-                } else {
-                    vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
                 }
             }
             None => {

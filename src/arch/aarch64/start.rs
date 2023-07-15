@@ -140,7 +140,7 @@ fn init_sysregs() {
             .value
             | 1 << 19, /* TSC */
     );
-    VBAR_EL2.set(vectors as u64);
+    VBAR_EL2.set(vectors as usize as u64);
     SCTLR_EL2.modify(SCTLR_EL2::M::Enable + SCTLR_EL2::C::Cacheable + SCTLR_EL2::I::Cacheable);
 }
 

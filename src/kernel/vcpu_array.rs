@@ -234,8 +234,4 @@ impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
             super::timer::start_timer_event(period, self);
         }
     }
-
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
-    }
 }

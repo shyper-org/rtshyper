@@ -5,10 +5,10 @@ use alloc::vec::Vec;
 use spin::RwLock;
 
 use crate::kernel::{current_cpu, active_vm};
+use crate::util::downcast::Downcast;
 
-pub trait EmuDev: Send + Sync {
+pub trait EmuDev: Downcast + Send + Sync {
     fn emu_type(&self) -> EmuDeviceType;
-    fn as_any(&self) -> &dyn core::any::Any;
     fn address_range(&self) -> Range<usize>;
     fn handler(&self, emu_ctx: &EmuContext) -> bool;
 }

@@ -706,10 +706,6 @@ impl EmuDev for EmuSmmu {
         EmuDeviceType::EmuDeviceTIOMMU
     }
 
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
-    }
-
     fn address_range(&self) -> Range<usize> {
         self.address_range.clone()
     }

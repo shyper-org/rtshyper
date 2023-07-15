@@ -101,7 +101,7 @@ pub fn mvm_config_init() {
         os_type: VmType::VmTOs,
         cmdline: String::from("earlycon console=ttyAMA0 root=/dev/vda rw audit=0 default_hugepagesz=32M hugepagesz=32M hugepages=4\0"),
         image: VmImageConfig {
-            kernel_img_name: Some("Image"),
+            kernel_img_name: Some(env!("VM0_IMAGE_PATH")),
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             // device_tree_filename: Some("qemu1.bin"),

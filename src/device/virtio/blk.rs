@@ -453,7 +453,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> boo
     } else {
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         let cache = mediated_blk.cache_pa();
-        generate_blk_req(req, &vq, &blk, cache, vm.clone(), req_node_list);
+        generate_blk_req(req, &vq, &blk, cache, vm, req_node_list);
     };
 
     // let time1 = time_current_us();

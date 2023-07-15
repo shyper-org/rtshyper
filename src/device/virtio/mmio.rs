@@ -686,10 +686,6 @@ impl EmuDev for VirtioMmio {
         self.0.inner_const.emu_type
     }
 
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
-    }
-
     fn address_range(&self) -> core::ops::Range<usize> {
         self.0.inner_const.base..self.0.inner_const.base + self.0.inner_const.length
     }
