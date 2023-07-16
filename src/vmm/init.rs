@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
 use crate::config::VmRegion;
@@ -5,12 +7,11 @@ use crate::dtb::{create_fdt, setup_fdt_vm0};
 use crate::device::EmuDeviceType::*;
 use crate::kernel::{
     current_cpu, iommmu_vm_init, VmType, iommu_add_device, mem_region_alloc_colors, ColorMemRegion, count_missing_num,
-    IpiVmmMsg, ipi_send_msg, IpiType, IpiInnerMsg,
+    IpiVmmPercoreMsg, ipi_send_msg, IpiType, IpiInnerMsg, Vm,
 };
-use crate::kernel::{vm, Vm};
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::access::copy_segment_to_vm;
-use crate::vmm::VmmEvent;
+use crate::vmm::VmmPercoreEvent;
 use crate::vmm::address::vmm_setup_ipa2hva;
 
 cfg_if::cfg_if! {
@@ -35,7 +36,7 @@ fn vm_map_ipa2color_regions(vm: &Vm, vm_region: &VmRegion, color_regions: &[Colo
     }
 }
 
-fn vmm_init_memory(vm: &Vm) -> bool {
+fn vmm_init_memory(vm: Arc<Vm>) -> bool {
     let config = vm.config();
     // passthrough regions
     for region in vm.config().passthrough_device_regions() {
@@ -60,7 +61,7 @@ fn vmm_init_memory(vm: &Vm) -> bool {
             Ok(vm_color_regions) => {
                 assert!(!vm_color_regions.is_empty());
                 debug!("{:x?}", vm_color_regions);
-                vm_map_ipa2color_regions(vm, vm_region, &vm_color_regions);
+                vm_map_ipa2color_regions(&vm, vm_region, &vm_color_regions);
                 vm.append_color_regions(vm_color_regions);
             }
             Err(_) => {
@@ -200,7 +201,7 @@ fn vmm_init_hardware(vm: &Vm) -> bool {
  *
  * @param[in] vm_id: target VM id to set up config.
  */
-pub fn vmm_setup_config(vm: &Vm) {
+pub fn vmm_setup_config(vm: Arc<Vm>) {
     trace!(
         "vmm_setup_config VM[{}] name {:?} current core {}",
         vm.id(),
@@ -208,23 +209,23 @@ pub fn vmm_setup_config(vm: &Vm) {
         current_cpu().id
     );
     // need ipi, must after push to global list
-    vmm_init_cpu(vm);
+    vmm_init_cpu(vm.clone());
     // need ipi, must after push to global list
-    if !vmm_init_memory(vm) {
+    if !vmm_init_memory(vm.clone()) {
         panic!("vmm_setup_config: vmm_init_memory failed");
     }
     // need memory, must after init memory
-    if !vmm_init_image(vm) {
+    if !vmm_init_image(&vm) {
         panic!("vmm_setup_config: vmm_init_image failed");
     }
-    if !vmm_init_hardware(vm) {
+    if !vmm_init_hardware(&vm) {
         panic!("vmm_setup_config: vmm_init_hardware failed");
     }
 
     info!("VM {} id {} init ok", vm.id(), vm.config().name);
 }
 
-fn vmm_init_cpu(vm: &Vm) {
+fn vmm_init_cpu(vm: Arc<Vm>) {
     let vm_id = vm.id();
     trace!("vmm_init_cpu: set up vm {} on cpu {}", vm_id, current_cpu().id);
     info!(
@@ -237,34 +238,32 @@ fn vmm_init_cpu(vm: &Vm) {
     for vcpu in vm.vcpu_list() {
         let target_cpu_id = vcpu.phys_id();
         if target_cpu_id != current_cpu().id {
-            let m = IpiVmmMsg {
-                vmid: vm_id,
-                event: VmmEvent::VmmAssignCpu,
+            let m = IpiVmmPercoreMsg {
+                vm: vm.clone(),
+                event: VmmPercoreEvent::AssignCpu,
             };
-            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(m)) {
                 error!("vmm_init_cpu: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
-            vmm_cpu_assign_vcpu(vm_id);
+            vmm_assign_vcpu_percore(&vm);
         }
     }
     info!("vmm_init_cpu: VM [{}] is ready", vm_id);
 }
 
-pub fn vmm_cpu_assign_vcpu(vm_id: usize) {
+pub fn vmm_assign_vcpu_percore(vm: &Vm) {
     let cpu_id = current_cpu().id;
     if current_cpu().assigned() {
-        trace!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm_id, cpu_id);
+        trace!("vmm_cpu_assign_vcpu vm[{}] cpu {} is assigned", vm.id(), cpu_id);
     }
-
-    let vm = vm(vm_id).unwrap();
 
     for vcpu in vm.vcpu_list() {
         if vcpu.phys_id() == current_cpu().id {
             if vcpu.id() == 0 {
-                info!("* Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
+                info!("* Core {} is assigned => vm {}, vcpu {}", cpu_id, vm.id(), vcpu.id());
             } else {
-                info!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm_id, vcpu.id());
+                info!("Core {} is assigned => vm {}, vcpu {}", cpu_id, vm.id(), vcpu.id());
             }
             current_cpu().vcpu_array.append_vcpu(vcpu.clone());
             break;

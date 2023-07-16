@@ -188,8 +188,8 @@ impl VirtioBlkReqNode {
 
 fn generate_blk_req(
     req: &VirtioBlkReq,
-    vq: &Virtq,
-    dev: &VirtioMmio,
+    vq: Arc<Virtq>,
+    dev: Arc<VirtioMmio>,
     cache: usize,
     vm: Arc<Vm>,
     req_node_list: Vec<VirtioBlkReqNode>,
@@ -318,14 +318,14 @@ fn generate_blk_req(
     }
 }
 
-pub fn virtio_mediated_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> bool {
+pub fn virtio_mediated_blk_notify_handler(vq: Arc<Virtq>, blk: Arc<VirtioMmio>, vm: Arc<Vm>) -> bool {
     let src_vmid = vm.id();
     let task = AsyncTask::new(IpiMediatedMsg { src_vm: vm, vq, blk }, src_vmid, async_ipi_req());
     EXECUTOR.add_task(task, true);
     true
 }
 
-pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> bool {
+pub fn virtio_blk_notify_handler(vq: Arc<Virtq>, blk: Arc<VirtioMmio>, vm: Arc<Vm>) -> bool {
     let avail_idx = vq.avail_idx();
 
     // let begin = time_current_us();
@@ -453,7 +453,7 @@ pub fn virtio_blk_notify_handler(vq: Virtq, blk: VirtioMmio, vm: Arc<Vm>) -> boo
     } else {
         let mediated_blk = mediated_blk_list_get(vm.med_blk_id());
         let cache = mediated_blk.cache_pa();
-        generate_blk_req(req, &vq, &blk, cache, vm, req_node_list);
+        generate_blk_req(req, vq.clone(), blk.clone(), cache, vm, req_node_list);
     };
 
     // let time1 = time_current_us();

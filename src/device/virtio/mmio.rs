@@ -1,4 +1,3 @@
-use alloc::boxed::Box;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use spin::Mutex;
@@ -100,17 +99,17 @@ struct VirtioInnerConst {
     base: usize,
     length: usize,
     emu_type: EmuDeviceType,
-    vq: Vec<Virtq>,
+    vq: Vec<Arc<Virtq>>,
     dev: VirtDev,
     vm: Weak<Vm>,
 }
 
-struct VirtioInner {
+pub struct VirtioMmio {
     inner_const: VirtioInnerConst,
     inner: Mutex<VirtioMmioInnerMut>,
 }
 
-impl VirtioInner {
+impl VirtioMmio {
     fn new(vm: Weak<Vm>, dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) -> Self {
         Self {
             inner_const: VirtioInnerConst {
@@ -135,14 +134,14 @@ impl VirtioInner {
         inner.regs.q_num_max = q_num_max;
     }
 
-    fn virtio_queue_init(&mut self, dev_type: VirtioDeviceType) {
+    fn virtio_queue_init(&mut self, weak: &Weak<VirtioMmio>, dev_type: VirtioDeviceType) {
         match dev_type {
             VirtioDeviceType::Block => {
                 self.set_q_num_max(VIRTQUEUE_BLK_MAX_SIZE as u32);
                 let queue = if self.inner_const.dev.mediated() {
-                    Virtq::new(0, virtio_mediated_blk_notify_handler)
+                    Virtq::new(0, weak.clone(), virtio_mediated_blk_notify_handler)
                 } else {
-                    Virtq::new(0, virtio_blk_notify_handler)
+                    Virtq::new(0, weak.clone(), virtio_blk_notify_handler)
                 };
                 self.inner_const.vq.push(queue);
             }
@@ -150,23 +149,23 @@ impl VirtioInner {
                 self.set_q_num_max(VIRTQUEUE_NET_MAX_SIZE as u32);
                 // Not support feature VIRTIO_NET_F_CTRL_VQ (no control queue)
                 for i in 0..2 {
-                    let queue = Virtq::new(i, virtio_net_notify_handler);
+                    let queue = Virtq::new(i, weak.clone(), virtio_net_notify_handler);
                     self.inner_const.vq.push(queue);
                 }
-                let queue = Virtq::new(2, virtio_net_handle_ctrl);
+                let queue = Virtq::new(2, weak.clone(), virtio_net_handle_ctrl);
                 self.inner_const.vq.push(queue);
             }
             VirtioDeviceType::Console => {
                 self.set_q_num_max(VIRTQUEUE_CONSOLE_MAX_SIZE as u32);
                 for i in 0..4 {
-                    let queue = Virtq::new(i, virtio_console_notify_handler);
+                    let queue = Virtq::new(i, weak.clone(), virtio_console_notify_handler);
                     self.inner_const.vq.push(queue);
                 }
             }
             VirtioDeviceType::Balloon => {
                 self.set_q_num_max(256_u32);
                 for i in 0..2 {
-                    let queue = Virtq::new(i, virtio_balloon_notify_handler);
+                    let queue = Virtq::new(i, weak.clone(), virtio_balloon_notify_handler);
                     self.inner_const.vq.push(queue);
                 }
             }
@@ -175,19 +174,13 @@ impl VirtioInner {
             }
         }
     }
-}
 
-#[repr(transparent)]
-#[derive(Clone)]
-pub struct VirtioMmio(Arc<VirtioInner>);
-
-impl VirtioMmio {
     pub fn upper_vm(&self) -> Option<Arc<Vm>> {
-        self.0.inner_const.vm.upgrade()
+        self.inner_const.vm.upgrade()
     }
 
     pub fn notify_config(&self) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_CONFIG;
         drop(inner);
         let vm = self.upper_vm().unwrap();
@@ -208,7 +201,7 @@ impl VirtioMmio {
     }
 
     pub fn notify(&self) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.irt_stat |= VIRTIO_MMIO_INT_VRING;
         drop(inner);
         let vm = self.upper_vm().unwrap();
@@ -230,11 +223,11 @@ impl VirtioMmio {
 
     // virtio_dev_reset
     pub fn dev_reset(&self) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.dev_stat = 0;
         inner.regs.irt_stat = 0;
         let idx = inner.regs.q_sel as usize;
-        let vq = &self.0.inner_const.vq;
+        let vq = &self.inner_const.vq;
         vq[idx].set_ready(0);
         for virtq in vq.iter() {
             virtq.reset();
@@ -243,106 +236,106 @@ impl VirtioMmio {
     }
 
     pub fn set_irt_stat(&self, irt_stat: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.irt_stat = irt_stat;
     }
 
     pub fn set_irt_ack(&self, irt_ack: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.irt_ack = irt_ack;
     }
 
     pub fn set_q_sel(&self, q_sel: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.q_sel = q_sel;
     }
 
     pub fn set_dev_stat(&self, dev_stat: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.dev_stat = dev_stat;
     }
 
     pub fn set_dev_feature(&self, dev_feature: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.dev_feature = dev_feature;
     }
 
     pub fn set_dev_feature_sel(&self, dev_feature_sel: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.dev_feature_sel = dev_feature_sel;
     }
 
     pub fn set_drv_feature(&self, drv_feature: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.drv_feature = drv_feature;
     }
 
     pub fn set_drv_feature_sel(&self, drv_feature_sel: u32) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.regs.drv_feature = drv_feature_sel;
     }
 
     pub fn or_driver_feature(&self, driver_features: usize) {
-        let mut inner = self.0.inner.lock();
+        let mut inner = self.inner.lock();
         inner.driver_features |= driver_features;
     }
 
     pub(super) fn dev(&self) -> &VirtDev {
-        &self.0.inner_const.dev
+        &self.inner_const.dev
     }
 
     pub fn q_sel(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.q_sel
     }
 
     pub fn magic(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.magic
     }
 
     pub fn version(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.version
     }
 
     pub fn device_id(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.device_id
     }
 
     pub fn vendor_id(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.vendor_id
     }
 
     pub fn dev_stat(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.dev_stat
     }
 
     pub fn dev_feature_sel(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.dev_feature_sel
     }
 
     pub fn drv_feature_sel(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.drv_feature_sel
     }
 
     pub fn q_num_max(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.q_num_max
     }
 
     pub fn irt_stat(&self) -> u32 {
-        let inner = self.0.inner.lock();
+        let inner = self.inner.lock();
         inner.regs.irt_stat
     }
 
     pub fn vq(&self, idx: usize) -> Result<&Virtq, ()> {
-        match self.0.inner_const.vq.get(idx) {
+        match self.inner_const.vq.get(idx) {
             Some(vq) => Ok(vq),
             None => Err(()),
         }
@@ -350,15 +343,11 @@ impl VirtioMmio {
 
     #[inline]
     pub fn base(&self) -> usize {
-        self.0.inner_const.base
-    }
-
-    pub fn notify_handler(&self, idx: usize) -> bool {
-        self.0.inner_const.vq[idx].call_notify_handler(self.clone())
+        self.inner_const.base
     }
 
     pub fn vq_num(&self) -> usize {
-        self.0.inner_const.vq.len()
+        self.inner_const.vq.len()
     }
 }
 
@@ -658,7 +647,7 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
     }
 }
 
-pub fn emu_virtio_mmio_init(vm: Weak<Vm>, emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
+pub fn emu_virtio_mmio_init(vm: Weak<Vm>, emu_cfg: &VmEmulatedDeviceConfig) -> Result<Arc<dyn EmuDev>, ()> {
     let virt_dev_type = match emu_cfg.emu_type {
         EmuDeviceType::EmuDeviceTVirtioBlk => VirtioDeviceType::Block,
         EmuDeviceType::EmuDeviceTVirtioNet => VirtioDeviceType::Net,
@@ -669,25 +658,27 @@ pub fn emu_virtio_mmio_init(vm: Weak<Vm>, emu_cfg: &VmEmulatedDeviceConfig) -> R
             return Err(());
         }
     };
-    let mut mmio = VirtioInner::new(vm, virt_dev_type, emu_cfg);
-    mmio.init(virt_dev_type);
-    mmio.virtio_queue_init(virt_dev_type);
-    let mmio = VirtioMmio(Arc::new(mmio));
+    let mmio = Arc::new_cyclic(|weak| {
+        let mut mmio = VirtioMmio::new(vm, virt_dev_type, emu_cfg);
+        mmio.init(virt_dev_type);
+        mmio.virtio_queue_init(weak, virt_dev_type);
+        mmio
+    });
     if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTVirtioNet {
         let nic = mmio.clone();
         let mac = emu_cfg.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
         super::mac::set_mac_info(&mac, nic);
     }
-    Ok(Box::new(mmio))
+    Ok(mmio)
 }
 
 impl EmuDev for VirtioMmio {
     fn emu_type(&self) -> EmuDeviceType {
-        self.0.inner_const.emu_type
+        self.inner_const.emu_type
     }
 
     fn address_range(&self) -> core::ops::Range<usize> {
-        self.0.inner_const.base..self.0.inner_const.base + self.0.inner_const.length
+        self.inner_const.base..self.inner_const.base + self.inner_const.length
     }
 
     fn handler(&self, emu_ctx: &EmuContext) -> bool {
@@ -702,8 +693,8 @@ impl EmuDev for VirtioMmio {
             // println!("{} {}", q_sel as usize, current_cpu().get_gpr(emu_ctx.reg));
             // }
             // println!("in VIRTIO_MMIO_QUEUE_NOTIFY");
-
-            if !self.notify_handler(current_cpu().get_gpr(emu_ctx.reg)) {
+            let idx = current_cpu().get_gpr(emu_ctx.reg);
+            if !self.inner_const.vq[idx].call_notify_handler() {
                 println!("Failed to handle virtio mmio request!");
             }
         } else if offset == VIRTIO_MMIO_INTERRUPT_STATUS && !write {

@@ -1,10 +1,12 @@
+use alloc::sync::Arc;
+
 use crate::arch::{interrupt_arch_deactive_irq, INTERRUPT_IRQ_GUEST_TIMER};
 use crate::kernel::{
-    current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmMsg, remove_vm, remove_vm_async_task,
-    Vm, vm, interrupt_cpu_enable,
+    current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, remove_vm, remove_vm_async_task, Vm,
+    vm_by_id, interrupt_cpu_enable, IpiVmmPercoreMsg,
 };
 use crate::kernel::vm_if_reset;
-use crate::vmm::VmmEvent;
+use crate::vmm::VmmPercoreEvent;
 use crate::vmm::address::vmm_unmap_ipa2hva;
 
 pub fn vmm_remove_vm(vm_id: usize) {
@@ -14,7 +16,7 @@ pub fn vmm_remove_vm(vm_id: usize) {
     }
 
     // remove vm: page table / mmio / vgic will be removed when vm drop
-    let vm = vm(vm_id).unwrap();
+    let vm = vm_by_id(vm_id).unwrap();
 
     // vcpu
     vmm_remove_vcpu(&vm);
@@ -31,13 +33,13 @@ pub fn vmm_remove_vm(vm_id: usize) {
     // remove vm unilib
     crate::util::unilib::unilib_fs_remove(vm_id);
     // unmap ipa(hva) percore at last
-    vmm_unmap_ipa2hva(&vm);
+    vmm_unmap_ipa2hva(vm);
     remove_vm(vm_id);
     info!("remove vm[{}] successfully", vm_id);
 }
 
-pub fn vmm_cpu_remove_vcpu(vmid: usize) {
-    current_cpu().vcpu_array.remove_vcpu(vmid);
+pub fn vmm_remove_vcpu_percore(vm: &Vm) {
+    current_cpu().vcpu_array.remove_vcpu(vm.id());
     if !current_cpu().assigned() {
         // hard code: remove el1 timer interrupt 27
         interrupt_cpu_enable(INTERRUPT_IRQ_GUEST_TIMER, false);
@@ -45,16 +47,16 @@ pub fn vmm_cpu_remove_vcpu(vmid: usize) {
     }
 }
 
-fn vmm_remove_vcpu(vm: &Vm) {
+fn vmm_remove_vcpu(vm: &Arc<Vm>) {
     for vcpu in vm.vcpu_list() {
         if vcpu.phys_id() == current_cpu().id {
-            vmm_cpu_remove_vcpu(vm.id());
+            vmm_remove_vcpu_percore(vm);
         } else {
-            let m = IpiVmmMsg {
-                vmid: vm.id(),
-                event: VmmEvent::VmmRemoveCpu,
+            let m = IpiVmmPercoreMsg {
+                vm: vm.clone(),
+                event: VmmPercoreEvent::RemoveCpu,
             };
-            if !ipi_send_msg(vcpu.phys_id(), IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+            if !ipi_send_msg(vcpu.phys_id(), IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(m)) {
                 warn!("vmm_remove_vcpu: failed to send ipi to Core {}", vcpu.phys_id());
             }
         }

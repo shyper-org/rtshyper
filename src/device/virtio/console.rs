@@ -1,8 +1,10 @@
+use alloc::sync::Arc;
+
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
 use crate::device::{VirtioMmio, Virtq};
-use crate::kernel::vm;
+use crate::kernel::vm_by_id;
 use crate::kernel::Vm;
 use crate::util::round_down;
 
@@ -92,7 +94,7 @@ pub fn console_features() -> usize {
     VIRTIO_F_VERSION_1 | VIRTIO_CONSOLE_F_SIZE
 }
 
-pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
+pub fn virtio_console_notify_handler(vq: Arc<Virtq>, console: Arc<VirtioMmio>, vm: Arc<Vm>) -> bool {
     if vq.vq_indx() % 4 != 1 {
         // println!("console rx queue notified!");
         return true;
@@ -157,7 +159,7 @@ pub fn virtio_console_notify_handler(vq: Virtq, console: VirtioMmio, vm: alloc::
 }
 
 fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov, len: usize) -> bool {
-    let trgt_vm = match vm(trgt_vmid as usize) {
+    let trgt_vm = match vm_by_id(trgt_vmid as usize) {
         None => {
             println!("target vm [{}] is not ready or not exist", trgt_vmid);
             return true;

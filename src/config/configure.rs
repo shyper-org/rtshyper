@@ -7,7 +7,7 @@ use spin::Mutex;
 
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
-use crate::kernel::{active_vm, vm, Vm, VmType, CONFIG_VM_NUM_MAX};
+use crate::kernel::{active_vm, vm_by_id, Vm, VmType, CONFIG_VM_NUM_MAX};
 use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
 use crate::kernel::access::{copy_segment_from_vm, copy_between_vm};
@@ -697,7 +697,7 @@ fn vm_cfg_finish_configuration(vmid: usize, _img_size: usize) -> alloc::sync::Ar
 
     // Get VM structure.
 
-    match vm(vmid) {
+    match vm_by_id(vmid) {
         None => {
             panic!("vm_cfg_upload_kernel_image:failed to init VM[{}]", vmid);
         }
@@ -717,7 +717,7 @@ pub fn upload_kernel_image(
     load_size: usize,
 ) -> Result<usize, ()> {
     // Before upload kernel image, set GVM.
-    let vm = match vm(vmid) {
+    let vm = match vm_by_id(vmid) {
         None => {
             info!(
                 "Successfully add configuration file for VM [{}]\n>>> Start to init...",

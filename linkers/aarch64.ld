@@ -7,7 +7,6 @@ SECTIONS
 
     .boot : {
         *(.text.boot)
-        *(.data.boot)
     }
 
     .text : {
@@ -23,13 +22,15 @@ SECTIONS
         *(.data*)
     }
 
-    . = ALIGN(4096);
-    _bss_begin = .;
     .bss (NOLOAD) : ALIGN(4096) {
+        *(.bss.stack)
+
+        . = ALIGN(4096);
+        _bss_begin = .;
         *(.bss*)
+        . = ALIGN(4096);
+        _bss_end = .;
     }
-    . = ALIGN(4096);
-    _bss_end = .;
 
     _image_end = ABSOLUTE(.);
     

@@ -149,7 +149,7 @@ pub fn net_features() -> usize {
 const VIRTIO_NET_CTRL_ANNOUNCE: u8 = 3;
 const VIRTIO_NET_CTRL_ANNOUNCE_ACK: u8 = 0;
 
-pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
+pub fn virtio_net_handle_ctrl(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: Arc<Vm>) -> bool {
     if vq.ready() == 0 {
         println!("virtio net control queue is not ready!");
         return false;
@@ -213,7 +213,7 @@ pub fn virtio_net_handle_ctrl(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<V
     true
 }
 
-pub fn virtio_net_notify_handler(vq: Virtq, nic: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
+pub fn virtio_net_notify_handler(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: alloc::sync::Arc<Vm>) -> bool {
     if vq.ready() == 0 {
         println!("net virt_queue is not ready!");
         return false;
@@ -325,7 +325,7 @@ pub fn ethernet_ipi_rev_handler(msg: IpiMessage) {
     }
 }
 
-fn ethernet_transmit(tx_iov: VirtioIov, len: usize, vm: &Vm) -> Option<Vec<VirtioMmio>> {
+fn ethernet_transmit(tx_iov: VirtioIov, len: usize, vm: &Vm) -> Option<Vec<Arc<VirtioMmio>>> {
     // [ destination MAC - 6 ][ source MAC - 6 ][ EtherType - 2 ][ Payload ]
     if len < size_of::<VirtioNetHdr>() || len - size_of::<VirtioNetHdr>() < 6 + 6 + 2 {
         println!(
@@ -366,7 +366,7 @@ fn ethernet_transmit(tx_iov: VirtioIov, len: usize, vm: &Vm) -> Option<Vec<Virti
     }
 }
 
-fn ethernet_broadcast(tx_iov: &VirtioIov, len: usize, cur_vm: &Vm) -> Option<Vec<VirtioMmio>> {
+fn ethernet_broadcast(tx_iov: &VirtioIov, len: usize, cur_vm: &Vm) -> Option<Vec<Arc<VirtioMmio>>> {
     let mut nic_list = vec![];
     super::mac::virtio_nic_list_walker(|nic| {
         let vm = nic.upper_vm().unwrap();
@@ -471,7 +471,7 @@ fn ethernet_is_arp(frame: &[u8]) -> bool {
     frame[12] == 0x8 && frame[13] == 0x6
 }
 
-fn ethernet_mac_to_nic(frame: &[u8]) -> Result<VirtioMmio, ()> {
+fn ethernet_mac_to_nic(frame: &[u8]) -> Result<Arc<VirtioMmio>, ()> {
     let frame_mac = &frame[0..6];
     super::mac::mac_to_nic(frame_mac).ok_or(())
 }

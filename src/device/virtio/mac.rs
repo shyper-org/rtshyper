@@ -1,10 +1,11 @@
 use alloc::collections::BTreeMap;
+use alloc::sync::Arc;
 
 use spin::Mutex;
 
 use super::VirtioMmio;
 
-static MAC2NIC_INFO: Mutex<BTreeMap<MacAddress, VirtioMmio>> = Mutex::new(BTreeMap::new());
+static MAC2NIC_INFO: Mutex<BTreeMap<MacAddress, Arc<VirtioMmio>>> = Mutex::new(BTreeMap::new());
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct MacAddress([u8; 6]);
@@ -17,17 +18,18 @@ impl MacAddress {
     }
 }
 
-pub fn set_mac_info(mac: &[u8], nic: VirtioMmio) {
+pub fn set_mac_info(mac: &[u8], nic: Arc<VirtioMmio>) {
     MAC2NIC_INFO.lock().insert(MacAddress::new(mac), nic);
 }
 
-pub fn mac_to_nic(mac: &[u8]) -> Option<VirtioMmio> {
+pub fn mac_to_nic(mac: &[u8]) -> Option<Arc<VirtioMmio>> {
     MAC2NIC_INFO.lock().get(&MacAddress::new(mac)).cloned()
 }
 
+#[inline]
 pub fn virtio_nic_list_walker<F>(mut f: F)
 where
-    F: FnMut(&VirtioMmio),
+    F: FnMut(&Arc<VirtioMmio>),
 {
     for nic in MAC2NIC_INFO.lock().values() {
         f(nic);

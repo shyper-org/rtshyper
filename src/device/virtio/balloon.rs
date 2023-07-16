@@ -1,6 +1,7 @@
 // see virtio 1.1 5.5 Traditional Memory Balloon Device
 
 use core::{ops::Deref, mem::size_of};
+use alloc::sync::Arc;
 
 use crate::kernel::Vm;
 
@@ -69,7 +70,7 @@ impl VirtioBallonConfig {
 // 1 deflateq Release memory in the virtual machine, the VM gets more memory from the host
 // 2 statsq.
 // Virtqueue 2 only exists if VIRTIO_BALLON_F_STATS_VQ set.
-pub fn virtio_balloon_notify_handler(vq: Virtq, balloon: VirtioMmio, vm: alloc::sync::Arc<Vm>) -> bool {
+pub fn virtio_balloon_notify_handler(vq: Arc<Virtq>, balloon: Arc<VirtioMmio>, vm: Arc<Vm>) -> bool {
     if vq.ready() == 0 {
         return false;
     }

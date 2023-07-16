@@ -5,8 +5,8 @@ use spin::Mutex;
 
 use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 use crate::kernel::{
-    active_vm, EXECUTOR, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg, IpiInnerMsg, vm, vm_id_list,
-    HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY, HVC_MEDIATED_DRV_NOTIFY, Vm,
+    active_vm, EXECUTOR, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg, IpiInnerMsg, HVC_MEDIATED,
+    HVC_MEDIATED_DEV_NOTIFY, HVC_MEDIATED_DRV_NOTIFY, Vm, vm_list_walker,
 };
 use crate::kernel::{ipi_register, IpiMessage, IpiType};
 use shyper::MediatedBlkContent;
@@ -17,9 +17,7 @@ pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 
 pub fn mediated_blk_list_push(mut blk: MediatedBlk) {
     let mut list = MEDIATED_BLK_LIST.lock();
-    let vm_id_list = vm_id_list();
-    for vm_id in vm_id_list {
-        let vm = vm(vm_id).unwrap();
+    vm_list_walker(|vm| {
         if let Some(id) = vm.config().mediated_block_index() {
             if id == list.len() {
                 info!("Assign blk[{}] to VM {}", list.len(), vm.id());
@@ -30,10 +28,9 @@ pub fn mediated_blk_list_push(mut blk: MediatedBlk) {
                     use crate::vmm::vmm_boot_vm;
                     vmm_boot_vm(vm.id());
                 }
-                break;
             }
         }
-    }
+    });
     list.push(blk);
 }
 
@@ -235,8 +232,8 @@ pub struct UsedInfo {
 
 pub struct ReadAsyncMsg {
     pub src_vm: Arc<Vm>,
-    pub vq: Virtq,
-    pub dev: VirtioMmio,
+    pub vq: Arc<Virtq>,
+    pub dev: Arc<VirtioMmio>,
     pub blk_id: usize,
     pub sector: usize,
     pub count: usize,
@@ -247,8 +244,8 @@ pub struct ReadAsyncMsg {
 
 pub struct WriteAsyncMsg {
     pub src_vm: Arc<Vm>,
-    pub vq: Virtq,
-    pub dev: VirtioMmio,
+    pub vq: Arc<Virtq>,
+    pub dev: Arc<VirtioMmio>,
     pub blk_id: usize,
     pub sector: usize,
     pub count: usize,

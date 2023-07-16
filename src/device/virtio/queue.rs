@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 use core::slice;
 
 use spin::Mutex;
@@ -50,20 +50,25 @@ struct VringUsed {
     ring: [VringUsedElem; 512],
 }
 
-#[derive(Clone)]
 pub struct Virtq {
     vq_index: usize,
-    notify_handler: fn(Virtq, VirtioMmio, Arc<Vm>) -> bool,
-    inner: Arc<Mutex<VirtqInner<'static>>>,
+    notify_handler: fn(Arc<Virtq>, Arc<VirtioMmio>, Arc<Vm>) -> bool,
+    mmio: Weak<VirtioMmio>,
+    inner: Mutex<VirtqInner<'static>>,
 }
 
 impl Virtq {
-    pub fn new(vq_index: usize, notify_handler: fn(Virtq, VirtioMmio, Arc<Vm>) -> bool) -> Virtq {
-        Virtq {
+    pub fn new(
+        vq_index: usize,
+        mmio: Weak<VirtioMmio>,
+        notify_handler: fn(Arc<Virtq>, Arc<VirtioMmio>, Arc<Vm>) -> bool,
+    ) -> Arc<Virtq> {
+        Arc::new(Virtq {
             vq_index,
             notify_handler,
-            inner: Arc::new(Mutex::new(VirtqInner::default())),
-        }
+            mmio,
+            inner: Mutex::new(VirtqInner::default()),
+        })
     }
 
     pub fn reset(&self) {
@@ -159,8 +164,12 @@ impl Virtq {
         }
     }
 
-    pub fn call_notify_handler(&self, mmio: VirtioMmio) -> bool {
-        (self.notify_handler)(self.clone(), mmio, active_vm().unwrap())
+    pub fn call_notify_handler(self: &Arc<Self>) -> bool {
+        if let Some(mmio) = self.mmio.upgrade() {
+            (self.notify_handler)(self.clone(), mmio, active_vm().unwrap())
+        } else {
+            false
+        }
     }
 
     // pub fn show_desc_info(&self, size: usize, vm: Vm) {

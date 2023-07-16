@@ -3,7 +3,7 @@ use tock_registers::interfaces::{Writeable, ReadWriteable};
 use crate::arch::PAGE_SIZE;
 use crate::kernel::{cpu_map_self, CPU_STACK_OFFSET, CPU_STACK_SIZE};
 
-#[link_section = ".data.boot"]
+#[link_section = ".bss.stack"]
 static mut BOOT_STACK: [u8; PAGE_SIZE * 8] = [0; PAGE_SIZE * 8];
 
 extern "C" {

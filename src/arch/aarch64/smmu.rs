@@ -1,4 +1,4 @@
-use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem::size_of;
 use core::ops::Range;
@@ -691,9 +691,9 @@ pub struct EmuSmmu {
     address_range: Range<usize>,
 }
 
-pub fn emu_smmu_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
+pub fn emu_smmu_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Arc<dyn EmuDev>, ()> {
     if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTIOMMU {
-        Ok(Box::new(EmuSmmu {
+        Ok(Arc::new(EmuSmmu {
             address_range: emu_cfg.base_ipa..emu_cfg.base_ipa + emu_cfg.length,
         }))
     } else {

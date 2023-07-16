@@ -1,28 +1,29 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
 
 use crate::arch::{PAGE_SIZE, PTE_S1_NORMAL, LVL1_SHIFT};
-use crate::kernel::{vm, current_cpu, IpiVmmMsg, Vm, IpiInnerMsg, ipi_send_msg, IpiType};
+use crate::kernel::{current_cpu, Vm, IpiInnerMsg, ipi_send_msg, IpiType, IpiVmmPercoreMsg};
 use crate::board::PLAT_DESC;
 use crate::util::barrier;
 
-use super::VmmEvent;
+use super::VmmPercoreEvent;
 
 // Here, we regrad IPA as part of HVA (Hypervisor VA)
 // using the higher bits as VMID to distinguish
 
 // convert ipa to pa and mapping the hva(from ipa) on current cpu()
-pub(super) fn vmm_setup_ipa2hva(vm: &Vm) {
+pub fn vmm_setup_ipa2hva(vm: Arc<Vm>) {
     let mut flag = false;
     for target_cpu_id in 0..PLAT_DESC.cpu_desc.num {
         if target_cpu_id != current_cpu().id {
-            let msg = IpiVmmMsg {
-                vmid: vm.id(),
-                event: VmmEvent::VmmMapIPA,
+            let msg = IpiVmmPercoreMsg {
+                vm: vm.clone(),
+                event: VmmPercoreEvent::MapIPA,
             };
-            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(msg)) {
+            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(msg)) {
                 error!("vmm_setup_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
@@ -31,21 +32,21 @@ pub(super) fn vmm_setup_ipa2hva(vm: &Vm) {
     }
     // execute after notify all other cores
     if flag {
-        vmm_map_ipa_percore(vm.id(), true);
+        vmm_map_ipa_percore(&vm, true);
     }
     info!("vmm_setup_ipa2hva: VM[{}] is ok", vm.id());
 }
 
-pub(super) fn vmm_unmap_ipa2hva(vm: &Vm) {
+pub fn vmm_unmap_ipa2hva(vm: Arc<Vm>) {
     vm.reset_mem_regions();
     let mut flag = false;
     for target_cpu_id in 0..PLAT_DESC.cpu_desc.num {
         if target_cpu_id != current_cpu().id {
-            let msg = IpiVmmMsg {
-                vmid: vm.id(),
-                event: VmmEvent::VmmUnmapIPA,
+            let msg = IpiVmmPercoreMsg {
+                vm: vm.clone(),
+                event: VmmPercoreEvent::UnmapIPA,
             };
-            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(msg)) {
+            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(msg)) {
                 error!("vmm_unmap_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
@@ -54,26 +55,16 @@ pub(super) fn vmm_unmap_ipa2hva(vm: &Vm) {
     }
     // execute after notify all other cores
     if flag {
-        vmm_unmap_ipa_percore(vm.id());
+        vmm_unmap_ipa_percore(&vm);
     }
     info!("vmm_unmap_ipa2hva: VM[{}] is ok", vm.id());
 }
 
-pub(super) fn vmm_map_ipa_percore(vm_id: usize, is_master: bool) {
+pub fn vmm_map_ipa_percore(vm: &Vm, is_master: bool) {
     static SHARED_PTE: RwLock<Vec<(usize, usize)>> = RwLock::new(Vec::new());
     static FINISH: AtomicBool = AtomicBool::new(false);
 
-    let vm = match vm(vm_id) {
-        None => {
-            panic!(
-                "vmm_map_ipa_percore: on core {}, VM [{}] is not added yet",
-                current_cpu().id,
-                vm_id
-            );
-        }
-        Some(vm) => vm,
-    };
-    trace!("vmm_map_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
+    trace!("vmm_map_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm.id());
     let config = vm.config();
     if is_master {
         let mut shared_pte_list = SHARED_PTE.write();
@@ -108,18 +99,12 @@ pub(super) fn vmm_map_ipa_percore(vm_id: usize, is_master: bool) {
     }
 }
 
-pub(super) fn vmm_unmap_ipa_percore(vm_id: usize) {
-    let vm = match vm(vm_id) {
-        None => {
-            panic!(
-                "vmm_unmap_ipa_percore: on core {}, VM [{}] is not added yet",
-                current_cpu().id,
-                vm_id
-            );
-        }
-        Some(vm) => vm,
-    };
-    trace!("vmm_unmap_ipa_percore: on core {}, for VM[{}]", current_cpu().id, vm_id);
+pub fn vmm_unmap_ipa_percore(vm: &Vm) {
+    trace!(
+        "vmm_unmap_ipa_percore: on core {}, for VM[{}]",
+        current_cpu().id,
+        vm.id()
+    );
     let config = vm.config();
     for region in config.memory_region().iter() {
         let hva = vm.ipa2hva(region.ipa_start);

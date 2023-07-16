@@ -2,7 +2,6 @@ use core::cell::{Cell, RefCell};
 use core::ops::Range;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -309,17 +308,13 @@ impl Default for VgicCpuPriv {
     }
 }
 
-#[derive(Clone)]
-#[repr(transparent)]
-pub struct Vgic(Arc<VgicInner>);
-
-struct VgicInner {
+pub struct Vgic {
     address_range: Range<usize>,
     vgicd: Vgicd,
     cpu_priv: Vec<VgicCpuPriv>,
 }
 
-impl VgicInner {
+impl Vgic {
     fn new(base: usize, length: usize) -> Self {
         Self {
             address_range: base..base + length,
@@ -327,13 +322,11 @@ impl VgicInner {
             cpu_priv: Vec::new(),
         }
     }
-}
 
-impl Vgic {
     fn remove_int_list(&self, vcpu: &Vcpu, interrupt: &VgicInt, is_pend: bool) {
         let vcpu_id = vcpu.id();
         let int_id = interrupt.id();
-        let mut cpu_priv = self.0.cpu_priv[vcpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow_mut();
         if is_pend {
             if !interrupt.in_pend() {
                 // println!("why int {} in pend is false but in pend list", int_id);
@@ -362,7 +355,7 @@ impl Vgic {
 
     fn add_int_list(&self, vcpu: &Vcpu, interrupt: Arc<VgicInt>, is_pend: bool) {
         let vcpu_id = vcpu.id();
-        let mut cpu_priv = self.0.cpu_priv[vcpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow_mut();
         if is_pend {
             interrupt.set_in_pend_state(true);
             cpu_priv.pend_list.push_back(interrupt);
@@ -397,7 +390,7 @@ impl Vgic {
 
     fn int_list_head(&self, vcpu: &Vcpu, is_pend: bool) -> Option<Arc<VgicInt>> {
         let vcpu_id = vcpu.id();
-        let cpu_priv = self.0.cpu_priv[vcpu_id].inner_mut.borrow();
+        let cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow();
         if is_pend {
             cpu_priv.pend_list.front().cloned()
         } else {
@@ -406,57 +399,57 @@ impl Vgic {
     }
 
     fn set_vgicd_ctlr(&self, ctlr: u32) {
-        self.0.vgicd.ctlr.store(ctlr, Ordering::Relaxed);
+        self.vgicd.ctlr.store(ctlr, Ordering::Relaxed);
     }
 
     pub fn vgicd_ctlr(&self) -> u32 {
-        self.0.vgicd.ctlr.load(Ordering::Relaxed)
+        self.vgicd.ctlr.load(Ordering::Relaxed)
     }
 
     pub fn vgicd_typer(&self) -> u32 {
-        self.0.vgicd.typer
+        self.vgicd.typer
     }
 
     pub fn vgicd_iidr(&self) -> u32 {
-        self.0.vgicd.iidr
+        self.vgicd.iidr
     }
 
     fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> Option<&Arc<VgicInt>> {
-        self.0.cpu_priv[cpu_id].interrupts.get(idx)
+        self.cpu_priv[cpu_id].interrupts.get(idx)
     }
 
     fn cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize) -> u16 {
-        let cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow();
+        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow();
         cpu_priv.curr_lrs[idx]
     }
 
     fn cpu_priv_sgis_pend(&self, cpu_id: usize, idx: usize) -> u8 {
-        let cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow();
+        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow();
         cpu_priv.sgis[idx].pend
     }
 
     fn cpu_priv_sgis_act(&self, cpu_id: usize, idx: usize) -> u8 {
-        let cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow();
+        let cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow();
         cpu_priv.sgis[idx].act
     }
 
     fn set_cpu_priv_curr_lrs(&self, cpu_id: usize, idx: usize, val: u16) {
-        let mut cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow_mut();
         cpu_priv.curr_lrs[idx] = val;
     }
 
     fn set_cpu_priv_sgis_pend(&self, cpu_id: usize, idx: usize, pend: u8) {
-        let mut cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow_mut();
         cpu_priv.sgis[idx].pend = pend;
     }
 
     fn set_cpu_priv_sgis_act(&self, cpu_id: usize, idx: usize, act: u8) {
-        let mut cpu_priv = self.0.cpu_priv[cpu_id].inner_mut.borrow_mut();
+        let mut cpu_priv = self.cpu_priv[cpu_id].inner_mut.borrow_mut();
         cpu_priv.sgis[idx].act = act;
     }
 
     fn vgicd_interrupt(&self, idx: usize) -> Option<&Arc<VgicInt>> {
-        self.0.vgicd.interrupts.get(idx)
+        self.vgicd.interrupts.get(idx)
     }
 
     fn get_int(&self, vcpu: &Vcpu, int_id: usize) -> Option<&Arc<VgicInt>> {
@@ -1895,12 +1888,12 @@ cfg_if::cfg_if! {
             }
         }
 
-        pub fn partial_passthrough_intc_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Box<dyn EmuDev>, ()> {
+        pub fn partial_passthrough_intc_init(emu_cfg: &VmEmulatedDeviceConfig) -> Result<Arc<dyn EmuDev>, ()> {
             if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTGPPT {
                 let intc = PartialPassthroughIntc {
                     address_range: emu_cfg.base_ipa..emu_cfg.base_ipa + emu_cfg.length,
                 };
-                Ok(Box::new(intc))
+                Ok(Arc::new(intc))
             } else {
                 Err(())
             }
@@ -1909,50 +1902,39 @@ cfg_if::cfg_if! {
 }
 
 pub fn vgic_ipi_handler(msg: IpiMessage) {
-    let vm_id;
-    let int_id;
-    let val;
-    match msg.ipi_message {
-        IpiInnerMsg::Initc(intc) => {
-            vm_id = intc.vm_id;
-            int_id = intc.int_id;
-            val = intc.val;
-        }
-        _ => {
-            println!("vgic_ipi_handler: illegal ipi");
-            return;
-        }
-    }
-    let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
-        None => {
-            println!("Core {} received vgic msg from unknown VM {}", current_cpu().id, vm_id);
-            return;
-        }
-        Some(vcpu) => vcpu,
-    };
-    // restore_vcpu_gic
-    if let Some(active_vcpu) = &current_cpu().active_vcpu {
-        if trgt_vcpu != active_vcpu {
-            active_vcpu.gic_save_context();
+    if let IpiInnerMsg::Initc(intc) = msg.ipi_message {
+        let vm_id = intc.vm_id;
+        let int_id = intc.int_id;
+        let val = intc.val;
+        let trgt_vcpu = match current_cpu().vcpu_array.pop_vcpu_through_vmid(vm_id) {
+            None => {
+                error!("Core {} received vgic msg from unknown VM {}", current_cpu().id, vm_id);
+                return;
+            }
+            Some(vcpu) => vcpu,
+        };
+        // restore_vcpu_gic
+        if let Some(active_vcpu) = &current_cpu().active_vcpu {
+            if trgt_vcpu != active_vcpu {
+                active_vcpu.gic_save_context();
+                trgt_vcpu.gic_restore_context();
+            }
+        } else {
             trgt_vcpu.gic_restore_context();
         }
-    } else {
-        trgt_vcpu.gic_restore_context();
-    }
 
-    let vm = match trgt_vcpu.vm() {
-        None => {
-            panic!("vgic_ipi_handler: vm is None");
+        let vm = match trgt_vcpu.vm() {
+            None => {
+                panic!("vgic_ipi_handler: vm is None");
+            }
+            Some(x) => x,
+        };
+        let vgic = vm.vgic();
+
+        if vm_id != vm.id() {
+            error!("VM {} received vgic msg from another vm {}", vm.id(), vm_id);
+            return;
         }
-        Some(x) => x,
-    };
-    let vgic = vm.vgic();
-
-    if vm_id != vm.id() {
-        println!("VM {} received vgic msg from another vm {}", vm.id(), vm_id);
-        return;
-    }
-    if let IpiInnerMsg::Initc(intc) = &msg.ipi_message {
         // println!(
         //     "vgic_ipi_handler: core {} receive vgic_ipi, event {:?}, vm_id {}, int_id {}, val {:#x}",
         //     current_cpu().id,
@@ -1995,18 +1977,20 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
                 }
             }
             _ => {
-                println!("vgic_ipi_handler: core {} received unknown event", current_cpu().id)
+                error!("vgic_ipi_handler: core {} received unknown event", current_cpu().id)
             }
         }
-    }
-    // save_vcpu_gic
-    if let Some(active_vcpu) = &current_cpu().active_vcpu {
-        if trgt_vcpu != active_vcpu {
+        // save_vcpu_gic
+        if let Some(active_vcpu) = &current_cpu().active_vcpu {
+            if trgt_vcpu != active_vcpu {
+                trgt_vcpu.gic_save_context();
+                active_vcpu.gic_restore_context();
+            }
+        } else {
             trgt_vcpu.gic_save_context();
-            active_vcpu.gic_restore_context();
         }
     } else {
-        trgt_vcpu.gic_save_context();
+        error!("vgic_ipi_handler: illegal ipi");
     }
 }
 
@@ -2016,7 +2000,7 @@ impl EmuDev for Vgic {
     }
 
     fn address_range(&self) -> Range<usize> {
-        self.0.address_range.clone()
+        self.address_range.clone()
     }
 
     fn handler(&self, emu_ctx: &EmuContext) -> bool {
@@ -2085,11 +2069,11 @@ impl EmuDev for Vgic {
     }
 }
 
-pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Result<Box<dyn EmuDev>, ()> {
+pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Result<Arc<dyn EmuDev>, ()> {
     if emu_cfg.emu_type != EmuDeviceType::EmuDeviceTGicd {
         return Err(());
     }
-    let mut vgic = VgicInner::new(emu_cfg.base_ipa, emu_cfg.length);
+    let mut vgic = Vgic::new(emu_cfg.base_ipa, emu_cfg.length);
 
     let cpu_num = vcpu_list.len();
     let vgicd = &mut vgic.vgicd;
@@ -2115,7 +2099,7 @@ pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Re
 
         vgic.cpu_priv.push(cpu_priv);
     }
-    Ok(Box::new(Vgic(Arc::new(vgic))))
+    Ok(Arc::new(vgic))
 }
 
 pub fn vgic_set_hw_int(vm: &Vm, int_id: usize) {

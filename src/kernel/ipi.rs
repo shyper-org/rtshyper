@@ -1,5 +1,6 @@
 use alloc::collections::BTreeMap;
 use alloc::collections::LinkedList;
+use alloc::sync::Arc;
 
 use spin::Mutex;
 use spin::RwLock;
@@ -10,7 +11,7 @@ use crate::board::PLATFORM_CPU_NUM_MAX;
 use crate::device::{VirtioMmio, Virtq};
 use crate::kernel::{interrupt_vm_inject, interrupt_reserve_int};
 use crate::kernel::{current_cpu, interrupt_cpu_ipi_send};
-use crate::vmm::VmmEvent;
+use crate::vmm::{VmmEvent, VmmPercoreEvent};
 
 use super::Vm;
 use super::interrupt_cpu_enable;
@@ -36,7 +37,7 @@ pub enum PowerEvent {
     PsciIpiCpuReset,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct IpiInitcMessage {
     pub event: InitcEvent,
     pub vm_id: usize,
@@ -47,7 +48,7 @@ pub struct IpiInitcMessage {
 /*
 * src: src vm id
 */
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct IpiPowerMessage {
     pub src: usize,
     pub event: PowerEvent,
@@ -63,30 +64,35 @@ pub struct IpiPowerMessage {
 
 #[derive(Clone)]
 pub struct IpiEthernetMsg {
-    pub trgt_nic: VirtioMmio,
+    pub trgt_nic: Arc<VirtioMmio>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct IpiVmmMsg {
     pub vmid: usize,
     pub event: VmmEvent,
 }
 
+#[derive(Clone)]
+pub struct IpiVmmPercoreMsg {
+    pub vm: Arc<Vm>,
+    pub event: VmmPercoreEvent,
+}
+
 // only support for mediated blk
 #[derive(Clone)]
 pub struct IpiMediatedMsg {
-    pub src_vm: alloc::sync::Arc<Vm>,
-    pub vq: Virtq,
-    pub blk: VirtioMmio,
-    // pub avail_idx: u16,
+    pub src_vm: Arc<Vm>,
+    pub vq: Arc<Virtq>,
+    pub blk: Arc<VirtioMmio>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct IpiMediatedNotifyMsg {
     pub vm_id: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct IpiHvcMsg {
     pub src_vmid: usize,
     pub trgt_vmid: usize,
@@ -94,7 +100,7 @@ pub struct IpiHvcMsg {
     pub event: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct IpiIntInjectMsg {
     pub vm_id: usize,
     pub int_id: usize,
@@ -115,14 +121,25 @@ pub enum IpiType {
 
 #[derive(Clone)]
 pub enum IpiInnerMsg {
+    // IpiTIntc
     Initc(IpiInitcMessage),
+    // IpiTPower
     Power(IpiPowerMessage),
+    // IpiTEthernetMsg
     EnternetMsg(IpiEthernetMsg),
+    // IpiTVMM
     VmmMsg(IpiVmmMsg),
+    // IpiTVMM
+    VmmPercoreMsg(IpiVmmPercoreMsg),
+    // IpiTMediatedDev
     MediatedMsg(IpiMediatedMsg),
+    // unused
     MediatedNotifyMsg(IpiMediatedNotifyMsg),
+    // IpiTHvc
     HvcMsg(IpiHvcMsg),
+    // IpiTIntInject
     IntInjectMsg(IpiIntInjectMsg),
+    // IpiTHyperFresh, unused
     HyperFreshMsg(),
 }
 

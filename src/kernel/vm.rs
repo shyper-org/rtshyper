@@ -1,4 +1,3 @@
-use alloc::boxed::Box;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 
@@ -151,9 +150,9 @@ struct VmInnerConst {
     vcpu_list: Vec<Vcpu>,
     intc_type: IntCtrlType,
     // TODO: create struct ArchVcpu and move intc_dev into it
-    arch_intc_dev: Option<Vgic>,
+    arch_intc_dev: Option<Arc<Vgic>>,
     int_bitmap: BitAlloc4K,
-    emu_devs: Vec<Box<dyn EmuDev>>,
+    emu_devs: Vec<Arc<dyn EmuDev>>,
 }
 
 fn cal_phys_id_list(config: &VmConfigEntry) -> Vec<usize> {
@@ -220,7 +219,7 @@ impl VmInnerConst {
                 EmuDeviceTGicd => {
                     self.intc_type = IntCtrlType::Emulated;
                     emu_intc_init(emu_cfg, &self.vcpu_list).map(|vgic| {
-                        self.arch_intc_dev = vgic.as_any().downcast_ref::<Vgic>().cloned();
+                        self.arch_intc_dev = vgic.clone().into_any_arc().downcast::<Vgic>().ok();
                         vgic
                     })
                 }
@@ -431,16 +430,12 @@ impl Vm {
     }
 
     // Get console dev by ipa.
-    pub fn emu_console_dev(&self, ipa: usize) -> Option<VirtioMmio> {
-        match self
-            .inner_const
+    pub fn emu_console_dev(&self, ipa: usize) -> Option<Arc<VirtioMmio>> {
+        self.inner_const
             .emu_devs
             .iter()
             .find(|dev| dev.address_range().start == ipa)
-        {
-            Some(dev) => dev.as_any().downcast_ref::<VirtioMmio>().cloned(),
-            None => None,
-        }
+            .and_then(|dev| dev.clone().into_any_arc().downcast::<VirtioMmio>().ok())
     }
 
     pub fn ncpu(&self) -> usize {
@@ -625,8 +620,15 @@ impl VmInnerMut {
 
 static VM_LIST: Mutex<Vec<Arc<Vm>>> = Mutex::new(Vec::new());
 
-pub fn vm_id_list() -> Vec<usize> {
-    VM_LIST.lock().iter().map(|vm| vm.id()).collect()
+#[inline]
+pub fn vm_list_walker<F>(mut f: F)
+where
+    F: FnMut(&Arc<Vm>),
+{
+    let vm_list = VM_LIST.lock();
+    for vm in vm_list.iter() {
+        f(vm);
+    }
 }
 
 pub fn push_vm(id: usize, config: VmConfigEntry) -> Result<Arc<Vm>, ()> {
@@ -651,7 +653,7 @@ pub fn remove_vm(id: usize) -> Arc<Vm> {
     }
 }
 
-pub fn vm(id: usize) -> Option<Arc<Vm>> {
+pub fn vm_by_id(id: usize) -> Option<Arc<Vm>> {
     let vm_list = VM_LIST.lock();
     vm_list.iter().find(|&x| x.id() == id).cloned()
 }
