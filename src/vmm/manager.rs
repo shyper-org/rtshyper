@@ -89,7 +89,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
                 vmid: vm_id,
                 event: VmmEvent::Boot,
             };
-            if !ipi_send_msg(phys_id, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+            if !ipi_send_msg(phys_id, IpiType::Vmm, IpiInnerMsg::VmmMsg(m)) {
                 error!("vmm_boot_vm: failed to send ipi to Core {}", phys_id);
             }
         } else {
@@ -139,7 +139,7 @@ pub fn vmm_reboot_vm(arg: usize) {
                 vmid: vm_id,
                 event: VmmEvent::Reboot,
             };
-            if !ipi_send_msg(cpu_trgt, IpiType::IpiTVMM, IpiInnerMsg::VmmMsg(m)) {
+            if !ipi_send_msg(cpu_trgt, IpiType::Vmm, IpiInnerMsg::VmmMsg(m)) {
                 error!("vmm_reboot_vm: failed to send ipi to Core {}", cpu_trgt);
             }
         }

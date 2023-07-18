@@ -26,11 +26,6 @@ const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
 
 const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
-pub fn power_arch_init() {
-    use crate::kernel::ipi_register;
-    ipi_register(IpiType::IpiTPower, psci_ipi_handler);
-}
-
 pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
     let m = IpiPowerMessage {
         src: vm.id(),
@@ -39,7 +34,7 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
         context: 0,
     };
 
-    if !ipi_intra_broadcast_msg(vm, IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
+    if !ipi_intra_broadcast_msg(vm, IpiType::Power, IpiInnerMsg::Power(m)) {
         warn!("power_arch_vm_shutdown_secondary_cores: fail to ipi_intra_broadcast_msg");
     }
 }
@@ -224,7 +219,7 @@ fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
         context: ctx,
     };
 
-    if !ipi_send_msg(physical_linear_id.unwrap(), IpiType::IpiTPower, IpiInnerMsg::Power(m)) {
+    if !ipi_send_msg(physical_linear_id.unwrap(), IpiType::Power, IpiInnerMsg::Power(m)) {
         warn!("psci_guest_cpu_on: fail to send msg");
         return usize::MAX - 1;
     }

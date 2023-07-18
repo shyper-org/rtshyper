@@ -220,10 +220,8 @@ fn cpu_sched_init() {
 pub fn cpu_init() {
     let cpu_id = current_cpu().id;
     if cpu_id == 0 {
-        use crate::arch::power_arch_init;
         use crate::board::{PlatOperation, Platform};
         Platform::power_on_secondary_cores();
-        power_arch_init();
     }
     // crate::arch::Arch::disable_prefetch();
     crate::kernel::interrupt_irqchip_init();

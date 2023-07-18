@@ -23,7 +23,7 @@ pub fn vmm_setup_ipa2hva(vm: Arc<Vm>) {
                 vm: vm.clone(),
                 event: VmmPercoreEvent::MapIPA,
             };
-            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(msg)) {
+            if !ipi_send_msg(target_cpu_id, IpiType::Vmm, IpiInnerMsg::VmmPercoreMsg(msg)) {
                 error!("vmm_setup_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {
@@ -46,7 +46,7 @@ pub fn vmm_unmap_ipa2hva(vm: Arc<Vm>) {
                 vm: vm.clone(),
                 event: VmmPercoreEvent::UnmapIPA,
             };
-            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(msg)) {
+            if !ipi_send_msg(target_cpu_id, IpiType::Vmm, IpiInnerMsg::VmmPercoreMsg(msg)) {
                 error!("vmm_unmap_ipa2hva: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {

@@ -1,9 +1,7 @@
-use alloc::collections::BTreeMap;
 use alloc::collections::LinkedList;
 use alloc::sync::Arc;
 
 use spin::Mutex;
-use spin::RwLock;
 
 use crate::arch::INTERRUPT_IRQ_IPI;
 use crate::board::PLAT_DESC;
@@ -106,17 +104,16 @@ pub struct IpiIntInjectMsg {
     pub int_id: usize,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IpiType {
-    IpiTIntc = 0,
-    IpiTPower = 1,
-    IpiTEthernetMsg = 2,
-    #[deprecated]
-    IpiTHyperFresh = 3,
-    IpiTHvc = 4,
-    IpiTVMM = 5,
-    IpiTMediatedDev = 6,
-    IpiTIntInject = 8,
+declare_enum_with_handler! {
+    pub IpiType, IPI_HANDLER_LIST, fn(IpiMessage) {
+        Intc => crate::arch::vgic_ipi_handler,
+        Power => crate::arch::psci_ipi_handler,
+        EthernetMsg => crate::device::ethernet_ipi_rev_handler,
+        Hvc => crate::kernel::hvc_ipi_handler,
+        Vmm => crate::vmm::vmm_ipi_handler,
+        MediatedDev => crate::device::mediated_ipi_handler,
+        IntInject => interrupt_inject_ipi_handler,
+    }
 }
 
 #[derive(Clone)]
@@ -139,18 +136,12 @@ pub enum IpiInnerMsg {
     HvcMsg(IpiHvcMsg),
     // IpiTIntInject
     IntInjectMsg(IpiIntInjectMsg),
-    // IpiTHyperFresh, unused
-    HyperFreshMsg(),
 }
 
 pub struct IpiMessage {
     pub ipi_type: IpiType,
     pub ipi_message: IpiInnerMsg,
 }
-
-pub type IpiHandlerFunc = fn(IpiMessage);
-
-static IPI_HANDLER_LIST: RwLock<BTreeMap<IpiType, IpiHandlerFunc>> = RwLock::new(BTreeMap::new());
 
 struct CpuIf {
     msg_queue: LinkedList<IpiMessage>,
@@ -175,14 +166,6 @@ impl CpuIf {
 pub fn ipi_init() {
     if current_cpu().id == 0 {
         interrupt_reserve_int(INTERRUPT_IRQ_IPI, ipi_irq_handler);
-
-        ipi_register(IpiType::IpiTIntInject, interrupt_inject_ipi_handler);
-        use crate::arch::vgic_ipi_handler;
-        ipi_register(IpiType::IpiTIntc, vgic_ipi_handler);
-        use crate::device::ethernet_ipi_rev_handler;
-        ipi_register(IpiType::IpiTEthernetMsg, ethernet_ipi_rev_handler);
-        use crate::vmm::vmm_ipi_handler;
-        ipi_register(IpiType::IpiTVMM, vmm_ipi_handler);
 
         info!("Interrupt init ok");
     }
@@ -225,20 +208,11 @@ fn ipi_irq_handler() {
     while let Some(ipi_msg) = ipi_pop_message(cpu_id) {
         let ipi_type = ipi_msg.ipi_type;
 
-        let ipi_handler_list = IPI_HANDLER_LIST.read();
-        if let Some(handler) = ipi_handler_list.get(&ipi_type).cloned() {
-            drop(ipi_handler_list);
+        if let Some(handler) = IPI_HANDLER_LIST.get(ipi_type as usize) {
             handler(ipi_msg);
         } else {
             error!("illegal ipi type {:?}", ipi_type)
         }
-    }
-}
-
-pub fn ipi_register(ipi_type: IpiType, handler: IpiHandlerFunc) {
-    let mut ipi_handler_list = IPI_HANDLER_LIST.write();
-    if ipi_handler_list.insert(ipi_type, handler).is_some() {
-        panic!("ipi_register: {ipi_type:#?} try to cover exist ipi handler");
     }
 }
 

@@ -190,11 +190,7 @@ impl VirtioMmio {
             interrupt_vm_inject(&vm, target_vcpu, int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
-            if !ipi_send_msg(
-                target_vcpu.phys_id(),
-                IpiType::IpiTIntInject,
-                IpiInnerMsg::IntInjectMsg(m),
-            ) {
+            if !ipi_send_msg(target_vcpu.phys_id(), IpiType::IntInject, IpiInnerMsg::IntInjectMsg(m)) {
                 error!("notify_config: failed to send ipi to Core {}", target_vcpu.phys_id());
             }
         }
@@ -211,11 +207,7 @@ impl VirtioMmio {
             interrupt_vm_inject(&vm, target_vcpu, int_id);
         } else {
             let m = IpiIntInjectMsg { vm_id: vm.id(), int_id };
-            if !ipi_send_msg(
-                target_vcpu.phys_id(),
-                IpiType::IpiTIntInject,
-                IpiInnerMsg::IntInjectMsg(m),
-            ) {
+            if !ipi_send_msg(target_vcpu.phys_id(), IpiType::IntInject, IpiInnerMsg::IntInjectMsg(m)) {
                 error!("notify_config: failed to send ipi to Core {}", target_vcpu.phys_id());
             }
         }

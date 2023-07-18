@@ -8,7 +8,7 @@ use crate::kernel::{
     active_vm, EXECUTOR, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg, IpiInnerMsg, HVC_MEDIATED,
     HVC_MEDIATED_DEV_NOTIFY, HVC_MEDIATED_DRV_NOTIFY, Vm, vm_list_walker,
 };
-use crate::kernel::{ipi_register, IpiMessage, IpiType};
+use crate::kernel::IpiMessage;
 use shyper::MediatedBlkContent;
 
 use super::{Virtq, VirtioMmio, BlkIov};
@@ -115,10 +115,6 @@ impl MediatedBlk {
     pub fn set_cache_pa(&self, cache_pa: usize) {
         self.content().cfg.cache_pa = cache_pa;
     }
-}
-
-pub fn mediated_dev_init() {
-    ipi_register(IpiType::IpiTMediatedDev, mediated_ipi_handler);
 }
 
 // only run in vm0

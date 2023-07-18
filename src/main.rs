@@ -23,8 +23,7 @@ extern crate memoffset;
 #[macro_use]
 extern crate derive_more;
 
-use device::mediated_dev_init;
-use kernel::{cpu_init, physical_mem_init, timer_init, hvc_init, iommu_init, current_cpu};
+use kernel::{cpu_init, physical_mem_init, timer_init, iommu_init, current_cpu};
 use vmm::{vm_init, vmm_boot_vm};
 
 #[macro_use]
@@ -55,9 +54,7 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
         mm::init(); // including heap and hypervisor VA space
         physical_mem_init();
         dtb::init_vm0_dtb(dtb);
-        hvc_init();
         iommu_init();
-        mediated_dev_init();
     }
     cpu_init();
     timer_init();

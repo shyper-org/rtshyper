@@ -6,8 +6,8 @@ use spin::Mutex;
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
-    active_vm, current_cpu, interrupt_vm_inject, ipi_register, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage,
-    IpiType, ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm_by_id,
+    active_vm, current_cpu, interrupt_vm_inject, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType,
+    ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm_by_id,
 };
 use crate::util::memcpy_safe;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
@@ -430,11 +430,11 @@ pub fn hvc_send_msg_to_vm(vm_id: usize, guest_msg: &HvcGuestMsg) -> bool {
             fid,
             event,
         };
-        if !ipi_send_msg(cpu_trgt, IpiType::IpiTHvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
+        if !ipi_send_msg(cpu_trgt, IpiType::Hvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
             error!(
                 "hvc_send_msg_to_vm: Failed to send ipi message, target {} type {:#?}",
                 cpu_trgt,
-                IpiType::IpiTHvc
+                IpiType::Hvc
             );
         }
     } else {
@@ -513,10 +513,6 @@ pub fn hvc_ipi_handler(msg: IpiMessage) {
     }
 }
 
-pub fn hvc_init() {
-    ipi_register(IpiType::IpiTHvc, hvc_ipi_handler);
-}
-
 pub fn send_hvc_ipi(src_vmid: usize, trgt_vmid: usize, fid: usize, event: usize, trgt_cpuid: usize) {
     let ipi_msg = IpiHvcMsg {
         src_vmid,
@@ -524,11 +520,11 @@ pub fn send_hvc_ipi(src_vmid: usize, trgt_vmid: usize, fid: usize, event: usize,
         fid,
         event,
     };
-    if !ipi_send_msg(trgt_cpuid, IpiType::IpiTHvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
+    if !ipi_send_msg(trgt_cpuid, IpiType::Hvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
         error!(
             "send_hvc_ipi: Failed to send ipi message, target {} type {:#?}",
             0,
-            IpiType::IpiTHvc
+            IpiType::Hvc
         );
     }
 }

@@ -242,7 +242,7 @@ fn vmm_init_cpu(vm: Arc<Vm>) {
                 vm: vm.clone(),
                 event: VmmPercoreEvent::AssignCpu,
             };
-            if !ipi_send_msg(target_cpu_id, IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(m)) {
+            if !ipi_send_msg(target_cpu_id, IpiType::Vmm, IpiInnerMsg::VmmPercoreMsg(m)) {
                 error!("vmm_init_cpu: failed to send ipi to Core {}", target_cpu_id);
             }
         } else {

@@ -222,7 +222,7 @@ impl AsyncCallback for IpiMediatedMsg {
             virtio_blk_notify_handler(self.vq.clone(), self.blk.clone(), self.src_vm.clone());
         } else {
             // send IPI to target cpu, and the target will invoke `mediated_ipi_handler`
-            ipi_send_msg(0, IpiType::IpiTMediatedDev, IpiInnerMsg::MediatedMsg(self.clone()));
+            ipi_send_msg(0, IpiType::MediatedDev, IpiInnerMsg::MediatedMsg(self.clone()));
         }
     }
 }

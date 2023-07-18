@@ -56,7 +56,7 @@ fn vmm_remove_vcpu(vm: &Arc<Vm>) {
                 vm: vm.clone(),
                 event: VmmPercoreEvent::RemoveCpu,
             };
-            if !ipi_send_msg(vcpu.phys_id(), IpiType::IpiTVMM, IpiInnerMsg::VmmPercoreMsg(m)) {
+            if !ipi_send_msg(vcpu.phys_id(), IpiType::Vmm, IpiInnerMsg::VmmPercoreMsg(m)) {
                 warn!("vmm_remove_vcpu: failed to send ipi to Core {}", vcpu.phys_id());
             }
         }

@@ -288,7 +288,7 @@ pub fn virtio_net_notify_handler(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: alloc
         } else {
             let msg = IpiEthernetMsg { trgt_nic: nic };
             let cpu_trgt = vm_if_get_cpu_id(trgt_vm.id()).unwrap();
-            if !ipi_send_msg(cpu_trgt, IpiType::IpiTEthernetMsg, IpiInnerMsg::EnternetMsg(msg)) {
+            if !ipi_send_msg(cpu_trgt, IpiType::EthernetMsg, IpiInnerMsg::EnternetMsg(msg)) {
                 error!(
                     "virtio_net_notify_handler: failed to send ipi message, target {}",
                     cpu_trgt
