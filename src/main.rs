@@ -39,6 +39,7 @@ mod dtb;
 mod kernel;
 mod mm;
 mod panic;
+#[allow(dead_code)]
 mod util;
 mod vmm;
 

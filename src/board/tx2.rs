@@ -1,8 +1,11 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::ARM_CORTEX_A57;
-use crate::board::{PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig};
-use crate::board::SchedRule::RoundRobin;
+use crate::board::Platform;
+
+use super::platform_common::{
+    ARM_CORTEX_A57, PlatOperation, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
+    SchedRule::RoundRobin,
+};
 
 pub struct Tx2Platform;
 
@@ -20,17 +23,6 @@ impl PlatOperation for Tx2Platform {
     const GICH_BASE: usize = 0x3884000;
     const GICV_BASE: usize = 0x3886000;
 
-    // start sector number (LBA)
-    const DISK_PARTITION_0_START: usize = 43643256;
-    const DISK_PARTITION_1_START: usize = 4104;
-    const DISK_PARTITION_2_START: usize = 45740408;
-
-    // size in sector (512-byte)
-    // pub const DISK_PARTITION_TOTAL_SIZE: usize = 31457280;
-    const DISK_PARTITION_0_SIZE: usize = 2097152;
-    const DISK_PARTITION_1_SIZE: usize = 41943040;
-    const DISK_PARTITION_2_SIZE: usize = 8388608;
-
     const SHARE_MEM_BASE: usize = 0xd_0000_0000;
 
     fn cpuid_to_cpuif(cpuid: usize) -> usize {
@@ -39,18 +31,6 @@ impl PlatOperation for Tx2Platform {
 
     fn cpuif_to_cpuid(cpuif: usize) -> usize {
         cpuif - PLAT_DESC.cpu_desc.num
-    }
-
-    fn blk_init() {
-        todo!()
-    }
-
-    fn blk_read(_sector: usize, _count: usize, _buf: usize) {
-        todo!()
-    }
-
-    fn blk_write(_sector: usize, _count: usize, _buf: usize) {
-        todo!()
     }
 
     #[inline]

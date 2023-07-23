@@ -1,4 +1,4 @@
-pub use self::platform_common::*;
+pub use platform_common::{PlatOperation, SchedRule, PLATFORM_CPU_NUM_MAX};
 
 mod platform_common;
 

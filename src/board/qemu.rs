@@ -1,9 +1,11 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::ARM_CORTEX_A57;
-use crate::board::{PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig};
-use crate::board::SchedRule::RoundRobin;
-use crate::driver::{read, write};
+use crate::board::Platform;
+
+use super::platform_common::{
+    ARM_CORTEX_A57, PlatOperation, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
+    SchedRule::RoundRobin,
+};
 
 pub struct QemuPlatform;
 
@@ -24,33 +26,12 @@ impl PlatOperation for QemuPlatform {
 
     const SHARE_MEM_BASE: usize = 0x7_0000_0000;
 
-    const DISK_PARTITION_0_START: usize = 0;
-    const DISK_PARTITION_1_START: usize = 2097152;
-    const DISK_PARTITION_2_START: usize = 10289152;
-
-    const DISK_PARTITION_TOTAL_SIZE: usize = 18481152;
-    const DISK_PARTITION_0_SIZE: usize = 524288;
-    const DISK_PARTITION_1_SIZE: usize = 8192000;
-    const DISK_PARTITION_2_SIZE: usize = 8192000;
-
     fn cpuid_to_cpuif(cpuid: usize) -> usize {
         cpuid
     }
 
     fn cpuif_to_cpuid(cpuif: usize) -> usize {
         cpuif
-    }
-
-    fn blk_init() {
-        todo!()
-    }
-
-    fn blk_read(sector: usize, count: usize, buf: usize) {
-        read(sector, count, buf);
-    }
-
-    fn blk_write(sector: usize, count: usize, buf: usize) {
-        write(sector, count, buf);
     }
 
     #[inline]

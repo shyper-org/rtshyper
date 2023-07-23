@@ -61,19 +61,6 @@ pub trait PlatOperation {
     const GICH_BASE: usize;
     const GICV_BASE: usize;
 
-    const DISK_PARTITION_0_START: usize = usize::MAX;
-    const DISK_PARTITION_1_START: usize = usize::MAX;
-    const DISK_PARTITION_2_START: usize = usize::MAX;
-    const DISK_PARTITION_3_START: usize = usize::MAX;
-    const DISK_PARTITION_4_START: usize = usize::MAX;
-
-    const DISK_PARTITION_TOTAL_SIZE: usize = usize::MAX;
-    const DISK_PARTITION_0_SIZE: usize = usize::MAX;
-    const DISK_PARTITION_1_SIZE: usize = usize::MAX;
-    const DISK_PARTITION_2_SIZE: usize = usize::MAX;
-    const DISK_PARTITION_3_SIZE: usize = usize::MAX;
-    const DISK_PARTITION_4_SIZE: usize = usize::MAX;
-
     const SHARE_MEM_BASE: usize;
 
     fn cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
@@ -111,12 +98,6 @@ pub trait PlatOperation {
     fn cpuid_to_cpuif(cpuid: usize) -> usize;
 
     fn cpuif_to_cpuid(cpuif: usize) -> usize;
-
-    fn blk_init();
-
-    fn blk_read(sector: usize, count: usize, buf: usize);
-
-    fn blk_write(sector: usize, count: usize, buf: usize);
 
     fn device_regions() -> &'static [Range<usize>];
 

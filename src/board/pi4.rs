@@ -1,8 +1,11 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::ARM_CORTEX_A57;
-use crate::board::{PlatOperation, Platform, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig};
-use crate::board::SchedRule::RoundRobin;
+use crate::board::Platform;
+
+use super::platform_common::{
+    ARM_CORTEX_A57, PlatOperation, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
+    SchedRule::RoundRobin,
+};
 
 pub struct Pi4Platform;
 
@@ -22,38 +25,12 @@ impl PlatOperation for Pi4Platform {
 
     const SHARE_MEM_BASE: usize = 0x7_0000_0000;
 
-    // start sector number (LBA)
-    const DISK_PARTITION_0_START: usize = 2048;
-    const DISK_PARTITION_1_START: usize = 526336;
-    const DISK_PARTITION_2_START: usize = 17303552;
-    const DISK_PARTITION_3_START: usize = 34082816;
-    const DISK_PARTITION_4_START: usize = 50862080;
-
-    // size in sector (512-byte)
-    const DISK_PARTITION_0_SIZE: usize = 524288;
-    const DISK_PARTITION_1_SIZE: usize = 16777216;
-    const DISK_PARTITION_2_SIZE: usize = 16777216;
-    const DISK_PARTITION_3_SIZE: usize = 16777216;
-    const DISK_PARTITION_4_SIZE: usize = 11471872;
-
     fn cpuid_to_cpuif(cpuid: usize) -> usize {
         cpuid
     }
 
     fn cpuif_to_cpuid(cpuif: usize) -> usize {
         cpuif
-    }
-
-    fn blk_init() {
-        todo!()
-    }
-
-    fn blk_read(_sector: usize, _count: usize, _buf: usize) {
-        todo!()
-    }
-
-    fn blk_write(_sector: usize, _count: usize, _buf: usize) {
-        todo!()
     }
 
     #[inline]
