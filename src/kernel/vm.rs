@@ -11,7 +11,7 @@ use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::board::{PlatOperation, Platform};
 use crate::config::VmConfigEntry;
-use crate::device::{EmuDev, emu_virtio_mmio_init, VirtioMmio};
+use crate::device::{EmuDev, emu_virtio_mmio_init};
 use crate::kernel::{mem_color_region_free, shyper_init};
 use crate::util::*;
 
@@ -340,12 +340,12 @@ impl Vm {
         &self.inner_const.vcpu_list
     }
 
-    pub fn find_emu_dev(&self, ipa: usize) -> Option<&dyn EmuDev> {
+    pub fn find_emu_dev(&self, ipa: usize) -> Option<Arc<dyn EmuDev>> {
         self.inner_const
             .emu_devs
             .iter()
             .find(|&dev| dev.address_range().contains(&ipa))
-            .map(|dev| dev.as_ref())
+            .map(|dev| dev.clone())
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize, map_block: bool) {
@@ -427,15 +427,6 @@ impl Vm {
 
     pub fn has_vgic(&self) -> bool {
         self.inner_const.arch_intc_dev.is_some()
-    }
-
-    // Get console dev by ipa.
-    pub fn emu_console_dev(&self, ipa: usize) -> Option<Arc<VirtioMmio>> {
-        self.inner_const
-            .emu_devs
-            .iter()
-            .find(|dev| dev.address_range().start == ipa)
-            .and_then(|dev| dev.clone().into_any_arc().downcast::<VirtioMmio>().ok())
     }
 
     pub fn ncpu(&self) -> usize {
