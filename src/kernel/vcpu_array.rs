@@ -12,7 +12,7 @@ use super::{sched::Scheduler, VcpuState, timer::timer_enable};
 
 pub struct VcpuArray {
     array: [Option<Vcpu>; CONFIG_VM_NUM_MAX],
-    pub(super) sched: Once<Box<dyn Scheduler>>,
+    pub(super) sched: Once<Box<dyn Scheduler<SchedItem = Vcpu>>>,
     len: usize,
     active: usize,
 }
@@ -111,7 +111,7 @@ impl VcpuArray {
         }
     }
 
-    fn scheduler(&mut self) -> &mut dyn Scheduler {
+    fn scheduler(&mut self) -> &mut dyn Scheduler<SchedItem = Vcpu> {
         match self.sched.get_mut() {
             Some(scheduler) => scheduler.as_mut(),
             None => panic!("scheduler is None"),

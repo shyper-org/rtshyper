@@ -4,7 +4,7 @@ use crate::board::Platform;
 
 use super::platform_common::{
     ARM_CORTEX_A57, PlatOperation, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
-    SchedRule::RoundRobin,
+    SchedRule,
 };
 
 pub struct Pi4Platform;
@@ -52,22 +52,22 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
             PlatCpuCoreConfig {
                 name: ARM_CORTEX_A57,
                 mpidr: 0x80000000,
-                sched: RoundRobin,
+                sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
                 name: ARM_CORTEX_A57,
                 mpidr: 0x80000001,
-                sched: RoundRobin,
+                sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
                 name: ARM_CORTEX_A57,
                 mpidr: 0x80000002,
-                sched: RoundRobin,
+                sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
                 name: ARM_CORTEX_A57,
                 mpidr: 0x80000003,
-                sched: RoundRobin,
+                sched: SchedRule::RoundRobin,
             },
         ],
     },

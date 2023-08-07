@@ -17,7 +17,6 @@ pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
 const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C, align(4096))]
-#[derive(Copy, Clone, Debug)]
 pub struct CpuPt {
     pub lvl1: [usize; PTE_PER_PAGE],
     pub lvl2: [usize; PTE_PER_PAGE],
@@ -210,11 +209,16 @@ fn cpu_init_pt() {
     cpu.init_pt(directory);
 }
 
-// Todo: add config for base slice
+// TODO: add config for base slice
 fn cpu_sched_init() {
     let rule = PLAT_DESC.cpu_desc.core_list[current_cpu().id].sched;
     trace!("cpu[{}] init {rule:?} Scheduler", current_cpu().id);
-    current_cpu().vcpu_array.sched.call_once(|| get_scheduler(rule));
+    current_cpu().vcpu_array.sched.call_once(|| {
+        let mut scheduler = get_scheduler(rule);
+        info!("core {} init {} scheduler", current_cpu().id, scheduler.name());
+        scheduler.init();
+        scheduler
+    });
 }
 
 pub fn cpu_init() {

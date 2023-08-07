@@ -11,19 +11,19 @@ const fn get_config() -> ConfigPlatform {
     if cfg!(feature = "tx2") {
         ConfigPlatform {
             platform: "tx2",
-            vm0_image_path: "./image/L4T",
+            vm0_image_path: "image/L4T",
             text_start: 0x83000000,
         }
     } else if cfg!(feature = "pi4") {
         ConfigPlatform {
             platform: "pi4",
-            vm0_image_path: "./image/Image_pi4_5.4.83_tlb",
+            vm0_image_path: "image/Image_pi4_5.4.83_tlb",
             text_start: 0xf0080000,
         }
     } else if cfg!(feature = "qemu") {
         ConfigPlatform {
             platform: "qemu",
-            vm0_image_path: "./image/Image_vanilla",
+            vm0_image_path: "image/Image_vanilla",
             text_start: 0x40080000,
         }
     } else {
@@ -65,7 +65,7 @@ fn main() {
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
     println!(
         "cargo:rustc-env=VM0_IMAGE_PATH={}",
-        std::path::absolute(config.vm0_image_path).unwrap().display()
+        format!("{}/{}", env!("CARGO_MANIFEST_DIR"), config.vm0_image_path)
     );
     println!("cargo:rustc-env=PLATFORM={}", config.platform.to_uppercase());
 }

@@ -26,11 +26,13 @@ pub enum VcpuState {
 #[repr(transparent)]
 pub struct Vcpu(pub Arc<VcpuInner>);
 
-impl core::cmp::PartialEq for Vcpu {
+impl PartialEq for Vcpu {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
 }
+
+impl Eq for Vcpu {}
 
 #[allow(dead_code)]
 pub(super) struct WeakVcpu(Weak<VcpuInner>);
@@ -84,7 +86,11 @@ impl Vcpu {
                 vm,
                 phys_id,
             },
-            reservation: MemoryBandwidth::new(config.memory_budget(), config.memory_replenishment_period()),
+            reservation: MemoryBandwidth::new(
+                // each vcpu allocates bandwidth equally
+                config.memory_budget() / config.cpu_num() as u32,
+                config.memory_replenishment_period(),
+            ),
             pmu_event: Arc::new(PmuTimerEvent(WeakVcpu(weak.clone()))),
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         });
