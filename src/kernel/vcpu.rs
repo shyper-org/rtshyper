@@ -79,29 +79,27 @@ struct VcpuConst {
 #[allow(dead_code)]
 impl Vcpu {
     pub(super) fn new(vm: Weak<Vm>, vcpu_id: usize, phys_id: usize, config: &VmConfigEntry) -> Self {
+        let inner_const = VcpuConst {
+            id: vcpu_id,
+            vm,
+            phys_id,
+        };
+        let reservation = MemoryBandwidth::new(
+            // each vcpu allocates bandwidth equally
+            config.memory_budget() / config.cpu_num() as u32,
+            config.memory_replenishment_period(),
+        );
         #[cfg(any(feature = "memory-reservation"))]
         let inner = Arc::new_cyclic(|weak| VcpuInner {
-            inner_const: VcpuConst {
-                id: vcpu_id,
-                vm,
-                phys_id,
-            },
-            reservation: MemoryBandwidth::new(
-                // each vcpu allocates bandwidth equally
-                config.memory_budget() / config.cpu_num() as u32,
-                config.memory_replenishment_period(),
-            ),
+            inner_const,
+            reservation,
             pmu_event: Arc::new(PmuTimerEvent(WeakVcpu(weak.clone()))),
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         });
         #[cfg(not(feature = "memory-reservation"))]
         let inner = Arc::new(VcpuInner {
-            inner_const: VcpuConst {
-                id: vcpu_id,
-                vm,
-                phys_id,
-            },
-            reservation: MemoryBandwidth::new(config.memory_budget(), config.memory_replenishment_period()),
+            inner_const,
+            reservation,
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         });
         Self(inner)

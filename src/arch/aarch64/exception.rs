@@ -163,8 +163,7 @@ extern "C" fn current_el_sp0_serror() {
 extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     info!("{}", unsafe { *ctx });
     panic!(
-        "current_elx_synchronous core[{}] elr_el2 {:016x} sp_el0 {:016x}\n sp_el1 {:016x} sp_sel {:016x}\n",
-        current_cpu().id,
+        "current_elx_synchronous elr_el2 {:016x} sp_el0 {:016x} sp_el1 {:016x} sp_sel {}",
         cortex_a::registers::ELR_EL2.get(),
         cortex_a::registers::SP_EL0.get(),
         cortex_a::registers::SP_EL1.get(),

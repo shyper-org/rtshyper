@@ -6,6 +6,7 @@ use core::{cell::Cell, ptr::NonNull};
 use alloc::{
     collections::{LinkedList, BinaryHeap},
     sync::Arc,
+    boxed::Box,
 };
 
 use crate::{
@@ -33,7 +34,8 @@ struct SchedulerRTRef(NonNull<SchedulerRT>);
 
 impl TimerEvent for SchedulerRTRef {
     fn callback(self: Arc<Self>, now: TimerTickValue) {
-        let scheduler = unsafe { &mut *(self.0.as_ptr() as *mut SchedulerRT) };
+        // SAFETY: Scheduler is a core-private data, and the raw pointer is on heap
+        let scheduler = unsafe { &mut *self.0.as_ptr() };
         scheduler.repl_timer_handler(now);
     }
 }
@@ -103,14 +105,16 @@ impl Ord for SchedUnit {
 
 impl SchedulerRT {
     pub fn new() -> Self {
-        let mut this = Self {
+        // Use Box::new() to point object on heap, otherwise the data is
+        // on stack and the raw pointer in SchedulerRTRef is not correct.
+        let mut this = Box::new(Self {
             run_queue: Default::default(),
             depleted_queue: Default::default(),
             replenishment_queue: Default::default(),
             self_ref: SchedulerRTRef(NonNull::dangling()),
-        };
-        this.self_ref = SchedulerRTRef(NonNull::new(&mut this).unwrap());
-        this
+        });
+        this.self_ref = SchedulerRTRef(NonNull::new(&mut *this).unwrap());
+        *this
     }
 }
 
