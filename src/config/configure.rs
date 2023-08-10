@@ -496,7 +496,7 @@ pub fn set_cpu(vmid: usize, num: usize, allocate_bitmap: usize, master: usize) -
         vm_cfg.set_cpu_cfg(num, allocate_bitmap, master);
 
         info!(
-            "VM[{}] vm_cfg_set_cpu: num {} allocate_bitmap {} master {:?}",
+            "VM[{}] vm_cfg_set_cpu: num {} allocate_bitmap {:#b} master {:?}",
             vmid,
             vm_cfg.cpu_num(),
             vm_cfg.cpu_allocated_bitmap(),
@@ -576,7 +576,7 @@ pub fn add_passthrough_device_region(vmid: usize, base_ipa: usize, base_pa: usiz
             length,
             dev_property: true,
         };
-        info!("VM[{}] vm_cfg_add_pt_dev: {:?}", vmid, pt_region_cfg);
+        info!("VM[{}] vm_cfg_add_pt_dev: {:x?}", vmid, pt_region_cfg);
 
         vm_cfg.add_passthrough_device_region(pt_region_cfg);
         Ok(0)
@@ -652,7 +652,7 @@ pub fn add_dtb_dev(
             length: addr_region_length,
         },
     };
-    info!("VM[{}] vm_cfg_add_dtb_dev: {:?}", vmid, vm_dtb_dev);
+    info!("VM[{}] vm_cfg_add_dtb_dev: {:x?}", vmid, vm_dtb_dev);
     vm_cfg_editor(vmid, |vm_cfg| {
         // Get DTB device config list.
 

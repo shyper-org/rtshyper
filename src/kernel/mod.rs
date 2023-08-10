@@ -22,7 +22,7 @@ mod ipi;
 mod ivc;
 mod mem;
 mod sched;
-mod timer;
+pub mod timer;
 mod vcpu;
 mod vcpu_array;
 mod vm;

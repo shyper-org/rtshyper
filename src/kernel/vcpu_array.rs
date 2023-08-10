@@ -15,6 +15,7 @@ pub struct VcpuArray {
     pub(super) sched: Once<Box<dyn Scheduler<SchedItem = Vcpu>>>,
     len: usize,
     active: usize,
+    timer_on: bool,
 }
 
 cfg_if::cfg_if! {
@@ -32,6 +33,7 @@ impl VcpuArray {
             sched: Once::new(),
             len: 0,
             active: 0,
+            timer_on: false,
         }
     }
 
@@ -97,7 +99,8 @@ impl VcpuArray {
                 vcpu.set_state(VcpuState::Runnable);
                 // determine the timer
                 self.active += 1;
-                if self.active >= ENABLE_TIMER_ACTIVE_NUM {
+                if !self.timer_on && self.active >= ENABLE_TIMER_ACTIVE_NUM {
+                    self.timer_on = true;
                     timer_enable(true);
                 }
                 // do scheduling
@@ -127,12 +130,14 @@ impl VcpuArray {
                     assert_ne!(self.active, usize::MAX);
                 }
                 vcpu.set_state(VcpuState::Inv);
-                if self.active < ENABLE_TIMER_ACTIVE_NUM {
+                if self.timer_on && self.active < ENABLE_TIMER_ACTIVE_NUM {
+                    self.timer_on = false;
                     timer_enable(false);
                 }
                 #[cfg(any(feature = "memory-reservation"))]
                 {
                     use super::timer::remove_timer_event;
+                    use crate::arch::PmuTimerEvent;
                     remove_timer_event(|event| {
                         use alloc::sync::Arc;
                         if let Some(event) = event.as_any().downcast_ref::<PmuTimerEvent>() {
@@ -207,31 +212,5 @@ impl VcpuArray {
     #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> IterMut<'_, Option<Vcpu>> {
         self.array.iter_mut()
-    }
-}
-
-#[cfg(any(feature = "memory-reservation"))]
-pub(super) struct PmuTimerEvent(pub(super) super::WeakVcpu);
-
-#[cfg(any(feature = "memory-reservation"))]
-impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
-    fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerTickValue) {
-        if let Some(vcpu) = self.0.upgrade() {
-            let period = vcpu.period();
-            trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
-            vcpu.supply_budget();
-            match vcpu.state() {
-                VcpuState::Inv | VcpuState::Runnable => {}
-                VcpuState::Running => crate::arch::vcpu_start_pmu(&vcpu),
-                VcpuState::Blocked => {
-                    vcpu.set_state(VcpuState::Runnable);
-                    current_cpu().vcpu_array.scheduler().put(vcpu);
-                    if current_cpu().active_vcpu.is_none() {
-                        current_cpu().vcpu_array.resched();
-                    }
-                }
-            }
-            super::timer::start_timer_event(period, self);
-        }
     }
 }

@@ -2,7 +2,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use tock_registers::interfaces::{ReadWriteable, Writeable, Readable};
 
-use crate::kernel::{current_cpu, Vcpu};
+use crate::kernel::{current_cpu, Vcpu, WeakVcpu, VcpuState};
 
 use super::regs::{PMCR_EL0, PMUSERENR_EL0, PMCCFILTR_EL0};
 
@@ -183,8 +183,9 @@ pub fn vcpu_start_pmu(vcpu: &Vcpu) {
 }
 
 pub fn vcpu_stop_pmu(vcpu: &Vcpu) {
-    MEM_ACCESS_EVENT.disable();
+    // read_counter must before disable event (disabling will reset the counter to 0)
     let current_memory_access_count = MEM_ACCESS_EVENT.read_counter();
+    MEM_ACCESS_EVENT.disable();
 
     let remaining_budget = if current_memory_access_count != 0 {
         MAX_PMU_COUNTER_VALUE - current_memory_access_count
@@ -199,4 +200,24 @@ pub fn vcpu_stop_pmu(vcpu: &Vcpu) {
         remaining_budget
     );
     vcpu.update_remaining_budget(remaining_budget);
+}
+
+pub struct PmuTimerEvent(pub WeakVcpu);
+
+impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
+    fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerTickValue) {
+        if let Some(vcpu) = self.0.upgrade() {
+            let period = vcpu.period();
+            trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
+            vcpu.supply_budget();
+            match vcpu.state() {
+                VcpuState::Inv | VcpuState::Runnable => {}
+                VcpuState::Running => crate::arch::vcpu_start_pmu(&vcpu),
+                VcpuState::Blocked => {
+                    current_cpu().vcpu_array.wakeup_vcpu(&vcpu);
+                }
+            }
+            crate::kernel::timer::start_timer_event(period, self);
+        }
+    }
 }

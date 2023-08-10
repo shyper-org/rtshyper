@@ -345,7 +345,7 @@ impl Vm {
             .emu_devs
             .iter()
             .find(|&dev| dev.address_range().contains(&ipa))
-            .map(|dev| dev.clone())
+            .cloned()
     }
 
     pub fn pt_map_range(&self, ipa: usize, len: usize, pa: usize, pte: usize, map_block: bool) {

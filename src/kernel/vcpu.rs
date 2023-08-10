@@ -11,7 +11,7 @@ use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::util::memcpy_safe;
 
 #[cfg(any(feature = "memory-reservation"))]
-use super::vcpu_array::PmuTimerEvent;
+use crate::arch::PmuTimerEvent;
 use super::{CpuState, Vm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,11 +35,11 @@ impl PartialEq for Vcpu {
 impl Eq for Vcpu {}
 
 #[allow(dead_code)]
-pub(super) struct WeakVcpu(Weak<VcpuInner>);
+pub struct WeakVcpu(Weak<VcpuInner>);
 
 #[allow(dead_code)]
 impl WeakVcpu {
-    pub(super) fn upgrade(&self) -> Option<Vcpu> {
+    pub fn upgrade(&self) -> Option<Vcpu> {
         self.0.upgrade().map(Vcpu)
     }
 }
@@ -323,7 +323,7 @@ impl Vcpu {
         self.0.reservation.remaining_budget.load(Ordering::Relaxed)
     }
 
-    pub(super) fn period(&self) -> u64 {
+    pub fn period(&self) -> u64 {
         self.0.reservation.period
     }
 
@@ -439,7 +439,7 @@ pub(super) fn run_idle_thread() {
             error!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
         }
         Some(ctx) => {
-            debug!("Core {} idle", current_cpu().id);
+            trace!("Core {} idle", current_cpu().id);
             current_cpu().cpu_state = CpuState::Idle;
             memcpy_safe(
                 ctx as *const u8,

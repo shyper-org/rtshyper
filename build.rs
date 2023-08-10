@@ -64,8 +64,9 @@ fn main() {
     let build_time = chrono::offset::Local::now().format("%Y-%m-%d %H:%M:%S %Z");
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
     println!(
-        "cargo:rustc-env=VM0_IMAGE_PATH={}",
-        format!("{}/{}", env!("CARGO_MANIFEST_DIR"), config.vm0_image_path)
+        "cargo:rustc-env=VM0_IMAGE_PATH={}/{}",
+        env!("CARGO_MANIFEST_DIR"),
+        config.vm0_image_path
     );
     println!("cargo:rustc-env=PLATFORM={}", config.platform.to_uppercase());
 }
