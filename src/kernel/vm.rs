@@ -3,9 +3,7 @@ use alloc::vec::Vec;
 
 use spin::{Mutex, Once};
 
-use crate::arch::{
-    PAGE_SIZE, PTE_S2_FIELD_AP_RO, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE, emu_intc_init, emu_smmu_init,
-};
+use crate::arch::{PAGE_SIZE, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE, emu_intc_init, emu_smmu_init};
 use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
@@ -357,23 +355,6 @@ impl Vm {
     pub fn pt_unmap_range(&self, ipa: usize, len: usize, map_block: bool) {
         let vm_inner = self.inner_mut.lock();
         vm_inner.pt.pt_unmap_range(ipa, len, map_block);
-    }
-
-    // ap: access permission
-    #[allow(dead_code)]
-    pub fn pt_set_access_permission(&self, ipa: usize, ap: usize) -> (usize, usize) {
-        let vm_inner = self.inner_mut.lock();
-        vm_inner.pt.access_permission(ipa, PAGE_SIZE, ap)
-    }
-
-    #[allow(dead_code)]
-    pub fn pt_read_only(&self) {
-        let config = self.config();
-        let vm_inner = self.inner_mut.lock();
-        let pt = &vm_inner.pt;
-        for region in config.memory_region().iter() {
-            pt.access_permission(region.ipa_start, region.length, PTE_S2_FIELD_AP_RO);
-        }
     }
 
     pub fn pt_dir(&self) -> usize {

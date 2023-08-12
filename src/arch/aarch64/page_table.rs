@@ -7,16 +7,12 @@ use crate::arch::ArchPageTableEntryTrait;
 use crate::arch::ArchTrait;
 use crate::arch::TlbInvalidate;
 use crate::kernel::Cpu;
+use crate::kernel::mem_page_alloc;
 use crate::util::{memcpy_safe, memset_safe};
 use crate::util::round_up;
 use crate::mm::PageFrame;
 
-use super::{PAGE_SIZE, PTE_PER_PAGE, WORD_SIZE, Arch};
-
-// page_table const
-pub const LVL1_SHIFT: usize = 30;
-pub const LVL2_SHIFT: usize = 21;
-pub const LVL3_SHIFT: usize = 12;
+use super::{PAGE_SIZE, PTE_PER_PAGE, Arch};
 
 const PTE_TABLE: usize = 0b11;
 const PTE_PAGE: usize = 0b11;
@@ -80,6 +76,27 @@ const fn pte_s1_field_attr_indx(idx: usize) -> usize {
     idx << 2
 }
 
+// page_table const
+pub const LVL1_SHIFT: usize = 30;
+pub const LVL2_SHIFT: usize = 21;
+pub const LVL3_SHIFT: usize = 12;
+
+// cfg_if::cfg_if! {
+//     if #[cfg(any(feature = "pa-bits-39"))] {
+//         const LVL_SHIFT: &[usize] = &[30, 21, 12];
+//     } else if #[cfg(any(feature = "pa-bits-48"))] {
+//         const LVL_SHIFT: &[usize] = &[39, 30, 21, 12];
+//     }
+// }
+
+// pub fn pt_lvl_idx(va: usize, lvl: usize) -> usize {
+//     (va >> LVL_SHIFT[lvl]) & (PTE_PER_PAGE - 1)
+// }
+
+// fn pt_lvl_offset(va: usize, lvl: usize) -> usize {
+//     va & ((1 << LVL_SHIFT[lvl]) - 1)
+// }
+
 // page_table function
 pub fn pt_lvl1_idx(va: usize) -> usize {
     (va >> LVL1_SHIFT) & (PTE_PER_PAGE - 1)
@@ -140,7 +157,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
-pub struct Aarch64PageTableEntry(usize);
+struct Aarch64PageTableEntry(usize);
 
 impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
     #[inline]
@@ -170,14 +187,12 @@ impl ArchPageTableEntryTrait for Aarch64PageTableEntry {
 
     #[inline]
     fn entry(&self, index: usize) -> Aarch64PageTableEntry {
-        let addr = self.to_pa().pa2hva() + index * WORD_SIZE;
-        unsafe { Aarch64PageTableEntry((addr as *const usize).read_volatile()) }
+        Aarch64PageTableEntry(unsafe { (self.to_pa().pa2hva() as *const usize).add(index).read_volatile() })
     }
 
     #[inline]
     fn set_entry(&self, index: usize, value: Aarch64PageTableEntry) {
-        let addr = self.to_pa().pa2hva() + index * WORD_SIZE;
-        unsafe { (addr as *mut usize).write_volatile(value.0) }
+        unsafe { (self.to_pa().pa2hva() as *mut usize).add(index).write_volatile(value.0) }
     }
 
     #[inline]
@@ -231,42 +246,6 @@ impl PageTable {
         self.directory_pa
     }
 
-    pub fn access_permission(&self, start_ipa: usize, len: usize, ap: usize) -> (usize, usize) {
-        let directory = Aarch64PageTableEntry::from_pa(self.directory_pa);
-        let mut ipa = start_ipa;
-        let mut size = 0;
-        let mut pa = 0;
-        while ipa < (start_ipa + len) {
-            let l1e = directory.entry(pt_lvl1_idx(ipa));
-            if !l1e.valid() {
-                ipa += 512 * 512 * 4096; // 1GB: 9 + 9 + 12 bits
-                continue;
-            }
-            let l2e = l1e.entry(pt_lvl2_idx(ipa));
-            if !l2e.valid() {
-                ipa += 512 * 4096; // 2MB: 9 + 12 bits
-                continue;
-            } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
-                let pte = l2e.to_pte() & !(0b11 << 6) | ap;
-                info!("access_permission set 512 page ipa {:x}", ipa);
-                l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
-                ipa += 512 * 4096; // 2MB: 9 + 12 bits
-                pa = l2e.to_pa();
-                size += 512 * 4096;
-                continue;
-            }
-            let l3e = l2e.entry(pt_lvl3_idx(ipa));
-            if l3e.valid() {
-                let pte = l3e.to_pte() & !(0b11 << 6) | ap;
-                l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(pte));
-                pa = l3e.to_pa();
-                size += 4096;
-            }
-            ipa += 4096; // 4KB: 12 bits
-        }
-        (pa, size)
-    }
-
     pub fn ipa2pa(&self, ipa: usize) -> Option<usize> {
         match self.stage {
             MmuStage::S1 => Arch::mem_translate(ipa),
@@ -297,8 +276,7 @@ impl PageTable {
         let directory = Aarch64PageTableEntry::from_pa(self.directory_pa);
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));
         if !l1e.valid() {
-            let result = crate::kernel::mem_page_alloc();
-            if let Ok(frame) = result {
+            if let Ok(frame) = mem_page_alloc() {
                 l1e = Aarch64PageTableEntry::make_table(frame.pa());
                 let mut pages = self.pages.lock();
                 let pf = pages.insert(frame.pa(), frame);
@@ -326,12 +304,6 @@ impl PageTable {
             if l2e.valid() {
                 l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry(0));
                 self.tlb_invalidate(ipa);
-                if empty_page(l1e.to_hva()) {
-                    let l1e_pa = l1e.to_pa();
-                    directory.set_entry(pt_lvl1_idx(ipa), Aarch64PageTableEntry(0));
-                    let mut pages = self.pages.lock();
-                    pages.remove(&l1e_pa);
-                }
             }
         }
     }
@@ -340,8 +312,7 @@ impl PageTable {
         let directory = Aarch64PageTableEntry::from_pa(self.directory_pa);
         let mut l1e = directory.entry(pt_lvl1_idx(ipa));
         if !l1e.valid() {
-            let result = crate::kernel::mem_page_alloc();
-            if let Ok(frame) = result {
+            if let Ok(frame) = mem_page_alloc() {
                 l1e = Aarch64PageTableEntry::make_table(frame.pa());
                 let mut pages = self.pages.lock();
                 let pf = pages.insert(frame.pa(), frame);
@@ -354,15 +325,14 @@ impl PageTable {
 
         let mut l2e = l1e.entry(pt_lvl2_idx(ipa));
         if !l2e.valid() {
-            let result = crate::kernel::mem_page_alloc();
-            if let Ok(frame) = result {
+            if let Ok(frame) = mem_page_alloc() {
                 l2e = Aarch64PageTableEntry::make_table(frame.pa());
                 let mut pages = self.pages.lock();
                 let pf = pages.insert(frame.pa(), frame);
                 debug_assert!(pf.is_none());
                 l1e.set_entry(pt_lvl2_idx(ipa), l2e);
             } else {
-                panic!("map lv2 page failed {:#?}", result.err());
+                panic!("map lv2 page failed");
             }
         } else if l2e.to_pte() & 0b11 == PTE_BLOCK {
             error!("map lvl 2 already mapped with 2mb {:#x}", l2e.to_pte());
@@ -387,19 +357,6 @@ impl PageTable {
                     l2e.set_entry(pt_lvl3_idx(ipa), Aarch64PageTableEntry::from_pa(0));
                     // invalidate tlbs
                     self.tlb_invalidate(ipa);
-                    // check l2e
-                    if empty_page(l2e.to_hva()) {
-                        let l2e_pa = l2e.to_pa();
-                        l1e.set_entry(pt_lvl2_idx(ipa), Aarch64PageTableEntry(0));
-                        let mut pages = self.pages.lock();
-                        pages.remove(&l2e_pa);
-                        // check l1e
-                        if empty_page(l1e.to_hva()) {
-                            let l1e_pa = l1e.to_pa();
-                            directory.set_entry(pt_lvl1_idx(ipa), Aarch64PageTableEntry(0));
-                            pages.remove(&l1e_pa);
-                        }
-                    }
                 }
             }
         }
@@ -524,13 +481,4 @@ impl PageTable {
             panic!("set_pte: not support lvl {lvl}");
         }
     }
-}
-
-fn empty_page(addr: usize) -> bool {
-    for i in 0..PTE_PER_PAGE {
-        if unsafe { ((addr + i * WORD_SIZE) as *const usize).read_volatile() } != 0 {
-            return false;
-        }
-    }
-    true
 }

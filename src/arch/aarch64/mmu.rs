@@ -190,7 +190,19 @@ pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables
     }
 }
 
-pub(super) extern "C" fn mmu_init(pt: &PageTables) {
+const PA_RANGE_TABLE: &[u64] = &[32, 36, 40, 42, 44, 48, 52];
+
+pub fn pa_range() -> u64 {
+    use cortex_a::registers::ID_AA64MMFR0_EL1;
+    // current only support 3-level page table (39bits), so the max is 36bits and max index is 1
+    ID_AA64MMFR0_EL1.read(ID_AA64MMFR0_EL1::PARange).min(1)
+}
+
+pub fn pa_range_val(pa_range_idx: usize) -> u64 {
+    PA_RANGE_TABLE[pa_range_idx]
+}
+
+pub extern "C" fn mmu_init(pt: &PageTables) {
     use cortex_a::registers::*;
     MAIR_EL2.write(
         MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
@@ -208,6 +220,19 @@ pub(super) extern "C" fn mmu_init(pt: &PageTables) {
             + TCR_EL2::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
             + TCR_EL2::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
             + TCR_EL2::T0SZ.val(64 - HYP_VA_SIZE),
+    );
+
+    let pa_range_idx = pa_range();
+    let pa_range = pa_range_val(pa_range_idx as usize);
+
+    VTCR_EL2.write(
+        VTCR_EL2::PS.val(pa_range_idx)
+            + VTCR_EL2::TG0::Granule4KB
+            + VTCR_EL2::SH0::Inner
+            + VTCR_EL2::ORGN0::NormalWBRAWA
+            + VTCR_EL2::IRGN0::NormalWBRAWA
+            + VTCR_EL2::SL0.val(if pa_range < 44 { 0b01 } else { 0b10 })
+            + VTCR_EL2::T0SZ.val(64 - pa_range),
     );
 
     // barrier::isb(barrier::SY);

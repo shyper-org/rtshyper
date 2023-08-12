@@ -28,7 +28,6 @@ log = { version = "0.4", features = [
     "release_max_level_info",
 ] }
 tock-registers = "0.8.0"
-cortex-a = { package = "aarch64-cpu", version = "9.3.1" }
 spin = { path = "deps/spin" }
 buddy_system_allocator = { path = "deps/buddy_system_allocator" }
 # spin = { version = "0.9.8" }
@@ -37,17 +36,18 @@ static_assertions = "1.1.0"
 derive_more = "0.99.17"
 intrusive-collections = "0.9"
 cfg-if = "1.0.0"
+memoffset = { version = "0.8", default-features = false, features = [
+    "unstable_const",
+] }
 
-[dependencies.memoffset]
-version = "0.8"
-default-features = false
-features = ["unstable_const"]
+# optional dependencies
+cortex-a = { package = "aarch64-cpu", version = "9.3.1", optional = true }
 
 [features]
 default = ["tx2"]
-tx2 = ["ns16550", "preempt", "memory-reservation"]
-qemu = ["pl011", "preempt"]
-pi4 = ["pl011", "preempt"]
+tx2 = ["cortex-a", "pa-bits-39", "ns16550", "preempt", "memory-reservation"]
+qemu = ["cortex-a", "pa-bits-39", "pl011", "preempt"]
+pi4 = ["cortex-a", "pa-bits-39", "pl011", "preempt"]
 ramdisk = []
 static-config = []
 ns16550 = []
@@ -56,3 +56,5 @@ preempt = []
 unishyper = []
 unilib = []
 memory-reservation = []
+pa-bits-39 = []
+pa-bits-48 = []

@@ -156,7 +156,7 @@ pub struct VmContext {
     hstr_el2: u64,
     #[cfg(not(feature = "memory-reservation"))]
     pub pmcr_el0: u64,
-    pub vtcr_el2: u64,
+    // pub vtcr_el2: u64,
 
     // exception
     far_el2: u64,
@@ -224,7 +224,7 @@ impl VmContext {
 
         #[cfg(not(feature = "memory-reservation"))]
         mrs!(self.pmcr_el0, PMCR_EL0);
-        mrs!(self.vtcr_el2, VTCR_EL2);
+        // mrs!(self.vtcr_el2, VTCR_EL2);
         mrs!(self.hcr_el2, HCR_EL2);
         // MRS!(self.cptr_el2, CPTR_EL2);
         // MRS!(self.hstr_el2, HSTR_EL2);
@@ -262,7 +262,7 @@ impl VmContext {
 
         #[cfg(not(feature = "memory-reservation"))]
         msr!(PMCR_EL0, self.pmcr_el0);
-        msr!(VTCR_EL2, self.vtcr_el2);
+        // msr!(VTCR_EL2, self.vtcr_el2);
         msr!(HCR_EL2, self.hcr_el2);
         // MSR!(CPTR_EL2, self.cptr_el2);
         // MSR!(HSTR_EL2, self.hstr_el2);

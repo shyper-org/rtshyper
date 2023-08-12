@@ -8,9 +8,7 @@ pub const ENTRY_PER_PAGE: usize = PAGE_SIZE / 8;
 
 pub type ContextFrame = super::context_frame::Aarch64ContextFrame;
 
-pub const WORD_SIZE: usize = core::mem::size_of::<usize>();
-const_assert_eq!(WORD_SIZE, 8);
-pub const PTE_PER_PAGE: usize = PAGE_SIZE / WORD_SIZE;
+pub const PTE_PER_PAGE: usize = PAGE_SIZE / core::mem::size_of::<usize>();
 
 // The size offset of the memory region addressed by TTBR0_EL2
 // see TCR_EL2::T0SZ

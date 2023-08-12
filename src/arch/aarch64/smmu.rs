@@ -9,6 +9,8 @@ use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
 
+use crate::arch::aarch64::mmu::pa_range_val;
+use crate::arch::aarch64::mmu::pa_range;
 use crate::board::PLAT_DESC;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::EmuContext;
@@ -64,6 +66,7 @@ const SMMUV2_TCR_IRGN0_WB_RA_WA: usize = 1 << 8;
 const SMMUV2_TCR_ORGN0_WB_RA_WA: usize = 1 << 10;
 const SMMUV2_TCR_SH0_IS: usize = 0x3 << 12;
 const SMMUV2_TCR_SL0_1: usize = 0x1 << 6;
+const SMMUV2_TCR_SL0_0: usize = 0x2 << 6;
 
 const SMMUV2_SCTLR_CFIE: usize = 1 << 6;
 const SMMUV2_SCTLR_CFRE: usize = 1 << 5;
@@ -455,8 +458,7 @@ impl SmmuV2 {
         let pasize = bit_extract(glb_rs0.IDR2.get() as usize, 4, 4);
         let ipasize = bit_extract(glb_rs0.IDR2.get() as usize, 0, 4);
 
-        let mut parange = cortex_a::registers::ID_AA64MMFR0_EL1.get() as usize;
-        parange = parange & bit_extract(parange, 0, 4);
+        let parange = pa_range() as usize;
         if (pasize as isize) < (parange as isize) {
             panic!("smmuv2 does not support the full available pa range")
         }
@@ -577,15 +579,19 @@ impl SmmuV2 {
         rs1.CBAR[context_id].set(cbar_val);
         rs1.CBA2R[context_id].set(1); // CBA2R_RW64_64BIT
 
-        let pa_size = 1; // PASize, 36-bit
-        let t0sz = 64 - 36;
-        let tcr = ((pa_size & 0x7) << SMMUV2_TCR_PASIZE_OFF)
-            | (t0sz & bit_mask!(0, 6))
+        let pa_size = pa_range() as usize;
+        let pa_range = pa_range_val(pa_size) as usize;
+        let tcr = (pa_size << SMMUV2_TCR_PASIZE_OFF)
+            | (64 - pa_range) & bit_mask!(0, 6) // t0sz
             | SMMUV2_TCR_TG0_4K
             | SMMUV2_TCR_ORGN0_WB_RA_WA
             | SMMUV2_TCR_IRGN0_WB_RA_WA
             | SMMUV2_TCR_SH0_IS
-            | SMMUV2_TCR_SL0_1;
+            | if pa_range < 44 {
+                SMMUV2_TCR_SL0_1
+            } else {
+                SMMUV2_TCR_SL0_0
+            };
         self.context_bank[context_id].TCR.set(tcr as u32);
         self.context_bank[context_id]
             .TTBR0
