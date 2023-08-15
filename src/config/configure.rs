@@ -1,5 +1,6 @@
 use core::ffi::CStr;
 use core::ops::Range;
+use core::sync::atomic::{AtomicU32, Ordering};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -7,6 +8,7 @@ use spin::Mutex;
 
 // use crate::board::*;
 use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
+use crate::kernel::timer::gettimer_tick_ms;
 use crate::kernel::{active_vm, vm_by_id, Vm, VmType, CONFIG_VM_NUM_MAX};
 use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
@@ -78,8 +80,13 @@ impl VmRegion {
     }
 }
 
-const DEFAULT_MEMORY_BUDGET: u32 = 10_0000_0000;
-const DEFAULT_MEMORY_REPLENISHMENT_PERIOD: u64 = 100; // replenishment timer period
+const DEFAULT_MEMORY_BUDGET: u32 = 10_0000_0000; // a very big budget that is impossible to be depleted
+const DEFAULT_MEMORY_REPLENISHMENT_PERIOD: u64 = 10; // replenishment timer period
+const DEFAULT_PERCENT: u32 = 50;
+
+// set by memory random access latency benchmark
+// on TX2, it is 26315800, DEFAULT_MEMORY_BUDGET is about 38 times, so it must be enough
+static MEMORY_BUDGET_PER_PERIOD: AtomicU32 = AtomicU32::new(DEFAULT_MEMORY_BUDGET);
 
 #[derive(Clone)]
 pub struct VmMemoryConfig {
@@ -662,26 +669,42 @@ pub fn add_dtb_dev(
     })
 }
 
+// MB/s
+fn budget2bandwidth(budget: u32, period: u64) -> u32 {
+    64 * budget / gettimer_tick_ms() as u32 / 1000 / period as u32
+}
+
+#[allow(dead_code)]
+pub fn set_memory_budget_second(budget: u32) {
+    let period_per_second = 1000 / DEFAULT_MEMORY_REPLENISHMENT_PERIOD as u32 / gettimer_tick_ms() as u32;
+    let budget_per_period = budget / period_per_second;
+    MEMORY_BUDGET_PER_PERIOD.store(budget_per_period, Ordering::Relaxed);
+    let bandwidth = budget2bandwidth(budget_per_period, DEFAULT_MEMORY_REPLENISHMENT_PERIOD);
+    info!("set memory limited budget {budget_per_period}, bandwidth {bandwidth} MB/s");
+}
+
 pub fn set_memory_color_budget(
     vmid: usize,
     color_num: usize,
     color_array_addr: usize,
-    budget: usize,
-    period: usize,
+    budget_percent: usize,
 ) -> Result<usize, ()> {
     vm_cfg_editor(vmid, |vm_cfg| {
         let color_array_hva = active_vm().unwrap().ipa2hva(color_array_addr);
         let color_array = unsafe { core::slice::from_raw_parts(color_array_hva as *const _, color_num) };
         vm_cfg.memory.colors.extend_from_slice(color_array);
         info!("VM[{vmid}] memory colors {:?}", vm_cfg.memory.colors);
-        if budget != 0 {
-            vm_cfg.memory.budget = budget as u32;
-            info!("VM[{vmid}] memory budget {}", vm_cfg.memory.budget);
-        }
-        if period != 0 {
-            vm_cfg.memory.period = period as u64;
-            info!("VM[{vmid}] memory period {}", vm_cfg.memory.period);
-        }
+
+        let percent = if (10..=90).contains(&budget_percent) || budget_percent == 100 {
+            budget_percent as u32
+        } else {
+            warn!("Illegal memory bandwidth percentage {budget_percent}, reset to default {DEFAULT_PERCENT}");
+            DEFAULT_PERCENT
+        };
+        let budget = MEMORY_BUDGET_PER_PERIOD.load(Ordering::Relaxed) * percent / 100;
+        let bandwidth = budget2bandwidth(budget, vm_cfg.memory.period);
+        info!("VM[{vmid}] memory bandwidth {bandwidth} MB/s, budget {budget}, percentage {percent}%");
+        vm_cfg.memory.budget = budget;
         Ok(0)
     })
 }

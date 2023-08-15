@@ -255,6 +255,13 @@ fn init_hypervisor_colors(colors: Vec<usize>) {
     HYPERVISOR_COLORS.call_once(|| colors);
 }
 
+#[allow(dead_code)]
+pub fn get_llc_size() -> usize {
+    let cpu_cache_info = CPU_CACHE.get().unwrap();
+    let last_level = cpu_cache_info.min_share_level;
+    cpu_cache_info.info_list[last_level - 1].size()
+}
+
 fn mem_region_init_by_colors() {
     if PLAT_DESC.mem_desc.regions.is_empty() {
         panic!("Platform Vm Memory Regions Overrun!");

@@ -1,11 +1,9 @@
-pub use self::uart::*;
-
-#[cfg(feature = "pi4")]
+#[cfg(feature = "gpio")]
 mod gpio;
-mod uart;
+pub mod uart;
 
 pub fn init() {
-    #[cfg(feature = "pi4")]
+    #[cfg(feature = "gpio")]
     {
         gpio::select_function(0, 4);
         gpio::select_function(1, 4);

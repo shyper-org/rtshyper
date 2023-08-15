@@ -21,6 +21,15 @@ pub fn timer_enable(val: bool) {
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
 }
 
+#[allow(dead_code)]
+pub fn gettime_ns() -> usize {
+    crate::arch::gettime_ns()
+}
+
+pub const fn gettimer_tick_ms() -> usize {
+    10
+}
+
 fn timer_notify_after(ms: usize) {
     use crate::arch::{timer_arch_enable_irq, timer_arch_set};
     if ms == 0 {
@@ -47,7 +56,7 @@ pub fn timer_irq_handler() {
 
     current_cpu().vcpu_array.resched();
 
-    timer_notify_after(10);
+    timer_notify_after(gettimer_tick_ms());
 }
 
 #[allow(dead_code)]

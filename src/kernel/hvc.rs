@@ -228,7 +228,7 @@ fn hvc_config_handler(
         HVC_CONFIG_PASSTHROUGH_DEVICE_STREAMS_IDS => config::add_passthrough_device_streams_ids(x0, x1, x2),
         HVC_CONFIG_DTB_DEVICE => config::add_dtb_dev(x0, x1, x2, x3, x4, x5, x6),
         HVC_CONFIG_UPLOAD_KERNEL_IMAGE => config::upload_kernel_image(x0, x1, x2, x3, x4),
-        HVC_CONFIG_MEMORY_COLOR_BUDGET => config::set_memory_color_budget(x0, x1, x2, x3, x4),
+        HVC_CONFIG_MEMORY_COLOR_BUDGET => config::set_memory_color_budget(x0, x1, x2, x3),
         _ => {
             println!("hvc_config_handler unknown event {}", event);
             Err(())

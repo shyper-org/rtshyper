@@ -62,6 +62,7 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     util::barrier();
     kernel::hypervisor_self_coloring();
     if cpu_id == 0 {
+        kernel::subinit();
         vm_init();
         info!(
             "{} Hypervisor init ok\n\nStart booting Monitor VM ...",

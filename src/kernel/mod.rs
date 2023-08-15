@@ -21,8 +21,15 @@ mod iommu;
 mod ipi;
 mod ivc;
 mod mem;
+#[cfg(any(feature = "memory-reservation"))]
+mod membwres;
 mod sched;
 pub mod timer;
 mod vcpu;
 mod vcpu_array;
 mod vm;
+
+pub fn subinit() {
+    #[cfg(any(feature = "memory-reservation"))]
+    membwres::init();
+}

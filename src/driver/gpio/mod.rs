@@ -1,4 +1,6 @@
+#[cfg(feature = "pi4")]
 const MMIO_BASE: usize = 0xFE000000;
+#[cfg(feature = "pi4")]
 const GPFSEL0: usize = MMIO_BASE + 0x200000;
 
 fn alt2bits(alt: u8) -> u8 {
