@@ -344,14 +344,13 @@ pub fn virtio_blk_notify_handler(vq: Arc<Virtq>, blk: Arc<VirtioMmio>, vm: Arc<V
     };
 
     let mut req_node_list = vec![];
-    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     let mut process_count: i32 = 0;
     // let mut desc_chain_head_idx;
 
     // let time0 = time_current_us();
 
-    while next_desc_idx_opt.is_some() {
-        let mut next_desc_idx = next_desc_idx_opt.unwrap() as usize;
+    while let Some(head_idx) = vq.pop_avail_desc_idx(avail_idx) {
+        let mut next_desc_idx = head_idx as usize;
         vq.disable_notify();
         if vq.check_avail_idx(avail_idx) {
             vq.enable_notify();
@@ -444,7 +443,6 @@ pub fn virtio_blk_notify_handler(vq: Arc<Virtq>, blk: Arc<VirtioMmio>, vm: Arc<V
         req_node_list.push(req_node);
 
         process_count += 1;
-        next_desc_idx_opt = vq.pop_avail_desc_idx(avail_idx);
     }
 
     if !req.mediated() {

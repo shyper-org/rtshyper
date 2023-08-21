@@ -48,9 +48,10 @@ fastrand = { version = "2.0.0", default-features = false, features = [
 
 [features]
 default = ["tx2"]
-tx2 = ["cortex-a", "pa-bits-39", "ns16550", "preempt", "memory-reservation"]
-qemu = ["cortex-a", "pa-bits-39", "pl011", "preempt"]
-pi4 = ["cortex-a", "pa-bits-39", "gpio", "pl011", "preempt"]
+tx2 = ["aarch64", "pa-bits-39", "ns16550", "preempt", "memory-reservation"]
+qemu = ["aarch64", "pa-bits-39", "pl011", "preempt"]
+pi4 = ["aarch64", "pa-bits-39", "gpio", "pl011", "preempt"]
+aarch64 = ["cortex-a"]
 ramdisk = []
 static-config = []
 ns16550 = []

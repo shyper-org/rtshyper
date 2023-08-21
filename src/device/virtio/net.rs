@@ -155,9 +155,8 @@ pub fn virtio_net_handle_ctrl(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: Arc<Vm>)
         return false;
     }
 
-    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
-    while next_desc_idx_opt.is_some() {
-        let mut idx = next_desc_idx_opt.unwrap() as usize;
+    while let Some(head_idx) = vq.pop_avail_desc_idx(vq.avail_idx()) {
+        let mut idx = head_idx as usize;
         let mut len = 0;
         let mut out_iov = VirtioIov::default();
         let mut in_iov = VirtioIov::default();
@@ -204,10 +203,9 @@ pub fn virtio_net_handle_ctrl(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: Arc<Vm>)
         }
 
         // update ctrl queue used ring
-        if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
+        if !vq.update_used_ring(len as u32, head_idx as u32) {
             return false;
         }
-        next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
     nic.notify();
     true
@@ -226,10 +224,8 @@ pub fn virtio_net_notify_handler(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: alloc
 
     let mut nics_to_notify = vec![];
 
-    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
-
-    while next_desc_idx_opt.is_some() {
-        let mut idx = next_desc_idx_opt.unwrap() as usize;
+    while let Some(head_idx) = vq.pop_avail_desc_idx(vq.avail_idx()) {
+        let mut idx = head_idx as usize;
         let mut len = 0;
         let mut tx_iov = VirtioIov::default();
 
@@ -252,14 +248,9 @@ pub fn virtio_net_notify_handler(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: alloc
             nics_to_notify.extend(list);
         }
 
-        if !vq.update_used_ring(
-            (len - size_of::<VirtioNetHdr>()) as u32,
-            next_desc_idx_opt.unwrap() as u32,
-        ) {
+        if !vq.update_used_ring((len - size_of::<VirtioNetHdr>()) as u32, head_idx as u32) {
             return false;
         }
-
-        next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
 
     if !vq.avail_is_avail() {

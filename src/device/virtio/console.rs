@@ -115,10 +115,8 @@ pub fn virtio_console_notify_handler(vq: Arc<Virtq>, console: Arc<VirtioMmio>, v
         }
     };
 
-    let mut next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
-
-    while next_desc_idx_opt.is_some() {
-        let mut idx = next_desc_idx_opt.unwrap() as usize;
+    while let Some(head_idx) = vq.pop_avail_desc_idx(vq.avail_idx()) {
+        let mut idx = head_idx as usize;
         let mut len = 0;
         let mut tx_iov = VirtioIov::default();
 
@@ -141,11 +139,9 @@ pub fn virtio_console_notify_handler(vq: Arc<Virtq>, console: Arc<VirtioMmio>, v
             println!("virtio_console_notify_handler: failed send");
             // return false;
         }
-        if !vq.update_used_ring(len as u32, next_desc_idx_opt.unwrap() as u32) {
+        if !vq.update_used_ring(len as u32, head_idx as u32) {
             return false;
         }
-
-        next_desc_idx_opt = vq.pop_avail_desc_idx(vq.avail_idx());
     }
 
     if !vq.avail_is_avail() {
@@ -173,10 +169,7 @@ fn virtio_console_recv(trgt_vmid: u16, trgt_console_ipa: u64, tx_iov: VirtioIov,
     {
         Some(x) => x,
         _ => {
-            warn!(
-                "virtio_console_recv: trgt_vm[{}] failed to get virtio console dev",
-                trgt_vmid
-            );
+            warn!("virtio_console_recv: trgt_vm[{trgt_vmid}] failed to get virtio console ipa {trgt_console_ipa:x}");
             return true;
         }
     };

@@ -81,6 +81,9 @@ pub const LVL1_SHIFT: usize = 30;
 pub const LVL2_SHIFT: usize = 21;
 pub const LVL3_SHIFT: usize = 12;
 
+#[cfg(any(feature = "pa-bits-48"))]
+compile_error!("unsupported feature: pa-bits-48");
+
 // cfg_if::cfg_if! {
 //     if #[cfg(any(feature = "pa-bits-39"))] {
 //         const LVL_SHIFT: &[usize] = &[30, 21, 12];

@@ -199,7 +199,7 @@ fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let vm = active_vm().unwrap();
     let physical_linear_id = vm.vcpuid_to_pcpuid(vcpu_id);
 
-    if vcpu_id >= vm.cpu_num() || physical_linear_id.is_err() {
+    if vcpu_id >= vm.cpu_num() || physical_linear_id.is_none() {
         warn!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
         return usize::MAX - 1;
     }

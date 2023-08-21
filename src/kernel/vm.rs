@@ -418,29 +418,24 @@ impl Vm {
         self.inner_const.int_bitmap.get(int_id) != 0
     }
 
-    pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Result<usize, ()> {
-        if let Some(vcpu) = self.vcpu_list().get(vcpuid) {
-            Ok(vcpu.phys_id())
-        } else {
-            Err(())
-        }
+    pub fn vcpuid_to_pcpuid(&self, vcpuid: usize) -> Option<usize> {
+        self.vcpu_list().get(vcpuid).map(|vcpu| vcpu.phys_id())
     }
 
-    pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Result<usize, ()> {
+    pub fn pcpuid_to_vcpuid(&self, pcpuid: usize) -> Option<usize> {
         for vcpu in self.vcpu_list() {
             if vcpu.phys_id() == pcpuid {
-                return Ok(vcpu.id());
+                return Some(vcpu.id());
             }
         }
-        Err(())
+        None
     }
 
     pub fn vcpu_to_pcpu_mask(&self, mask: usize, len: usize) -> usize {
         let mut pmask = 0;
         for i in 0..len {
-            let shift = self.vcpuid_to_pcpuid(i);
-            if mask & (1 << i) != 0 {
-                if let Ok(shift) = shift {
+            if let Some(shift) = self.vcpuid_to_pcpuid(i) {
+                if mask & (1 << i) != 0 {
                     pmask |= 1 << shift;
                 }
             }
@@ -451,9 +446,8 @@ impl Vm {
     pub fn pcpu_to_vcpu_mask(&self, mask: usize, len: usize) -> usize {
         let mut pmask = 0;
         for i in 0..len {
-            let shift = self.pcpuid_to_vcpuid(i);
-            if mask & (1 << i) != 0 && shift.is_ok() {
-                if let Ok(shift) = shift {
+            if let Some(shift) = self.pcpuid_to_vcpuid(i) {
+                if mask & (1 << i) != 0 {
                     pmask |= 1 << shift;
                 }
             }

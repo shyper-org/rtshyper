@@ -34,7 +34,6 @@ pub(super) struct VirtDev {
     inner: Mutex<VirtDevInner>,
 }
 
-#[allow(dead_code)]
 impl VirtDev {
     pub fn new(dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) -> Self {
         let (desc, features, req) = match dev_type {
@@ -118,10 +117,6 @@ impl VirtDev {
             Some(req) => req.mediated(),
             None => false,
         }
-    }
-
-    pub fn is_net(&self) -> bool {
-        matches!(&self.desc, DevDesc::NetDesc(_))
     }
 }
 
