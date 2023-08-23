@@ -1,5 +1,4 @@
 use core::mem::size_of;
-use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -12,6 +11,8 @@ use crate::util::memcpy_safe;
 
 #[cfg(any(feature = "memory-reservation"))]
 use crate::arch::PmuTimerEvent;
+#[cfg(any(feature = "memory-reservation"))]
+use super::bwres::membwres::MemoryBandwidth;
 use super::{CpuState, Vm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,28 +47,11 @@ impl WeakVcpu {
 
 pub struct VcpuInner {
     inner_const: VcpuConst,
+    pub inner_mut: Mutex<VcpuInnerMut>,
+    #[cfg(any(feature = "memory-reservation"))]
     reservation: MemoryBandwidth,
     #[cfg(any(feature = "memory-reservation"))]
-    pmu_event: Arc<PmuTimerEvent>,
-    pub inner_mut: Mutex<VcpuInnerMut>,
-}
-
-struct MemoryBandwidth {
-    budget: u32,
-    period: u64,
-    remaining_budget: AtomicU32,
-    replenish: AtomicBool,
-}
-
-impl MemoryBandwidth {
-    fn new(budget: u32, period: u64) -> Self {
-        Self {
-            budget,
-            period,
-            remaining_budget: AtomicU32::new(budget),
-            replenish: AtomicBool::new(false),
-        }
-    }
+    pmu_event: Option<Arc<PmuTimerEvent>>,
 }
 
 struct VcpuConst {
@@ -76,37 +60,40 @@ struct VcpuConst {
     phys_id: usize, // related physical CPU id
 }
 
-#[allow(dead_code)]
 impl Vcpu {
+    #[allow(unused_variables)]
     pub(super) fn new(vm: Weak<Vm>, vcpu_id: usize, phys_id: usize, config: &VmConfigEntry) -> Self {
         let inner_const = VcpuConst {
             id: vcpu_id,
             vm,
             phys_id,
         };
-        let reservation = MemoryBandwidth::new(
-            // each vcpu allocates bandwidth equally
-            config.memory_budget() / config.cpu_num() as u32,
-            config.memory_replenishment_period(),
-        );
         #[cfg(any(feature = "memory-reservation"))]
         let inner = Arc::new_cyclic(|weak| VcpuInner {
             inner_const,
-            reservation,
-            pmu_event: Arc::new(PmuTimerEvent(WeakVcpu(weak.clone()))),
+            reservation: MemoryBandwidth::new(
+                // each vcpu allocates bandwidth equally
+                config.memory.budget / config.cpu_num() as u32,
+                config.memory.period,
+            ),
+            pmu_event: if config.memory.is_limited() {
+                debug!("vcpu {vcpu_id} memory is limited");
+                Some(Arc::new(PmuTimerEvent(WeakVcpu(weak.clone()))))
+            } else {
+                None
+            },
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         });
         #[cfg(not(feature = "memory-reservation"))]
         let inner = Arc::new(VcpuInner {
             inner_const,
-            reservation,
             inner_mut: Mutex::new(VcpuInnerMut::new()),
         });
         Self(inner)
     }
 
     #[cfg(any(feature = "memory-reservation"))]
-    pub(super) fn pmu_event(&self) -> Arc<PmuTimerEvent> {
+    pub(super) fn pmu_event(&self) -> Option<Arc<PmuTimerEvent>> {
         self.0.pmu_event.clone()
     }
 
@@ -131,7 +118,9 @@ impl Vcpu {
         self.save_cpu_ctx();
 
         #[cfg(any(feature = "memory-reservation"))]
-        crate::arch::vcpu_stop_pmu(self);
+        if self.0.pmu_event.is_some() {
+            crate::arch::vcpu_stop_pmu(self);
+        }
 
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.ext_regs_store();
@@ -144,7 +133,9 @@ impl Vcpu {
         self.restore_cpu_ctx();
 
         #[cfg(any(feature = "memory-reservation"))]
-        crate::arch::vcpu_start_pmu(self);
+        if self.0.pmu_event.is_some() {
+            crate::arch::vcpu_start_pmu(self);
+        }
 
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.generic_timer.set_offset(vtimer_offset as u64);
@@ -269,21 +260,12 @@ impl Vcpu {
         inner.vm_ctx.vmpidr_el2 = vmpidr as u64;
     }
 
-    pub fn context_ext_regs_store(&self) {
-        let mut inner = self.0.inner_mut.lock();
-        inner.context_ext_regs_store();
-    }
-
-    pub fn vcpu_ctx_addr(&self) -> usize {
-        let inner = self.0.inner_mut.lock();
-        inner.vcpu_ctx_addr()
-    }
-
     pub fn set_elr(&self, elr: usize) {
         let mut inner = self.0.inner_mut.lock();
         inner.set_elr(elr);
     }
 
+    #[allow(dead_code)]
     pub fn elr(&self) -> usize {
         let inner = self.0.inner_mut.lock();
         inner.vcpu_ctx.exception_pc()
@@ -302,49 +284,42 @@ impl Vcpu {
     }
 
     fn inject_int_inlist(&self) {
-        match self.vm() {
-            None => {}
-            Some(vm) => {
-                let mut inner = self.0.inner_mut.lock();
-                let int_list = core::mem::take(&mut inner.int_list);
-                drop(inner);
-                trace!("schedule: inject int {:?} for vm {}", int_list, vm.id());
-                for int in int_list {
-                    interrupt_vm_inject(&vm, self, int);
-                }
+        if let Some(vm) = self.vm() {
+            let mut inner = self.0.inner_mut.lock();
+            let int_list = core::mem::take(&mut inner.int_list);
+            drop(inner);
+            trace!("schedule: inject int {:?} for vm {}", int_list, vm.id());
+            for int in int_list {
+                interrupt_vm_inject(&vm, self, int);
             }
         }
     }
+}
 
+#[cfg(any(feature = "memory-reservation"))]
+impl Vcpu {
     pub fn remaining_budget(&self) -> u32 {
-        self.0.reservation.remaining_budget.load(Ordering::Relaxed)
+        self.0.reservation.remaining_budget()
     }
 
     pub fn period(&self) -> u64 {
-        self.0.reservation.period
+        self.0.reservation.period()
     }
 
     pub fn update_remaining_budget(&self, remaining_budget: u32) {
-        self.0
-            .reservation
-            .remaining_budget
-            .store(remaining_budget, Ordering::Relaxed);
+        self.0.reservation.update_remaining_budget(remaining_budget);
     }
 
     pub fn reset_remaining_budget(&self) {
-        let reservation = &self.0.reservation;
-        reservation.remaining_budget.store(0, Ordering::Relaxed);
-        reservation.replenish.store(true, Ordering::Relaxed);
+        self.0.reservation.reset_remaining_budget();
     }
 
     pub fn supply_budget(&self) {
-        let reservation = &self.0.reservation;
-        if reservation.replenish.load(Ordering::Relaxed) {
-            reservation
-                .remaining_budget
-                .store(reservation.budget, Ordering::Relaxed);
-            reservation.replenish.store(false, Ordering::Relaxed);
-        }
+        self.0.reservation.supply_budget();
+    }
+
+    pub fn budget_try_rescue(&self) -> bool {
+        self.0.reservation.budget_try_rescue()
     }
 }
 
@@ -365,20 +340,12 @@ impl VcpuInnerMut {
         }
     }
 
-    fn vcpu_ctx_addr(&self) -> usize {
-        &(self.vcpu_ctx) as *const _ as usize
-    }
-
     fn gic_ctx_reset(&mut self) {
         use crate::arch::gic_lrs;
         for i in 0..gic_lrs() {
             self.vm_ctx.gic_state.lr[i] = 0;
         }
         self.vm_ctx.gic_state.hcr |= 1 << 2;
-    }
-
-    fn context_ext_regs_store(&mut self) {
-        self.vm_ctx.ext_regs_store();
     }
 
     fn set_elr(&mut self, elr: usize) {

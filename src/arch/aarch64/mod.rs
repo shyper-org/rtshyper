@@ -11,7 +11,9 @@ pub use self::timer::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 pub use self::cache::*;
-pub use pmuv3::{arch_pmu_init, vcpu_start_pmu, vcpu_stop_pmu, cpu_cycle_count, PmuTimerEvent};
+pub use pmuv3::{arch_pmu_init, cpu_cycle_count};
+#[cfg(any(feature = "memory-reservation"))]
+pub use pmuv3::{vcpu_start_pmu, vcpu_stop_pmu, PmuTimerEvent};
 
 #[macro_use]
 mod regs;
@@ -30,7 +32,6 @@ mod interrupt;
 mod mmu;
 #[allow(dead_code)]
 mod page_table;
-#[allow(dead_code)]
 mod pmuv3;
 mod psci;
 mod smc;

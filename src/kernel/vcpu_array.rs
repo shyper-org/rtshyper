@@ -72,45 +72,43 @@ impl VcpuArray {
         }
     }
 
-    pub fn wakeup_vcpu(&mut self, vcpu: &Vcpu) -> bool {
-        match self
+    pub fn wakeup_vcpu(&mut self, vcpu: &Vcpu) {
+        if let Some(vcpu) = self
             .array
             .iter()
             .flatten()
             .find(|&array_vcpu| array_vcpu == vcpu)
             .cloned()
         {
-            Some(vcpu) => {
-                debug!(
-                    "core {} VM {} vcpu {} wakeup",
-                    current_cpu().id,
-                    vcpu.vm_id(),
-                    vcpu.id()
-                );
-                #[cfg(any(feature = "memory-reservation"))]
-                {
-                    if vcpu.state() == VcpuState::Inv {
+            trace!(
+                "core {} VM {} vcpu {} wakeup",
+                current_cpu().id,
+                vcpu.vm_id(),
+                vcpu.id()
+            );
+            #[cfg(any(feature = "memory-reservation"))]
+            {
+                if vcpu.state() == VcpuState::Inv {
+                    if let Some(event) = vcpu.pmu_event() {
+                        debug!("VM {} vcpu {} register pmu event", vcpu.vm_id(), vcpu.id());
                         let period = vcpu.period();
-                        let event = vcpu.pmu_event();
                         super::timer::start_timer_event(period, event);
                     }
                 }
-                // set vcpu state
-                vcpu.set_state(VcpuState::Runnable);
-                // determine the timer
-                self.active += 1;
-                if !self.timer_on && self.active >= ENABLE_TIMER_ACTIVE_NUM {
-                    self.timer_on = true;
-                    timer_enable(true);
-                }
-                // do scheduling
-                self.scheduler().put(vcpu);
-                if current_cpu().active_vcpu.is_none() {
-                    self.resched();
-                }
-                true
             }
-            None => false,
+            // set vcpu state
+            vcpu.set_state(VcpuState::Runnable);
+            // determine the timer
+            self.active += 1;
+            if !self.timer_on && self.active >= ENABLE_TIMER_ACTIVE_NUM {
+                self.timer_on = true;
+                timer_enable(true);
+            }
+            // do scheduling
+            self.scheduler().put(vcpu);
+            if current_cpu().active_vcpu.is_none() {
+                self.resched();
+            }
         }
     }
 
@@ -136,16 +134,18 @@ impl VcpuArray {
                 }
                 #[cfg(any(feature = "memory-reservation"))]
                 {
-                    use super::timer::remove_timer_event;
-                    use crate::arch::PmuTimerEvent;
-                    remove_timer_event(|event| {
-                        use alloc::sync::Arc;
-                        if let Some(event) = event.as_any().downcast_ref::<PmuTimerEvent>() {
-                            core::ptr::addr_of!(*event) == Arc::as_ptr(&vcpu.pmu_event())
-                        } else {
-                            false
-                        }
-                    });
+                    if let Some(vcpu_event) = vcpu.pmu_event() {
+                        use super::timer::remove_timer_event;
+                        use crate::arch::PmuTimerEvent;
+                        remove_timer_event(|event| {
+                            use alloc::sync::Arc;
+                            if let Some(event) = event.as_any().downcast_ref::<PmuTimerEvent>() {
+                                core::ptr::addr_of!(*event) == Arc::as_ptr(&vcpu_event)
+                            } else {
+                                false
+                            }
+                        });
+                    }
                 }
                 // remove vcpu from scheduler
                 self.scheduler().remove(&vcpu);
@@ -197,7 +197,7 @@ impl VcpuArray {
     #[allow(dead_code)]
     pub fn block_current(&mut self) {
         if let Some(vcpu) = current_cpu().active_vcpu.take() {
-            debug!("core {} VM {} vcpu {} block", current_cpu().id, vcpu.vm_id(), vcpu.id());
+            trace!("core {} VM {} vcpu {} block", current_cpu().id, vcpu.vm_id(), vcpu.id());
             vcpu.context_vm_store();
             vcpu.set_state(VcpuState::Blocked);
             self.scheduler().remove(&vcpu);

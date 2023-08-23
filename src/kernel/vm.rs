@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 
@@ -145,7 +146,7 @@ pub struct Vm {
 struct VmInnerConst {
     id: usize,
     config: VmConfigEntry,
-    vcpu_list: Vec<Vcpu>,
+    vcpu_list: Box<[Vcpu]>,
     intc_type: IntCtrlType,
     // TODO: create struct ArchVcpu and move intc_dev into it
     arch_intc_dev: Option<Arc<Vgic>>,
@@ -192,14 +193,14 @@ impl VmInnerConst {
         // set the master cpu id to VmInterface
         vm_if_set_cpu_id(id, *phys_id_list.first().unwrap());
 
-        let mut vcpu_list = vec![];
+        let mut vcpu_list = Vec::with_capacity(config.cpu_num());
         for (vcpu_id, phys_id) in phys_id_list.into_iter().enumerate() {
             vcpu_list.push(Vcpu::new(vm.clone(), vcpu_id, phys_id, &config));
         }
         let mut this = Self {
             id,
             config,
-            vcpu_list,
+            vcpu_list: vcpu_list.into_boxed_slice(),
             arch_intc_dev: None,
             int_bitmap: BitAlloc4K::default(),
             emu_devs: vec![],

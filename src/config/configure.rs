@@ -107,6 +107,13 @@ impl Default for VmMemoryConfig {
     }
 }
 
+impl VmMemoryConfig {
+    #[allow(dead_code)]
+    pub fn is_limited(&self) -> bool {
+        self.budget < DEFAULT_MEMORY_BUDGET
+    }
+}
+
 #[derive(Clone)]
 pub struct VmImageConfig {
     pub kernel_img_name: Option<&'static str>,
@@ -236,14 +243,6 @@ impl VmConfigEntry {
             }
             color_bitmap
         }
-    }
-
-    pub fn memory_budget(&self) -> u32 {
-        self.memory.budget
-    }
-
-    pub fn memory_replenishment_period(&self) -> u64 {
-        self.memory.period
     }
 
     fn add_memory_cfg(&mut self, ipa_start: usize, length: usize) {
@@ -695,16 +694,23 @@ pub fn set_memory_color_budget(
         vm_cfg.memory.colors.extend_from_slice(color_array);
         info!("VM[{vmid}] memory colors {:?}", vm_cfg.memory.colors);
 
-        let percent = if (10..=90).contains(&budget_percent) || budget_percent == 100 {
-            budget_percent as u32
+        if cfg!(feature = "memory-reservation") {
+            let percent = if budget_percent == 100 || budget_percent == 0 {
+                info!("VM[{vmid}] memory bandwidth is unlimited");
+                return Ok(0);
+            } else if (10..=90).contains(&budget_percent) {
+                budget_percent as u32
+            } else {
+                warn!("Illegal memory bandwidth percentage {budget_percent}, reset to default {DEFAULT_PERCENT}");
+                DEFAULT_PERCENT
+            };
+            let budget = MEMORY_BUDGET_PER_PERIOD.load(Ordering::Relaxed) * percent / 100;
+            let bandwidth = budget2bandwidth(budget, vm_cfg.memory.period);
+            info!("VM[{vmid}] memory bandwidth {bandwidth} MB/s, budget {budget}, percentage {percent}%");
+            vm_cfg.memory.budget = budget;
         } else {
-            warn!("Illegal memory bandwidth percentage {budget_percent}, reset to default {DEFAULT_PERCENT}");
-            DEFAULT_PERCENT
-        };
-        let budget = MEMORY_BUDGET_PER_PERIOD.load(Ordering::Relaxed) * percent / 100;
-        let bandwidth = budget2bandwidth(budget, vm_cfg.memory.period);
-        info!("VM[{vmid}] memory bandwidth {bandwidth} MB/s, budget {budget}, percentage {percent}%");
-        vm_cfg.memory.budget = budget;
+            warn!("VM[{vmid}] memory budget {budget_percent} is not set because feature \"memory-reservation\" is not enabled");
+        }
         Ok(0)
     })
 }
