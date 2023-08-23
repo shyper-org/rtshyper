@@ -318,6 +318,7 @@ impl Vcpu {
         self.0.reservation.supply_budget();
     }
 
+    #[cfg(any(feature = "dynamic-budget"))]
     pub fn budget_try_rescue(&self) -> bool {
         self.0.reservation.budget_try_rescue()
     }

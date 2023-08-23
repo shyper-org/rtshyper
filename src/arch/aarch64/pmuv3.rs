@@ -169,11 +169,14 @@ fn pmu_mem_access_handler() {
         MEM_ACCESS_EVENT.read_counter()
     );
     vcpu.reset_remaining_budget();
+    #[cfg(any(feature = "dynamic-budget"))]
     if vcpu.budget_try_rescue() {
         vcpu_start_pmu(vcpu);
     } else {
         current_cpu().vcpu_array.block_current();
     }
+    #[cfg(not(feature = "dynamic-budget"))]
+    current_cpu().vcpu_array.block_current();
 }
 
 #[allow(dead_code)]

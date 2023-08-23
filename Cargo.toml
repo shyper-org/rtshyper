@@ -59,7 +59,10 @@ pl011 = []
 preempt = []
 unishyper = []
 unilib = []
-memory-reservation = ["fastrand"]
 pa-bits-39 = []
 pa-bits-48 = []
 gpio = []
+
+memory-reservation = ["fastrand", "dynamic-budget"]
+# This feature "dynamic-budget" belongs to "memory-reservation"
+dynamic-budget = []

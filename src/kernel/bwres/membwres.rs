@@ -50,34 +50,45 @@ struct ReclaimManagerRef {
 
 impl TimerEvent for ReclaimManagerRef {
     fn callback(self: alloc::sync::Arc<Self>, _now: crate::util::timer_list::TimerTickValue) {
-        let manager = unsafe { self.manager.as_ref() };
-        *manager.val.lock() = 0;
+        let mut val = unsafe { self.manager.as_ref() }.val.lock();
+        if *val != 0 {
+            trace!("reset GLOBAL_RECLAIM_MANAGER budget {} to 0", *val);
+            *val = 0;
+        }
         crate::kernel::timer::start_timer_event(self.period, self); // equals to DEFAULT_MEMORY_REPLENISHMENT_PERIOD
     }
 }
 
 static GLOBAL_RECLAIM_MANAGER: ReclaimManager = ReclaimManager::new();
 
+#[allow(dead_code)]
 fn apply_budget(budget: usize) -> usize {
     const MIN_BUDGET: usize = 10_usize.pow(5);
 
-    if budget == 0 {
-        return 0;
-    }
-
     let mut val = GLOBAL_RECLAIM_MANAGER.val.lock();
-    if *val >= budget {
-        *val -= budget;
-        budget
-    } else {
+    if budget == 0 {
+        // vcpu run out of its all budget (including prediction and donation), try get more budget
+        // TODO: add a more suitable method to apply excess budget
         let apply = *val;
         *val = 0;
-        usize::min(apply, MIN_BUDGET)
+        apply
+    } else {
+        // vcpu apply budget that it donate at this period
+        if *val >= budget {
+            *val -= budget;
+            budget
+        } else {
+            let apply = *val;
+            *val = 0;
+            usize::min(apply, MIN_BUDGET)
+        }
     }
 }
 
 fn giveup_budget(budget: usize) {
-    *GLOBAL_RECLAIM_MANAGER.val.lock() += budget;
+    let mut val = GLOBAL_RECLAIM_MANAGER.val.lock();
+    *val += budget;
+    trace!("GLOBAL_RECLAIM_MANAGER now has {} budget", *val);
 }
 
 const CACHE_LINE_SIZE: usize = 64;
@@ -118,20 +129,27 @@ impl MemoryBandwidth {
     }
 
     pub fn supply_budget(&self) {
-        // Do prediction here
-        let next_budget = u32::min(self.predict(), self.budget);
-        let giveup = self.budget - next_budget;
-        trace!(
-            "predict budget {next_budget}, static allocated budget {}, giveup {giveup}",
+        let next_budget = if cfg!(feature = "dynamic-budget") {
+            // Do prediction here
+            let next_budget = u32::min(self.predict(), self.budget);
+            let giveup = self.budget - next_budget;
+            trace!(
+                "predict budget {next_budget}, static allocated budget {}, giveup {giveup}",
+                self.budget
+            );
+            if giveup > 0 {
+                giveup_budget(giveup as usize);
+            }
+            next_budget
+        } else {
             self.budget
-        );
-        if giveup > 0 {
-            giveup_budget(giveup as usize);
-        }
+        };
+        self.last_predict_budget.store(next_budget, Relaxed);
 
         self.remaining_budget.store(next_budget, Relaxed);
     }
 
+    #[cfg(any(feature = "dynamic-budget"))]
     pub fn budget_try_rescue(&self) -> bool {
         let donate = self.budget - self.last_predict_budget.load(Relaxed);
         let apply = apply_budget(donate as usize) as u32;
