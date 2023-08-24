@@ -1,5 +1,6 @@
 use alloc::collections::BTreeMap;
 
+use alloc::sync::Arc;
 use spin::Mutex;
 
 use crate::arch::{
@@ -59,7 +60,7 @@ pub fn interrupt_vm_remove(_vm: &Vm, id: usize) {
     }
 }
 
-pub fn interrupt_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize) {
+pub fn interrupt_vm_inject(vm: &Vm, vcpu: &Arc<Vcpu>, int_id: usize) {
     if vcpu.phys_id() != current_cpu().id {
         error!(
             "interrupt_vm_inject: Core {} failed to find target (VCPU {} VM {})",

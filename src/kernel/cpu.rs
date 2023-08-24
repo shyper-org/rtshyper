@@ -1,3 +1,4 @@
+use alloc::sync::Arc;
 use spin::Once;
 
 use crate::arch::ArchTrait;
@@ -34,7 +35,7 @@ pub enum CpuState {
 pub struct Cpu {
     pub id: usize,
     pub cpu_state: CpuState,
-    pub active_vcpu: Option<Vcpu>,
+    pub active_vcpu: Option<Arc<Vcpu>>,
     ctx: Option<usize>,
 
     pub vcpu_array: VcpuArray,
@@ -151,7 +152,7 @@ impl Cpu {
         }
     }
 
-    pub(super) fn set_active_vcpu(&mut self, active_vcpu: Option<Vcpu>) {
+    pub(super) fn set_active_vcpu(&mut self, active_vcpu: Option<Arc<Vcpu>>) {
         self.active_vcpu = active_vcpu;
     }
 

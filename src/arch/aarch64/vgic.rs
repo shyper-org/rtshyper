@@ -44,7 +44,7 @@ impl VgicInt {
         })
     }
 
-    fn priv_new(id: usize, owner: Vcpu, targets: usize, enabled: bool) -> Arc<Self> {
+    fn priv_new(id: usize, owner: Arc<Vcpu>, targets: usize, enabled: bool) -> Arc<Self> {
         Arc::new(Self {
             inner_const: VgicIntInnerConst {
                 id: id as u16,
@@ -105,7 +105,7 @@ impl VgicInt {
         vgic_int.state = state;
     }
 
-    fn set_owner(&self, owner: Vcpu) {
+    fn set_owner(&self, owner: Arc<Vcpu>) {
         let mut vgic_int = self.inner.lock();
         vgic_int.owner = Some(owner);
     }
@@ -170,7 +170,7 @@ impl VgicInt {
         vgic_int.cfg
     }
 
-    fn owner(&self) -> Option<Vcpu> {
+    fn owner(&self) -> Option<Arc<Vcpu>> {
         let vgic_int = self.inner.lock();
         vgic_int.owner.clone()
     }
@@ -204,7 +204,7 @@ impl VgicInt {
 }
 
 struct VgicIntInnerMut {
-    owner: Option<Vcpu>,
+    owner: Option<Arc<Vcpu>>,
     in_lr: bool,
     lr: u16,
     enabled: bool,
@@ -233,7 +233,7 @@ impl VgicIntInnerMut {
         }
     }
 
-    fn priv_new(owner: Vcpu, targets: usize, enabled: bool) -> VgicIntInnerMut {
+    fn priv_new(owner: Arc<Vcpu>, targets: usize, enabled: bool) -> VgicIntInnerMut {
         VgicIntInnerMut {
             owner: Some(owner),
             in_lr: false,
@@ -701,7 +701,7 @@ impl Vgic {
         }
     }
 
-    fn set_enable(&self, vcpu: &Vcpu, int_id: usize, en: bool) {
+    fn set_enable(&self, vcpu: &Arc<Vcpu>, int_id: usize, en: bool) {
         if int_id < GIC_SGIS_NUM {
             return;
         }
@@ -749,7 +749,7 @@ impl Vgic {
         self.get_int(vcpu, int_id).unwrap().enabled()
     }
 
-    fn set_pend(&self, vcpu: &Vcpu, int_id: usize, pend: bool) {
+    fn set_pend(&self, vcpu: &Arc<Vcpu>, int_id: usize, pend: bool) {
         if bit_extract(int_id, 0, 10) < GIC_SGIS_NUM {
             self.sgi_set_pend(vcpu, int_id, pend);
             return;
@@ -809,7 +809,7 @@ impl Vgic {
         }
     }
 
-    fn set_active(&self, vcpu: &Vcpu, int_id: usize, act: bool) {
+    fn set_active(&self, vcpu: &Arc<Vcpu>, int_id: usize, act: bool) {
         if let Some(interrupt) = self.get_int(vcpu, bit_extract(int_id, 0, 10)) {
             let interrupt_lock = interrupt.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), interrupt) {
@@ -850,7 +850,7 @@ impl Vgic {
         }
     }
 
-    fn set_icfgr(&self, vcpu: &Vcpu, int_id: usize, cfg: u8) {
+    fn set_icfgr(&self, vcpu: &Arc<Vcpu>, int_id: usize, cfg: u8) {
         if let Some(interrupt) = self.get_int(vcpu, int_id) {
             let interrupt_lock = interrupt.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), interrupt) {
@@ -939,7 +939,7 @@ impl Vgic {
         // println!("sgi_set_pend[{}]", end - begin);
     }
 
-    fn set_prio(&self, vcpu: &Vcpu, int_id: usize, mut prio: u8) {
+    fn set_prio(&self, vcpu: &Arc<Vcpu>, int_id: usize, mut prio: u8) {
         prio &= 0xf0; // gic-400 only allows 4 priority bits in non-secure state
 
         if let Some(interrupt) = self.get_int(vcpu, int_id) {
@@ -982,7 +982,7 @@ impl Vgic {
         self.get_int(vcpu, int_id).unwrap().prio()
     }
 
-    fn set_trgt(&self, vcpu: &Vcpu, int_id: usize, trgt: u8) {
+    fn set_trgt(&self, vcpu: &Arc<Vcpu>, int_id: usize, trgt: u8) {
         if let Some(interrupt) = self.get_int(vcpu, int_id) {
             let interrupt_lock = interrupt.lock.lock();
             if vgic_int_get_owner(vcpu.clone(), interrupt) {
@@ -1026,7 +1026,7 @@ impl Vgic {
         self.get_int(vcpu, int_id).unwrap().targets()
     }
 
-    pub fn inject(&self, vcpu: &Vcpu, int_id: usize) {
+    pub fn inject(&self, vcpu: &Arc<Vcpu>, int_id: usize) {
         // println!("Core {} inject int {} to vm{}", current_cpu().id, int_id, vcpu.vm_id());
         if let Some(interrupt) = self.get_int(vcpu, bit_extract(int_id, 0, 10)) {
             if interrupt.hw() {
@@ -1532,7 +1532,7 @@ impl Vgic {
         }
     }
 
-    fn refill_lrs(&self, vcpu: &Vcpu) {
+    fn refill_lrs(&self, vcpu: &Arc<Vcpu>) {
         // if current_cpu().id == 1 {
         //     println!("refill lrs");
         // }
@@ -1591,7 +1591,7 @@ impl Vgic {
         // println!("end refill lrs");
     }
 
-    fn eoir_highest_spilled_active(&self, vcpu: &Vcpu) {
+    fn eoir_highest_spilled_active(&self, vcpu: &Arc<Vcpu>) {
         let interrupt = self.int_list_head(vcpu, false);
         if let Some(int) = interrupt {
             vgic_int_get_owner(vcpu.clone(), &int);
@@ -1729,7 +1729,7 @@ fn gich_get_lr(interrupt: &VgicInt) -> Option<u32> {
     None
 }
 
-fn vgic_int_get_owner(vcpu: Vcpu, interrupt: &VgicInt) -> bool {
+fn vgic_int_get_owner(vcpu: Arc<Vcpu>, interrupt: &VgicInt) -> bool {
     // if interrupt.owner().is_none() {
     //     interrupt.set_owner(vcpu.clone());
     //     return true;
@@ -1903,7 +1903,7 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
         };
         // restore_vcpu_gic
         if let Some(active_vcpu) = &current_cpu().active_vcpu {
-            if trgt_vcpu != active_vcpu {
+            if !Arc::ptr_eq(trgt_vcpu, active_vcpu) {
                 active_vcpu.gic_save_context();
                 trgt_vcpu.gic_restore_context();
             }
@@ -1970,7 +1970,7 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
         }
         // save_vcpu_gic
         if let Some(active_vcpu) = &current_cpu().active_vcpu {
-            if trgt_vcpu != active_vcpu {
+            if !Arc::ptr_eq(trgt_vcpu, active_vcpu) {
                 trgt_vcpu.gic_save_context();
                 active_vcpu.gic_restore_context();
             }
@@ -2057,7 +2057,7 @@ impl EmuDev for Vgic {
     }
 }
 
-pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Result<Arc<dyn EmuDev>, ()> {
+pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Arc<Vcpu>]) -> Result<Arc<dyn EmuDev>, ()> {
     if emu_cfg.emu_type != EmuDeviceType::EmuDeviceTGicd {
         return Err(());
     }

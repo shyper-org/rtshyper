@@ -146,7 +146,7 @@ pub struct Vm {
 struct VmInnerConst {
     id: usize,
     config: VmConfigEntry,
-    vcpu_list: Box<[Vcpu]>,
+    vcpu_list: Box<[Arc<Vcpu>]>,
     intc_type: IntCtrlType,
     // TODO: create struct ArchVcpu and move intc_dev into it
     arch_intc_dev: Option<Arc<Vgic>>,
@@ -330,12 +330,12 @@ impl Vm {
     }
 
     #[inline]
-    pub fn vcpu(&self, index: usize) -> Option<&Vcpu> {
+    pub fn vcpu(&self, index: usize) -> Option<&Arc<Vcpu>> {
         self.vcpu_list().get(index)
     }
 
     #[inline]
-    pub fn vcpu_list(&self) -> &[Vcpu] {
+    pub fn vcpu_list(&self) -> &[Arc<Vcpu>] {
         &self.inner_const.vcpu_list
     }
 

@@ -5,14 +5,15 @@ use crate::{
 use alloc::{
     boxed::Box,
     slice::{Iter, IterMut},
+    sync::Arc,
 };
 use spin::Once;
 
 use super::{sched::Scheduler, timer::timer_enable, VcpuState};
 
 pub struct VcpuArray {
-    array: [Option<Vcpu>; CONFIG_VM_NUM_MAX],
-    pub(super) sched: Once<Box<dyn Scheduler<SchedItem = Vcpu>>>,
+    array: [Option<Arc<Vcpu>>; CONFIG_VM_NUM_MAX],
+    pub(super) sched: Once<Box<dyn Scheduler<SchedItem = Arc<Vcpu>>>>,
     len: usize,
     active: usize,
     timer_on: bool,
@@ -38,7 +39,7 @@ impl VcpuArray {
     }
 
     #[inline]
-    pub fn pop_vcpu_through_vmid(&self, vm_id: usize) -> Option<&Vcpu> {
+    pub fn pop_vcpu_through_vmid(&self, vm_id: usize) -> Option<&Arc<Vcpu>> {
         match self.array.get(vm_id) {
             Some(vcpu) => vcpu.as_ref(),
             None => None,
@@ -50,7 +51,7 @@ impl VcpuArray {
         self.len
     }
 
-    pub fn append_vcpu(&mut self, vcpu: Vcpu) {
+    pub fn append_vcpu(&mut self, vcpu: Arc<Vcpu>) {
         // There is only 1 VCPU from a VM in a PCPU
         let vm_id = vcpu.vm_id();
         match self.array.get_mut(vm_id) {
@@ -72,12 +73,12 @@ impl VcpuArray {
         }
     }
 
-    pub fn wakeup_vcpu(&mut self, vcpu: &Vcpu) {
+    pub fn wakeup_vcpu(&mut self, vcpu: &Arc<Vcpu>) {
         if let Some(vcpu) = self
             .array
             .iter()
             .flatten()
-            .find(|&array_vcpu| array_vcpu == vcpu)
+            .find(|&array_vcpu| Arc::ptr_eq(array_vcpu, vcpu))
             .cloned()
         {
             trace!(
@@ -112,14 +113,14 @@ impl VcpuArray {
         }
     }
 
-    fn scheduler(&mut self) -> &mut dyn Scheduler<SchedItem = Vcpu> {
+    fn scheduler(&mut self) -> &mut dyn Scheduler<SchedItem = Arc<Vcpu>> {
         match self.sched.get_mut() {
             Some(scheduler) => scheduler.as_mut(),
             None => panic!("scheduler is None"),
         }
     }
 
-    pub fn remove_vcpu(&mut self, vm_id: usize) -> Option<Vcpu> {
+    pub fn remove_vcpu(&mut self, vm_id: usize) -> Option<Arc<Vcpu>> {
         match self.array.get_mut(vm_id) {
             Some(x) => x.take().map(|vcpu| {
                 self.len -= 1;
@@ -138,7 +139,6 @@ impl VcpuArray {
                         use super::timer::remove_timer_event;
                         use crate::arch::PmuTimerEvent;
                         remove_timer_event(|event| {
-                            use alloc::sync::Arc;
                             if let Some(event) = event.as_any().downcast_ref::<PmuTimerEvent>() {
                                 core::ptr::addr_of!(*event) == Arc::as_ptr(&vcpu_event)
                             } else {
@@ -149,9 +149,11 @@ impl VcpuArray {
                 }
                 // remove vcpu from scheduler
                 self.scheduler().remove(&vcpu);
-                if current_cpu().active_vcpu.as_ref() == Some(&vcpu) {
-                    current_cpu().set_active_vcpu(None);
-                    self.resched();
+                if let Some(current_vcpu) = current_cpu().active_vcpu.as_ref() {
+                    if Arc::ptr_eq(current_vcpu, &vcpu) {
+                        current_cpu().set_active_vcpu(None);
+                        self.resched();
+                    }
                 }
                 vcpu
             }),
@@ -167,9 +169,9 @@ impl VcpuArray {
         }
     }
 
-    fn switch_to(&mut self, next_vcpu: Vcpu) {
+    fn switch_to(&mut self, next_vcpu: Arc<Vcpu>) {
         if let Some(prev_vcpu) = current_cpu().active_vcpu.clone() {
-            if prev_vcpu.ne(&next_vcpu) {
+            if !Arc::ptr_eq(&prev_vcpu, &next_vcpu) {
                 trace!(
                     "next vm {} vcpu {}, prev vm {} vcpu {}",
                     next_vcpu.vm_id(),
@@ -205,12 +207,12 @@ impl VcpuArray {
         }
     }
 
-    pub fn iter(&self) -> Iter<'_, Option<Vcpu>> {
+    pub fn iter(&self) -> Iter<'_, Option<Arc<Vcpu>>> {
         self.array.iter()
     }
 
     #[allow(dead_code)]
-    pub fn iter_mut(&mut self) -> IterMut<'_, Option<Vcpu>> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, Option<Arc<Vcpu>>> {
         self.array.iter_mut()
     }
 }

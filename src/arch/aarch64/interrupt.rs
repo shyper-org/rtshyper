@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use crate::arch::{gic_cpu_init, gic_cpu_reset, gic_glb_init, gic_maintenance_handler, InterruptController};
 use crate::board::{PlatOperation, Platform, PLAT_DESC};
 use crate::kernel::{current_cpu, interrupt_reserve_int, Vcpu, Vm};
@@ -45,11 +47,11 @@ pub fn interrupt_arch_vm_register(vm: &Vm, id: usize) {
     super::vgic_set_hw_int(vm, id);
 }
 
-pub fn interrupt_arch_vm_inject(vm: &Vm, vcpu: &Vcpu, int_id: usize) {
+pub fn interrupt_arch_vm_inject(vm: &Vm, vcpu: &Arc<Vcpu>, int_id: usize) {
     let vgic = vm.vgic();
     // trace!("int {}, cur vcpu vm {}, trgt vcpu vm {}", int_id, active_vm().unwrap().id(), vcpu.vm_id());
     if let Some(cur_vcpu) = current_cpu().active_vcpu.as_ref() {
-        if cur_vcpu == vcpu {
+        if Arc::ptr_eq(cur_vcpu, vcpu) {
             vgic.inject(vcpu, int_id);
             return;
         }

@@ -6,7 +6,7 @@ use crate::kernel::Vcpu;
 use crate::kernel::VmType;
 
 pub fn vcpu_arch_init(config: &VmConfigEntry, vcpu: &Vcpu) {
-    let mut vcpu_inner = vcpu.0.inner_mut.lock();
+    let mut vcpu_inner = vcpu.inner_mut.lock();
     match config.os_type {
         VmType::VmTOs => {
             vcpu_inner.vcpu_ctx.set_argument(config.device_tree_load_ipa());

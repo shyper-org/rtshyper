@@ -1,7 +1,7 @@
 mod sched_rr;
 mod sched_rt;
 
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
 
 use crate::board::SchedRule;
 
@@ -22,7 +22,7 @@ pub trait Scheduler {
 }
 
 // factory mode
-pub fn get_scheduler(rule: SchedRule) -> Box<dyn Scheduler<SchedItem = Vcpu>> {
+pub fn get_scheduler(rule: SchedRule) -> Box<dyn Scheduler<SchedItem = Arc<Vcpu>>> {
     match rule {
         SchedRule::RoundRobin => Box::new(sched_rr::SchedulerRR::new(1)),
         SchedRule::RealTime => Box::new(sched_rt::SchedulerRT::new()),

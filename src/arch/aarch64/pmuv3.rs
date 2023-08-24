@@ -1,9 +1,10 @@
+use alloc::sync::Weak;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 #[cfg(any(feature = "memory-reservation"))]
-use crate::kernel::{current_cpu, Vcpu, VcpuState, WeakVcpu};
+use crate::kernel::{current_cpu, Vcpu, VcpuState};
 
 use super::regs::{PMCCFILTR_EL0, PMCR_EL0, PMUSERENR_EL0};
 
@@ -219,7 +220,7 @@ pub fn vcpu_stop_pmu(vcpu: &Vcpu) {
 }
 
 #[cfg(any(feature = "memory-reservation"))]
-pub struct PmuTimerEvent(pub WeakVcpu);
+pub struct PmuTimerEvent(pub Weak<Vcpu>);
 
 #[cfg(any(feature = "memory-reservation"))]
 impl crate::util::timer_list::TimerEvent for PmuTimerEvent {

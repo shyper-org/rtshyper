@@ -1,11 +1,13 @@
-use crate::kernel::Vcpu;
 use alloc::collections::VecDeque;
+use alloc::sync::Arc;
+
+use crate::kernel::Vcpu;
 
 use super::Scheduler;
 
 #[derive(Default)]
 pub struct SchedulerRR {
-    queue: VecDeque<Vcpu>,
+    queue: VecDeque<Arc<Vcpu>>,
     #[allow(unused)]
     base_slice: usize,
 }
@@ -20,7 +22,7 @@ impl SchedulerRR {
 }
 
 impl Scheduler for SchedulerRR {
-    type SchedItem = Vcpu;
+    type SchedItem = Arc<Vcpu>;
 
     fn name(&self) -> &'static str {
         "Round Robin"
@@ -33,7 +35,7 @@ impl Scheduler for SchedulerRR {
     }
 
     fn remove(&mut self, item: &Self::SchedItem) {
-        if let Some(idx) = self.queue.iter().position(|x| x.eq(item)) {
+        if let Some(idx) = self.queue.iter().position(|x| Arc::ptr_eq(x, item)) {
             self.queue.remove(idx);
         }
     }

@@ -44,9 +44,8 @@ impl TimerEvent for SchedulerRTRef {
 const DEFAULT_PERIOD: usize = 10;
 const DEFAULT_BUDGET: usize = 4;
 
-type SchedItemInner = Vcpu;
+type SchedItemInner = Arc<Vcpu>;
 
-#[derive(PartialEq, Eq)]
 struct SchedUnit {
     item: SchedItemInner,
     budget: usize,
@@ -58,6 +57,20 @@ struct SchedUnit {
 
     priority: Cell<usize>,
 }
+
+impl PartialEq for SchedUnit {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.item, &other.item)
+            && self.budget == other.budget
+            && self.period == other.period
+            && self.current_budget == other.current_budget
+            && self.last_start == other.last_start
+            && self.current_deadline == other.current_deadline
+            && self.priority == other.priority
+    }
+}
+
+impl Eq for SchedUnit {}
 
 impl SchedUnit {
     fn new(item: SchedItemInner) -> Self {
@@ -142,8 +155,8 @@ impl Scheduler for SchedulerRT {
     }
 
     fn remove(&mut self, item: &Self::SchedItem) {
-        self.run_queue.retain(|unit| &unit.item != item);
-        self.depleted_queue.drain_filter(|unit| &unit.item == item);
+        self.run_queue.retain(|unit| !Arc::ptr_eq(&unit.item, item));
+        self.depleted_queue.drain_filter(|unit| Arc::ptr_eq(&unit.item, item));
         self.replenishment_queue_remove(item);
     }
 
@@ -218,9 +231,13 @@ impl SchedulerRT {
     }
 
     fn replenishment_queue_remove(&mut self, item: &SchedItemInner) {
-        if self.replenishment_queue.iter().any(|unit| &unit.item == item) {
+        if self
+            .replenishment_queue
+            .iter()
+            .any(|unit| Arc::ptr_eq(&unit.item, item))
+        {
             self.remove_timer();
-            self.replenishment_queue.retain(|unit| &unit.item != item);
+            self.replenishment_queue.retain(|unit| !Arc::ptr_eq(&unit.item, item));
             if let Some(peek) = self.replenishment_queue.peek() {
                 start_timer_event(peek.current_deadline.get() as u64, Arc::new(self.self_ref.clone()));
             }

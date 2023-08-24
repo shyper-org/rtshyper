@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
 use crate::board::PlatOperation;
 use crate::kernel::CpuState;
@@ -121,7 +123,7 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     true
 }
 
-fn psci_vcpu_on(vcpu: &Vcpu, entry: usize, ctx: usize) {
+fn psci_vcpu_on(vcpu: &Arc<Vcpu>, entry: usize, ctx: usize) {
     // println!("psci vcpu on， entry {:x}, ctx {:x}", entry, ctx);
     if vcpu.phys_id() != current_cpu().id {
         panic!(
