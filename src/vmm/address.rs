@@ -4,9 +4,9 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
 
-use crate::arch::{PAGE_SIZE, PTE_S1_NORMAL, LVL1_SHIFT};
-use crate::kernel::{current_cpu, Vm, IpiInnerMsg, ipi_send_msg, IpiType, IpiVmmPercoreMsg};
+use crate::arch::{LVL1_SHIFT, PAGE_SIZE, PTE_S1_NORMAL};
 use crate::board::PLAT_DESC;
+use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiType, IpiVmmPercoreMsg, Vm};
 use crate::util::barrier;
 
 use super::VmmPercoreEvent;

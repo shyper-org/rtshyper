@@ -3,20 +3,20 @@ use alloc::ffi::CString;
 use crate::arch::interrupt_arch_deactive_irq;
 use crate::arch::power_arch_vm_shutdown_secondary_cores;
 use crate::config::vm_cfg_entry;
-use crate::kernel::{
-    active_vcpu_id, active_vm, current_cpu, push_vm, Vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
-    vm_list_walker,
-};
-use crate::kernel::{ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg, vm_if_get_cpu_id};
-use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcManageMsg, vcpu_run};
 use crate::kernel::HVC_CONFIG;
 use crate::kernel::HVC_CONFIG_UPLOAD_KERNEL_IMAGE;
 use crate::kernel::HVC_VMM;
 use crate::kernel::HVC_VMM_REBOOT_VM;
+use crate::kernel::{
+    active_vcpu_id, active_vm, current_cpu, push_vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
+    vm_list_walker, Vm,
+};
+use crate::kernel::{hvc_send_msg_to_vm, vcpu_run, HvcGuestMsg, HvcManageMsg};
+use crate::kernel::{ipi_send_msg, vm_if_get_cpu_id, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::util::bit_extract;
-use crate::vmm::{vmm_assign_vcpu_percore, vmm_init_image, vmm_setup_config, vmm_remove_vcpu_percore};
+use crate::vmm::{vmm_assign_vcpu_percore, vmm_init_image, vmm_remove_vcpu_percore, vmm_setup_config};
 
-use shyper::{VM_NUM_MAX, VMInfo};
+use shyper::{VMInfo, VM_NUM_MAX};
 
 #[derive(Copy, Clone)]
 pub enum VmmEvent {

@@ -4,8 +4,8 @@ pub mod static_array_rb_tree {
     use core::ops::{Deref, DerefMut};
     use intrusive_collections::{
         intrusive_adapter,
-        rbtree::{RBTree, CursorMut},
-        RBTreeLink, KeyAdapter,
+        rbtree::{CursorMut, RBTree},
+        KeyAdapter, RBTreeLink,
     };
 
     /// A wrapper for the type stored in the `StaticArrayRBTree::Inner::RBTree` variant.

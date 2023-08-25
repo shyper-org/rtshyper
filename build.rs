@@ -1,4 +1,3 @@
-#![feature(absolute_path)]
 use std::env::var;
 
 struct ConfigPlatform {
@@ -32,28 +31,6 @@ const fn get_config() -> ConfigPlatform {
 }
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/");
-
-    // compile libfdt-bingding
-    let c_compiler = "aarch64-none-elf-gcc";
-    let fdt_dirs = ["libfdt-binding", "deps/libfdt"];
-    let c_files = fdt_dirs.iter().flat_map(|path| {
-        std::fs::read_dir(path).unwrap().filter_map(|f| {
-            let f = f.unwrap();
-            if f.file_type().unwrap().is_file() && matches!(f.path().extension(), Some(ext) if ext == "c") {
-                Some(f.path())
-            } else {
-                None
-            }
-        })
-    });
-    cc::Build::new()
-        .compiler(c_compiler)
-        .includes(fdt_dirs)
-        .files(c_files)
-        .flag("-w")
-        .compile("fdt-binding");
-
     // set the linker script
     let arch = var("CARGO_CFG_TARGET_ARCH").unwrap();
     println!("cargo:rustc-link-arg=-Tlinkers/{arch}.ld");

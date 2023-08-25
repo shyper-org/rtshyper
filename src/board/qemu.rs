@@ -3,8 +3,8 @@ use crate::arch::SmmuDesc;
 use crate::board::Platform;
 
 use super::platform_common::{
-    ARM_CORTEX_A57, PlatOperation, PlatCpuCoreConfig, ArchDesc, PlatCpuConfig, PlatformConfig, PlatMemoryConfig,
-    SchedRule,
+    ArchDesc, PlatCpuConfig, PlatCpuCoreConfig, PlatMemoryConfig, PlatOperation, PlatformConfig, SchedRule,
+    ARM_CORTEX_A57,
 };
 
 pub struct QemuPlatform;

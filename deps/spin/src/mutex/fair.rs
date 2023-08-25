@@ -444,12 +444,7 @@ impl<'a, T: ?Sized, R> Starvation<'a, T, R> {
         if self
             .lock
             .lock
-            .compare_exchange(
-                STARVED,
-                STARVED | LOCKED,
-                Ordering::Acquire,
-                Ordering::Relaxed,
-            )
+            .compare_exchange(STARVED, STARVED | LOCKED, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
         {
             // We are the only starving user, lock the mutex.

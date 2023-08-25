@@ -1,11 +1,11 @@
 // see virtio 1.1 5.5 Traditional Memory Balloon Device
 
-use core::{ops::Deref, mem::size_of};
 use alloc::sync::Arc;
+use core::{mem::size_of, ops::Deref};
 
 use crate::kernel::Vm;
 
-use super::{mmio::VIRTIO_F_VERSION_1, Virtq, VirtioMmio, iov::VirtioIov};
+use super::{iov::VirtioIov, mmio::VIRTIO_F_VERSION_1, VirtioMmio, Virtq};
 
 // Size of a PFN in the balloon interface.
 const VIRTIO_BALLOON_PFN_SHIFT: usize = 12;

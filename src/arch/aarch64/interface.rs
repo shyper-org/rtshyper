@@ -1,6 +1,6 @@
 use tock_registers::interfaces::*;
 
-use crate::arch::{ArchTrait, Address};
+use crate::arch::{Address, ArchTrait};
 
 pub const PAGE_SHIFT: usize = 12;
 pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;

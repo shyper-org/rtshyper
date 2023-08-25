@@ -4,18 +4,18 @@ use alloc::vec::Vec;
 
 use spin::{Mutex, Once};
 
-use crate::arch::{PAGE_SIZE, timer_arch_get_counter, HYP_VA_SIZE, VM_IPA_SIZE, emu_intc_init, emu_smmu_init};
-use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
+use crate::arch::{emu_intc_init, emu_smmu_init, timer_arch_get_counter, HYP_VA_SIZE, PAGE_SIZE, VM_IPA_SIZE};
+use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
 use crate::board::{PlatOperation, Platform};
 use crate::config::VmConfigEntry;
-use crate::device::{EmuDev, emu_virtio_mmio_init};
+use crate::device::{emu_virtio_mmio_init, EmuDev};
 use crate::kernel::{mem_color_region_free, shyper_init};
 use crate::util::*;
 
-use super::{ColorMemRegion, mem_page_alloc};
 use super::vcpu::Vcpu;
+use super::{mem_page_alloc, ColorMemRegion};
 
 // make sure that the CONFIG_VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
 pub const CONFIG_VM_NUM_MAX: usize = core::cmp::min(shyper::VM_NUM_MAX, (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);

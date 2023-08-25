@@ -1,18 +1,18 @@
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::ffi::CStr;
 use core::ops::Range;
 use core::sync::atomic::{AtomicU32, Ordering};
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 
 use spin::Mutex;
 
 // use crate::board::*;
-use crate::device::{EmuDeviceType, mediated_blk_free, mediated_blk_request};
+use crate::device::{mediated_blk_free, mediated_blk_request, EmuDeviceType};
+use crate::kernel::access::{copy_between_vm, copy_segment_from_vm};
 use crate::kernel::timer::gettimer_tick_ms;
 use crate::kernel::{active_vm, vm_by_id, Vm, VmType, CONFIG_VM_NUM_MAX};
 use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
-use crate::kernel::access::{copy_segment_from_vm, copy_between_vm};
 
 const CFG_MAX_NUM: usize = 0x10;
 // const IRQ_MAX_NUM: usize = 0x40;

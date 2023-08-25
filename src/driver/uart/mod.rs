@@ -14,7 +14,7 @@ trait UartOperation {
     fn send(&self, byte: u8);
 }
 
-use crate::board::{Platform, PlatOperation};
+use crate::board::{PlatOperation, Platform};
 
 const UART_BASE: usize = Platform::HYPERVISOR_UART_BASE;
 

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{mediated_blk_list_get, VirtioMmio, Virtq, ReadAsyncMsg, WriteAsyncMsg, UsedInfo};
+use crate::device::{mediated_blk_list_get, ReadAsyncMsg, UsedInfo, VirtioMmio, Virtq, WriteAsyncMsg};
 use crate::kernel::{async_blk_io_req, async_ipi_req, AsyncTask, IpiMediatedMsg, Vm, EXECUTOR};
 use crate::util::memcpy_safe;
 

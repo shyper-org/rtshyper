@@ -1,5 +1,5 @@
-use core::ops::RangeInclusive;
 use buddy_system_allocator::LockedHeap;
+use core::ops::RangeInclusive;
 
 use crate::arch::HYP_VA_SIZE;
 

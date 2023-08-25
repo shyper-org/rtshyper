@@ -1,4 +1,4 @@
-use core::cmp::{PartialOrd, Ord, PartialEq, Ordering, Reverse};
+use core::cmp::{Ordering, Reverse};
 
 use alloc::collections::BinaryHeap;
 use alloc::sync::Arc;

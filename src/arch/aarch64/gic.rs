@@ -1,9 +1,9 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use spin::Mutex;
-use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
+use tock_registers::*;
 
 use crate::arch::INTERRUPT_NUM_MAX;
 use crate::board::{PlatOperation, Platform};

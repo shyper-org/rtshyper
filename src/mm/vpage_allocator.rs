@@ -1,10 +1,10 @@
 use core::borrow::Borrow;
 use core::cmp::Ordering;
 use core::fmt;
-use core::ops::{RangeInclusive, Deref, DerefMut};
+use core::ops::{Deref, DerefMut, RangeInclusive};
 
-use spin::Mutex;
 use intrusive_collections::Bound;
+use spin::Mutex;
 
 use crate::arch::{LVL1_SHIFT, PAGE_SIZE};
 use crate::kernel::AllocError;
@@ -12,7 +12,7 @@ use crate::util::round_up;
 
 use super::_image_end;
 use super::page::{Page, VAddr};
-use super::util::static_array_rb_tree::{StaticArrayRBTree, Inner, ValueRefMut};
+use super::util::static_array_rb_tree::{Inner, StaticArrayRBTree, ValueRefMut};
 
 pub const CPU_BANKED_ADDRESS: usize = 0x4_0000_0000; // 0x400000000 = 16GB
 

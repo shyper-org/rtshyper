@@ -1,13 +1,13 @@
 use spin::Once;
 
-use crate::arch::{PAGE_SIZE, pt_map_banked_cpu, PTE_PER_PAGE, TlbInvalidate};
 use crate::arch::ArchTrait;
 use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 use crate::arch::PageTable;
+use crate::arch::{pt_map_banked_cpu, TlbInvalidate, PAGE_SIZE, PTE_PER_PAGE};
 use crate::board::{PLATFORM_CPU_NUM_MAX, PLAT_DESC};
 use crate::kernel::{Vcpu, Vm};
-use crate::util::timer_list::{TimerTickValue, TimerList};
+use crate::util::timer_list::{TimerList, TimerTickValue};
 
 use super::sched::get_scheduler;
 use super::vcpu_array::VcpuArray;

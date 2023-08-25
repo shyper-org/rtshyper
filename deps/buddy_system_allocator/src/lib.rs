@@ -22,8 +22,6 @@ use spin::Mutex;
 
 mod frame;
 pub mod linked_list;
-#[cfg(test)]
-mod test;
 
 pub use frame::*;
 
@@ -113,8 +111,7 @@ impl<const ORDER: usize> Heap<ORDER> {
                 for j in (class + 1..i + 1).rev() {
                     if let Some(block) = self.free_list[j].pop() {
                         unsafe {
-                            self.free_list[j - 1]
-                                .push((block as usize + (1 << (j - 1))) as *mut usize);
+                            self.free_list[j - 1].push((block as usize + (1 << (j - 1))) as *mut usize);
                             self.free_list[j - 1].push(block);
                         }
                     } else {
@@ -125,8 +122,7 @@ impl<const ORDER: usize> Heap<ORDER> {
                 let result = NonNull::new(
                     self.free_list[class]
                         .pop()
-                        .expect("current block should have free space now")
-                        as *mut u8,
+                        .expect("current block should have free space now") as *mut u8,
                 );
                 if let Some(result) = result {
                     self.user += layout.size();
@@ -331,9 +327,7 @@ unsafe impl<const ORDER: usize> GlobalAlloc for LockedHeapWithRescue<ORDER> {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.inner
-            .lock()
-            .dealloc(NonNull::new_unchecked(ptr), layout)
+        self.inner.lock().dealloc(NonNull::new_unchecked(ptr), layout)
     }
 }
 

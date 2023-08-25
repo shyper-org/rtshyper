@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
 use crate::kernel::current_cpu;
-use crate::util::timer_list::{TimerTickValue, TimerEvent};
+use crate::util::timer_list::{TimerEvent, TimerTickValue};
 
 pub fn timer_init() {
     crate::arch::timer_arch_init();

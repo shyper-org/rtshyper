@@ -19,9 +19,7 @@ unsafe impl Send for LinkedList {}
 impl LinkedList {
     /// Create a new LinkedList
     pub const fn new() -> LinkedList {
-        LinkedList {
-            head: ptr::null_mut(),
-        }
+        LinkedList { head: ptr::null_mut() }
     }
 
     /// Return `true` if the list is empty

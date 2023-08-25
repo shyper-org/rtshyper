@@ -5,14 +5,14 @@ use alloc::vec::Vec;
 use spin::{Mutex, Once};
 
 use crate::arch::{
-    PAGE_SIZE, PAGE_SHIFT, cache_init, CPU_CACHE, CacheInfoTrait, PTE_S1_NORMAL, PTE_S1_DEVICE, ArchTrait,
-    TlbInvalidate, CacheInvalidate, Arch,
+    cache_init, Arch, ArchTrait, CacheInfoTrait, CacheInvalidate, TlbInvalidate, CPU_CACHE, PAGE_SHIFT, PAGE_SIZE,
+    PTE_S1_DEVICE, PTE_S1_NORMAL,
 };
 use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
-use crate::util::{round_up, memcpy_safe, barrier, reset_barrier};
 use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
+use crate::util::{barrier, memcpy_safe, reset_barrier, round_up};
 
 use super::{current_cpu, CPU_MASTER};
 

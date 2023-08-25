@@ -10,11 +10,11 @@ use alloc::collections::BTreeMap;
 
 use spin::Mutex;
 
-use crate::util::{memcpy_safe, sleep};
-use crate::kernel::{active_vm, HVC_UNILIB_FS_INIT, HVC_UNILIB_FS_LSEEK};
-use crate::kernel::{HvcGuestMsg, HvcUniLibMsg, hvc_send_msg_to_vm};
 use crate::kernel::HVC_UNILIB;
-use crate::kernel::{HVC_UNILIB_FS_OPEN, HVC_UNILIB_FS_CLOSE, HVC_UNILIB_FS_READ, HVC_UNILIB_FS_WRITE};
+use crate::kernel::{active_vm, HVC_UNILIB_FS_INIT, HVC_UNILIB_FS_LSEEK};
+use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcUniLibMsg};
+use crate::kernel::{HVC_UNILIB_FS_CLOSE, HVC_UNILIB_FS_OPEN, HVC_UNILIB_FS_READ, HVC_UNILIB_FS_WRITE};
+use crate::util::{memcpy_safe, sleep};
 
 pub static UNILIB_FS_LIST: Mutex<BTreeMap<usize, UnilibFS>> = Mutex::new(BTreeMap::new());
 

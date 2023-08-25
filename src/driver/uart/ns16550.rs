@@ -1,7 +1,7 @@
+use tock_registers::interfaces::*;
 use tock_registers::register_bitfields;
 use tock_registers::register_structs;
 use tock_registers::registers::*;
-use tock_registers::interfaces::*;
 
 register_bitfields! {
     u8,

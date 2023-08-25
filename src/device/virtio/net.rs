@@ -1,18 +1,18 @@
-use core::mem::size_of;
-use alloc::vec::Vec;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::mem::size_of;
 use spin::Mutex;
 
 use crate::device::{VirtioMmio, Virtq};
-use crate::kernel::{current_cpu, vm_if_get_cpu_id};
-use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 use crate::kernel::IpiMessage;
 use crate::kernel::Vm;
+use crate::kernel::{current_cpu, vm_if_get_cpu_id};
+use crate::kernel::{ipi_send_msg, IpiEthernetMsg, IpiInnerMsg, IpiType};
 
-use super::mmio::VIRTIO_F_VERSION_1;
-use super::queue::{VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
 use super::dev::DevDesc;
 use super::iov::VirtioIov;
+use super::mmio::VIRTIO_F_VERSION_1;
+use super::queue::{VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
 
 pub const VIRTQUEUE_NET_MAX_SIZE: usize = 256;
 

@@ -4,15 +4,15 @@ use alloc::sync::Arc;
 use spin::Mutex;
 
 use crate::arch::INTERRUPT_IRQ_IPI;
-use crate::board::PLAT_DESC;
 use crate::board::PLATFORM_CPU_NUM_MAX;
+use crate::board::PLAT_DESC;
 use crate::device::{VirtioMmio, Virtq};
-use crate::kernel::{interrupt_vm_inject, interrupt_reserve_int};
 use crate::kernel::{current_cpu, interrupt_cpu_ipi_send};
+use crate::kernel::{interrupt_reserve_int, interrupt_vm_inject};
 use crate::vmm::{VmmEvent, VmmPercoreEvent};
 
-use super::Vm;
 use super::interrupt_cpu_enable;
+use super::Vm;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Copy, Clone, Debug)]

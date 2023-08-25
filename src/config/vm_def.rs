@@ -11,9 +11,9 @@ use crate::device::EmuDeviceType;
 use crate::kernel::VmType;
 
 use super::{
-    PassthroughRegion, VmConfigEntry, VmCpuConfig, VMDtbDevConfigList, VmEmulatedDeviceConfig,
-    VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion, VmDtbDevConfig,
-    DtbDevType,
+    DtbDevType, PassthroughRegion, VMDtbDevConfigList, VmConfigEntry, VmCpuConfig, VmDtbDevConfig,
+    VmEmulatedDeviceConfig, VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig,
+    VmRegion,
 };
 
 pub fn init_tmp_config_for_bma1() {

@@ -1,9 +1,9 @@
 use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
 use crate::board::PlatOperation;
-use crate::kernel::{current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
-use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
+use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
+use crate::kernel::{current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
 use crate::vmm::vmm_reboot;
 
 use super::smc::smc_call;

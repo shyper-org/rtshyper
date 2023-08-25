@@ -3,19 +3,19 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::config::VmEmulatedDeviceConfig;
-use crate::device::{EmuContext};
-use crate::device::{EmuDev, EmuDeviceType};
+use crate::device::EmuContext;
 use crate::device::Virtq;
-use crate::kernel::{current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType, active_vm};
-use crate::kernel::Vm;
+use crate::device::{EmuDev, EmuDeviceType};
 use crate::kernel::interrupt_vm_inject;
+use crate::kernel::Vm;
+use crate::kernel::{active_vm, current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 
 use super::balloon::virtio_balloon_notify_handler;
-use super::queue::VIRTQ_READY;
-use super::net::{virtio_net_handle_ctrl, virtio_net_notify_handler, VIRTQUEUE_NET_MAX_SIZE};
+use super::blk::{virtio_blk_notify_handler, virtio_mediated_blk_notify_handler, VIRTQUEUE_BLK_MAX_SIZE};
+use super::console::{virtio_console_notify_handler, VIRTQUEUE_CONSOLE_MAX_SIZE};
 use super::dev::{VirtDev, VirtioDeviceType};
-use super::console::{VIRTQUEUE_CONSOLE_MAX_SIZE, virtio_console_notify_handler};
-use super::blk::{VIRTQUEUE_BLK_MAX_SIZE, virtio_blk_notify_handler, virtio_mediated_blk_notify_handler};
+use super::net::{virtio_net_handle_ctrl, virtio_net_notify_handler, VIRTQUEUE_NET_MAX_SIZE};
+use super::queue::VIRTQ_READY;
 
 pub const VIRTIO_F_VERSION_1: usize = 1 << 32;
 pub const VIRTIO_MMIO_MAGIC_VALUE: usize = 0x000;

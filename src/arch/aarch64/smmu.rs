@@ -5,19 +5,19 @@ use core::ops::Range;
 use core::ptr;
 
 use spin::Mutex;
-use tock_registers::*;
 use tock_registers::interfaces::*;
 use tock_registers::registers::*;
+use tock_registers::*;
 
-use crate::arch::aarch64::mmu::pa_range_val;
 use crate::arch::aarch64::mmu::pa_range;
+use crate::arch::aarch64::mmu::pa_range_val;
 use crate::board::PLAT_DESC;
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::EmuContext;
 use crate::device::EmuDev;
 use crate::device::EmuDeviceType;
-use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::Vm;
+use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::{active_vm, current_cpu};
 use crate::util::{bit_extract, FlexBitmap};
 

@@ -1,4 +1,4 @@
-use tock_registers::interfaces::{Writeable, ReadWriteable};
+use tock_registers::interfaces::{ReadWriteable, Writeable};
 
 use crate::arch::PAGE_SIZE;
 use crate::kernel::{cpu_map_self, CPU_STACK_OFFSET, CPU_STACK_SIZE};
@@ -131,7 +131,7 @@ unsafe extern "C" fn _start() -> ! {
 }
 
 fn init_sysregs() {
-    use cortex_a::registers::{HCR_EL2, VBAR_EL2, SCTLR_EL2};
+    use cortex_a::registers::{HCR_EL2, SCTLR_EL2, VBAR_EL2};
     HCR_EL2.set(
         (HCR_EL2::VM::Enable
             + HCR_EL2::RW::EL1IsAarch64

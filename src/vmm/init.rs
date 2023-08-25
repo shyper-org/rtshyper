@@ -1,18 +1,18 @@
 use alloc::sync::Arc;
 
-use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::arch::PAGE_SIZE;
+use crate::arch::{PTE_S2_DEVICE, PTE_S2_NORMAL};
 use crate::config::VmRegion;
-use crate::dtb::{create_fdt, setup_fdt_vm0};
 use crate::device::EmuDeviceType::*;
-use crate::kernel::{
-    current_cpu, iommmu_vm_init, VmType, iommu_add_device, mem_region_alloc_colors, ColorMemRegion, count_missing_num,
-    IpiVmmPercoreMsg, ipi_send_msg, IpiType, IpiInnerMsg, Vm,
-};
-use crate::kernel::interrupt_vm_register;
+use crate::dtb::{create_fdt, setup_fdt_vm0};
 use crate::kernel::access::copy_segment_to_vm;
-use crate::vmm::VmmPercoreEvent;
+use crate::kernel::interrupt_vm_register;
+use crate::kernel::{
+    count_missing_num, current_cpu, iommmu_vm_init, iommu_add_device, ipi_send_msg, mem_region_alloc_colors,
+    ColorMemRegion, IpiInnerMsg, IpiType, IpiVmmPercoreMsg, Vm, VmType,
+};
 use crate::vmm::address::vmm_setup_ipa2hva;
+use crate::vmm::VmmPercoreEvent;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "ramdisk")] {

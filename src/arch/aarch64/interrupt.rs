@@ -1,8 +1,8 @@
-use crate::arch::{gic_cpu_reset, InterruptController, gic_glb_init, gic_cpu_init, gic_maintenance_handler};
+use crate::arch::{gic_cpu_init, gic_cpu_reset, gic_glb_init, gic_maintenance_handler, InterruptController};
 use crate::board::{PlatOperation, Platform, PLAT_DESC};
-use crate::kernel::{current_cpu, Vcpu, Vm, interrupt_reserve_int};
+use crate::kernel::{current_cpu, interrupt_reserve_int, Vcpu, Vm};
 
-use super::{GICD, GIC_SGIS_NUM, gicc_get_current_irq, gicc_clear_current_irq};
+use super::{gicc_clear_current_irq, gicc_get_current_irq, GICD, GIC_SGIS_NUM};
 
 pub const INTERRUPT_NUM_MAX: usize = 1024;
 pub const INTERRUPT_IRQ_HYPERVISOR_TIMER: usize = 26;

@@ -1,11 +1,11 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use tock_registers::interfaces::{ReadWriteable, Writeable, Readable};
+use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 #[cfg(any(feature = "memory-reservation"))]
-use crate::kernel::{current_cpu, Vcpu, WeakVcpu, VcpuState};
+use crate::kernel::{current_cpu, Vcpu, VcpuState, WeakVcpu};
 
-use super::regs::{PMCR_EL0, PMUSERENR_EL0, PMCCFILTR_EL0};
+use super::regs::{PMCCFILTR_EL0, PMCR_EL0, PMUSERENR_EL0};
 
 #[cfg(any(feature = "memory-reservation"))]
 const MAX_PMU_COUNTER_VALUE: u32 = u32::MAX;
@@ -135,8 +135,8 @@ pub fn arch_pmu_init() {
     #[cfg(any(feature = "memory-reservation"))]
     {
         use crate::{
-            kernel::{interrupt_reserve_int, interrupt_cpu_enable},
-            board::{Platform, PlatOperation},
+            board::{PlatOperation, Platform},
+            kernel::{interrupt_cpu_enable, interrupt_reserve_int},
         };
         // register the interrupt handler
         let pmu_irq_list = Platform::pmu_irq_list();

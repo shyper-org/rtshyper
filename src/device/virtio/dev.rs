@@ -2,10 +2,10 @@ use spin::Mutex;
 
 use crate::config::VmEmulatedDeviceConfig;
 
-use super::balloon::{VirtioBallonConfig, balloon_features};
-use super::console::{ConsoleDesc, console_features};
-use super::net::{NetDesc, net_features};
-use super::blk::{BlkDesc, VirtioBlkReq, blk_features};
+use super::balloon::{balloon_features, VirtioBallonConfig};
+use super::blk::{blk_features, BlkDesc, VirtioBlkReq};
+use super::console::{console_features, ConsoleDesc};
+use super::net::{net_features, NetDesc};
 
 #[derive(Copy, Clone, Debug)]
 #[allow(dead_code)]

@@ -1,6 +1,6 @@
+use tock_registers::interfaces::*;
 use tock_registers::register_structs;
 use tock_registers::registers::*;
-use tock_registers::interfaces::*;
 
 const UART_FR_RXFF: u32 = 1 << 4;
 const UART_FR_TXFF: u32 = 1 << 5;

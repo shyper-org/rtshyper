@@ -1,16 +1,16 @@
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
-use alloc::{vec::Vec, boxed::Box, sync::Arc};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use spin::Mutex;
 
 use crate::{
-    kernel::{
-        timer::{gettime_ns, start_timer_event},
-        current_cpu,
-    },
     config,
+    kernel::{
+        current_cpu,
+        timer::{gettime_ns, start_timer_event},
+    },
     util::timer_list::{TimerEvent, TimerTickValue},
 };
 

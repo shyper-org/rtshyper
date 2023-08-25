@@ -1,14 +1,14 @@
+use crate::{
+    arch::ArchTrait,
+    kernel::{current_cpu, Vcpu, CONFIG_VM_NUM_MAX},
+};
 use alloc::{
-    slice::{Iter, IterMut},
     boxed::Box,
+    slice::{Iter, IterMut},
 };
 use spin::Once;
-use crate::{
-    kernel::{current_cpu, Vcpu, CONFIG_VM_NUM_MAX},
-    arch::ArchTrait,
-};
 
-use super::{sched::Scheduler, VcpuState, timer::timer_enable};
+use super::{sched::Scheduler, timer::timer_enable, VcpuState};
 
 pub struct VcpuArray {
     array: [Option<Vcpu>; CONFIG_VM_NUM_MAX],

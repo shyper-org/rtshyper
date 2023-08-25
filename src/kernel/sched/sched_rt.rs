@@ -2,17 +2,18 @@
  * See Xen xen/common/sched/rt.c
  */
 
-use core::{cell::Cell, ptr::NonNull};
 use alloc::{
-    collections::{LinkedList, BinaryHeap},
-    sync::Arc,
     boxed::Box,
+    collections::{BinaryHeap, LinkedList},
+    sync::Arc,
 };
+use core::{cell::Cell, ptr::NonNull};
 
 use crate::{
     kernel::{
-        Vcpu, VcpuState, current_cpu,
-        timer::{start_timer_event, remove_timer_event},
+        current_cpu,
+        timer::{remove_timer_event, start_timer_event},
+        Vcpu, VcpuState,
     },
     util::timer_list::{TimerEvent, TimerTickValue},
 };

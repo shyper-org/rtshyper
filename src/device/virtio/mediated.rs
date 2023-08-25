@@ -4,14 +4,14 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::device::{virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-use crate::kernel::{
-    active_vm, EXECUTOR, AsyncTaskState, hvc_send_msg_to_vm, HvcDefaultMsg, HvcGuestMsg, IpiInnerMsg, HVC_MEDIATED,
-    HVC_MEDIATED_DEV_NOTIFY, HVC_MEDIATED_DRV_NOTIFY, Vm, vm_list_walker,
-};
 use crate::kernel::IpiMessage;
+use crate::kernel::{
+    active_vm, hvc_send_msg_to_vm, vm_list_walker, AsyncTaskState, HvcDefaultMsg, HvcGuestMsg, IpiInnerMsg, Vm,
+    EXECUTOR, HVC_MEDIATED, HVC_MEDIATED_DEV_NOTIFY, HVC_MEDIATED_DRV_NOTIFY,
+};
 use shyper::MediatedBlkContent;
 
-use super::{Virtq, VirtioMmio, BlkIov};
+use super::{BlkIov, VirtioMmio, Virtq};
 
 pub static MEDIATED_BLK_LIST: Mutex<Vec<MediatedBlk>> = Mutex::new(Vec::new());
 

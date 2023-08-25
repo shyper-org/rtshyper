@@ -6,13 +6,13 @@ use crate::arch::Address;
 use crate::arch::ArchPageTableEntryTrait;
 use crate::arch::ArchTrait;
 use crate::arch::TlbInvalidate;
-use crate::kernel::Cpu;
 use crate::kernel::mem_page_alloc;
-use crate::util::{memcpy_safe, memset_safe};
-use crate::util::round_up;
+use crate::kernel::Cpu;
 use crate::mm::PageFrame;
+use crate::util::round_up;
+use crate::util::{memcpy_safe, memset_safe};
 
-use super::{PAGE_SIZE, PTE_PER_PAGE, Arch};
+use super::{Arch, PAGE_SIZE, PTE_PER_PAGE};
 
 const PTE_TABLE: usize = 0b11;
 const PTE_PAGE: usize = 0b11;
@@ -80,9 +80,6 @@ const fn pte_s1_field_attr_indx(idx: usize) -> usize {
 pub const LVL1_SHIFT: usize = 30;
 pub const LVL2_SHIFT: usize = 21;
 pub const LVL3_SHIFT: usize = 12;
-
-#[cfg(any(feature = "pa-bits-48"))]
-compile_error!("unsupported feature: pa-bits-48");
 
 // cfg_if::cfg_if! {
 //     if #[cfg(any(feature = "pa-bits-39"))] {

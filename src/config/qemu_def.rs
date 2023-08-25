@@ -3,11 +3,11 @@ use alloc::vec::Vec;
 
 use crate::board::*;
 use crate::device::EmuDeviceType;
-use crate::kernel::{HVC_IRQ, VmType, HYPERVISOR_COLORS};
+use crate::kernel::{VmType, HVC_IRQ, HYPERVISOR_COLORS};
 
 use super::{
-    VmConfigEntry, VmCpuConfig, VmEmulatedDeviceConfig, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig,
-    VmRegion, PassthroughRegion, vm_cfg_add_vm_entry, VmEmulatedDeviceConfigList, VMDtbDevConfigList,
+    vm_cfg_add_vm_entry, PassthroughRegion, VMDtbDevConfigList, VmConfigEntry, VmCpuConfig, VmEmulatedDeviceConfig,
+    VmEmulatedDeviceConfigList, VmImageConfig, VmMemoryConfig, VmPassthroughDeviceConfig, VmRegion,
 };
 
 #[rustfmt::skip]

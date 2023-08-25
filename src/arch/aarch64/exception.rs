@@ -2,15 +2,15 @@ use core::arch::global_asm;
 
 // use alloc::collections::BinaryHeap;
 // use spin::{Mutex, Lazy};
-use tock_registers::interfaces::*;
 use cortex_a::registers::ESR_EL2;
+use tock_registers::interfaces::*;
 
 use crate::arch::{ContextFrame, ContextFrameTrait, InterruptController};
-use crate::kernel::{current_cpu, active_vm};
 use crate::kernel::interrupt_handler;
+use crate::kernel::{active_vm, current_cpu};
 
-use super::{interrupt_arch_deactive_irq, IntCtrl};
 use super::sync::{data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
+use super::{interrupt_arch_deactive_irq, IntCtrl};
 
 global_asm!(include_str!("exception.S"));
 

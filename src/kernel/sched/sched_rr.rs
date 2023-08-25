@@ -1,5 +1,5 @@
-use alloc::collections::VecDeque;
 use crate::kernel::Vcpu;
+use alloc::collections::VecDeque;
 
 use super::Scheduler;
 

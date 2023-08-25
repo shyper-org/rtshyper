@@ -1,5 +1,5 @@
-use tock_registers::*;
 use tock_registers::interfaces::*;
+use tock_registers::*;
 
 use crate::arch::{pt_lvl1_idx, pt_lvl2_idx, Address};
 use crate::arch::{LVL1_SHIFT, LVL2_SHIFT};

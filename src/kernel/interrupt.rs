@@ -3,8 +3,8 @@ use alloc::collections::BTreeMap;
 use spin::Mutex;
 
 use crate::arch::{
-    interrupt_arch_ipi_send, interrupt_arch_vm_inject, INTERRUPT_NUM_MAX, GIC_SGIS_NUM, GIC_PRIVINT_NUM,
-    interrupt_arch_vm_register,
+    interrupt_arch_ipi_send, interrupt_arch_vm_inject, interrupt_arch_vm_register, GIC_PRIVINT_NUM, GIC_SGIS_NUM,
+    INTERRUPT_NUM_MAX,
 };
 use crate::kernel::{current_cpu, Vcpu, VcpuState, Vm};
 use crate::util::{BitAlloc, BitAlloc4K};

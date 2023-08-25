@@ -1,13 +1,13 @@
 use alloc::sync::Arc;
 
 use crate::arch::{interrupt_arch_deactive_irq, INTERRUPT_IRQ_GUEST_TIMER};
-use crate::kernel::{
-    current_cpu, interrupt_vm_remove, ipi_send_msg, IpiInnerMsg, IpiType, remove_vm, remove_vm_async_task, Vm,
-    vm_by_id, interrupt_cpu_enable, IpiVmmPercoreMsg,
-};
 use crate::kernel::vm_if_reset;
-use crate::vmm::VmmPercoreEvent;
+use crate::kernel::{
+    current_cpu, interrupt_cpu_enable, interrupt_vm_remove, ipi_send_msg, remove_vm, remove_vm_async_task, vm_by_id,
+    IpiInnerMsg, IpiType, IpiVmmPercoreMsg, Vm,
+};
 use crate::vmm::address::vmm_unmap_ipa2hva;
+use crate::vmm::VmmPercoreEvent;
 
 pub fn vmm_remove_vm(vm_id: usize) {
     if vm_id == 0 {

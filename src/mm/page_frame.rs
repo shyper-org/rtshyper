@@ -1,7 +1,7 @@
 use core::alloc::{GlobalAlloc, Layout};
 
 use crate::arch::PAGE_SIZE;
-use crate::kernel::{AllocError, current_cpu};
+use crate::kernel::{current_cpu, AllocError};
 use crate::util::memset_safe;
 
 use super::HEAP_ALLOCATOR;

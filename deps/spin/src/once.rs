@@ -109,10 +109,7 @@ mod status {
             success: Ordering,
             failure: Ordering,
         ) -> Result<Status, Status> {
-            match self
-                .0
-                .compare_exchange(old as u8, new as u8, success, failure)
-            {
+            match self.0.compare_exchange(old as u8, new as u8, success, failure) {
                 // SAFETY: A compare exchange will always return a value that was later stored into
                 // the atomic u8, but due to the invariant that it must be a valid Status, we know
                 // that both Ok(_) and Err(_) will be safely transmutable.
@@ -249,9 +246,7 @@ impl<T, R: RelaxStrategy> Once<T, R> {
             // The compare-exchange succeeded, so we shall initialize it.
 
             // We use a guard (Finish) to catch panics caused by builder
-            let finish = Finish {
-                status: &self.status,
-            };
+            let finish = Finish { status: &self.status };
             let val = match f() {
                 Ok(val) => val,
                 Err(err) => {
@@ -714,11 +709,7 @@ mod tests {
             thread::spawn(move || {
                 rx.recv().unwrap();
                 let (once, called) = &*shared;
-                assert_eq!(
-                    called.load(Ordering::Acquire),
-                    1,
-                    "leader thread did not run first"
-                );
+                assert_eq!(called.load(Ordering::Acquire), 1, "leader thread did not run first");
 
                 once.call_once(|| {
                     called.fetch_add(1, Ordering::AcqRel);

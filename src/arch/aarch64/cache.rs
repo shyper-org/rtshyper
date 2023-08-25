@@ -1,17 +1,17 @@
 use core::fmt::Display;
 
 use crate::{
-    device::{EmuContext, emu_register_reg, EmuRegType},
+    arch::{cache, CacheIndexed, CacheInfoTrait, CacheInvalidate, CacheType},
+    device::{emu_register_reg, EmuContext, EmuRegType},
     kernel::current_cpu,
-    arch::{CacheInfoTrait, CacheType, CacheIndexed, cache, CacheInvalidate},
 };
 use alloc::vec::Vec;
 use cache::CpuCacheInfo;
-use cortex_a::registers::{CLIDR_EL1, CCSIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};
+use cortex_a::registers::{CCSIDR_EL1, CLIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};
 use spin::Once;
 use tock_registers::interfaces::{Readable, Writeable};
 
-use super::{PAGE_SIZE, Aarch64Arch};
+use super::{Aarch64Arch, PAGE_SIZE};
 
 pub static CPU_CACHE: Once<CpuCacheInfo<Aarch64CacheInfo>> = Once::new();
 

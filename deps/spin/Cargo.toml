@@ -35,11 +35,6 @@ rustdoc-args = [
     "docsrs",
 ]
 
-[[bench]]
-name = "mutex"
-harness = false
-required-features = ["ticket_mutex"]
-
 [dependencies.lock_api_crate]
 version = "0.4"
 optional = true

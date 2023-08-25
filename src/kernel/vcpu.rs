@@ -2,7 +2,7 @@ use core::mem::size_of;
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
-use spin::{Mutex, Lazy};
+use spin::{Lazy, Mutex};
 
 use crate::arch::{ContextFrame, ContextFrameTrait, VmContext};
 use crate::config::VmConfigEntry;
@@ -10,10 +10,10 @@ use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
 use crate::util::memcpy_safe;
 
 #[cfg(any(feature = "memory-reservation"))]
-use crate::arch::PmuTimerEvent;
-#[cfg(any(feature = "memory-reservation"))]
 use super::bwres::membwres::MemoryBandwidth;
 use super::{CpuState, Vm};
+#[cfg(any(feature = "memory-reservation"))]
+use crate::arch::PmuTimerEvent;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VcpuState {

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use spin::RwLock;
 
-use crate::kernel::{current_cpu, active_vm};
+use crate::kernel::{active_vm, current_cpu};
 use crate::util::downcast::DowncastSync;
 
 pub trait EmuDev: DowncastSync {

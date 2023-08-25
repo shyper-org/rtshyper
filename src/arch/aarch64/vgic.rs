@@ -12,7 +12,7 @@ use crate::board::{PlatOperation, Platform};
 use crate::config::VmEmulatedDeviceConfig;
 use crate::device::{EmuContext, EmuDev, EmuDeviceType};
 use crate::kernel::{active_vcpu_id, active_vm, current_cpu};
-use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInnerMsg, IpiMessage, IpiType, IpiInitcMessage};
+use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInitcMessage, IpiInnerMsg, IpiMessage, IpiType};
 use crate::kernel::{InitcEvent, Vcpu, Vm};
 use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth};
 

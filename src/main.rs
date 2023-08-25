@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 #![feature(alloc_error_handler)]
 #![feature(const_btree_new)]
 #![feature(drain_filter)]
@@ -23,7 +23,7 @@ extern crate memoffset;
 #[macro_use]
 extern crate derive_more;
 
-use kernel::{cpu_init, physical_mem_init, timer_init, iommu_init, current_cpu};
+use kernel::{cpu_init, current_cpu, iommu_init, physical_mem_init, timer_init};
 use vmm::{vm_init, vmm_boot_vm};
 
 #[macro_use]
@@ -36,6 +36,7 @@ mod config;
 mod device;
 mod driver;
 mod dtb;
+mod feature;
 mod kernel;
 mod mm;
 mod panic;

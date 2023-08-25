@@ -1,7 +1,7 @@
 use core::future::Future;
 use core::pin::Pin;
-use core::task::Context;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use core::task::Context;
 
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, LinkedList};

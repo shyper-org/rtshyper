@@ -17,21 +17,28 @@ debug = true
 
 [build-dependencies]
 chrono = "0.4.23"
-cc = "1.0"
+
+[workspace]
+members = [
+    "deps/buddy_system_allocator",
+    "deps/libfdt-binding",
+    "deps/libshyper",
+    "deps/spin",
+]
 
 [dependencies]
-shyper = { path = "libshyper" }
+shyper = { path = "deps/libshyper" }
+fdt = { path = "deps/libfdt-binding" }
+spin = { path = "deps/spin" }
+buddy_system_allocator = { path = "deps/buddy_system_allocator" }
+# spin = { version = "0.9.8" }
+# buddy_system_allocator = "0.9.0"
 vm-fdt = { git = "https://github.com/migu4917/vm-fdt", features = ["alloc"] }
-fdt = { path = "libfdt-binding" }
 log = { version = "0.4", features = [
     "max_level_trace",
     "release_max_level_info",
 ] }
 tock-registers = "0.8.0"
-spin = { path = "deps/spin" }
-buddy_system_allocator = { path = "deps/buddy_system_allocator" }
-# spin = { version = "0.9.8" }
-# buddy_system_allocator = "0.9.0"
 static_assertions = "1.1.0"
 derive_more = "0.99.17"
 intrusive-collections = "0.9"

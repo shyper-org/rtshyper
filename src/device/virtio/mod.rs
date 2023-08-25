@@ -1,9 +1,9 @@
-pub use blk::{BlkIov, virtio_blk_notify_handler, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
-pub use mediated::*;
-pub use mmio::{VirtioMmio, emu_virtio_mmio_init};
-pub use net::{virtio_net_announce, ethernet_ipi_rev_handler};
-pub use queue::Virtq;
+pub use blk::{virtio_blk_notify_handler, BlkIov, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT};
 pub use mac::remove_virtio_nic;
+pub use mediated::*;
+pub use mmio::{emu_virtio_mmio_init, VirtioMmio};
+pub use net::{ethernet_ipi_rev_handler, virtio_net_announce};
+pub use queue::Virtq;
 
 mod balloon;
 mod blk;

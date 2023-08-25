@@ -6,8 +6,8 @@ use spin::Mutex;
 use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
-    active_vm, current_cpu, interrupt_vm_inject, ipi_send_msg, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType,
-    ivc_update_mq, vm_if_get_cpu_id, vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, vm_by_id,
+    active_vm, current_cpu, interrupt_vm_inject, ipi_send_msg, ivc_update_mq, vm_by_id, vm_if_get_cpu_id,
+    vm_if_ivc_arg, vm_if_ivc_arg_ptr, vm_if_set_ivc_arg_ptr, IpiHvcMsg, IpiInnerMsg, IpiMessage, IpiType,
 };
 use crate::util::memcpy_safe;
 use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_vm};
