@@ -43,3 +43,4 @@ mod timer;
 mod tlb;
 mod vcpu;
 mod vgic;
+mod vm;

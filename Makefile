@@ -56,8 +56,8 @@ pi4:
 	scp ./image/pi4_fin.dtb ${TFTP_SERVER}/pi4_dtb
 
 clippy:
-	cargo clippy ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
 	cargo fmt
+	cargo clippy ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
 
 fmt:
 	cargo fmt

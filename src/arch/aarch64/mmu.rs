@@ -98,7 +98,7 @@ pub static mut LVL2_PAGE_TABLE: PageTables = PageTables {
     entry: [BlockDescriptor(0); ENTRY_PER_PAGE],
 };
 
-pub extern "C" fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
+pub fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl2_base = lvl2_pt as *const _ as usize;
     let image_end_align_gb = round_up(_image_end as usize, 1 << LVL1_SHIFT);
 
@@ -202,8 +202,8 @@ pub fn pa_range_val(pa_range_idx: usize) -> u64 {
     PA_RANGE_TABLE[pa_range_idx]
 }
 
-pub extern "C" fn mmu_init(pt: &PageTables) {
-    use cortex_a::registers::*;
+pub fn mmu_init(pt: &PageTables) {
+    use cortex_a::{asm::barrier, registers::*};
     MAIR_EL2.write(
         MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
             + MAIR_EL2::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
@@ -235,7 +235,5 @@ pub extern "C" fn mmu_init(pt: &PageTables) {
             + VTCR_EL2::T0SZ.val(64 - pa_range),
     );
 
-    // barrier::isb(barrier::SY);
-    // SCTLR_EL2.modify(SCTLR_EL2::M::Enable + SCTLR_EL2::C::Cacheable + SCTLR_EL2::I::Cacheable);
-    // barrier::isb(barrier::SY);
+    barrier::isb(barrier::SY);
 }

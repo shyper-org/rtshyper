@@ -9,19 +9,13 @@ cfg_if! {
     } else if #[cfg(feature = "qemu")] {
         assert_cfg!(not(any(feature = "pi4", feature = "tx2")));
     } else {
-        compile_error("must provide a feature represent the platform");
+        compile_error!("must provide a feature represent the platform");
     }
 }
 
 cfg_if! {
     if #[cfg(feature = "dynamic-budget")] {
         assert_cfg!(feature = "memory-reservation", "must enable memory-reservation is enable dynamic-budget");
-    }
-}
-
-cfg_if! {
-    if #[cfg(any(feature = "tx2", feature = "pi4", feature = "qemu"))] {
-        assert_cfg!(feature = "aarch64", "must enable aarch64 on the target platform");
     }
 }
 

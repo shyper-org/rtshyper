@@ -44,7 +44,6 @@ mod panic;
 mod util;
 mod vmm;
 
-#[no_mangle]
 pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     if cpu_id == 0 {
         driver::init();

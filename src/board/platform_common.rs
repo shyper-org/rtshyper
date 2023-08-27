@@ -61,8 +61,6 @@ pub trait PlatOperation {
     const GICH_BASE: usize;
     const GICV_BASE: usize;
 
-    const SHARE_MEM_BASE: usize;
-
     fn cpu_on(arch_core_id: usize, entry: usize, ctx: usize) {
         crate::arch::power_arch_cpu_on(arch_core_id, entry, ctx);
     }

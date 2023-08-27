@@ -3,13 +3,10 @@ SECTIONS
 {
     . = TEXT_START;
 
-	_image_start = ABSOLUTE(.);
-
-    .boot : {
-        *(.text.boot)
-    }
+    _image_start = ABSOLUTE(.);
 
     .text : {
+        *(.text.boot)
         *(.text*)
     }
 

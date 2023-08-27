@@ -7,8 +7,6 @@ use spin::{Mutex, Once};
 use crate::arch::PageTable;
 use crate::arch::Vgic;
 use crate::arch::{emu_intc_init, emu_smmu_init, timer_arch_get_counter, HYP_VA_SIZE, PAGE_SIZE, VM_IPA_SIZE};
-use crate::arch::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
-use crate::board::{PlatOperation, Platform};
 use crate::config::VmConfigEntry;
 use crate::device::{emu_virtio_mmio_init, EmuDev};
 use crate::kernel::{mem_color_region_free, shyper_init};
@@ -121,17 +119,8 @@ impl VmInterface {
     }
 }
 
-/* HCR_EL2 init value
- *  - VM
- *  - RW
- *  - IMO
- *  - FMO
- *  - TSC
- */
-// const HCR_EL2_INIT_VAL: u64 = 0x80080019;
-
 #[derive(Clone, Copy, Default, Debug)]
-enum IntCtrlType {
+pub enum IntCtrlType {
     #[default]
     Emulated,
     #[cfg(not(feature = "memory-reservation"))]
@@ -285,24 +274,6 @@ impl Vm {
         }
         this.init_intc_mode(this.inner_const.intc_type);
         this
-    }
-
-    fn init_intc_mode(&self, intc_type: IntCtrlType) {
-        for vcpu in self.vcpu_list() {
-            debug!("vm {} vcpu {} set {:?} hcr", self.id(), vcpu.id(), intc_type);
-            match intc_type {
-                IntCtrlType::Emulated => {
-                    vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT | GICC_CTLR_EOIMODENS_BIT) as u32);
-                    vcpu.set_hcr(0x80080019);
-                }
-                #[cfg(not(feature = "memory-reservation"))]
-                IntCtrlType::Passthrough => {
-                    vcpu.set_gich_ctlr((GICC_CTLR_EN_BIT) as u32);
-                    vcpu.set_hcr(0x80080001); // HCR_EL2_GIC_PASSTHROUGH_VAL
-                }
-            }
-            // hcr |= 1 << 17; // set HCR_EL2.TID2=1, trap for cache id sysregs
-        }
     }
 
     pub fn set_iommu_ctx_id(&self, id: usize) {
@@ -461,16 +432,6 @@ impl Vm {
         vm_inner.pt.show_pt(ipa);
     }
 
-    pub fn share_mem_base(&self) -> usize {
-        let inner = self.inner_mut.lock();
-        inner.share_mem_base
-    }
-
-    pub fn add_share_mem_base(&self, len: usize) {
-        let mut inner = self.inner_mut.lock();
-        inner.share_mem_base += len;
-    }
-
     // Formula: Virtual Count = Physical Count - <offset>
     //          (from ARM: Learn the architecture - Generic Timer)
     // So, <offset> = Physical Count - Virtual Count
@@ -554,9 +515,6 @@ struct VmInnerMut {
     color_pa_info: VmColorPaInfo,
     balloon: Vec<usize>,
 
-    // migration
-    share_mem_base: usize,
-
     // iommu
     iommu_ctx_id: Option<usize>,
 
@@ -576,7 +534,6 @@ impl VmInnerMut {
             },
             color_pa_info: VmColorPaInfo::default(),
             balloon: vec![],
-            share_mem_base: Platform::SHARE_MEM_BASE, // hard code
             iommu_ctx_id: None,
             running: 0,
             vtimer_offset: timer_arch_get_counter(),

@@ -220,7 +220,6 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     }
 }
 
-#[no_mangle]
 #[cfg(feature = "preempt")]
 fn interrupt_enter() {
     use super::{cpu_interrupt_disable, cpu_interrupt_enable};
@@ -236,7 +235,6 @@ fn interrupt_enter() {
     }
 }
 
-#[no_mangle]
 #[cfg(feature = "preempt")]
 fn interrupt_leave() {
     use super::{cpu_interrupt_disable, cpu_interrupt_enable};

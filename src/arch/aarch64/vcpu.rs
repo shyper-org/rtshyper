@@ -22,3 +22,15 @@ pub fn vcpu_arch_init(config: &VmConfigEntry, vcpu: &Vcpu) {
         (SPSR_EL2::M::EL1h + SPSR_EL2::I::Masked + SPSR_EL2::F::Masked + SPSR_EL2::A::Masked + SPSR_EL2::D::Masked)
             .value;
 }
+
+impl Vcpu {
+    pub fn set_gich_ctlr(&self, ctlr: u32) {
+        let mut inner = self.0.inner_mut.lock();
+        inner.vm_ctx.gic_state.ctlr = ctlr;
+    }
+
+    pub fn set_hcr(&self, hcr: u64) {
+        let mut inner = self.0.inner_mut.lock();
+        inner.vm_ctx.hcr_el2 = hcr;
+    }
+}

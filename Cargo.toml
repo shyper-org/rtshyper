@@ -48,17 +48,19 @@ memoffset = { version = "0.9", default-features = false, features = [
 ] }
 
 # optional dependencies
-cortex-a = { package = "aarch64-cpu", version = "9.3.1", optional = true }
 fastrand = { version = "2.0.0", default-features = false, features = [
     "alloc",
 ], optional = true }
 
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+cortex-a = { package = "aarch64-cpu", version = "9.3.1" }
+smccc = "0.1.1"
+
 [features]
 default = ["tx2"]
-tx2 = ["aarch64", "pa-bits-39", "ns16550", "preempt", "memory-reservation"]
-qemu = ["aarch64", "pa-bits-39", "pl011", "preempt"]
-pi4 = ["aarch64", "pa-bits-39", "gpio", "pl011", "preempt"]
-aarch64 = ["cortex-a"]
+tx2 = ["pa-bits-39", "ns16550", "preempt", "memory-reservation"]
+qemu = ["pa-bits-39", "pl011", "preempt"]
+pi4 = ["pa-bits-39", "gpio", "pl011", "preempt"]
 ramdisk = []
 static-config = []
 ns16550 = []

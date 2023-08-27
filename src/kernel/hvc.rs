@@ -1,9 +1,6 @@
-use alloc::collections::BTreeMap;
 use core::mem::size_of;
 
-use spin::Mutex;
-
-use crate::arch::{PAGE_SIZE, PTE_S2_NORMAL};
+use crate::arch::PAGE_SIZE;
 use crate::device::{mediated_blk_notify_handler, mediated_dev_append};
 use crate::kernel::{
     active_vm, current_cpu, interrupt_vm_inject, ipi_send_msg, ivc_update_mq, vm_by_id, vm_if_get_cpu_id,
@@ -14,19 +11,10 @@ use crate::vmm::{get_vm_id, vmm_boot_vm, vmm_list_vm, vmm_reboot_vm, vmm_remove_
 
 use shyper::VM_NUM_MAX;
 
-pub static SHARE_MEM_LIST: Mutex<BTreeMap<usize, usize>> = Mutex::new(BTreeMap::new());
 // If succeed, return 0.
 const HVC_FINISH: usize = 0;
 // If failed, return -1.
 // const HVC_ERR: usize = usize::MAX;
-
-// share mem type
-pub const MIGRATE_BITMAP: usize = 0;
-pub const VM_CONTEXT_SEND: usize = 1;
-pub const VM_CONTEXT_RECEIVE: usize = 2;
-pub const MIGRATE_SEND: usize = 3;
-pub const MIGRATE_RECEIVE: usize = 4;
-pub const LIVE_UPDATE_IMG: usize = 5;
 
 // hvc_fid
 pub const HVC_SYS: usize = 0;
@@ -165,21 +153,6 @@ pub struct HvcUniLibMsg {
     pub arg_3: usize,
 }
 
-pub fn add_share_mem(mem_type: usize, base: usize) {
-    let mut list = SHARE_MEM_LIST.lock();
-    list.insert(mem_type, base);
-}
-
-pub fn get_share_mem(mem_type: usize) -> usize {
-    let list = SHARE_MEM_LIST.lock();
-    match list.get(&mem_type) {
-        None => {
-            panic!("there is not {} type share memory", mem_type);
-        }
-        Some(tup) => *tup,
-    }
-}
-
 pub fn hvc_guest_handler(
     hvc_type: usize,
     event: usize,
@@ -303,25 +276,11 @@ fn hvc_ivc_handler(event: usize, x0: usize, x1: usize) -> Result<usize, ()> {
             }
         }
         HVC_IVC_SHARE_MEM => {
-            let vm = active_vm().unwrap();
-            let base = vm.share_mem_base();
-            if x0 == LIVE_UPDATE_IMG {
-                // hard code for pa 0x8a000000, x1 should be 0x8000000
-                vm.pt_map_range(base, x1, 0x8a000000, PTE_S2_NORMAL, true);
-            }
-            vm.add_share_mem_base(x1);
-            add_share_mem(x0, base);
-            info!(
-                "VM{} add share mem type {:#x} base {:#x} len {:#x}",
-                active_vm().unwrap().id(),
-                x0,
-                base,
-                x1
-            );
-            Ok(base)
+            error!("not support vm migration and live update");
+            Ok(HVC_FINISH)
         }
         _ => {
-            println!("hvc_ivc_handler: unknown event {}", event);
+            error!("hvc_ivc_handler: unknown event {}", event);
             Err(())
         }
     }
@@ -510,21 +469,5 @@ pub fn hvc_ipi_handler(msg: IpiMessage) {
         _ => {
             println!("vgic_ipi_handler: illegal ipi");
         }
-    }
-}
-
-pub fn send_hvc_ipi(src_vmid: usize, trgt_vmid: usize, fid: usize, event: usize, trgt_cpuid: usize) {
-    let ipi_msg = IpiHvcMsg {
-        src_vmid,
-        trgt_vmid,
-        fid,
-        event,
-    };
-    if !ipi_send_msg(trgt_cpuid, IpiType::Hvc, IpiInnerMsg::HvcMsg(ipi_msg)) {
-        error!(
-            "send_hvc_ipi: Failed to send ipi message, target {} type {:#?}",
-            0,
-            IpiType::Hvc
-        );
     }
 }

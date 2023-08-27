@@ -23,8 +23,6 @@ impl PlatOperation for Pi4Platform {
     const GICH_BASE: usize = 0xFF844000;
     const GICV_BASE: usize = 0xFF846000;
 
-    const SHARE_MEM_BASE: usize = 0x7_0000_0000;
-
     fn cpuid_to_cpuif(cpuid: usize) -> usize {
         cpuid
     }

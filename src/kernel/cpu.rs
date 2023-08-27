@@ -183,7 +183,6 @@ impl Cpu {
     }
 }
 
-#[no_mangle]
 #[link_section = ".cpu_private"]
 pub static mut CPU: Cpu = Cpu::default();
 
@@ -248,9 +247,7 @@ pub fn cpu_init() {
 
 static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
 
-#[no_mangle]
-// #[link_section = ".text.boot"]
-pub extern "C" fn cpu_map_self(cpu_id: usize) -> usize {
+pub fn cpu_map_self(cpu_id: usize) -> usize {
     let cpu = unsafe { &mut CPU_LIST[cpu_id] };
     cpu.id = cpu_id;
 

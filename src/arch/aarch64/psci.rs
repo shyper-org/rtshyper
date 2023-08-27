@@ -7,22 +7,13 @@ use crate::kernel::{current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
 use crate::vmm::vmm_reboot;
 
 use super::smc::smc_call;
-
-const PSCI_VERSION: usize = 0x84000000;
-const PSCI_MIG_INFO_TYPE: usize = 0x84000006;
-const PSCI_FEATURES: usize = 0x8400000A;
-// const PSCI_CPU_SUSPEND_AARCH64: usize = 0xc4000001;
-// const PSCI_CPU_OFF: usize = 0xc4000002;
-const PSCI_CPU_ON_AARCH64: usize = 0xc4000003;
-const PSCI_AFFINITY_INFO_AARCH64: usize = 0xc4000004;
-const PSCI_SYSTEM_OFF: usize = 0x84000008;
-const PSCI_SYSTEM_RESET: usize = 0x84000009;
+use smccc::psci::*;
 
 const PSCI_E_SUCCESS: usize = 0;
 const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
 
 #[cfg(feature = "tx2")]
-const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: usize = 0xC2FFFE02;
+const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: u32 = 0xC2FFFE02;
 
 const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
@@ -40,10 +31,7 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
 }
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
-    // println!("power_arch_cpu_on, {:x}, {:x}, {:x}", PSCI_CPU_ON_AARCH64, mpidr, entry);
-
-    // println!("smc return val is {}", r);
-    smc_call(PSCI_CPU_ON_AARCH64, mpidr, entry, ctx).0
+    smc_call(PSCI_CPU_ON_64, mpidr, entry, ctx).0
 }
 
 #[allow(dead_code)]
@@ -61,11 +49,12 @@ pub fn power_arch_sys_shutdown() {
     smc_call(PSCI_SYSTEM_OFF, 0, 0, 0);
 }
 
-fn psci_guest_sys_reset() {
+fn psci_guest_sys_reset() -> usize {
     vmm_reboot();
+    0
 }
 
-fn psci_guest_sys_off() {
+fn psci_guest_sys_off() -> usize {
     let vm_id = active_vm().unwrap().id();
     if vm_id == 0 {
         crate::board::Platform::sys_shutdown();
@@ -73,6 +62,7 @@ fn psci_guest_sys_off() {
         info!("VM[{}] system off, please remove it on MVM", vm_id);
         // vmm_remove_vm(vm_id);
     }
+    0
 }
 
 #[inline(never)]
@@ -81,22 +71,20 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
         "smc_guest_handler: fid {:#x}, x1 {:#x}, x2 {:#x}, x3 {:#x}",
         fid, x1, x2, x3
     );
-    let r = match fid {
+    let r = match fid as u32 {
+        PSCI_FEATURES => match x1 as u32 {
+            PSCI_VERSION | PSCI_CPU_ON_64 | PSCI_FEATURES => PSCI_E_SUCCESS,
+            _ => PSCI_E_NOT_SUPPORTED,
+        },
         PSCI_VERSION => smc_call(PSCI_VERSION, 0, 0, 0).0,
-        PSCI_MIG_INFO_TYPE => PSCI_TOS_NOT_PRESENT_MP,
-        PSCI_CPU_ON_AARCH64 => psci_guest_cpu_on(x1, x2, x3),
-        PSCI_AFFINITY_INFO_AARCH64 => 0,
-        PSCI_SYSTEM_RESET => {
-            psci_guest_sys_reset();
-            0
-        }
-        PSCI_SYSTEM_OFF => {
-            psci_guest_sys_off();
-            0
-        }
+        PSCI_CPU_ON_64 => psci_guest_cpu_on(x1, x2, x3),
+        PSCI_SYSTEM_RESET => psci_guest_sys_reset(),
+        PSCI_SYSTEM_OFF => psci_guest_sys_off(),
+        PSCI_MIGRATE_INFO_TYPE => PSCI_TOS_NOT_PRESENT_MP,
+        PSCI_AFFINITY_INFO_64 => 0,
         #[cfg(feature = "tx2")]
         TEGRA_SIP_GET_ACTMON_CLK_COUNTERS => {
-            let result = smc_call(fid, x1, x2, x3);
+            let result = smc_call(TEGRA_SIP_GET_ACTMON_CLK_COUNTERS, x1, x2, x3);
             // println!("x1 {:#x}, x2 {:#x}, x3 {:#x}", x1, x2, x3);
             // println!(
             //     "result.0 {:#x}, result.1 {:#x}, result.2 {:#x}",
@@ -106,10 +94,6 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
             current_cpu().set_gpr(2, result.2);
             result.0
         }
-        PSCI_FEATURES => match x1 {
-            PSCI_VERSION | PSCI_CPU_ON_AARCH64 | PSCI_FEATURES => PSCI_E_SUCCESS,
-            _ => PSCI_E_NOT_SUPPORTED,
-        },
         _ => {
             // unimplemented!();
             return false;
@@ -133,7 +117,7 @@ fn psci_vcpu_on(vcpu: &Vcpu, entry: usize, ctx: usize) {
     current_cpu().cpu_state = CpuState::Run;
     vcpu.reset_context();
     vcpu.set_gpr(0, ctx);
-    vcpu.set_elr(entry);
+    vcpu.set_exception_pc(entry);
     // Just wake up the vcpu
     current_cpu().vcpu_array.wakeup_vcpu(vcpu);
 }

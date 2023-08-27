@@ -190,16 +190,6 @@ impl Vcpu {
         }
     }
 
-    pub fn set_gich_ctlr(&self, ctlr: u32) {
-        let mut inner = self.0.inner_mut.lock();
-        inner.vm_ctx.gic_state.ctlr = ctlr;
-    }
-
-    pub fn set_hcr(&self, hcr: u64) {
-        let mut inner = self.0.inner_mut.lock();
-        inner.vm_ctx.hcr_el2 = hcr;
-    }
-
     pub fn state(&self) -> VcpuState {
         let inner = self.0.inner_mut.lock();
         inner.state
@@ -260,20 +250,14 @@ impl Vcpu {
         inner.vm_ctx.vmpidr_el2 = vmpidr as u64;
     }
 
-    pub fn set_elr(&self, elr: usize) {
+    pub fn set_exception_pc(&self, elr: usize) {
         let mut inner = self.0.inner_mut.lock();
-        inner.set_elr(elr);
-    }
-
-    #[allow(dead_code)]
-    pub fn elr(&self) -> usize {
-        let inner = self.0.inner_mut.lock();
-        inner.vcpu_ctx.exception_pc()
+        inner.vcpu_ctx.set_exception_pc(elr);
     }
 
     pub fn set_gpr(&self, idx: usize, val: usize) {
         let mut inner = self.0.inner_mut.lock();
-        inner.set_gpr(idx, val);
+        inner.vcpu_ctx.set_gpr(idx, val);
     }
 
     pub fn push_int(&self, int: usize) {
@@ -328,7 +312,7 @@ pub struct VcpuInnerMut {
     state: VcpuState,
     int_list: Vec<usize>,
     pub vcpu_ctx: ContextFrame,
-    vm_ctx: VmContext,
+    pub vm_ctx: VmContext,
 }
 
 impl VcpuInnerMut {
@@ -342,19 +326,8 @@ impl VcpuInnerMut {
     }
 
     fn gic_ctx_reset(&mut self) {
-        use crate::arch::gic_lrs;
-        for i in 0..gic_lrs() {
-            self.vm_ctx.gic_state.lr[i] = 0;
-        }
+        self.vm_ctx.gic_state.lr.fill(0);
         self.vm_ctx.gic_state.hcr |= 1 << 2;
-    }
-
-    fn set_elr(&mut self, elr: usize) {
-        self.vcpu_ctx.set_exception_pc(elr);
-    }
-
-    fn set_gpr(&mut self, idx: usize, val: usize) {
-        self.vcpu_ctx.set_gpr(idx, val);
     }
 }
 

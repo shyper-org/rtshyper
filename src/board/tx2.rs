@@ -23,8 +23,6 @@ impl PlatOperation for Tx2Platform {
     const GICH_BASE: usize = 0x3884000;
     const GICV_BASE: usize = 0x3886000;
 
-    const SHARE_MEM_BASE: usize = 0xd_0000_0000;
-
     fn cpuid_to_cpuif(cpuid: usize) -> usize {
         cpuid + PLAT_DESC.cpu_desc.num
     }

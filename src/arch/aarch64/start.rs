@@ -131,7 +131,10 @@ unsafe extern "C" fn _start() -> ! {
 }
 
 fn init_sysregs() {
-    use cortex_a::registers::{HCR_EL2, SCTLR_EL2, VBAR_EL2};
+    use cortex_a::{
+        asm::barrier,
+        registers::{HCR_EL2, SCTLR_EL2, VBAR_EL2},
+    };
     HCR_EL2.set(
         (HCR_EL2::VM::Enable
             + HCR_EL2::RW::EL1IsAarch64
@@ -142,14 +145,15 @@ fn init_sysregs() {
     );
     VBAR_EL2.set(vectors as usize as u64);
     SCTLR_EL2.modify(SCTLR_EL2::M::Enable + SCTLR_EL2::C::Cacheable + SCTLR_EL2::I::Cacheable);
+    barrier::isb(barrier::SY);
 }
 
-unsafe extern "C" fn clear_bss() {
+unsafe fn clear_bss() {
     core::slice::from_raw_parts_mut(_bss_begin as usize as *mut u8, _bss_end as usize - _bss_begin as usize).fill(0)
 }
 
 #[link_section = ".text.boot"]
-unsafe extern "C" fn cache_invalidate(cache_level: usize) {
+unsafe fn cache_invalidate(cache_level: usize) {
     core::arch::asm!(
         r#"
         msr csselr_el1, {0}
