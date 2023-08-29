@@ -1,20 +1,16 @@
-use crate::arch::{timer_arch_get_counter, timer_arch_get_frequency};
+use crate::kernel::timer;
 
-pub fn time_current_us() -> usize {
-    let count = timer_arch_get_counter();
-    let freq = timer_arch_get_frequency();
-    count * 1000000 / freq
+pub fn current_us() -> usize {
+    timer::gettime_ns() / 1000
 }
 
-pub fn time_current_ms() -> usize {
-    let count = timer_arch_get_counter();
-    let freq = timer_arch_get_frequency();
-    count * 1000 / freq
+pub fn current_ms() -> usize {
+    timer::gettime_ns() / 10_usize.pow(6)
 }
 
 pub fn sleep(us: usize) {
-    let end = time_current_us() + us;
-    while time_current_us() < end {
+    let end = current_us() + us;
+    while current_us() < end {
         core::hint::spin_loop();
     }
 }

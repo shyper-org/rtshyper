@@ -1904,11 +1904,11 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
         // restore_vcpu_gic
         if let Some(active_vcpu) = &current_cpu().active_vcpu {
             if trgt_vcpu != active_vcpu {
-                active_vcpu.gic_save_context();
-                trgt_vcpu.gic_restore_context();
+                active_vcpu.intc_save_context();
+                trgt_vcpu.intc_restore_context();
             }
         } else {
-            trgt_vcpu.gic_restore_context();
+            trgt_vcpu.intc_restore_context();
         }
 
         let vm = match trgt_vcpu.vm() {
@@ -1971,11 +1971,11 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
         // save_vcpu_gic
         if let Some(active_vcpu) = &current_cpu().active_vcpu {
             if trgt_vcpu != active_vcpu {
-                trgt_vcpu.gic_save_context();
-                active_vcpu.gic_restore_context();
+                trgt_vcpu.intc_save_context();
+                active_vcpu.intc_restore_context();
             }
         } else {
-            trgt_vcpu.gic_save_context();
+            trgt_vcpu.intc_save_context();
         }
     } else {
         error!("vgic_ipi_handler: illegal ipi");

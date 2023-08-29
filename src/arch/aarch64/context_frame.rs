@@ -1,11 +1,8 @@
 use core::arch::global_asm;
-use core::fmt::Formatter;
 
 use cortex_a::registers::*;
 
-use crate::arch::GicState;
-
-use super::GenericTimerContext;
+use super::timer::GenericTimerContext;
 
 global_asm!(include_str!("fpsimd.S"));
 
@@ -18,13 +15,13 @@ extern "C" {
 #[derive(Copy, Clone, Debug)]
 pub struct Aarch64ContextFrame {
     gpr: [u64; 31],
-    pub spsr: u64,
+    spsr: u64,
     elr: u64,
     sp: u64,
 }
 
 impl core::fmt::Display for Aarch64ContextFrame {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         for i in 0..31 {
             write!(f, "x{:02}: {:016x}   ", i, self.gpr[i])?;
             if (i + 1) % 2 == 0 {
@@ -95,13 +92,13 @@ impl Default for Aarch64ContextFrame {
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug)]
-pub struct VmCtxFpsimd {
+struct FpsimdState {
     fpsimd: [u64; 64],
     fpsr: u32,
     fpcr: u32,
 }
 
-impl Default for VmCtxFpsimd {
+impl Default for FpsimdState {
     fn default() -> Self {
         Self {
             fpsimd: [0; 64],
@@ -111,11 +108,10 @@ impl Default for VmCtxFpsimd {
     }
 }
 
-impl VmCtxFpsimd {
+impl FpsimdState {
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
-        self.fpsr = 0;
-        self.fpcr = 0;
-        self.fpsimd.fill(0);
+        *self = Default::default();
     }
 }
 
@@ -125,7 +121,7 @@ pub struct VmContext {
     pub generic_timer: GenericTimerContext,
 
     // vpidr and vmpidr
-    vpidr_el2: u32,
+    // vpidr_el2: u32,
     pub vmpidr_el2: u64,
 
     // 64bit EL1/EL0 register
@@ -133,7 +129,7 @@ pub struct VmContext {
     sp_el1: u64,
     elr_el1: u64,
     spsr_el1: u32,
-    pub sctlr_el1: u32,
+    sctlr_el1: u32,
     actlr_el1: u64,
     cpacr_el1: u32,
     ttbr0_el1: u64,
@@ -161,41 +157,20 @@ pub struct VmContext {
     // exception
     far_el2: u64,
     hpfar_el2: u64,
-    fpsimd: VmCtxFpsimd,
-    pub gic_state: GicState,
+    fpsimd: FpsimdState,
 }
 
 impl VmContext {
+    pub fn new() -> Self {
+        Self {
+            sctlr_el1: 0x30C50830,
+            ..Default::default()
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
-        self.generic_timer.reset();
-        self.vpidr_el2 = 0;
-        self.vmpidr_el2 = 0;
-        self.sp_el0 = 0;
-        self.sp_el1 = 0;
-        self.elr_el1 = 0;
-        self.spsr_el1 = 0;
-        self.sctlr_el1 = 0;
-        self.actlr_el1 = 0;
-        self.cpacr_el1 = 0;
-        self.ttbr0_el1 = 0;
-        self.ttbr1_el1 = 0;
-        self.tcr_el1 = 0;
-        self.esr_el1 = 0;
-        self.far_el1 = 0;
-        self.par_el1 = 0;
-        self.mair_el1 = 0;
-        self.amair_el1 = 0;
-        self.vbar_el1 = 0;
-        self.contextidr_el1 = 0;
-        self.tpidr_el0 = 0;
-        self.tpidr_el1 = 0;
-        self.tpidrro_el0 = 0;
-        self.hcr_el2 = 0;
-        self.cptr_el2 = 0;
-        self.hstr_el2 = 0;
-        self.far_el2 = 0;
-        self.hpfar_el2 = 0;
-        self.fpsimd.reset();
+        *self = Self::new();
     }
 
     pub fn ext_regs_store(&mut self) {
@@ -232,6 +207,9 @@ impl VmContext {
         // MRS!(self.hpfar_el2, HPFAR_EL2);
         mrs!(self.actlr_el1, ACTLR_EL1);
         self.generic_timer.save();
+        unsafe {
+            fpsimd_save_ctx(&self.fpsimd as *const _ as usize);
+        }
     }
 
     pub fn ext_regs_restore(&self) {
@@ -269,25 +247,8 @@ impl VmContext {
         // MSR!(FAR_EL2, self.far_el2);
         // MSR!(HPFAR_EL2, self.hpfar_el2);
         msr!(ACTLR_EL1, self.actlr_el1);
-    }
-
-    pub fn fpsimd_save_context(&self) {
-        unsafe {
-            fpsimd_save_ctx(&self.fpsimd as *const _ as usize);
-        }
-    }
-
-    pub fn fpsimd_restore_context(&self) {
         unsafe {
             fpsimd_restore_ctx(&self.fpsimd as *const _ as usize);
         }
-    }
-
-    pub fn gic_save_state(&mut self) {
-        self.gic_state.save_state();
-    }
-
-    pub fn gic_restore_state(&self) {
-        self.gic_state.restore_state();
     }
 }

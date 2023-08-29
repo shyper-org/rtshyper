@@ -10,7 +10,6 @@ use crate::kernel::interrupt_vm_inject;
 use crate::kernel::Vm;
 use crate::kernel::{active_vm, current_cpu, ipi_send_msg, IpiInnerMsg, IpiIntInjectMsg, IpiType};
 
-use super::balloon::virtio_balloon_notify_handler;
 use super::blk::{virtio_blk_notify_handler, virtio_mediated_blk_notify_handler, VIRTQUEUE_BLK_MAX_SIZE};
 use super::console::{virtio_console_notify_handler, VIRTQUEUE_CONSOLE_MAX_SIZE};
 use super::dev::{VirtDev, VirtioDeviceType};
@@ -162,10 +161,11 @@ impl VirtioMmio {
                     self.inner_const.vq.push(queue);
                 }
             }
+            #[cfg(feature = "balloon")]
             VirtioDeviceType::Balloon => {
                 self.set_q_num_max(256_u32);
                 for i in 0..2 {
-                    let queue = Virtq::new(i, weak.clone(), virtio_balloon_notify_handler);
+                    let queue = Virtq::new(i, weak.clone(), super::balloon::virtio_balloon_notify_handler);
                     self.inner_const.vq.push(queue);
                 }
             }
@@ -337,12 +337,9 @@ impl VirtioMmio {
     pub fn base(&self) -> usize {
         self.inner_const.base
     }
-
-    pub fn vq_num(&self) -> usize {
-        self.inner_const.vq.len()
-    }
 }
 
+#[allow(dead_code)]
 struct VirtioMmioInnerMut {
     driver_features: usize,
     driver_status: usize,
@@ -612,6 +609,7 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
             VIRTIO_MMIO_CONFIG..=0x1ff => match mmio.dev().desc() {
                 super::dev::DevDesc::BlkDesc(blk_desc) => blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
                 super::dev::DevDesc::NetDesc(net_desc) => net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
+                #[cfg(feature = "balloon")]
                 super::dev::DevDesc::Balloon(config) => config.read_config(offset - VIRTIO_MMIO_CONFIG),
                 _ => {
                     error!("unknow desc type");
@@ -627,6 +625,7 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
         let val = value as usize;
         current_cpu().set_gpr(idx, val);
     } else {
+        #[cfg(feature = "balloon")]
         if (VIRTIO_MMIO_CONFIG..=0x1ff).contains(&offset) {
             let val = current_cpu().get_gpr(emu_ctx.reg) as u32;
             match mmio.dev().desc() {
@@ -644,6 +643,7 @@ pub fn emu_virtio_mmio_init(vm: Weak<Vm>, emu_cfg: &VmEmulatedDeviceConfig) -> R
         EmuDeviceType::EmuDeviceTVirtioBlk => VirtioDeviceType::Block,
         EmuDeviceType::EmuDeviceTVirtioNet => VirtioDeviceType::Net,
         EmuDeviceType::EmuDeviceTVirtioConsole => VirtioDeviceType::Console,
+        #[cfg(feature = "balloon")]
         EmuDeviceType::VirtioBalloon => VirtioDeviceType::Balloon,
         _ => {
             println!("emu_virtio_mmio_init: unknown emulated device type");

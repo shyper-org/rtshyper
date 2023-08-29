@@ -8,7 +8,6 @@ pub use self::mmu::PLATFORM_PHYSICAL_LIMIT_GB;
 pub use self::page_table::*;
 pub use self::psci::*;
 pub use self::smmu::*;
-pub use self::timer::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
 pub use pmuv3::{arch_pmu_init, cpu_cycle_count};
@@ -20,7 +19,6 @@ mod regs;
 
 #[allow(dead_code)]
 mod cache;
-#[allow(dead_code)]
 mod context_frame;
 mod cpu;
 #[allow(dead_code)]
@@ -39,7 +37,7 @@ mod smc;
 mod smmu;
 mod start;
 mod sync;
-mod timer;
+pub mod timer;
 mod tlb;
 mod vcpu;
 mod vgic;

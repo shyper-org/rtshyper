@@ -199,8 +199,7 @@ pub fn vmm_reboot() {
     vm_if_set_ivc_arg_ptr(vm.id(), 0);
 
     crate::arch::interrupt_arch_clear();
-    crate::arch::vcpu_arch_init(vm.config(), vm.vcpu(0).unwrap());
-    vcpu.reset_context();
+    vcpu.init(vm.config());
 
     vmm_load_image_from_mvm(&vm);
 }

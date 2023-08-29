@@ -3,14 +3,6 @@ use crate::kernel::{IntCtrlType, Vm};
 impl Vm {
     // TODO: move to ArchVm
     pub fn init_intc_mode(&self, intc_type: IntCtrlType) {
-        /* HCR_EL2 init value
-         *  - VM
-         *  - RW
-         *  - IMO
-         *  - FMO
-         *  - TSC
-         */
-        // const HCR_EL2_INIT_VAL: u64 = 0x80080019;
         use super::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
         use cortex_a::registers::HCR_EL2;
         const HCR_EL2_TSC: u64 = 1 << 19; /* TSC */

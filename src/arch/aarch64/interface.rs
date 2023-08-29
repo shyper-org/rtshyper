@@ -7,6 +7,7 @@ pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;
 pub const ENTRY_PER_PAGE: usize = PAGE_SIZE / 8;
 
 pub type ContextFrame = super::context_frame::Aarch64ContextFrame;
+pub type InterruptContext = super::gic::GicState;
 
 pub const PTE_PER_PAGE: usize = PAGE_SIZE / core::mem::size_of::<usize>();
 

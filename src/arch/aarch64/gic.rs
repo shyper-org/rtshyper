@@ -521,18 +521,18 @@ impl GicHypervisorInterface {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct GicState {
-    pub hcr: u32,
+    hcr: u32,
     eisr: [u32; GIC_LIST_REGS_NUM / 32],
     elrsr: [u32; GIC_LIST_REGS_NUM / 32],
     apr: u32,
-    pub lr: [u32; GIC_LIST_REGS_NUM],
+    lr: [u32; GIC_LIST_REGS_NUM],
     pub ctlr: u32,
 }
 
 impl Default for GicState {
     fn default() -> Self {
         Self {
-            hcr: 0,
+            hcr: 1 << 2, // List Register Entry Not Present Interrupt Enable.
             eisr: [0; GIC_LIST_REGS_NUM / 32],
             elrsr: [0; GIC_LIST_REGS_NUM / 32],
             apr: 0,
@@ -542,8 +542,8 @@ impl Default for GicState {
     }
 }
 
-impl GicState {
-    pub fn save_state(&mut self) {
+impl crate::arch::InterruptContextTriat for GicState {
+    fn save_state(&mut self) {
         self.hcr = GICH.hcr();
         self.apr = GICH.APR.get();
         for i in 0..(GIC_LIST_REGS_NUM / 32) {
@@ -566,7 +566,7 @@ impl GicState {
         self.ctlr = GICC.CTLR.get();
     }
 
-    pub fn restore_state(&self) {
+    fn restore_state(&self) {
         // println!("before restore");
         // println!("GICH hcr {:x}", GICH.hcr());
         // println!("GICC ctlr {:x}", GICC.CTLR.get());

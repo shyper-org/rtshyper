@@ -76,6 +76,6 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
         fn context_vm_entry(ctx: usize) -> !;
     }
     unsafe {
-        context_vm_entry(current_cpu().current_ctx().unwrap());
+        context_vm_entry(current_cpu().current_ctx() as usize);
     }
 }

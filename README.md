@@ -2,6 +2,20 @@
 
 forked form [Rust-Shyper](https://gitee.com/openeuler/rust_shyper)
 
+An embedded hypervisor for mixed-critical system.
+- Fully based on Rust.
+- High performance and reliability.
+- Supporting strong memory isolation (cache isolation and memory bandwidth control).
+
+## Supported Platform
+
+The list of supported (and work in progress) platforms is presented below:
+
+**aarch64**
+- [x] NVIDIA Jetson TX2
+- [ ] (work-in-progress) Raspberry Pi 4 Model B
+- [ ] (work-in-progress) QEMU
+
 ## How to Build
 First, install the [Rust](https://www.rust-lang.org/tools/install) toolchain. 
 

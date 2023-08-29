@@ -2,6 +2,7 @@ use spin::Mutex;
 
 use crate::config::VmEmulatedDeviceConfig;
 
+#[cfg(feature = "balloon")]
 use super::balloon::{balloon_features, VirtioBallonConfig};
 use super::blk::{blk_features, BlkDesc, VirtioBlkReq};
 use super::console::{console_features, ConsoleDesc};
@@ -14,6 +15,7 @@ pub enum VirtioDeviceType {
     Net = 1,
     Block = 2,
     Console = 3,
+    #[cfg(feature = "balloon")]
     Balloon = 5,
 }
 
@@ -21,6 +23,7 @@ pub enum DevDesc {
     BlkDesc(BlkDesc),
     NetDesc(NetDesc),
     ConsoleDesc(ConsoleDesc),
+    #[cfg(feature = "balloon")]
     Balloon(VirtioBallonConfig),
 }
 
@@ -62,6 +65,7 @@ impl VirtDev {
 
                 (desc, features, None)
             }
+            #[cfg(feature = "balloon")]
             VirtioDeviceType::Balloon => {
                 let config = DevDesc::Balloon(VirtioBallonConfig::new(config.cfg_list[0]));
                 let features = balloon_features();

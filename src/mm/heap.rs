@@ -1,12 +1,8 @@
 use buddy_system_allocator::LockedHeap;
 use core::ops::RangeInclusive;
 
-use crate::arch::HYP_VA_SIZE;
-
-const HYP_VA_SIZE_USIZE: usize = HYP_VA_SIZE as usize;
-
 #[global_allocator]
-pub static HEAP_ALLOCATOR: LockedHeap<HYP_VA_SIZE_USIZE> = LockedHeap::empty();
+pub static HEAP_ALLOCATOR: LockedHeap<{ usize::BITS as usize }> = LockedHeap::empty();
 
 pub fn heap_init() {
     #[repr(align(4096))]

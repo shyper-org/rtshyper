@@ -6,7 +6,7 @@ use spin::{Mutex, Once};
 
 use crate::arch::PageTable;
 use crate::arch::Vgic;
-use crate::arch::{emu_intc_init, emu_smmu_init, timer_arch_get_counter, HYP_VA_SIZE, PAGE_SIZE, VM_IPA_SIZE};
+use crate::arch::{emu_intc_init, emu_smmu_init, HYP_VA_SIZE, VM_IPA_SIZE};
 use crate::config::VmConfigEntry;
 use crate::device::{emu_virtio_mmio_init, EmuDev};
 use crate::kernel::{mem_color_region_free, shyper_init};
@@ -435,25 +435,27 @@ impl Vm {
     // Formula: Virtual Count = Physical Count - <offset>
     //          (from ARM: Learn the architecture - Generic Timer)
     // So, <offset> = Physical Count - Virtual Count
-    // in this case, Physical Count is `timer_arch_get_counter()`;
+    // in this case, Physical Count is `timer::get_counter()`;
     // virtual count is recorded when the VM is pending (runnning vcpu = 0)
     // Only used in Vcpu::context_vm_store
+    #[cfg(feature = "vtimer")]
     pub(super) fn update_vtimer(&self) {
         let mut inner = self.inner_mut.lock();
         trace!(">>> update_vtimer: VM[{}] running {}", self.id(), inner.running);
         inner.running -= 1;
         if inner.running == 0 {
-            inner.vtimer = timer_arch_get_counter() - inner.vtimer_offset;
+            inner.vtimer = super::timer::get_counter() - inner.vtimer_offset;
             trace!("VM[{}] set vtimer {:#x}", self.id(), inner.vtimer);
         }
     }
 
     // Only used in Vcpu::context_vm_restore
+    #[cfg(feature = "vtimer")]
     pub(super) fn update_vtimer_offset(&self) -> usize {
         let mut inner = self.inner_mut.lock();
         trace!(">>> update_vtimer_offset: VM[{}] running {}", self.id(), inner.running);
         if inner.running == 0 {
-            inner.vtimer_offset = timer_arch_get_counter() - inner.vtimer;
+            inner.vtimer_offset = super::timer::get_counter() - inner.vtimer;
             trace!("VM[{}] set offset {:#x}", self.id(), inner.vtimer_offset);
         }
         inner.running += 1;
@@ -471,7 +473,9 @@ impl Vm {
         prefix | ipa
     }
 
+    #[cfg(feature = "balloon")]
     pub fn inflate_balloon(&self, guest_addr: usize, len: usize) {
+        use crate::arch::PAGE_SIZE;
         if len != PAGE_SIZE {
             error!("len {:#x} not handable", len);
             return;
@@ -513,14 +517,18 @@ struct VmInnerMut {
     // memory config
     pt: PageTable,
     color_pa_info: VmColorPaInfo,
-    balloon: Vec<usize>,
-
     // iommu
     iommu_ctx_id: Option<usize>,
 
+    #[cfg(feature = "balloon")]
+    balloon: Vec<usize>,
+
     // VM timer
+    #[cfg(feature = "vtimer")]
     running: usize,
+    #[cfg(feature = "vtimer")]
     vtimer_offset: usize,
+    #[cfg(feature = "vtimer")]
     vtimer: usize,
 }
 
@@ -533,10 +541,14 @@ impl VmInnerMut {
                 panic!("vmm_init_memory: page alloc failed");
             },
             color_pa_info: VmColorPaInfo::default(),
-            balloon: vec![],
             iommu_ctx_id: None,
+            #[cfg(feature = "balloon")]
+            balloon: vec![],
+            #[cfg(feature = "vtimer")]
             running: 0,
-            vtimer_offset: timer_arch_get_counter(),
+            #[cfg(feature = "vtimer")]
+            vtimer_offset: super::timer::get_counter(),
+            #[cfg(feature = "vtimer")]
             vtimer: 0,
         }
     }

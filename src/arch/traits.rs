@@ -8,6 +8,11 @@ pub trait ContextFrameTrait {
     fn gpr(&self, index: usize) -> usize;
 }
 
+pub trait InterruptContextTriat: Default {
+    fn save_state(&mut self);
+    fn restore_state(&self);
+}
+
 pub trait ArchPageTableEntryTrait {
     fn from_pte(value: usize) -> Self;
     fn from_pa(pa: usize) -> Self;

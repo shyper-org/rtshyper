@@ -1,4 +1,4 @@
-use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq, vcpu_arch_init};
+use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq};
 use crate::board::PlatOperation;
 use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
@@ -115,7 +115,6 @@ fn psci_vcpu_on(vcpu: &Vcpu, entry: usize, ctx: usize) {
         );
     }
     current_cpu().cpu_state = CpuState::Run;
-    vcpu.reset_context();
     vcpu.set_gpr(0, ctx);
     vcpu.set_exception_pc(entry);
     // Just wake up the vcpu
@@ -162,10 +161,8 @@ pub fn psci_ipi_handler(msg: IpiMessage) {
                     unimplemented!("PowerEvent::PsciIpiCpuOff")
                 }
                 PowerEvent::PsciIpiCpuReset => {
-                    vcpu_arch_init(
-                        active_vm().unwrap().config(),
-                        current_cpu().active_vcpu.as_ref().unwrap(),
-                    );
+                    let vcpu = current_cpu().active_vcpu.as_ref().unwrap();
+                    vcpu.init_boot_info(active_vm().unwrap().config());
                 }
             }
         }

@@ -58,7 +58,7 @@ smccc = "0.1.1"
 
 [features]
 default = ["tx2"]
-tx2 = ["pa-bits-39", "ns16550", "preempt", "memory-reservation"]
+tx2 = ["pa-bits-39", "vtimer", "ns16550", "preempt", "memory-reservation"]
 qemu = ["pa-bits-39", "pl011", "preempt"]
 pi4 = ["pa-bits-39", "gpio", "pl011", "preempt"]
 ramdisk = []
@@ -71,6 +71,8 @@ unilib = []
 pa-bits-39 = []
 pa-bits-48 = []
 gpio = []
+vtimer = []
+balloon = []
 
 memory-reservation = ["fastrand", "dynamic-budget"]
 # This feature "dynamic-budget" belongs to "memory-reservation"

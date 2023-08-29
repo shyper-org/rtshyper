@@ -5,13 +5,13 @@ use crate::kernel::current_cpu;
 use crate::util::timer_list::{TimerEvent, TimerTickValue};
 
 pub fn timer_init() {
-    crate::arch::timer_arch_init();
+    crate::arch::timer::timer_arch_init();
     timer_enable(false);
 
     crate::util::barrier();
     if current_cpu().id == 0 {
         crate::kernel::interrupt_reserve_int(INTERRUPT_IRQ_HYPERVISOR_TIMER, timer_irq_handler);
-        info!("Timer frequency: {}Hz", crate::arch::timer_arch_get_frequency());
+        info!("Timer frequency: {}Hz", crate::arch::timer::timer_arch_get_frequency());
         info!("Timer init ok");
     }
 }
@@ -21,17 +21,21 @@ pub fn timer_enable(val: bool) {
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
 }
 
-#[allow(dead_code)]
 pub fn gettime_ns() -> usize {
-    crate::arch::gettime_ns()
+    crate::arch::timer::gettime_ns()
 }
 
 pub const fn gettimer_tick_ms() -> usize {
     10
 }
 
+#[allow(dead_code)]
+pub fn get_counter() -> usize {
+    crate::arch::timer::timer_arch_get_counter()
+}
+
 fn timer_notify_after(ms: usize) {
-    use crate::arch::{timer_arch_enable_irq, timer_arch_set};
+    use crate::arch::timer::{timer_arch_enable_irq, timer_arch_set};
     if ms == 0 {
         return;
     }
@@ -47,7 +51,7 @@ fn check_timer_event(current_tick: TimerTickValue) {
 }
 
 pub fn timer_irq_handler() {
-    use crate::arch::timer_arch_disable_irq;
+    use crate::arch::timer::timer_arch_disable_irq;
 
     timer_arch_disable_irq();
     current_cpu().sys_tick += 1;

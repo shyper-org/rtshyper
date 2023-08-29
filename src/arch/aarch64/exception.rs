@@ -161,7 +161,7 @@ extern "C" fn current_el_sp0_serror() {
 #[no_mangle]
 #[inline(never)]
 extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
-    info!("{}", unsafe { *ctx });
+    info!("{}", unsafe { ctx.as_ref().unwrap() });
     panic!(
         "current_elx_synchronous elr_el2 {:016x} sp_el0 {:016x} sp_el1 {:016x} sp_sel {}",
         cortex_a::registers::ELR_EL2.get(),
@@ -215,9 +215,7 @@ extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
             );
         },
     }
-    if let Some(ctx) = prev_ctx {
-        current_cpu().set_ctx(ctx as *mut _);
-    }
+    current_cpu().set_ctx(prev_ctx);
 }
 
 #[cfg(feature = "preempt")]
@@ -306,9 +304,7 @@ extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
         interrupt_leave();
         interrupt_arch_deactive_irq(handled_by_hypervisor);
     }
-    if let Some(ctx) = prev_ctx {
-        current_cpu().set_ctx(ctx as *mut _);
-    }
+    current_cpu().set_ctx(prev_ctx);
 }
 
 #[no_mangle]

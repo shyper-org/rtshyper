@@ -1,3 +1,5 @@
+use core::ptr;
+
 use spin::Once;
 
 use crate::arch::ArchTrait;
@@ -35,7 +37,7 @@ pub struct Cpu {
     pub id: usize,
     pub cpu_state: CpuState,
     pub active_vcpu: Option<Vcpu>,
-    ctx: Option<usize>,
+    ctx: *mut ContextFrame,
 
     pub vcpu_array: VcpuArray,
     // timer
@@ -58,7 +60,7 @@ impl Cpu {
             id: 0,
             cpu_state: CpuState::Inv,
             active_vcpu: None,
-            ctx: None,
+            ctx: ptr::null_mut(),
             vcpu_array: VcpuArray::new(),
             sys_tick: 0,
             timer_list: Once::new(),
@@ -75,26 +77,22 @@ impl Cpu {
         }
     }
 
-    pub fn current_ctx(&self) -> Option<usize> {
+    pub fn current_ctx(&self) -> *mut ContextFrame {
         self.ctx
     }
 
-    pub fn set_ctx(&mut self, ctx: *mut ContextFrame) -> Option<usize> {
-        self.ctx.replace(ctx as usize)
+    pub fn set_ctx(&mut self, ctx: *mut ContextFrame) -> *mut ContextFrame {
+        let prev = self.ctx;
+        self.ctx = ctx;
+        prev
     }
 
-    pub fn set_gpr(&self, idx: usize, val: usize) {
+    pub fn set_gpr(&mut self, idx: usize, val: usize) {
         if idx >= CONTEXT_GPR_NUM {
             return;
         }
-        if let Some(ctx_addr) = self.current_ctx() {
-            if ctx_addr < 0x1000 {
-                panic!("illegal ctx addr {:x}", ctx_addr);
-            }
-            let ctx = ctx_addr as *mut ContextFrame;
-            unsafe {
-                (*ctx).set_gpr(idx, val);
-            }
+        if let Some(ctx) = unsafe { self.ctx.as_mut() } {
+            ctx.set_gpr(idx, val);
         }
     }
 
@@ -102,52 +100,24 @@ impl Cpu {
         if idx >= CONTEXT_GPR_NUM {
             return 0;
         }
-        match self.current_ctx() {
-            Some(ctx_addr) => {
-                if ctx_addr < 0x1000 {
-                    panic!("illegal ctx addr {:x}", ctx_addr);
-                }
-                let ctx = ctx_addr as *mut ContextFrame;
-                unsafe { (*ctx).gpr(idx) }
-            }
-            None => 0,
+        if let Some(ctx) = unsafe { self.ctx.as_ref() } {
+            ctx.gpr(idx)
+        } else {
+            0
         }
     }
 
     pub fn get_elr(&self) -> usize {
-        match self.current_ctx() {
-            Some(ctx_addr) => {
-                if ctx_addr < 0x1000 {
-                    panic!("illegal ctx addr {:x}", ctx_addr);
-                }
-                let ctx = ctx_addr as *mut ContextFrame;
-                unsafe { (*ctx).exception_pc() }
-            }
-            None => 0,
+        if let Some(ctx) = unsafe { self.ctx.as_ref() } {
+            ctx.exception_pc()
+        } else {
+            0
         }
     }
 
-    #[allow(dead_code)]
-    pub fn get_spsr(&self) -> usize {
-        match self.current_ctx() {
-            Some(ctx_addr) => {
-                if ctx_addr < 0x1000 {
-                    panic!("illegal ctx addr {:x}", ctx_addr);
-                }
-                let ctx = ctx_addr as *mut ContextFrame;
-                unsafe { (*ctx).spsr as usize }
-            }
-            None => 0,
-        }
-    }
-
-    pub fn set_elr(&self, val: usize) {
-        if let Some(ctx_addr) = self.current_ctx() {
-            if ctx_addr < 0x1000 {
-                panic!("illegal ctx addr {:x}", ctx_addr);
-            }
-            let ctx = ctx_addr as *mut ContextFrame;
-            unsafe { (*ctx).set_exception_pc(val) }
+    pub fn set_elr(&mut self, val: usize) {
+        if let Some(ctx) = unsafe { self.ctx.as_mut() } {
+            ctx.set_exception_pc(val)
         }
     }
 

@@ -71,14 +71,17 @@ impl ColorMemRegion {
         self.available = state;
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, addr: &usize) -> bool {
         (self.base..self.base + self.count * self.step).contains(addr) && (addr - self.base) % self.step == 0
     }
 
+    #[allow(dead_code)]
     pub fn split(&mut self, addr: usize) -> Option<Self> {
         let color_region = ColorMemRegion::new(self.color, addr, 1, self.step);
         MEM_REGION_BY_COLOR

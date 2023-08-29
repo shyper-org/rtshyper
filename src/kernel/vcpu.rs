@@ -1,13 +1,10 @@
-use core::mem::size_of;
-
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use spin::{Lazy, Mutex};
 
-use crate::arch::{ContextFrame, ContextFrameTrait, VmContext};
+use crate::arch::{ContextFrame, ContextFrameTrait, InterruptContext, InterruptContextTriat, VmContext};
 use crate::config::VmConfigEntry;
 use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
-use crate::util::memcpy_safe;
 
 #[cfg(any(feature = "memory-reservation"))]
 use super::bwres::membwres::MemoryBandwidth;
@@ -97,9 +94,23 @@ impl Vcpu {
         self.0.pmu_event.clone()
     }
 
-    pub(super) fn init(&self, config: &VmConfigEntry) {
-        crate::arch::vcpu_arch_init(config, self);
+    pub fn init(&self, config: &VmConfigEntry) {
+        self.init_boot_info(config);
         self.reset_context();
+    }
+
+    pub fn init_boot_info(&self, config: &VmConfigEntry) {
+        use crate::kernel::VmType;
+        let arg = match config.os_type {
+            VmType::VmTOs => config.device_tree_load_ipa(),
+            _ => {
+                let arg = &config.memory_region()[0];
+                arg.ipa_start + arg.length
+            }
+        };
+        let mut inner = self.0.inner_mut.lock();
+        inner.vcpu_ctx.set_argument(arg);
+        inner.vcpu_ctx.set_exception_pc(config.kernel_entry_point());
     }
 
     // pub fn shutdown(&self) {
@@ -114,79 +125,66 @@ impl Vcpu {
     // }
 
     pub fn context_vm_store(&self) {
-        self.vm().unwrap().update_vtimer();
-        self.save_cpu_ctx();
-
         #[cfg(any(feature = "memory-reservation"))]
         if self.0.pmu_event.is_some() {
             crate::arch::vcpu_stop_pmu(self);
         }
 
+        #[cfg(feature = "vtimer")]
+        self.vm().unwrap().update_vtimer();
+        self.save_cpu_ctx();
+
         let mut inner = self.0.inner_mut.lock();
         inner.vm_ctx.ext_regs_store();
-        inner.vm_ctx.fpsimd_save_context();
-        inner.vm_ctx.gic_save_state();
+        drop(inner);
+        self.intc_save_context();
     }
 
     pub fn context_vm_restore(&self) {
-        let vtimer_offset = self.vm().unwrap().update_vtimer_offset();
-        self.restore_cpu_ctx();
-
         #[cfg(any(feature = "memory-reservation"))]
         if self.0.pmu_event.is_some() {
             crate::arch::vcpu_start_pmu(self);
         }
 
+        #[cfg(feature = "vtimer")]
+        let vtimer_offset = self.vm().unwrap().update_vtimer_offset();
+        self.restore_cpu_ctx();
+
         let mut inner = self.0.inner_mut.lock();
+        #[cfg(feature = "vtimer")]
         inner.vm_ctx.generic_timer.set_offset(vtimer_offset as u64);
-        // restore vm's VFP and SIMD
-        inner.vm_ctx.fpsimd_restore_context();
-        inner.vm_ctx.gic_restore_state();
         inner.vm_ctx.ext_regs_restore();
         drop(inner);
+        self.intc_restore_context();
 
         self.inject_int_inlist();
     }
 
-    pub fn gic_restore_context(&self) {
+    pub fn intc_restore_context(&self) {
         let inner = self.0.inner_mut.lock();
-        inner.vm_ctx.gic_restore_state();
+        inner.intc_ctx.restore_state();
     }
 
-    pub fn gic_save_context(&self) {
+    pub fn intc_save_context(&self) {
         let mut inner = self.0.inner_mut.lock();
-        inner.vm_ctx.gic_save_state();
+        inner.intc_ctx.save_state();
     }
 
-    pub fn save_cpu_ctx(&self) {
-        let inner = self.0.inner_mut.lock();
-        match current_cpu().current_ctx() {
-            None => {
-                error!("save_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
-            }
-            Some(ctx) => {
-                memcpy_safe(
-                    &(inner.vcpu_ctx) as *const _ as *const u8,
-                    ctx as *const u8,
-                    size_of::<ContextFrame>(),
-                );
-            }
+    fn save_cpu_ctx(&self) {
+        if let Some(ctx) = unsafe { current_cpu().current_ctx().as_ref() } {
+            let mut inner = self.0.inner_mut.lock();
+            inner.vcpu_ctx.clone_from(ctx);
+        } else {
+            error!("save_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
         }
     }
 
     fn restore_cpu_ctx(&self) {
-        let inner = self.0.inner_mut.lock();
-        match current_cpu().current_ctx() {
-            None => {
-                error!("restore_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
-            }
-            Some(ctx) => {
-                memcpy_safe(
-                    ctx as *const u8,
-                    &(inner.vcpu_ctx) as *const _ as *const u8,
-                    size_of::<ContextFrame>(),
-                );
-            }
+        if let Some(ctx) = unsafe { current_cpu().current_ctx().as_mut() } {
+            let inner = self.0.inner_mut.lock();
+            ctx.clone_from(&inner.vcpu_ctx);
+        } else {
+            error!("save_cpu_ctx: cpu{} ctx is NULL", current_cpu().id);
         }
     }
 
@@ -223,22 +221,10 @@ impl Vcpu {
         self.vm().unwrap().pt_dir()
     }
 
-    pub fn reset_context(&self) {
-        self.arch_ctx_reset();
+    fn reset_context(&self) {
         let mut inner = self.0.inner_mut.lock();
-        inner.gic_ctx_reset();
-        // if self.vm().vm_type() == VmType::VmTBma {
-        //     info!("vm {} bma ctx restore", self.vm_id());
-        //     self.reset_vm_ctx();
-        //     self.context_ext_regs_store(); // what the fuck ?? why store here ???
-        // }
-    }
 
-    fn arch_ctx_reset(&self) {
-        let mut inner = self.0.inner_mut.lock();
-        inner.vm_ctx.sctlr_el1 = 0x30C50830;
-        let mut vmpidr = 0;
-        vmpidr |= 1 << 31;
+        let mut vmpidr = 1 << 31;
 
         #[cfg(feature = "tx2")]
         if self.vm_id() == 0 {
@@ -248,6 +234,11 @@ impl Vcpu {
 
         vmpidr |= self.id();
         inner.vm_ctx.vmpidr_el2 = vmpidr as u64;
+        // if self.vm().vm_type() == VmType::VmTBma {
+        //     info!("vm {} bma ctx restore", self.vm_id());
+        //     self.reset_vm_ctx();
+        //     self.context_ext_regs_store(); // what the fuck ?? why store here ???
+        // }
     }
 
     pub fn set_exception_pc(&self, elr: usize) {
@@ -311,8 +302,10 @@ impl Vcpu {
 pub struct VcpuInnerMut {
     state: VcpuState,
     int_list: Vec<usize>,
-    pub vcpu_ctx: ContextFrame,
+    // regs: ArchVcpuRegs
+    vcpu_ctx: ContextFrame,
     pub vm_ctx: VmContext,
+    pub intc_ctx: InterruptContext,
 }
 
 impl VcpuInnerMut {
@@ -321,13 +314,9 @@ impl VcpuInnerMut {
             state: VcpuState::Inv,
             int_list: vec![],
             vcpu_ctx: ContextFrame::default(),
-            vm_ctx: VmContext::default(),
+            vm_ctx: VmContext::new(),
+            intc_ctx: InterruptContext::default(),
         }
-    }
-
-    fn gic_ctx_reset(&mut self) {
-        self.vm_ctx.gic_state.lr.fill(0);
-        self.vm_ctx.gic_state.hcr |= 1 << 2;
     }
 }
 
@@ -347,11 +336,6 @@ pub fn vcpu_run(announce: bool) {
     }
     current_cpu().cpu_state = CpuState::Run;
     // tlb_invalidate_guest_all();
-    // for i in 0..vm.mem_region_num() {
-    //     unsafe {
-    //         cache_invalidate_d(vm.pa_start(i), vm.pa_length(i));
-    //     }
-    // }
 }
 
 fn idle_thread() -> ! {
@@ -372,18 +356,11 @@ static IDLE_THREAD: Lazy<IdleThread> = Lazy::new(|| {
 });
 
 pub(super) fn run_idle_thread() {
-    match current_cpu().current_ctx() {
-        None => {
-            error!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
-        }
-        Some(ctx) => {
-            trace!("Core {} idle", current_cpu().id);
-            current_cpu().cpu_state = CpuState::Idle;
-            memcpy_safe(
-                ctx as *const u8,
-                &(IDLE_THREAD.ctx) as *const _ as *const u8,
-                size_of::<ContextFrame>(),
-            );
-        }
+    if let Some(ctx) = unsafe { current_cpu().current_ctx().as_mut() } {
+        trace!("Core {} idle", current_cpu().id);
+        current_cpu().cpu_state = CpuState::Idle;
+        ctx.clone_from(&IDLE_THREAD.ctx);
+    } else {
+        error!("run_idle_thread: cpu{} ctx is NULL", current_cpu().id);
     }
 }

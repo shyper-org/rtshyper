@@ -81,15 +81,12 @@ impl GenericTimerContext {
         }
     }
 
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
-        self.cntvoff_el2 = 0;
-        self.cntkctl_el1 = 0;
-        self.cntp_cval_el0 = 0;
-        self.cntv_cval_el0 = 0;
-        self.cntp_ctl_el0 = GENERIC_TIMER_CTRL_IMASK;
-        self.cntv_ctl_el0 = GENERIC_TIMER_CTRL_IMASK;
+        *self = Default::default();
     }
 
+    #[cfg(feature = "vtimer")]
     pub fn set_offset(&mut self, vtimer_offset: u64) {
         self.cntvoff_el2 = vtimer_offset;
     }

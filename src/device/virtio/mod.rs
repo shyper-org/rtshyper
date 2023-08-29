@@ -5,6 +5,7 @@ pub use mmio::{emu_virtio_mmio_init, VirtioMmio};
 pub use net::{ethernet_ipi_rev_handler, virtio_net_announce};
 pub use queue::Virtq;
 
+#[cfg(feature = "balloon")]
 mod balloon;
 mod blk;
 #[allow(dead_code)]
@@ -13,7 +14,6 @@ mod dev;
 mod iov;
 mod mac;
 mod mediated;
-#[allow(dead_code)]
 mod mmio;
 #[allow(dead_code)]
 mod net;
