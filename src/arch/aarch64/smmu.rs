@@ -487,9 +487,14 @@ impl SmmuV2 {
         ) as u16
     }
 
-    fn alloc_smr(&self) -> Option<usize> {
-        let alloc_bitmap = &self.smr_alloc_bitmap;
-        (0..alloc_bitmap.len()).find(|&i| alloc_bitmap.get(i) == 0)
+    fn alloc_smr(&mut self) -> Option<usize> {
+        for i in 0..self.smr_alloc_bitmap.len() {
+            if self.smr_alloc_bitmap.get(i) == 0 {
+                self.smr_alloc_bitmap.set(i, true);
+                return Some(i);
+            }
+        }
+        None
     }
 
     fn compatible_smr_exists(&mut self, mask: u16, id: u16, context_id: usize, group: bool) -> bool {
@@ -521,14 +526,13 @@ impl SmmuV2 {
     }
 
     fn write_smr(&mut self, smr: usize, mask: u16, id: u16, group: bool) {
-        if self.smr_alloc_bitmap.get(smr) != 0 {
+        if self.smr_alloc_bitmap.get(smr) == 0 {
             panic!("smmu: trying to write unallocated smr {}", smr);
         } else {
             let mut val: usize = (mask as usize) << SMMU_SMR_MASK_OFF;
             val |= (id & bit_mask!(SMMU_SMR_ID_OFF, SMMU_SMR_ID_LEN)) as usize;
             val |= SMMUV2_SMR_VALID;
             self.glb_rs0.SMR[smr].set(val as u32);
-            self.smr_alloc_bitmap.set(smr, true);
             if group {
                 self.group_alloc_bitmap.set(smr, true);
             }
@@ -537,7 +541,7 @@ impl SmmuV2 {
 
     // Stream-to-Context
     fn write_s2c(&mut self, smr: usize, context_id: usize) {
-        if self.smr_alloc_bitmap.get(smr) != 0 {
+        if self.smr_alloc_bitmap.get(smr) == 0 {
             panic!("smmu: trying to write unallocated s2c {}", smr);
         } else {
             let mut s2cr: usize = self.glb_rs0.S2CR[smr].get() as usize;
