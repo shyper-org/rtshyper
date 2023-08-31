@@ -168,9 +168,9 @@ fn pmu_mem_access_handler() {
         vcpu.id(),
         MEM_ACCESS_EVENT.read_counter()
     );
-    vcpu.reset_remaining_budget();
+    vcpu.bw_info().reset_remaining_budget();
     #[cfg(any(feature = "dynamic-budget"))]
-    if vcpu.budget_try_rescue() {
+    if vcpu.bw_info().budget_try_rescue() {
         vcpu_start_pmu(vcpu);
     } else {
         current_cpu().vcpu_array.block_current();
@@ -186,7 +186,7 @@ pub fn cpu_cycle_count() -> u64 {
 
 #[cfg(any(feature = "memory-reservation"))]
 pub fn vcpu_start_pmu(vcpu: &Vcpu) {
-    let remaining_budget = vcpu.remaining_budget();
+    let remaining_budget = vcpu.bw_info().remaining_budget();
     trace!(
         "vcpu_start_pmu: core {} VM {} Vcpu {} memory budget {:#x}",
         current_cpu().id,
@@ -215,7 +215,7 @@ pub fn vcpu_stop_pmu(vcpu: &Vcpu) {
         vcpu.id(),
         remaining_budget
     );
-    vcpu.update_remaining_budget(remaining_budget);
+    vcpu.bw_info().update_remaining_budget(remaining_budget);
 }
 
 #[cfg(any(feature = "memory-reservation"))]
@@ -225,16 +225,38 @@ pub struct PmuTimerEvent(pub WeakVcpu);
 impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
     fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerTickValue) {
         if let Some(vcpu) = self.0.upgrade() {
-            let period = vcpu.period();
+            let period = vcpu.bw_info().period();
             trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
             match vcpu.state() {
                 VcpuState::Running => {
                     vcpu_stop_pmu(&vcpu);
-                    vcpu.supply_budget();
+                    #[cfg(feature = "trace-memory")]
+                    {
+                        let prev_bw =
+                            crate::util::budget2bandwidth(vcpu.bw_info().used_budget(), vcpu.bw_info().period());
+                        info!(
+                            "VM {} vcpu {} used memory bandwidth {}",
+                            vcpu.vm_id(),
+                            vcpu.id(),
+                            prev_bw
+                        );
+                    }
+                    vcpu.bw_info().supply_budget();
                     vcpu_start_pmu(&vcpu);
                 }
                 VcpuState::Blocked => {
-                    vcpu.supply_budget();
+                    #[cfg(feature = "trace-memory")]
+                    {
+                        let prev_bw =
+                            crate::util::budget2bandwidth(vcpu.bw_info().used_budget(), vcpu.bw_info().period());
+                        info!(
+                            "VM {} vcpu {} used memory bandwidth {}",
+                            vcpu.vm_id(),
+                            vcpu.id(),
+                            prev_bw
+                        );
+                    }
+                    vcpu.bw_info().supply_budget();
                     current_cpu().vcpu_array.wakeup_vcpu(&vcpu);
                 }
                 _ => {}

@@ -26,3 +26,24 @@ macro_rules! declare_enum_with_handler {
         ];
     }
 }
+
+#[macro_export]
+macro_rules! atomic_read_relaxed {
+    ($atomic:expr) => {
+        $atomic.load(core::sync::atomic::Ordering::Relaxed)
+    };
+}
+
+#[macro_export]
+macro_rules! atomic_write_relaxed {
+    ($atomic:expr, $val:expr) => {
+        $atomic.store($val, core::sync::atomic::Ordering::Relaxed);
+    };
+}
+
+#[macro_export]
+macro_rules! atomic_swap_relaxed {
+    ($atomic:expr, $val:expr) => {
+        $atomic.swap($val, core::sync::atomic::Ordering::Relaxed)
+    };
+}

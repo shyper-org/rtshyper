@@ -25,7 +25,7 @@ pub fn gettime_ns() -> usize {
     crate::arch::timer::gettime_ns()
 }
 
-pub const fn gettimer_tick_ms() -> usize {
+pub const fn timer_tick_ms() -> usize {
     10
 }
 
@@ -60,7 +60,7 @@ pub fn timer_irq_handler() {
 
     current_cpu().vcpu_array.resched();
 
-    timer_notify_after(gettimer_tick_ms());
+    timer_notify_after(timer_tick_ms());
 }
 
 #[allow(dead_code)]

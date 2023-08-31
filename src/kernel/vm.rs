@@ -21,58 +21,76 @@ static VM_IF_LIST: [Mutex<VmInterface>; CONFIG_VM_NUM_MAX] =
     [const { Mutex::new(VmInterface::default()) }; CONFIG_VM_NUM_MAX];
 
 pub fn vm_if_reset(vm_id: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.reset();
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().reset();
+    }
 }
 
 pub fn vm_if_set_state(vm_id: usize, vm_state: VmState) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.state = vm_state;
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().state = vm_state;
+    }
 }
 
 pub fn vm_if_get_state(vm_id: usize) -> VmState {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.state
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().state
+    } else {
+        VmState::default()
+    }
 }
 
 fn vm_if_set_cpu_id(vm_id: usize, master_cpu_id: usize) {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.master_cpu_id.call_once(|| master_cpu_id);
-    debug!(
-        "vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}",
-        vm_id, master_cpu_id
-    );
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().master_cpu_id.call_once(|| master_cpu_id);
+        debug!(
+            "vm_if_list_set_cpu_id vm [{}] set master_cpu_id {}",
+            vm_id, master_cpu_id
+        );
+    }
 }
 
 pub fn vm_if_get_cpu_id(vm_id: usize) -> Option<usize> {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.master_cpu_id.get().cloned()
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().master_cpu_id.get().cloned()
+    } else {
+        None
+    }
 }
 
 pub fn vm_if_set_ivc_arg(vm_id: usize, ivc_arg: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.ivc_arg = ivc_arg;
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().ivc_arg = ivc_arg;
+    }
 }
 
 pub fn vm_if_ivc_arg(vm_id: usize) -> usize {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.ivc_arg
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().ivc_arg
+    } else {
+        0
+    }
 }
 
 pub fn vm_if_set_ivc_arg_ptr(vm_id: usize, ivc_arg_ptr: usize) {
-    let mut vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.ivc_arg_ptr = ivc_arg_ptr;
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().ivc_arg_ptr = ivc_arg_ptr;
+    }
 }
 
 pub fn vm_if_ivc_arg_ptr(vm_id: usize) -> usize {
-    let vm_if = VM_IF_LIST[vm_id].lock();
-    vm_if.ivc_arg_ptr
+    if let Some(vm_if) = VM_IF_LIST.get(vm_id) {
+        vm_if.lock().ivc_arg_ptr
+    } else {
+        0
+    }
 }
 // End vm interface func implementation
 
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum VmState {
+    #[default]
     Inv = 0,
     Pending = 1,
     Active = 2,

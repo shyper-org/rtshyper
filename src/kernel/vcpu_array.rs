@@ -91,7 +91,7 @@ impl VcpuArray {
                 if vcpu.state() == VcpuState::Inv {
                     if let Some(event) = vcpu.pmu_event() {
                         debug!("VM {} vcpu {} register pmu event", vcpu.vm_id(), vcpu.id());
-                        let period = vcpu.period();
+                        let period = vcpu.bw_info().period();
                         super::timer::start_timer_event(period, event);
                     }
                 }

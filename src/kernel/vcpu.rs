@@ -4,7 +4,7 @@ use spin::{Lazy, Mutex};
 
 use crate::arch::{ContextFrame, ContextFrameTrait, InterruptContext, InterruptContextTriat, VmContext};
 use crate::config::VmConfigEntry;
-use crate::kernel::{current_cpu, interrupt_vm_inject, vm_if_set_state};
+use crate::kernel::{current_cpu, interrupt_vm_inject};
 
 #[cfg(any(feature = "memory-reservation"))]
 use super::bwres::membwres::MemoryBandwidth;
@@ -269,33 +269,10 @@ impl Vcpu {
             }
         }
     }
-}
 
-#[cfg(any(feature = "memory-reservation"))]
-impl Vcpu {
-    pub fn remaining_budget(&self) -> u32 {
-        self.0.reservation.remaining_budget()
-    }
-
-    pub fn period(&self) -> u64 {
-        self.0.reservation.period()
-    }
-
-    pub fn update_remaining_budget(&self, remaining_budget: u32) {
-        self.0.reservation.update_remaining_budget(remaining_budget);
-    }
-
-    pub fn reset_remaining_budget(&self) {
-        self.0.reservation.reset_remaining_budget();
-    }
-
-    pub fn supply_budget(&self) {
-        self.0.reservation.supply_budget();
-    }
-
-    #[cfg(any(feature = "dynamic-budget"))]
-    pub fn budget_try_rescue(&self) -> bool {
-        self.0.reservation.budget_try_rescue()
+    #[cfg(any(feature = "memory-reservation"))]
+    pub fn bw_info(&self) -> &MemoryBandwidth {
+        &self.0.reservation
     }
 }
 
@@ -324,8 +301,6 @@ impl VcpuInnerMut {
 pub fn vcpu_run(announce: bool) {
     let vcpu = current_cpu().active_vcpu.clone().unwrap();
     let vm = vcpu.vm().unwrap();
-
-    vm_if_set_state(vm.id(), super::VmState::Active);
 
     if announce {
         crate::device::virtio_net_announce(vm);

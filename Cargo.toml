@@ -77,3 +77,4 @@ balloon = []
 memory-reservation = ["fastrand", "dynamic-budget"]
 # This feature "dynamic-budget" belongs to "memory-reservation"
 dynamic-budget = []
+trace-memory = []

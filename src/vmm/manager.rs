@@ -102,6 +102,8 @@ pub fn vmm_boot_vm(vm_id: usize) {
                     );
                 }
                 Some(vcpu) => {
+                    use crate::kernel::{vm_if_set_state, VmState};
+                    vm_if_set_state(vm_id, VmState::Active);
                     interrupt_arch_deactive_irq(true);
                     current_cpu().vcpu_array.wakeup_vcpu(vcpu);
                     if current_cpu().assigned() && active_vcpu_id() == 0 {

@@ -9,7 +9,7 @@ use spin::Mutex;
 // use crate::board::*;
 use crate::device::{mediated_blk_free, mediated_blk_request, EmuDeviceType};
 use crate::kernel::access::{copy_between_vm, copy_segment_from_vm};
-use crate::kernel::timer::gettimer_tick_ms;
+use crate::kernel::timer::timer_tick_ms;
 use crate::kernel::{active_vm, vm_by_id, Vm, VmType, CONFIG_VM_NUM_MAX};
 use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
@@ -668,17 +668,12 @@ pub fn add_dtb_dev(
     })
 }
 
-// MB/s
-fn budget2bandwidth(budget: u32, period: u64) -> u32 {
-    64 * budget / gettimer_tick_ms() as u32 / 1000 / period as u32
-}
-
 #[allow(dead_code)]
 pub fn set_memory_budget_second(budget: u32) {
-    let period_per_second = 1000 / DEFAULT_MEMORY_REPLENISHMENT_PERIOD as u32 / gettimer_tick_ms() as u32;
+    let period_per_second = 1000 / DEFAULT_MEMORY_REPLENISHMENT_PERIOD as u32 / timer_tick_ms() as u32;
     let budget_per_period = budget / period_per_second;
     MEMORY_BUDGET_PER_PERIOD.store(budget_per_period, Ordering::Relaxed);
-    let bandwidth = budget2bandwidth(budget_per_period, DEFAULT_MEMORY_REPLENISHMENT_PERIOD);
+    let bandwidth = crate::util::budget2bandwidth(budget_per_period, DEFAULT_MEMORY_REPLENISHMENT_PERIOD);
     info!("set memory limited budget {budget_per_period}, bandwidth {bandwidth} MB/s");
 }
 
@@ -705,7 +700,7 @@ pub fn set_memory_color_budget(
                 DEFAULT_PERCENT
             };
             let budget = MEMORY_BUDGET_PER_PERIOD.load(Ordering::Relaxed) * percent / 100;
-            let bandwidth = budget2bandwidth(budget, vm_cfg.memory.period);
+            let bandwidth = crate::util::budget2bandwidth(budget, vm_cfg.memory.period);
             info!("VM[{vmid}] memory bandwidth {bandwidth} MB/s, budget {budget}, percentage {percent}%");
             vm_cfg.memory.budget = budget;
         } else {

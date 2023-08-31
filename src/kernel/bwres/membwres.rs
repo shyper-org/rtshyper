@@ -1,5 +1,5 @@
 use core::ptr::{self, NonNull};
-use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
+use core::sync::atomic::AtomicU32;
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
@@ -67,21 +67,25 @@ fn apply_budget(budget: usize) -> usize {
 
     let mut val = GLOBAL_RECLAIM_MANAGER.val.lock();
     if budget == 0 {
-        // vcpu run out of its all budget (including prediction and donation), try get more budget
+        // `budget == 0`: vcpu run out of its all budget (including prediction and donation)
+        // Try get all the relaimed budget
         // TODO: add a more suitable method to apply excess budget
         let apply = *val;
         *val = 0;
         apply
     } else {
         // vcpu apply budget that it donate at this period
-        if *val >= budget {
+        let apply = if *val >= budget {
             *val -= budget;
             budget
         } else {
+            // `*val < budget`: remain budget is not enough
             let apply = *val;
             *val = 0;
-            usize::min(apply, MIN_BUDGET)
-        }
+            apply
+        };
+        // At least apply MIN_BUDGET to reduce frequent interrupt overhead
+        usize::max(apply, MIN_BUDGET)
     }
 }
 
@@ -98,6 +102,7 @@ pub struct MemoryBandwidth {
     period: u64,
     last_predict_budget: AtomicU32,
     remaining_budget: AtomicU32,
+    used_budget: AtomicU32,
     predictor: Mutex<BudgetPredictor>,
 }
 
@@ -108,6 +113,7 @@ impl MemoryBandwidth {
             period,
             last_predict_budget: AtomicU32::new(budget),
             remaining_budget: AtomicU32::new(budget),
+            used_budget: AtomicU32::new(0),
             predictor: Mutex::new(BudgetPredictor::new()),
         }
     }
@@ -117,15 +123,24 @@ impl MemoryBandwidth {
     }
 
     pub fn remaining_budget(&self) -> u32 {
-        self.remaining_budget.load(Relaxed)
+        atomic_read_relaxed!(self.remaining_budget)
     }
 
     pub fn update_remaining_budget(&self, remaining_budget: u32) {
-        self.remaining_budget.store(remaining_budget, Relaxed);
+        let prev_remain = atomic_swap_relaxed!(self.remaining_budget, remaining_budget);
+        use core::sync::atomic::Ordering::Relaxed;
+        // Only update `used_budget` when the `remaining_budget` decreases
+        if prev_remain > remaining_budget {
+            self.used_budget.fetch_add(prev_remain - remaining_budget, Relaxed);
+        }
     }
 
     pub fn reset_remaining_budget(&self) {
-        self.remaining_budget.store(0, Relaxed);
+        self.update_remaining_budget(0);
+    }
+
+    pub fn used_budget(&self) -> u32 {
+        atomic_read_relaxed!(self.used_budget)
     }
 
     pub fn supply_budget(&self) {
@@ -144,14 +159,16 @@ impl MemoryBandwidth {
         } else {
             self.budget
         };
-        self.last_predict_budget.store(next_budget, Relaxed);
+        atomic_write_relaxed!(self.last_predict_budget, next_budget);
 
-        self.remaining_budget.store(next_budget, Relaxed);
+        atomic_write_relaxed!(self.remaining_budget, next_budget);
+
+        atomic_write_relaxed!(self.used_budget, 0);
     }
 
     #[cfg(any(feature = "dynamic-budget"))]
     pub fn budget_try_rescue(&self) -> bool {
-        let donate = self.budget - self.last_predict_budget.load(Relaxed);
+        let donate = self.budget - atomic_read_relaxed!(self.last_predict_budget);
         let apply = apply_budget(donate as usize) as u32;
         if apply != 0 {
             debug!("budget_try_rescue: apply {apply} additional budget");
@@ -163,7 +180,7 @@ impl MemoryBandwidth {
     }
 
     fn predict(&self) -> u32 {
-        let consume = self.last_predict_budget.load(Relaxed) - self.remaining_budget();
+        let consume = self.used_budget();
         self.predictor.lock().predict(consume)
     }
 }
@@ -186,7 +203,7 @@ impl<T> ListNode<T> {
 const DEFAULT_ITER: usize = 100;
 
 fn latency_bench(repeat_time: usize) -> usize {
-    let g_mem_size = crate::kernel::get_llc_size() * 2;
+    let g_mem_size = crate::kernel::get_llc_size() * 4;
     let workingset_size = g_mem_size / CACHE_LINE_SIZE;
 
     const_assert_eq!(core::mem::size_of::<ListNode<usize>>(), CACHE_LINE_SIZE);
