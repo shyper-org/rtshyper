@@ -23,9 +23,6 @@ extern crate memoffset;
 #[macro_use]
 extern crate derive_more;
 
-use kernel::{cpu_init, current_cpu, iommu_init, physical_mem_init, timer_init};
-use vmm::{vm_init, vmm_boot_vm};
-
 #[macro_use]
 mod macros;
 
@@ -51,26 +48,28 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
         util::logger::logger_init().unwrap();
         info!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
         info!("Built At {}", env!("BUILD_TIME"));
-
         mm::init(); // including heap and hypervisor VA space
-        physical_mem_init();
+
         dtb::init_vm0_dtb(dtb);
-        iommu_init();
+        kernel::physical_mem_init();
+        #[cfg(feature = "iommu")]
+        kernel::iommu_init();
     }
-    cpu_init();
-    timer_init();
+    kernel::cpu_init();
+    kernel::timer_init();
     util::barrier();
     kernel::hypervisor_self_coloring();
     if cpu_id == 0 {
         kernel::subinit();
-        vm_init();
+        vmm::vm_init();
         info!(
             "{} Hypervisor init ok\n\nStart booting Monitor VM ...",
             env!("CARGO_PKG_NAME")
         );
-        vmm_boot_vm(0);
+        vmm::vmm_boot_vm(0);
     }
 
+    use kernel::current_cpu;
     current_cpu().vcpu_array.resched();
     extern "C" {
         fn context_vm_entry(ctx: usize) -> !;

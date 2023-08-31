@@ -6,7 +6,7 @@ use spin::{Mutex, Once};
 
 use crate::arch::PageTable;
 use crate::arch::Vgic;
-use crate::arch::{emu_intc_init, emu_smmu_init, HYP_VA_SIZE, VM_IPA_SIZE};
+use crate::arch::{emu_intc_init, HYP_VA_SIZE, VM_IPA_SIZE};
 use crate::config::VmConfigEntry;
 use crate::device::{emu_virtio_mmio_init, EmuDev};
 use crate::kernel::{mem_color_region_free, shyper_init};
@@ -237,7 +237,8 @@ impl VmInnerConst {
                 EmuDeviceTVirtioBlk | EmuDeviceTVirtioConsole | EmuDeviceTVirtioNet | VirtioBalloon => {
                     emu_virtio_mmio_init(vm.clone(), emu_cfg)
                 }
-                EmuDeviceTIOMMU => emu_smmu_init(emu_cfg), // Do IOMMU init later, after add VM to global list
+                #[cfg(feature = "iommu")]
+                EmuDeviceTIOMMU => crate::kernel::emu_iommu_init(emu_cfg), // Do IOMMU init later, after add VM to global list
                 EmuDeviceTShyper => {
                     if !shyper_init(self.id, emu_cfg.base_ipa, emu_cfg.length) {
                         return false;
@@ -294,11 +295,13 @@ impl Vm {
         this
     }
 
+    #[cfg(feature = "iommu")]
     pub fn set_iommu_ctx_id(&self, id: usize) {
         let mut vm_inner = self.inner_mut.lock();
         vm_inner.iommu_ctx_id = Some(id);
     }
 
+    #[cfg(feature = "iommu")]
     pub fn iommu_ctx_id(&self) -> usize {
         let vm_inner = self.inner_mut.lock();
         match vm_inner.iommu_ctx_id {
@@ -535,7 +538,7 @@ struct VmInnerMut {
     // memory config
     pt: PageTable,
     color_pa_info: VmColorPaInfo,
-    // iommu
+    #[cfg(feature = "iommu")]
     iommu_ctx_id: Option<usize>,
 
     #[cfg(feature = "balloon")]
@@ -559,6 +562,7 @@ impl VmInnerMut {
                 panic!("vmm_init_memory: page alloc failed");
             },
             color_pa_info: VmColorPaInfo::default(),
+            #[cfg(feature = "iommu")]
             iommu_ctx_id: None,
             #[cfg(feature = "balloon")]
             balloon: vec![],

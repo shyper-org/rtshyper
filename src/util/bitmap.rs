@@ -117,6 +117,10 @@ pub struct FlexBitmap {
 }
 
 impl FlexBitmap {
+    pub const fn empty() -> Self {
+        FlexBitmap { len: 0, map: vec![] }
+    }
+
     pub fn new(len: usize) -> FlexBitmap {
         let map = vec![0; (len + 64 - 1) / 64];
         FlexBitmap { len, map }
@@ -173,8 +177,8 @@ impl FlexBitmap {
         self.map.as_slice()
     }
 
-    pub fn vec_len(&self) -> usize {
-        self.map.len()
+    pub fn len(&self) -> usize {
+        self.len
     }
 
     pub fn sum(&self) -> usize {

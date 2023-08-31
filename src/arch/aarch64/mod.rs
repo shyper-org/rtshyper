@@ -7,6 +7,7 @@ pub use self::interrupt::*;
 pub use self::mmu::PLATFORM_PHYSICAL_LIMIT_GB;
 pub use self::page_table::*;
 pub use self::psci::*;
+#[cfg(feature = "smmuv2")]
 pub use self::smmu::*;
 pub use self::vcpu::*;
 pub use self::vgic::*;
@@ -34,6 +35,7 @@ mod pmuv3;
 mod psci;
 mod smc;
 #[allow(dead_code)]
+#[cfg(feature = "smmuv2")]
 mod smmu;
 mod start;
 mod sync;
@@ -42,3 +44,9 @@ mod tlb;
 mod vcpu;
 mod vgic;
 mod vm;
+
+pub struct SmmuDesc {
+    pub base: usize,
+    pub interrupt_id: usize,
+    pub global_mask: u16,
+}

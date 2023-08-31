@@ -21,12 +21,6 @@ use crate::kernel::CONFIG_VM_NUM_MAX;
 use crate::kernel::{active_vm, current_cpu};
 use crate::util::{bit_extract, FlexBitmap};
 
-pub struct SmmuDesc {
-    pub base: usize,
-    pub interrupt_id: usize,
-    pub global_mask: u16,
-}
-
 const SMMUV2_CBAR_TYPE_S1_S2: usize = 0x3 << 16;
 const SMMUV2_CBAR_TYPE_S2: usize = 0x0 << 16;
 
@@ -318,11 +312,11 @@ struct SmmuV2 {
 
     emu_rs0_idr1: u32,
     context_s2_idx: usize,
-    context_alloc_bitmap: Option<FlexBitmap>,
+    context_alloc_bitmap: FlexBitmap,
 
     smr_num: usize,
-    smr_alloc_bitmap: Option<FlexBitmap>,
-    group_alloc_bitmap: Option<FlexBitmap>,
+    smr_alloc_bitmap: FlexBitmap,
+    group_alloc_bitmap: FlexBitmap,
 }
 
 impl SmmuV2 {
@@ -334,10 +328,10 @@ impl SmmuV2 {
 
             emu_rs0_idr1: 0,
             context_s2_idx: 0,
-            context_alloc_bitmap: None,
+            context_alloc_bitmap: FlexBitmap::empty(),
             smr_num: 0,
-            smr_alloc_bitmap: None,
-            group_alloc_bitmap: None,
+            smr_alloc_bitmap: FlexBitmap::empty(),
+            group_alloc_bitmap: FlexBitmap::empty(),
         }
     }
 
@@ -376,7 +370,7 @@ impl SmmuV2 {
         self.context_s2_idx = context_bank_num - CONFIG_VM_NUM_MAX;
         self.emu_rs0_idr1 = (idr1 & !bit_mask!(SMMUV2_IDR1_NUMCB_OFF, SMMUV2_IDR1_NUMCB_LEN)) as u32
             | SMMU_IDR1::NUMCB.val(self.context_s2_idx as u32).value;
-        self.context_alloc_bitmap = Some(FlexBitmap::new(context_bank_num));
+        self.context_alloc_bitmap = FlexBitmap::new(context_bank_num);
 
         self.check_features();
 
@@ -384,8 +378,8 @@ impl SmmuV2 {
         // Indicates the number of Stream mapping register groups in the Stream match table, in the range 0-128.
         let smr_num = rs0.IDR0.get() as usize & 0xff;
         self.smr_num = smr_num;
-        self.smr_alloc_bitmap = Some(FlexBitmap::new(smr_num));
-        self.group_alloc_bitmap = Some(FlexBitmap::new(smr_num));
+        self.smr_alloc_bitmap = FlexBitmap::new(smr_num);
+        self.group_alloc_bitmap = FlexBitmap::new(smr_num);
 
         /* Clear random reset state. */
         rs0.GFSR.set(rs0.GFSR.get());
@@ -471,7 +465,7 @@ impl SmmuV2 {
 
     #[inline]
     fn smr_is_group(&self, smr: usize) -> bool {
-        self.group_alloc_bitmap.as_ref().unwrap().get(smr) == 1
+        self.group_alloc_bitmap.get(smr) == 1
     }
 
     #[inline]
@@ -494,13 +488,13 @@ impl SmmuV2 {
     }
 
     fn alloc_smr(&self) -> Option<usize> {
-        let alloc_bitmap = self.smr_alloc_bitmap.as_ref().unwrap();
-        (0..alloc_bitmap.vec_len()).find(|&i| alloc_bitmap.get(i) == 0)
+        let alloc_bitmap = &self.smr_alloc_bitmap;
+        (0..alloc_bitmap.len()).find(|&i| alloc_bitmap.get(i) == 0)
     }
 
     fn compatible_smr_exists(&mut self, mask: u16, id: u16, context_id: usize, group: bool) -> bool {
         for smr in 0..self.smr_num {
-            let bit = self.smr_alloc_bitmap.as_ref().unwrap().get(smr);
+            let bit = self.smr_alloc_bitmap.get(smr);
             if bit == 0 {
                 continue;
             } else {
@@ -513,7 +507,7 @@ impl SmmuV2 {
                         || (context_id == self.smr_get_context(smr))
                     {
                         if mask > smr_mask {
-                            self.smr_alloc_bitmap.as_mut().unwrap().set(smr, false);
+                            self.smr_alloc_bitmap.set(smr, false);
                         } else {
                             return true;
                         }
@@ -527,22 +521,23 @@ impl SmmuV2 {
     }
 
     fn write_smr(&mut self, smr: usize, mask: u16, id: u16, group: bool) {
-        if self.smr_alloc_bitmap.as_ref().unwrap().get(smr) != 0 {
+        if self.smr_alloc_bitmap.get(smr) != 0 {
             panic!("smmu: trying to write unallocated smr {}", smr);
         } else {
             let mut val: usize = (mask as usize) << SMMU_SMR_MASK_OFF;
             val |= (id & bit_mask!(SMMU_SMR_ID_OFF, SMMU_SMR_ID_LEN)) as usize;
             val |= SMMUV2_SMR_VALID;
             self.glb_rs0.SMR[smr].set(val as u32);
+            self.smr_alloc_bitmap.set(smr, true);
             if group {
-                self.group_alloc_bitmap.as_mut().unwrap().set(smr, true);
+                self.group_alloc_bitmap.set(smr, true);
             }
         }
     }
 
     // Stream-to-Context
     fn write_s2c(&mut self, smr: usize, context_id: usize) {
-        if self.smr_alloc_bitmap.as_ref().unwrap().get(smr) != 0 {
+        if self.smr_alloc_bitmap.get(smr) != 0 {
             panic!("smmu: trying to write unallocated s2c {}", smr);
         } else {
             let mut s2cr: usize = self.glb_rs0.S2CR[smr].get() as usize;
@@ -555,10 +550,7 @@ impl SmmuV2 {
     }
 
     fn alloc_ctxbnk(&mut self) -> Option<usize> {
-        let bitmap = match &mut self.context_alloc_bitmap {
-            None => panic!("smmu_alloc_ctxbnk: smmu v2 context_alloc_bitmap not init"),
-            Some(bitmap) => bitmap,
-        };
+        let bitmap = &mut self.context_alloc_bitmap;
         for i in self.context_s2_idx..self.context_bank.len() {
             if bitmap.get(i) == 0 {
                 bitmap.set(i, true);
@@ -570,7 +562,7 @@ impl SmmuV2 {
     }
 
     fn write_ctxbnk(&mut self, context_id: usize, root_pt: usize, vm_id: usize) {
-        if self.context_alloc_bitmap.is_none() || self.context_alloc_bitmap.as_ref().unwrap().get(context_id) == 0 {
+        if self.context_alloc_bitmap.get(context_id) == 0 {
             panic!("smmu ctx {} not allocated", context_id);
         }
         let rs1 = &self.glb_rs1;
