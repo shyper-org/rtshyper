@@ -131,7 +131,7 @@ unsafe extern "C" fn _start() -> ! {
 }
 
 fn init_sysregs() {
-    use cortex_a::{
+    use aarch64_cpu::{
         asm::barrier,
         registers::{HCR_EL2, SCTLR_EL2, VBAR_EL2},
     };

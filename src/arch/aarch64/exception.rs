@@ -2,7 +2,7 @@ use core::arch::global_asm;
 
 // use alloc::collections::BinaryHeap;
 // use spin::{Mutex, Lazy};
-use cortex_a::registers::ESR_EL2;
+use aarch64_cpu::registers::ESR_EL2;
 use tock_registers::interfaces::*;
 
 use crate::arch::{ContextFrame, ContextFrameTrait, InterruptController};
@@ -26,7 +26,7 @@ fn exception_class() -> usize {
 
 #[inline(always)]
 fn exception_far() -> usize {
-    cortex_a::registers::FAR_EL2.get() as usize
+    aarch64_cpu::registers::FAR_EL2.get() as usize
 }
 
 #[inline(always)]
@@ -53,7 +53,7 @@ fn translate_far_to_hpfar(far: usize) -> Result<usize, ()> {
         (par & mask) >> 8
     }
 
-    use cortex_a::registers::PAR_EL1;
+    use aarch64_cpu::registers::PAR_EL1;
 
     let par = PAR_EL1.get();
     arm_at!("s1e1r", far);
@@ -164,10 +164,10 @@ extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     info!("{}", unsafe { ctx.as_ref().unwrap() });
     panic!(
         "current_elx_synchronous elr_el2 {:016x} sp_el0 {:016x} sp_el1 {:016x} sp_sel {}",
-        cortex_a::registers::ELR_EL2.get(),
-        cortex_a::registers::SP_EL0.get(),
-        cortex_a::registers::SP_EL1.get(),
-        cortex_a::registers::SPSel.get(),
+        aarch64_cpu::registers::ELR_EL2.get(),
+        aarch64_cpu::registers::SP_EL0.get(),
+        aarch64_cpu::registers::SP_EL1.get(),
+        aarch64_cpu::registers::SPSel.get(),
     );
 }
 

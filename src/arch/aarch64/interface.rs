@@ -29,12 +29,12 @@ impl ArchTrait for Aarch64Arch {
 
     #[inline]
     fn wait_for_interrupt() {
-        cortex_a::asm::wfi();
+        aarch64_cpu::asm::wfi();
     }
 
     #[inline]
     fn nop() {
-        cortex_a::asm::nop();
+        aarch64_cpu::asm::nop();
     }
 
     fn fault_address() -> usize {
@@ -51,7 +51,7 @@ impl ArchTrait for Aarch64Arch {
 
     #[inline]
     fn install_self_page_table(base: usize) {
-        cortex_a::registers::TTBR0_EL2.set_baddr(base as u64);
+        aarch64_cpu::registers::TTBR0_EL2.set_baddr(base as u64);
         isb!();
     }
 
@@ -69,7 +69,7 @@ impl ArchTrait for Aarch64Arch {
     }
 
     fn mem_translate(va: usize) -> Option<usize> {
-        use cortex_a::registers::PAR_EL1;
+        use aarch64_cpu::registers::PAR_EL1;
         const PAR_PA_MASK: u64 = ((1 << (48 - 12)) - 1) << 12; // 0xFFFF_FFFF_F000
 
         let par = PAR_EL1.get();
@@ -86,7 +86,7 @@ impl ArchTrait for Aarch64Arch {
 
     #[inline]
     fn current_stack_pointer() -> usize {
-        cortex_a::registers::SP.get() as usize
+        aarch64_cpu::registers::SP.get() as usize
     }
 }
 

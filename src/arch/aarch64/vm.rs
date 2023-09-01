@@ -4,7 +4,7 @@ impl Vm {
     // TODO: move to ArchVm
     pub fn init_intc_mode(&self, intc_type: IntCtrlType) {
         use super::{GICC_CTLR_EN_BIT, GICC_CTLR_EOIMODENS_BIT};
-        use cortex_a::registers::HCR_EL2;
+        use aarch64_cpu::registers::HCR_EL2;
         const HCR_EL2_TSC: u64 = 1 << 19; /* TSC */
 
         let (gich_ctlr, hcr) = match intc_type {

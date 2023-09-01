@@ -193,7 +193,7 @@ pub fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
 const PA_RANGE_TABLE: &[u64] = &[32, 36, 40, 42, 44, 48, 52];
 
 pub fn pa_range() -> u64 {
-    use cortex_a::registers::ID_AA64MMFR0_EL1;
+    use aarch64_cpu::registers::ID_AA64MMFR0_EL1;
     // current only support 3-level page table (39bits), so the max is 36bits and max index is 1
     ID_AA64MMFR0_EL1.read(ID_AA64MMFR0_EL1::PARange).min(1)
 }
@@ -203,7 +203,7 @@ pub fn pa_range_val(pa_range_idx: usize) -> u64 {
 }
 
 pub fn mmu_init(pt: &PageTables) {
-    use cortex_a::{asm::barrier, registers::*};
+    use aarch64_cpu::{asm::barrier, registers::*};
     MAIR_EL2.write(
         MAIR_EL2::Attr0_Device::nonGathering_nonReordering_noEarlyWriteAck
             + MAIR_EL2::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc

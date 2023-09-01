@@ -5,9 +5,9 @@ use crate::{
     device::{emu_register_reg, EmuContext, EmuRegType},
     kernel::current_cpu,
 };
+use aarch64_cpu::registers::{CCSIDR_EL1, CLIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};
 use alloc::vec::Vec;
 use cache::CpuCacheInfo;
-use cortex_a::registers::{CCSIDR_EL1, CLIDR_EL1, CSSELR_EL1, ID_AA64MMFR2_EL1};
 use spin::Once;
 use tock_registers::interfaces::{Readable, Writeable};
 

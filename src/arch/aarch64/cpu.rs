@@ -1,4 +1,4 @@
-use cortex_a::registers::DAIF;
+use aarch64_cpu::registers::DAIF;
 use tock_registers::interfaces::*;
 
 /// Mask (disable) interrupt from perspective of CPU

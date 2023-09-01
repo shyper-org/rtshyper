@@ -1,6 +1,6 @@
 use core::arch::global_asm;
 
-use cortex_a::registers::*;
+use aarch64_cpu::registers::*;
 
 use super::timer::GenericTimerContext;
 

@@ -25,11 +25,11 @@ pub fn timer_arch_disable_irq() {
 }
 
 pub fn timer_arch_get_counter() -> usize {
-    cortex_a::registers::CNTPCT_EL0.get() as usize
+    aarch64_cpu::registers::CNTPCT_EL0.get() as usize
 }
 
 pub fn timer_arch_get_frequency() -> usize {
-    cortex_a::registers::CNTFRQ_EL0.get() as usize
+    aarch64_cpu::registers::CNTFRQ_EL0.get() as usize
 }
 
 #[allow(dead_code)]
