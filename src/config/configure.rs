@@ -112,6 +112,13 @@ impl VmMemoryConfig {
     pub fn is_limited(&self) -> bool {
         self.budget < DEFAULT_MEMORY_BUDGET
     }
+
+    fn set_budget_by_percentage(&mut self, percent: u32) {
+        let budget = MEMORY_BUDGET_PER_PERIOD.load(Ordering::Relaxed) * percent / 100;
+        self.budget = budget;
+        let bandwidth = crate::util::budget2bandwidth(budget, self.period);
+        info!("memory bandwidth {bandwidth} MB/s, budget {budget}, percentage {percent}%");
+    }
 }
 
 #[derive(Clone)]
@@ -699,10 +706,7 @@ pub fn set_memory_color_budget(
                 warn!("Illegal memory bandwidth percentage {budget_percent}, reset to default {DEFAULT_PERCENT}");
                 DEFAULT_PERCENT
             };
-            let budget = MEMORY_BUDGET_PER_PERIOD.load(Ordering::Relaxed) * percent / 100;
-            let bandwidth = crate::util::budget2bandwidth(budget, vm_cfg.memory.period);
-            info!("VM[{vmid}] memory bandwidth {bandwidth} MB/s, budget {budget}, percentage {percent}%");
-            vm_cfg.memory.budget = budget;
+            vm_cfg.memory.set_budget_by_percentage(percent);
         } else {
             warn!("VM[{vmid}] memory budget {budget_percent} is not set because feature \"memory-reservation\" is not enabled");
         }

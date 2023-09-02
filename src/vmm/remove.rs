@@ -16,26 +16,28 @@ pub fn vmm_remove_vm(vm_id: usize) {
     }
 
     // remove vm: page table / mmio / vgic will be removed when vm drop
-    let vm = vm_by_id(vm_id).unwrap();
-
-    // vcpu
-    vmm_remove_vcpu(&vm);
-    // reset vm interface
-    vm_if_reset(vm_id);
-    // passthrough dev
-    vmm_remove_passthrough_device(&vm);
-    // clear async task list
-    remove_vm_async_task(vm_id);
-    crate::device::remove_virtio_nic(vm_id);
-    // remove vm cfg
-    let _ = crate::config::del_vm(vm_id);
-    #[cfg(feature = "unilib")]
-    // remove vm unilib
-    crate::util::unilib::unilib_fs_remove(vm_id);
-    // unmap ipa(hva) percore at last
-    vmm_unmap_ipa2hva(vm);
-    remove_vm(vm_id);
-    info!("remove vm[{}] successfully", vm_id);
+    if let Some(vm) = vm_by_id(vm_id) {
+        // vcpu
+        vmm_remove_vcpu(&vm);
+        // reset vm interface
+        vm_if_reset(vm_id);
+        // passthrough dev
+        vmm_remove_passthrough_device(&vm);
+        // clear async task list
+        remove_vm_async_task(vm_id);
+        crate::device::remove_virtio_nic(vm_id);
+        // remove vm cfg
+        let _ = crate::config::del_vm(vm_id);
+        #[cfg(feature = "unilib")]
+        // remove vm unilib
+        crate::util::unilib::unilib_fs_remove(vm_id);
+        // unmap ipa(hva) percore at last
+        vmm_unmap_ipa2hva(vm);
+        remove_vm(vm_id);
+        info!("remove vm[{}] successfully", vm_id);
+    } else {
+        error!("VM[{vm_id}] does not exist!");
+    }
 }
 
 pub fn vmm_remove_vcpu_percore(vm: &Vm) {
