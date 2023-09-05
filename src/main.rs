@@ -41,13 +41,32 @@ mod panic;
 mod util;
 mod vmm;
 
+mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
+fn print_built_info() {
+    println!(
+        "Welcome to {} {} {} Hypervisor!",
+        env!("PLATFORM"),
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+    println!(
+        "Built At {build_time} by {hostname} {rustc_version} with features {features:?}",
+        build_time = env!("BUILD_TIME"),
+        hostname = env!("HOSTNAME"),
+        rustc_version = built_info::RUSTC_VERSION,
+        features = built_info::FEATURES_LOWERCASE_STR
+    );
+}
+
 pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     if cpu_id == 0 {
         driver::init();
         banner::init();
+        print_built_info();
         util::logger::logger_init().unwrap();
-        info!("Welcome to {} {} Hypervisor!", env!("PLATFORM"), env!("CARGO_PKG_NAME"));
-        info!("Built At {}", env!("BUILD_TIME"));
         mm::init(); // including heap and hypervisor VA space
 
         dtb::init_vm0_dtb(dtb);

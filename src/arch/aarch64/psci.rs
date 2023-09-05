@@ -167,10 +167,7 @@ pub fn psci_ipi_handler(msg: IpiMessage) {
             }
         }
         _ => {
-            panic!(
-                "psci_ipi_handler: cpu{} receive illegal psci ipi type",
-                current_cpu().id
-            );
+            error!("psci_ipi_handler: receive illegal psci ipi type");
         }
     }
 }
@@ -178,32 +175,32 @@ pub fn psci_ipi_handler(msg: IpiMessage) {
 fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
     let vcpu_id = mpidr & 0xff;
     let vm = active_vm().unwrap();
-    let physical_linear_id = vm.vcpuid_to_pcpuid(vcpu_id);
 
-    if vcpu_id >= vm.cpu_num() || physical_linear_id.is_none() {
-        warn!("psci_guest_cpu_on: target vcpu {} not exist", vcpu_id);
-        return usize::MAX - 1;
-    }
-    #[cfg(feature = "tx2")]
-    {
-        let cluster = (mpidr >> 8) & 0xff;
-        if vm.id() == 0 && cluster != 1 {
-            warn!("psci_guest_cpu_on: L4T only support cluster #1");
+    if let Some(phys_id) = vm.vcpuid_to_pcpuid(vcpu_id) {
+        #[cfg(feature = "tx2")]
+        {
+            let cluster = (mpidr >> 8) & 0xff;
+            if vm.id() == 0 && cluster != 1 {
+                warn!("psci_guest_cpu_on: L4T only support cluster #1");
+                return usize::MAX - 1;
+            }
+        }
+
+        let m = IpiPowerMessage {
+            src: vm.id(),
+            event: PowerEvent::PsciIpiCpuOn,
+            entry,
+            context: ctx,
+        };
+
+        if !ipi_send_msg(phys_id, IpiType::Power, IpiInnerMsg::Power(m)) {
+            warn!("psci_guest_cpu_on: fail to send msg");
             return usize::MAX - 1;
         }
+
+        0
+    } else {
+        warn!("psci_guest_cpu_on: VM {} target vcpu {} not exist", vm.id(), vcpu_id);
+        usize::MAX - 1
     }
-
-    let m = IpiPowerMessage {
-        src: vm.id(),
-        event: PowerEvent::PsciIpiCpuOn,
-        entry,
-        context: ctx,
-    };
-
-    if !ipi_send_msg(physical_linear_id.unwrap(), IpiType::Power, IpiInnerMsg::Power(m)) {
-        warn!("psci_guest_cpu_on: fail to send msg");
-        return usize::MAX - 1;
-    }
-
-    0
 }

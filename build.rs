@@ -40,6 +40,9 @@ fn main() {
     // set envs
     let build_time = chrono::offset::Local::now().format("%Y-%m-%d %H:%M:%S %Z");
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
+    let hostname = gethostname::gethostname();
+    println!("cargo:rustc-env=HOSTNAME={}", hostname.into_string().unwrap());
+    built::write_built_file().expect("Failed to acquire build-time information");
     println!(
         "cargo:rustc-env=VM0_IMAGE_PATH={}/{}",
         env!("CARGO_MANIFEST_DIR"),

@@ -17,6 +17,8 @@ debug = true
 
 [build-dependencies]
 chrono = "0.4.23"
+built = { version = "0.6.1", features = [] }
+gethostname = "0.4.3"
 
 [workspace]
 members = [
