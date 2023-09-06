@@ -66,6 +66,7 @@ tx2 = [
     "vtimer",
     "ns16550",
     "preempt",
+    "self-coloring",
     "memory-reservation",
 ]
 qemu = ["pa-bits-39", "pl011", "preempt"]
@@ -84,6 +85,7 @@ vtimer = []
 balloon = []
 iommu = ["smmuv2"]
 smmuv2 = []
+self-coloring = []
 
 memory-reservation = ["fastrand", "dynamic-budget"]
 # This feature "dynamic-budget" belongs to "memory-reservation"
