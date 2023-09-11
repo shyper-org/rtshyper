@@ -25,5 +25,5 @@ cfg_if! {
     }
 }
 
-#[cfg(any(feature = "pa-bits-48"))]
+#[cfg(feature = "pa-bits-48")]
 compile_error!("currently unsupported feature: pa-bits-48");

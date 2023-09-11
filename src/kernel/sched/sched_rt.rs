@@ -143,7 +143,7 @@ impl Scheduler for SchedulerRT {
 
     fn remove(&mut self, item: &Self::SchedItem) {
         self.run_queue.retain(|unit| &unit.item != item);
-        self.depleted_queue.drain_filter(|unit| &unit.item == item);
+        self.depleted_queue.extract_if(|unit| &unit.item == item).for_each(drop);
         self.replenishment_queue_remove(item);
     }
 
@@ -196,7 +196,9 @@ impl SchedulerRT {
 
     fn queue_remove(&mut self, other: &SchedUnit) {
         self.run_queue.retain(|unit| unit.as_ref() != other);
-        self.depleted_queue.drain_filter(|unit| unit.as_ref() == other);
+        self.depleted_queue
+            .extract_if(|unit| unit.as_ref() == other)
+            .for_each(drop);
     }
 
     fn run_queue_push(&mut self, unit: Arc<SchedUnit>) {

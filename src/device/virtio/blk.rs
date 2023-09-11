@@ -297,7 +297,7 @@ fn generate_blk_req(
                 let data_bg =
                     unsafe { core::slice::from_raw_parts_mut(req_node.iov[0].data_bg as *mut u8, cstr.len()) };
                 data_bg.copy_from_slice(cstr);
-                if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx as u32) {
+                if !vq.update_used_ring(req_node.iov_total as u32, req_node.desc_chain_head_idx) {
                     println!("blk_req_handler: fail to update used ring");
                 }
                 dev.notify();

@@ -204,7 +204,7 @@ impl<T: TaskOwner> FairQueue<T> {
     fn remove(&mut self, owner: usize) {
         if let Some(sub_queue) = self.map.remove(&owner) {
             self.len -= sub_queue.len();
-            self.queue.drain_filter(|x| *x == owner);
+            self.queue.extract_if(|x| *x == owner).for_each(drop);
         }
     }
 }
@@ -358,5 +358,5 @@ pub fn remove_vm_async_task(vm_id: usize) {
     let mut io_list = EXECUTOR.io_task_list.lock();
     let mut ipi_list = EXECUTOR.ipi_task_list.lock();
     io_list.remove(vm_id);
-    ipi_list.drain_filter(|x| x.src_vmid == vm_id);
+    ipi_list.extract_if(|x| x.src_vmid == vm_id).for_each(drop);
 }

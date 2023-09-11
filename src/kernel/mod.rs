@@ -12,7 +12,7 @@ pub use self::vm::*;
 
 pub mod access;
 mod async_task;
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 mod bwres;
 mod cpu;
 #[allow(dead_code)]
@@ -30,6 +30,6 @@ mod vcpu_array;
 mod vm;
 
 pub fn subinit() {
-    #[cfg(any(feature = "memory-reservation"))]
+    #[cfg(feature = "memory-reservation")]
     bwres::init();
 }

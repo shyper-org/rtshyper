@@ -6,10 +6,10 @@ use crate::arch::{ContextFrame, ContextFrameTrait, InterruptContext, InterruptCo
 use crate::config::VmConfigEntry;
 use crate::kernel::{current_cpu, interrupt_vm_inject};
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 use super::bwres::membwres::MemoryBandwidth;
 use super::{CpuState, Vm};
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 use crate::arch::PmuTimerEvent;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,9 +45,9 @@ impl WeakVcpu {
 pub struct VcpuInner {
     inner_const: VcpuConst,
     pub inner_mut: Mutex<VcpuInnerMut>,
-    #[cfg(any(feature = "memory-reservation"))]
+    #[cfg(feature = "memory-reservation")]
     reservation: MemoryBandwidth,
-    #[cfg(any(feature = "memory-reservation"))]
+    #[cfg(feature = "memory-reservation")]
     pmu_event: Option<Arc<PmuTimerEvent>>,
 }
 
@@ -65,7 +65,7 @@ impl Vcpu {
             vm,
             phys_id,
         };
-        #[cfg(any(feature = "memory-reservation"))]
+        #[cfg(feature = "memory-reservation")]
         let inner = Arc::new_cyclic(|weak| VcpuInner {
             inner_const,
             reservation: MemoryBandwidth::new(
@@ -89,7 +89,7 @@ impl Vcpu {
         Self(inner)
     }
 
-    #[cfg(any(feature = "memory-reservation"))]
+    #[cfg(feature = "memory-reservation")]
     pub(super) fn pmu_event(&self) -> Option<Arc<PmuTimerEvent>> {
         self.0.pmu_event.clone()
     }
@@ -125,7 +125,7 @@ impl Vcpu {
     // }
 
     pub fn context_vm_store(&self) {
-        #[cfg(any(feature = "memory-reservation"))]
+        #[cfg(feature = "memory-reservation")]
         if self.0.pmu_event.is_some() {
             crate::arch::vcpu_stop_pmu(self);
         }
@@ -141,7 +141,7 @@ impl Vcpu {
     }
 
     pub fn context_vm_restore(&self) {
-        #[cfg(any(feature = "memory-reservation"))]
+        #[cfg(feature = "memory-reservation")]
         if self.0.pmu_event.is_some() {
             crate::arch::vcpu_start_pmu(self);
         }
@@ -270,7 +270,7 @@ impl Vcpu {
         }
     }
 
-    #[cfg(any(feature = "memory-reservation"))]
+    #[cfg(feature = "memory-reservation")]
     pub fn bw_info(&self) -> &MemoryBandwidth {
         &self.0.reservation
     }

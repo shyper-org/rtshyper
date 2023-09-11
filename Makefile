@@ -57,7 +57,7 @@ pi4:
 
 clippy:
 	cargo fmt
-	cargo clippy ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
+	cargo clippy --no-deps ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
 
 fmt:
 	cargo fmt

@@ -166,7 +166,7 @@ impl MemoryBandwidth {
         atomic_write_relaxed!(self.used_budget, 0);
     }
 
-    #[cfg(any(feature = "dynamic-budget"))]
+    #[cfg(feature = "dynamic-budget")]
     pub fn budget_try_rescue(&self) -> bool {
         let donate = self.budget - atomic_read_relaxed!(self.last_predict_budget);
         let apply = apply_budget(donate as usize) as u32;

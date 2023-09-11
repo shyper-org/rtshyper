@@ -1,4 +1,4 @@
-use core::mem::size_of;
+use core::mem::size_of_val;
 use core::slice;
 
 use super::Vm;
@@ -6,7 +6,7 @@ use crate::arch::CacheInvalidate;
 use crate::util::memcpy_safe;
 
 pub fn copy_segment_to_vm<T: Sized>(vm: &Vm, load_ipa: usize, bin: &[T]) {
-    let bin = unsafe { slice::from_raw_parts(bin.as_ptr() as *const u8, bin.len() * size_of::<T>()) };
+    let bin = unsafe { slice::from_raw_parts(bin.as_ptr() as *const u8, size_of_val(bin)) };
     let hva = vm.ipa2hva(load_ipa) as *mut u8;
     if hva.is_null() {
         error!("illegal ipa {:#x} from VM {}", load_ipa, vm.id());
@@ -67,7 +67,7 @@ pub fn copy_between_vm(dest: (&Vm, usize), src: (&Vm, usize), len: usize) -> boo
 }
 
 pub fn copy_segment_from_vm<T: Sized>(vm: &Vm, bin: &mut [T], load_ipa: usize) {
-    let bin = unsafe { slice::from_raw_parts_mut(bin.as_mut_ptr() as *mut u8, bin.len() * size_of::<T>()) };
+    let bin = unsafe { slice::from_raw_parts_mut(bin.as_mut_ptr() as *mut u8, size_of_val(bin)) };
     let hva = vm.ipa2hva(load_ipa) as *mut u8;
     if hva.is_null() {
         error!("illegal ipa {:#x} from VM {}", load_ipa, vm.id());

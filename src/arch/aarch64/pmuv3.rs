@@ -2,12 +2,12 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 use crate::kernel::{current_cpu, Vcpu, VcpuState, WeakVcpu};
 
 use super::regs::{PMCCFILTR_EL0, PMCR_EL0, PMUSERENR_EL0};
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 const MAX_PMU_COUNTER_VALUE: u32 = u32::MAX;
 
 /// See ARM PMU Events
@@ -20,14 +20,14 @@ enum PmuEvent {
     L2dCacheRefill = 0x17, // Level 2 data cache refill
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 #[derive(Clone, Debug)]
 struct PmuEventCounter {
     event: PmuEvent,
     index: u32,
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 impl PmuEventCounter {
     fn enable(&self, initial_value: u32) {
         // Disable counter
@@ -78,7 +78,7 @@ struct PmuEventCounterList {
     // event_counters_list: Mutex<Vec<PmuEventCounter>>,
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 static MEM_ACCESS_EVENT: PmuEventCounter = PmuEventCounter {
     event: PmuEvent::MemAccess,
     index: 0,
@@ -132,7 +132,7 @@ pub fn arch_pmu_init() {
     // software can access PMCCNTR_EL0
     PMUSERENR_EL0.write(PMUSERENR_EL0::EN::Trap + PMUSERENR_EL0::CR::Trap);
 
-    #[cfg(any(feature = "memory-reservation"))]
+    #[cfg(feature = "memory-reservation")]
     {
         use crate::{
             board::{PlatOperation, Platform},
@@ -145,7 +145,7 @@ pub fn arch_pmu_init() {
     }
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 fn pmu_irq_handler() {
     // Read the overflow register
     let pmovsr = mrs!(PMOVSCLR_EL0);
@@ -158,7 +158,7 @@ fn pmu_irq_handler() {
     }
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 fn pmu_mem_access_handler() {
     let vcpu = current_cpu().active_vcpu.as_ref().unwrap();
     // TODO: try apply additional budget here
@@ -169,7 +169,7 @@ fn pmu_mem_access_handler() {
         MEM_ACCESS_EVENT.read_counter()
     );
     vcpu.bw_info().reset_remaining_budget();
-    #[cfg(any(feature = "dynamic-budget"))]
+    #[cfg(feature = "dynamic-budget")]
     if vcpu.bw_info().budget_try_rescue() {
         vcpu_start_pmu(vcpu);
     } else {
@@ -184,7 +184,7 @@ pub fn cpu_cycle_count() -> u64 {
     mrs!(PMCCNTR_EL0)
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 pub fn vcpu_start_pmu(vcpu: &Vcpu) {
     let remaining_budget = vcpu.bw_info().remaining_budget();
     trace!(
@@ -197,7 +197,7 @@ pub fn vcpu_start_pmu(vcpu: &Vcpu) {
     MEM_ACCESS_EVENT.enable(MAX_PMU_COUNTER_VALUE - remaining_budget);
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 pub fn vcpu_stop_pmu(vcpu: &Vcpu) {
     // read_counter must before disable event (disabling will reset the counter to 0)
     let current_memory_access_count = MEM_ACCESS_EVENT.read_counter();
@@ -218,10 +218,10 @@ pub fn vcpu_stop_pmu(vcpu: &Vcpu) {
     vcpu.bw_info().update_remaining_budget(remaining_budget);
 }
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 pub struct PmuTimerEvent(pub WeakVcpu);
 
-#[cfg(any(feature = "memory-reservation"))]
+#[cfg(feature = "memory-reservation")]
 impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
     fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerTickValue) {
         if let Some(vcpu) = self.0.upgrade() {

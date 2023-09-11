@@ -5,7 +5,7 @@ use crate::arch::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::board::{PlatOperation, Platform};
 use crate::config::vm_cfg_add_vm_entry;
 use crate::device::EmuDeviceType;
-use crate::kernel::{VmType, HVC_IRQ, HYPERVISOR_COLORS};
+use crate::kernel::{VmType, HVC_IRQ};
 
 use super::{
     PassthroughRegion, VMDtbDevConfigList, VmConfigEntry, VmCpuConfig, VmEmulatedDeviceConfig,
@@ -195,7 +195,7 @@ pub fn mvm_config_init() {
             PassthroughRegion { ipa: 0x40000000, pa: 0x40000000, length: 0x40000000, dev_property: true },
         ],
         // 146 is UART_INT
-        #[cfg(any(feature = "memory-reservation"))]
+        #[cfg(feature = "memory-reservation")]
         irqs: vec![
             INTERRUPT_IRQ_GUEST_TIMER, 32, 33, 34, 35, 36, 37, 38, 39, 40, 48, 49, 56, 57, 58, 59, 60, 62, 63, 64, 65, 67, 68,
             69, 70, 71, 72, 74, 76, 79, 82, 85, 88, 91, 92, 94, 95, 96, 97, 102, 103, 104, 105, 107,
@@ -254,7 +254,7 @@ pub fn mvm_config_init() {
         },
         memory: VmMemoryConfig {
             region: vm_region,
-            colors: HYPERVISOR_COLORS.get().unwrap().clone(),
+            colors: (0..32).collect(),
             ..Default::default()
         },
         cpu: VmCpuConfig {

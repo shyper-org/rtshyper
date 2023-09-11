@@ -739,7 +739,7 @@ impl EmuDev for EmuSmmu {
                 info!(
                     "emu_smmu_handler: vm {} is not allowed to access context[{}]",
                     active_vm().unwrap().id(),
-                    (address - smmu_v2.context_bank.first().unwrap().base_addr as usize) / 0x10000,
+                    (address - smmu_v2.context_bank.first().unwrap().base_addr) / 0x10000,
                 );
             }
         } else {

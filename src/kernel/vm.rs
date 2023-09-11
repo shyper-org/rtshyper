@@ -16,7 +16,7 @@ use super::vcpu::Vcpu;
 use super::{mem_page_alloc, ColorMemRegion};
 
 // make sure that the CONFIG_VM_NUM_MAX is not greater than (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1
-pub const CONFIG_VM_NUM_MAX: usize = core::cmp::min(shyper::VM_NUM_MAX, (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
+pub const CONFIG_VM_NUM_MAX: usize = min!(shyper::VM_NUM_MAX, (1 << (HYP_VA_SIZE - VM_IPA_SIZE)) - 1);
 static VM_IF_LIST: [Mutex<VmInterface>; CONFIG_VM_NUM_MAX] =
     [const { Mutex::new(VmInterface::default()) }; CONFIG_VM_NUM_MAX];
 

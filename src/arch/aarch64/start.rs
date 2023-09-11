@@ -12,7 +12,7 @@ extern "C" {
     fn vectors();
 }
 
-#[cfg(any(feature = "tx2"))]
+#[cfg(feature = "tx2")]
 macro_rules! mpidr2cpuid {
     () => {
         r#"

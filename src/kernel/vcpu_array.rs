@@ -19,7 +19,7 @@ pub struct VcpuArray {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(any(feature = "memory-reservation"))] {
+    if #[cfg(feature = "memory-reservation")] {
         const ENABLE_TIMER_ACTIVE_NUM: usize = 1;
     } else {
         const ENABLE_TIMER_ACTIVE_NUM: usize = 2;
@@ -86,7 +86,7 @@ impl VcpuArray {
                 vcpu.vm_id(),
                 vcpu.id()
             );
-            #[cfg(any(feature = "memory-reservation"))]
+            #[cfg(feature = "memory-reservation")]
             {
                 if vcpu.state() == VcpuState::Inv {
                     if let Some(event) = vcpu.pmu_event() {
@@ -132,7 +132,7 @@ impl VcpuArray {
                     self.timer_on = false;
                     timer_enable(false);
                 }
-                #[cfg(any(feature = "memory-reservation"))]
+                #[cfg(feature = "memory-reservation")]
                 {
                     if let Some(vcpu_event) = vcpu.pmu_event() {
                         use super::timer::remove_timer_event;

@@ -133,7 +133,7 @@ pub fn init_vm0_dtb(dtb: *mut core::ffi::c_void) {
         // modify arm pmu
         // Hardcode: here, irq and affi are associated with clurster 1, cpu 0
         cfg_if::cfg_if! {
-            if #[cfg(any(feature = "memory-reservation"))] {
+            if #[cfg(feature = "memory-reservation")] {
                 let r = fdt_disable_node(dtb, "/arm-pmu\0".as_ptr());
                 assert_eq!(r, 0);
             } else {
@@ -222,7 +222,7 @@ pub fn init_vm0_dtb(dtb: *mut core::ffi::c_void) {
         assert_eq!(fdt_remove_node(dtb, "/flash@0\0".as_ptr()), 0);
 
         cfg_if::cfg_if! {
-            if #[cfg(any(feature = "memory-reservation"))] {
+            if #[cfg(feature = "memory-reservation")] {
                 let r = fdt_disable_node(dtb, "/pmu\0".as_ptr());
                 assert_eq!(r, 0);
             }

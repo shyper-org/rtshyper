@@ -47,3 +47,14 @@ macro_rules! atomic_swap_relaxed {
         $atomic.swap($val, core::sync::atomic::Ordering::Relaxed)
     };
 }
+
+#[macro_export]
+macro_rules! min {
+    ($a:expr, $b:expr) => {
+        if $a < $b {
+            $a
+        } else {
+            $b
+        }
+    };
+}
