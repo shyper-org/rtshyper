@@ -5,6 +5,8 @@ use core::arch::global_asm;
 use aarch64_cpu::registers::ESR_EL2;
 use tock_registers::interfaces::*;
 
+use expose_helper::ffi_interface;
+
 use crate::arch::{ContextFrame, ContextFrameTrait, InterruptController};
 use crate::kernel::interrupt_handler;
 use crate::kernel::{active_vm, current_cpu};
@@ -142,25 +144,24 @@ pub fn exception_data_abort_access_is_sign_ext() -> bool {
     ((exception_iss() >> 21) & 1) != 0
 }
 
-#[no_mangle]
-extern "C" fn current_el_sp0_synchronous() {
+#[ffi_interface]
+pub fn current_el_sp0_synchronous() {
     panic!("current_el_sp0_synchronous");
 }
 
-#[no_mangle]
-extern "C" fn current_el_sp0_irq() {
+#[ffi_interface]
+pub fn current_el_sp0_irq() {
     // lower_aarch64_irq(ctx);
     panic!("current_el_sp0_irq");
 }
 
-#[no_mangle]
-extern "C" fn current_el_sp0_serror() {
+#[ffi_interface]
+pub fn current_el_sp0_serror() {
     panic!("current_el0_serror");
 }
 
-#[no_mangle]
-#[inline(never)]
-extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
+#[ffi_interface]
+pub fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     info!("{}", unsafe { ctx.as_ref().unwrap() });
     panic!(
         "current_elx_synchronous elr_el2 {:016x} sp_el0 {:016x} sp_el1 {:016x} sp_sel {}",
@@ -171,19 +172,19 @@ extern "C" fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     );
 }
 
-#[no_mangle]
-extern "C" fn current_el_spx_irq(ctx: *mut ContextFrame) {
+#[ffi_interface]
+pub fn current_el_spx_irq(ctx: *mut ContextFrame) {
     trace!(">>> core {} current_el_spx_irq", current_cpu().id);
     lower_aarch64_irq(ctx);
 }
 
-#[no_mangle]
-extern "C" fn current_el_spx_serror() {
+#[ffi_interface]
+pub fn current_el_spx_serror() {
     panic!("current_elx_serror");
 }
 
-#[no_mangle]
-extern "C" fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
+#[ffi_interface]
+pub fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     trace!("lower_aarch64_synchronous");
     let prev_ctx = current_cpu().set_ctx(ctx);
     match exception_class() {
@@ -288,8 +289,8 @@ fn interrupt_leave() {
 // // TODO: currently, this is useless
 // static PENDING_IRQ_LIST: Lazy<Mutex<BinaryHeap<PendingIrq>>> = Lazy::new(|| Mutex::new(BinaryHeap::new()));
 
-#[no_mangle]
-extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
+#[ffi_interface]
+pub fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     let prev_ctx = current_cpu().set_ctx(ctx);
     if let Some((int_id, _sender)) = IntCtrl::fetch() {
         #[cfg(feature = "preempt")]
@@ -307,7 +308,7 @@ extern "C" fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     current_cpu().set_ctx(prev_ctx);
 }
 
-#[no_mangle]
-extern "C" fn lower_aarch64_serror() {
+#[ffi_interface]
+pub fn lower_aarch64_serror() {
     panic!("lower aarch64 serror");
 }
