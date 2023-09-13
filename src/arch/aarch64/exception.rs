@@ -5,7 +5,7 @@ use core::arch::global_asm;
 use aarch64_cpu::registers::ESR_EL2;
 use tock_registers::interfaces::*;
 
-use expose_helper::ffi_interface;
+use ffi_interface::c_interface;
 
 use crate::arch::{ContextFrame, ContextFrameTrait, InterruptController};
 use crate::kernel::interrupt_handler;
@@ -144,23 +144,23 @@ pub fn exception_data_abort_access_is_sign_ext() -> bool {
     ((exception_iss() >> 21) & 1) != 0
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn current_el_sp0_synchronous() {
     panic!("current_el_sp0_synchronous");
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn current_el_sp0_irq() {
     // lower_aarch64_irq(ctx);
     panic!("current_el_sp0_irq");
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn current_el_sp0_serror() {
     panic!("current_el0_serror");
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     info!("{}", unsafe { ctx.as_ref().unwrap() });
     panic!(
@@ -172,18 +172,18 @@ pub fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
     );
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn current_el_spx_irq(ctx: *mut ContextFrame) {
     trace!(">>> core {} current_el_spx_irq", current_cpu().id);
     lower_aarch64_irq(ctx);
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn current_el_spx_serror() {
     panic!("current_elx_serror");
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     trace!("lower_aarch64_synchronous");
     let prev_ctx = current_cpu().set_ctx(ctx);
@@ -289,7 +289,7 @@ fn interrupt_leave() {
 // // TODO: currently, this is useless
 // static PENDING_IRQ_LIST: Lazy<Mutex<BinaryHeap<PendingIrq>>> = Lazy::new(|| Mutex::new(BinaryHeap::new()));
 
-#[ffi_interface]
+#[c_interface]
 pub fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     let prev_ctx = current_cpu().set_ctx(ctx);
     if let Some((int_id, _sender)) = IntCtrl::fetch() {
@@ -308,7 +308,7 @@ pub fn lower_aarch64_irq(ctx: *mut ContextFrame) {
     current_cpu().set_ctx(prev_ctx);
 }
 
-#[ffi_interface]
+#[c_interface]
 pub fn lower_aarch64_serror() {
     panic!("lower aarch64 serror");
 }

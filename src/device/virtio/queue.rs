@@ -7,12 +7,17 @@ use crate::device::VirtioMmio;
 use crate::kernel::{active_vm, Vm};
 
 pub const VIRTQ_READY: usize = 1;
+/* This marks a buffer as continuing via the next field. */
 pub const VIRTQ_DESC_F_NEXT: u16 = 1;
+/* This marks a buffer as write-only (otherwise read-only). */
 pub const VIRTQ_DESC_F_WRITE: u16 = 2;
 
+/* The device uses this in used->flags to advise the driver: don't kick me
+ * when you add a buffer. It's unreliable, so it's simply an
+ * optimization. */
 pub const VRING_USED_F_NO_NOTIFY: usize = 1;
 
-pub const DESC_QUEUE_SIZE: usize = 512;
+const DESC_QUEUE_SIZE: usize = 512;
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone)]
@@ -32,7 +37,7 @@ struct VringDesc {
 struct VringAvail {
     flags: u16,
     idx: u16,
-    ring: [u16; 512],
+    ring: [u16; DESC_QUEUE_SIZE],
 }
 
 #[repr(C)]
@@ -47,12 +52,12 @@ struct VringUsedElem {
 struct VringUsed {
     flags: u16,
     idx: u16,
-    ring: [VringUsedElem; 512],
+    ring: [VringUsedElem; DESC_QUEUE_SIZE],
 }
 
 pub struct Virtq {
     vq_index: usize,
-    notify_handler: fn(Arc<Virtq>, Arc<VirtioMmio>, Arc<Vm>) -> bool,
+    notify_handler: fn(Arc<Self>, Arc<VirtioMmio>, Arc<Vm>) -> bool,
     mmio: Weak<VirtioMmio>,
     inner: Mutex<VirtqInner<'static>>,
 }
@@ -61,9 +66,9 @@ impl Virtq {
     pub fn new(
         vq_index: usize,
         mmio: Weak<VirtioMmio>,
-        notify_handler: fn(Arc<Virtq>, Arc<VirtioMmio>, Arc<Vm>) -> bool,
-    ) -> Arc<Virtq> {
-        Arc::new(Virtq {
+        notify_handler: fn(Arc<Self>, Arc<VirtioMmio>, Arc<Vm>) -> bool,
+    ) -> Arc<Self> {
+        Arc::new(Self {
             vq_index,
             notify_handler,
             mmio,

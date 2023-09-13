@@ -6,9 +6,9 @@ use quote::quote;
 use syn::{Error, ItemFn, Visibility};
 
 #[proc_macro_attribute]
-pub fn ffi_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn c_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     if !attr.is_empty() {
-        return Error::new(Span::call_site(), "expect an empty attribute: `#[ffi_interface]`")
+        return Error::new(Span::call_site(), "expect an empty attribute")
             .to_compile_error()
             .into();
     }
@@ -17,7 +17,7 @@ pub fn ffi_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     match func.vis {
         Visibility::Public(_) => {}
         _ => {
-            return Error::new(Span::call_site(), "`must decorate a public function: #[ffi_interface]`")
+            return Error::new(Span::call_site(), "`must decorate a public function")
                 .to_compile_error()
                 .into();
         }
@@ -29,6 +29,8 @@ pub fn ffi_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #[no_mangle]
         #[inline(never)]
+        #[forbid(elided_lifetimes_in_paths)]
+        #[forbid(improper_ctypes_definitions)]
         pub extern "C" #func_decl {
             #func_block
         }

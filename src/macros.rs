@@ -12,7 +12,7 @@ macro_rules! println {
 #[macro_export]
 macro_rules! declare_enum_with_handler {
     (
-        $enum_vis:vis $enum_name:ident, $array:ident, $handler_type:ty {
+        $enum_vis:vis enum $enum_name:ident [$array_vis:vis $array:ident => $handler_type:ty] {
             $($vis:vis $variant:ident => $handler:expr, )*
         }
     ) => {
@@ -21,7 +21,7 @@ macro_rules! declare_enum_with_handler {
         $enum_vis enum $enum_name {
             $($vis $variant, )*
         }
-        static $array: &[$handler_type] = &[
+        $array_vis static $array: &[$handler_type] = &[
             $($handler, )*
         ];
     }

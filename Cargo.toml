@@ -26,7 +26,7 @@ members = [
     "deps/libfdt-binding",
     "deps/libshyper",
     "deps/spin",
-    "deps/expose_helper",
+    "deps/ffi_interface",
 ]
 
 [dependencies]
@@ -49,7 +49,7 @@ cfg-if = "1.0.0"
 memoffset = { version = "0.9", default-features = false, features = [
     "unstable_const",
 ] }
-expose_helper = { path = "deps/expose_helper" }
+ffi_interface = { path = "deps/ffi_interface" }
 
 # optional dependencies
 fastrand = { version = "2.0.0", default-features = false, features = [
