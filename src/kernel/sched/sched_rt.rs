@@ -11,11 +11,10 @@ use core::{cell::Cell, ptr::NonNull};
 
 use crate::{
     kernel::{
-        current_cpu,
-        timer::{remove_timer_event, start_timer_event},
+        timer::{now, remove_timer_event, start_timer_event},
         Vcpu, VcpuState,
     },
-    util::timer_list::{TimerEvent, TimerTickValue},
+    util::timer_list::{TimerEvent, TimerValue},
 };
 
 use super::Scheduler;
@@ -34,27 +33,27 @@ pub struct SchedulerRT {
 struct SchedulerRTRef(NonNull<SchedulerRT>);
 
 impl TimerEvent for SchedulerRTRef {
-    fn callback(self: Arc<Self>, now: TimerTickValue) {
+    fn callback(self: Arc<Self>, now: TimerValue) {
         // SAFETY: Scheduler is a core-private data, and the raw pointer is on heap
         let scheduler = unsafe { &mut *self.0.as_ptr() };
         scheduler.repl_timer_handler(now);
     }
 }
 
-const DEFAULT_PERIOD: usize = 10;
-const DEFAULT_BUDGET: usize = 4;
+const DEFAULT_PERIOD: TimerValue = TimerValue::from_millis(10);
+const DEFAULT_BUDGET: TimerValue = TimerValue::from_millis(4);
 
 type SchedItemInner = Vcpu;
 
 #[derive(PartialEq, Eq)]
 struct SchedUnit {
     item: SchedItemInner,
-    budget: usize,
-    period: usize,
+    budget: TimerValue,
+    period: TimerValue,
 
-    current_budget: Cell<usize>,
-    last_start: Cell<usize>,
-    current_deadline: Cell<usize>,
+    current_budget: Cell<TimerValue>,
+    last_start: Cell<TimerValue>,
+    current_deadline: Cell<TimerValue>,
 
     priority: Cell<usize>,
 }
@@ -67,24 +66,24 @@ impl SchedUnit {
             period: DEFAULT_PERIOD,
 
             priority: Cell::new(0),
-            current_budget: Cell::new(0),
-            last_start: Cell::new(0),
-            current_deadline: Cell::new(0),
+            current_budget: Cell::new(TimerValue::ZERO),
+            last_start: Cell::new(TimerValue::ZERO),
+            current_deadline: Cell::new(TimerValue::ZERO),
         }
     }
 }
 
 impl SchedUnit {
-    fn update_deadline(&self, now: TimerTickValue) {
-        debug_assert!(self.period != 0);
-        assert!(now as usize >= self.current_deadline.get());
+    fn update_deadline(&self, now: TimerValue) {
+        debug_assert!(!self.period.is_zero());
+        assert!(now >= self.current_deadline.get());
 
-        let count = (now as usize - self.current_deadline.get()) / self.period + 1;
+        let count = ((now.as_micros() - self.current_deadline.get().as_micros()) / self.period.as_micros() + 1) as u32;
         self.current_deadline
             .set(self.current_deadline.get() + count * self.period);
 
         self.current_budget.set(self.budget);
-        self.last_start.set(now as usize);
+        self.last_start.set(now);
         self.priority.set(0);
     }
 }
@@ -119,10 +118,6 @@ impl SchedulerRT {
     }
 }
 
-fn current_time() -> u64 {
-    current_cpu().sys_tick
-}
-
 impl Scheduler for SchedulerRT {
     type SchedItem = SchedItemInner;
 
@@ -151,8 +146,8 @@ impl Scheduler for SchedulerRT {
         let item_state = item.state();
         let unit = SchedUnit::new(item);
 
-        let now = current_time();
-        if now as usize >= unit.current_deadline.get() {
+        let now = now();
+        if now >= unit.current_deadline.get() {
             unit.update_deadline(now);
         }
 
@@ -176,14 +171,14 @@ impl SchedulerRT {
     }
 
     fn burn_budget(&mut self, unit: &SchedUnit) {
-        let now = current_time() as usize;
+        let now = now();
         let delta = now - unit.last_start.get();
 
         unit.last_start.set(now);
 
         if unit.current_budget.get() < delta {
             // mark the unit run out of its budget
-            unit.current_budget.set(0);
+            unit.current_budget.set(TimerValue::ZERO);
         } else {
             unit.current_budget.set(unit.current_budget.get() - delta);
         }
@@ -202,7 +197,7 @@ impl SchedulerRT {
     }
 
     fn run_queue_push(&mut self, unit: Arc<SchedUnit>) {
-        if unit.current_budget.get() > 0 {
+        if unit.current_budget.get() > TimerValue::ZERO {
             self.run_queue.push(unit);
         } else {
             self.depleted_queue.push_back(unit);
@@ -213,7 +208,7 @@ impl SchedulerRT {
         if let Some(current_peek) = self.replenishment_queue.peek() {
             if &unit > current_peek {
                 self.remove_timer();
-                start_timer_event(unit.current_deadline.get() as u64, Arc::new(self.self_ref.clone()));
+                start_timer_event(unit.current_deadline.get(), Arc::new(self.self_ref.clone()));
             }
         }
         self.replenishment_queue.push(unit);
@@ -224,14 +219,14 @@ impl SchedulerRT {
             self.remove_timer();
             self.replenishment_queue.retain(|unit| &unit.item != item);
             if let Some(peek) = self.replenishment_queue.peek() {
-                start_timer_event(peek.current_deadline.get() as u64, Arc::new(self.self_ref.clone()));
+                start_timer_event(peek.current_deadline.get(), Arc::new(self.self_ref.clone()));
             }
         } else {
             error!("replenishment_queue_remove VM {} vcpu {}", item.vm_id(), item.id());
         }
     }
 
-    fn repl_timer_handler(&mut self, now: TimerTickValue) {
+    fn repl_timer_handler(&mut self, now: TimerValue) {
         let mut tmp_queue = LinkedList::new();
         /*
          * Do the replenishment and move replenished units
@@ -240,7 +235,7 @@ impl SchedulerRT {
          * the correct place since its deadline changes.
          */
         while let Some(unit) = self.replenishment_queue.pop() {
-            if (now as usize) < unit.current_deadline.get() {
+            if now < unit.current_deadline.get() {
                 break;
             }
             unit.update_deadline(now);
@@ -258,7 +253,7 @@ impl SchedulerRT {
         // if the replenishment queue is not empty
         if let Some(unit) = self.replenishment_queue.peek() {
             // set the timer
-            start_timer_event(unit.current_deadline.get() as u64, Arc::new(self.self_ref.clone()));
+            start_timer_event(unit.current_deadline.get(), Arc::new(self.self_ref.clone()));
         }
     }
 }

@@ -145,24 +145,27 @@ pub fn exception_data_abort_access_is_sign_ext() -> bool {
 }
 
 #[c_interface]
-pub fn current_el_sp0_synchronous() {
+pub fn current_el_sp0_synchronous(ctx: *mut ContextFrame) {
+    current_cpu().set_ctx(ctx);
     panic!("current_el_sp0_synchronous");
 }
 
 #[c_interface]
-pub fn current_el_sp0_irq() {
+pub fn current_el_sp0_irq(ctx: *mut ContextFrame) {
+    current_cpu().set_ctx(ctx);
     // lower_aarch64_irq(ctx);
     panic!("current_el_sp0_irq");
 }
 
 #[c_interface]
-pub fn current_el_sp0_serror() {
+pub fn current_el_sp0_serror(ctx: *mut ContextFrame) {
+    current_cpu().set_ctx(ctx);
     panic!("current_el0_serror");
 }
 
 #[c_interface]
 pub fn current_el_spx_synchronous(ctx: *mut ContextFrame) {
-    info!("{}", unsafe { ctx.as_ref().unwrap() });
+    current_cpu().set_ctx(ctx);
     panic!(
         "current_elx_synchronous elr_el2 {:016x} sp_el0 {:016x} sp_el1 {:016x} sp_sel {}",
         aarch64_cpu::registers::ELR_EL2.get(),
@@ -179,7 +182,8 @@ pub fn current_el_spx_irq(ctx: *mut ContextFrame) {
 }
 
 #[c_interface]
-pub fn current_el_spx_serror() {
+pub fn current_el_spx_serror(ctx: *mut ContextFrame) {
+    current_cpu().set_ctx(ctx);
     panic!("current_elx_serror");
 }
 
@@ -309,6 +313,7 @@ pub fn lower_aarch64_irq(ctx: *mut ContextFrame) {
 }
 
 #[c_interface]
-pub fn lower_aarch64_serror() {
+pub fn lower_aarch64_serror(ctx: *mut ContextFrame) {
+    current_cpu().set_ctx(ctx);
     panic!("lower aarch64 serror");
 }

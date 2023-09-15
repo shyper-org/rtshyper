@@ -1,36 +1,37 @@
 use core::cmp::{Ordering, Reverse};
+use core::time::Duration;
 
 use alloc::collections::BinaryHeap;
 use alloc::sync::Arc;
 
 use super::downcast::Downcast;
 
-pub type TimerTickValue = u64;
+pub type TimerValue = Duration;
 
 pub trait TimerEvent: Downcast {
-    fn callback(self: Arc<Self>, now: TimerTickValue);
+    fn callback(self: Arc<Self>, now: TimerValue);
 }
 
 struct TimerEventWrapper {
-    timeout_tick: TimerTickValue,
+    timeout: TimerValue,
     event: Arc<dyn TimerEvent>,
 }
 
 impl PartialOrd for TimerEventWrapper {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.timeout_tick.partial_cmp(&other.timeout_tick)
+        self.timeout.partial_cmp(&other.timeout)
     }
 }
 
 impl Ord for TimerEventWrapper {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.timeout_tick.cmp(&other.timeout_tick)
+        self.timeout.cmp(&other.timeout)
     }
 }
 
 impl PartialEq for TimerEventWrapper {
     fn eq(&self, other: &Self) -> bool {
-        self.timeout_tick == other.timeout_tick
+        self.timeout == other.timeout
     }
 }
 
@@ -49,14 +50,14 @@ impl TimerList {
         }
     }
 
-    pub fn push(&mut self, timeout_tick: TimerTickValue, event: Arc<dyn TimerEvent>) {
-        self.events.push(Reverse(TimerEventWrapper { timeout_tick, event }));
+    pub fn push(&mut self, timeout: TimerValue, event: Arc<dyn TimerEvent>) {
+        self.events.push(Reverse(TimerEventWrapper { timeout, event }));
     }
 
-    pub fn pop(&mut self, current_tick: TimerTickValue) -> Option<(TimerTickValue, Arc<dyn TimerEvent>)> {
+    pub fn pop(&mut self, current_time: TimerValue) -> Option<(TimerValue, Arc<dyn TimerEvent>)> {
         if let Some(e) = self.events.peek() {
-            if e.0.timeout_tick <= current_tick {
-                return self.events.pop().map(|e| (e.0.timeout_tick, e.0.event));
+            if e.0.timeout <= current_time {
+                return self.events.pop().map(|e| (e.0.timeout, e.0.event));
             }
         }
         None

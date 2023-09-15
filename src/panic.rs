@@ -8,6 +8,7 @@ fn panic(info: &PanicInfo) -> ! {
         current_cpu().id,
         info
     );
+    println!("{}", unsafe { &*current_cpu().current_ctx() });
     loop {
         core::hint::spin_loop();
     }

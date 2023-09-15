@@ -30,7 +30,7 @@ impl core::fmt::Display for Aarch64ContextFrame {
         }
         writeln!(f, "spsr:{:016x}", self.spsr)?;
         write!(f, "elr: {:016x}", self.elr)?;
-        writeln!(f, "   sp:  {:016x}", self.sp)?;
+        write!(f, "   sp:  {:016x}", self.sp)?;
         Ok(())
     }
 }

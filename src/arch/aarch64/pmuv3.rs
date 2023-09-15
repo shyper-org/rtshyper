@@ -223,10 +223,15 @@ pub struct PmuTimerEvent(pub WeakVcpu);
 
 #[cfg(feature = "memory-reservation")]
 impl crate::util::timer_list::TimerEvent for PmuTimerEvent {
-    fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerTickValue) {
+    fn callback(self: alloc::sync::Arc<Self>, now: crate::util::timer_list::TimerValue) {
         if let Some(vcpu) = self.0.upgrade() {
             let period = vcpu.bw_info().period();
-            trace!("vm {} vcpu {} supply_budget at {}", vcpu.vm_id(), vcpu.id(), now);
+            trace!(
+                "vm {} vcpu {} supply_budget at {}",
+                vcpu.vm_id(),
+                vcpu.id(),
+                now.as_millis()
+            );
             match vcpu.state() {
                 VcpuState::Running => {
                     vcpu_stop_pmu(&vcpu);

@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use crate::arch::INTERRUPT_IRQ_HYPERVISOR_TIMER;
 use crate::kernel::current_cpu;
-use crate::util::timer_list::{TimerEvent, TimerTickValue};
+use crate::util::timer_list::{TimerEvent, TimerValue};
 
 pub fn timer_init() {
     crate::arch::timer::timer_arch_init();
@@ -21,12 +21,8 @@ pub fn timer_enable(val: bool) {
     super::interrupt::interrupt_cpu_enable(INTERRUPT_IRQ_HYPERVISOR_TIMER, val);
 }
 
-pub fn gettime_ns() -> usize {
-    crate::arch::timer::gettime_ns()
-}
-
-pub const fn timer_tick_ms() -> usize {
-    10
+pub fn now() -> core::time::Duration {
+    core::time::Duration::from_nanos(crate::arch::timer::gettime_ns() as u64)
 }
 
 #[allow(dead_code)]
@@ -44,9 +40,9 @@ fn timer_notify_after(ms: usize) {
     timer_arch_enable_irq();
 }
 
-fn check_timer_event(current_tick: TimerTickValue) {
-    while let Some((_timeout_tick, event)) = current_cpu().timer_list.get_mut().unwrap().pop(current_tick) {
-        event.callback(current_cpu().sys_tick);
+fn check_timer_event(current_time: TimerValue) {
+    while let Some((_timeout, event)) = current_cpu().timer_list.get_mut().unwrap().pop(current_time) {
+        event.callback(current_time);
     }
 }
 
@@ -54,19 +50,18 @@ pub fn timer_irq_handler() {
     use crate::arch::timer::timer_arch_disable_irq;
 
     timer_arch_disable_irq();
-    current_cpu().sys_tick += 1;
 
-    check_timer_event(current_cpu().sys_tick);
+    check_timer_event(now());
 
     current_cpu().vcpu_array.resched();
 
-    timer_notify_after(timer_tick_ms());
+    timer_notify_after(10);
 }
 
 #[allow(dead_code)]
-pub fn start_timer_event(period: TimerTickValue, event: Arc<dyn TimerEvent>) {
-    let timeout_tick = current_cpu().sys_tick + period;
-    current_cpu().timer_list.get_mut().unwrap().push(timeout_tick, event);
+pub fn start_timer_event(period: TimerValue, event: Arc<dyn TimerEvent>) {
+    let timeout = now() + period;
+    current_cpu().timer_list.get_mut().unwrap().push(timeout, event);
 }
 
 #[allow(dead_code)]

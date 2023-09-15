@@ -26,10 +26,9 @@ impl log::Log for SimpleLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            // let ms = crate::lib::timer::current_ms();
-            // let s = ms / 1000;
-            // let ms = ms % 1000;
-            // print!("[{:04}.{:03}]", s, ms);
+            let time = crate::kernel::timer::now();
+            let sec = time.as_secs();
+            let ms = time.subsec_millis();
 
             let level = match record.level() {
                 Level::Error => "E>",
@@ -42,7 +41,7 @@ impl log::Log for SimpleLogger {
                 "{}",
                 with_color!(
                     level2color(record.level()),
-                    "{}{}[{}] {}",
+                    "[{sec:04}.{ms:03}]{}{}[{}] {}",
                     level,
                     crate::kernel::current_cpu().id,
                     record.target(),

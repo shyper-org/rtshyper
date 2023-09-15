@@ -3,13 +3,13 @@ use alloc::vec::Vec;
 use core::ffi::CStr;
 use core::ops::Range;
 use core::sync::atomic::{AtomicU32, Ordering};
+use core::time::Duration;
 
 use spin::Mutex;
 
 // use crate::board::*;
 use crate::device::{mediated_blk_free, mediated_blk_request, EmuDeviceType};
 use crate::kernel::access::{copy_between_vm, copy_segment_from_vm};
-use crate::kernel::timer::timer_tick_ms;
 use crate::kernel::{active_vm, vm_by_id, Vm, VmType, CONFIG_VM_NUM_MAX};
 use crate::util::{BitAlloc, BitAlloc16};
 use crate::vmm::vmm_init_gvm;
@@ -81,7 +81,7 @@ impl VmRegion {
 }
 
 const DEFAULT_MEMORY_BUDGET: u32 = 10_0000_0000; // a very big budget that is impossible to be depleted
-const DEFAULT_MEMORY_REPLENISHMENT_PERIOD: u64 = 10; // replenishment timer period
+const DEFAULT_MEMORY_REPLENISHMENT_PERIOD: Duration = Duration::from_millis(100); // replenishment timer period
 const DEFAULT_PERCENT: u32 = 50;
 
 // set by memory random access latency benchmark
@@ -93,7 +93,7 @@ pub struct VmMemoryConfig {
     pub region: Vec<VmRegion>,
     pub colors: Vec<usize>,
     pub budget: u32,
-    pub period: u64,
+    pub period: Duration,
 }
 
 impl Default for VmMemoryConfig {
@@ -677,8 +677,8 @@ pub fn add_dtb_dev(
 
 #[allow(dead_code)]
 pub fn set_memory_budget_second(budget: u32) {
-    let period_per_second = 1000 / DEFAULT_MEMORY_REPLENISHMENT_PERIOD as u32 / timer_tick_ms() as u32;
-    let budget_per_period = budget / period_per_second;
+    let budget_per_period =
+        ((budget as usize * DEFAULT_MEMORY_REPLENISHMENT_PERIOD.as_millis() as usize) / 10_usize.pow(3)) as u32;
     MEMORY_BUDGET_PER_PERIOD.store(budget_per_period, Ordering::Relaxed);
     let bandwidth = crate::util::budget2bandwidth(budget_per_period, DEFAULT_MEMORY_REPLENISHMENT_PERIOD);
     info!("set memory limited budget {budget_per_period}, bandwidth {bandwidth} MB/s");

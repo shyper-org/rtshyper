@@ -1,5 +1,6 @@
 use core::ptr::{self, NonNull};
 use core::sync::atomic::AtomicU32;
+use core::time::Duration;
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
@@ -9,9 +10,9 @@ use crate::{
     config,
     kernel::{
         current_cpu,
-        timer::{gettime_ns, start_timer_event},
+        timer::{now, start_timer_event},
     },
-    util::timer_list::{TimerEvent, TimerTickValue},
+    util::timer_list::{TimerEvent, TimerValue},
 };
 
 use super::ema::ExponentialMovingAverage;
@@ -44,12 +45,12 @@ impl ReclaimManager {
 }
 
 struct ReclaimManagerRef {
-    period: TimerTickValue,
+    period: TimerValue,
     manager: NonNull<ReclaimManager>,
 }
 
 impl TimerEvent for ReclaimManagerRef {
-    fn callback(self: alloc::sync::Arc<Self>, _now: crate::util::timer_list::TimerTickValue) {
+    fn callback(self: alloc::sync::Arc<Self>, _now: crate::util::timer_list::TimerValue) {
         let mut val = unsafe { self.manager.as_ref() }.val.lock();
         if *val != 0 {
             trace!("reset GLOBAL_RECLAIM_MANAGER budget {} to 0", *val);
@@ -99,7 +100,7 @@ const CACHE_LINE_SIZE: usize = 64;
 
 pub struct MemoryBandwidth {
     budget: u32,
-    period: u64,
+    period: Duration,
     last_predict_budget: AtomicU32,
     remaining_budget: AtomicU32,
     used_budget: AtomicU32,
@@ -107,7 +108,7 @@ pub struct MemoryBandwidth {
 }
 
 impl MemoryBandwidth {
-    pub fn new(budget: u32, period: u64) -> Self {
+    pub fn new(budget: u32, period: Duration) -> Self {
         Self {
             budget,
             period,
@@ -118,7 +119,7 @@ impl MemoryBandwidth {
         }
     }
 
-    pub fn period(&self) -> u64 {
+    pub fn period(&self) -> Duration {
         self.period
     }
 
@@ -226,7 +227,7 @@ fn latency_bench(repeat_time: usize) -> usize {
 
     let mut readsum = 0;
     // actual access
-    let start = gettime_ns();
+    let start = now();
     for _ in 0..repeat_time {
         let mut pos = head;
         while let Some(p) = unsafe { pos.as_ref() } {
@@ -234,9 +235,9 @@ fn latency_bench(repeat_time: usize) -> usize {
             pos = p.next;
         }
     }
-    let end = gettime_ns();
+    let end = now();
 
-    let nsdiff = end - start;
+    let nsdiff = (end - start).as_nanos() as usize;
     let avglat = nsdiff / workingset_size / repeat_time;
     info!("duration {nsdiff} ns, average {avglat} ns, readsum {readsum}");
     info!("bandwidth {} MB/s", CACHE_LINE_SIZE * 1000 / avglat);
@@ -254,7 +255,7 @@ pub(super) fn init() {
 
     if current_cpu().id == 0 {
         let reclaim_manager_timer_event = Arc::new(ReclaimManagerRef {
-            period: 10,
+            period: core::time::Duration::from_millis(100),
             manager: NonNull::new(ptr::addr_of!(GLOBAL_RECLAIM_MANAGER) as *mut _).unwrap(),
         });
         start_timer_event(reclaim_manager_timer_event.period, reclaim_manager_timer_event);

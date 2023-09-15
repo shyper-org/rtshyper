@@ -9,7 +9,7 @@ use crate::arch::PageTable;
 use crate::arch::{pt_map_banked_cpu, TlbInvalidate, PAGE_SIZE, PTE_PER_PAGE};
 use crate::board::{PLATFORM_CPU_NUM_MAX, PLAT_DESC};
 use crate::kernel::{Vcpu, Vm};
-use crate::util::timer_list::{TimerList, TimerTickValue};
+use crate::util::timer_list::TimerList;
 
 use super::sched::get_scheduler;
 use super::vcpu_array::VcpuArray;
@@ -41,7 +41,6 @@ pub struct Cpu {
 
     pub vcpu_array: VcpuArray,
     // timer
-    pub(super) sys_tick: TimerTickValue,
     pub(super) timer_list: Once<TimerList>,
 
     pub current_irq: usize,
@@ -62,7 +61,6 @@ impl Cpu {
             active_vcpu: None,
             ctx: ptr::null_mut(),
             vcpu_array: VcpuArray::new(),
-            sys_tick: 0,
             timer_list: Once::new(),
             current_irq: 0,
             interrupt_nested: 0,

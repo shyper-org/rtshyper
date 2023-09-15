@@ -91,7 +91,6 @@ pub fn ptr_read_write(addr: usize, width: usize, val: usize, read: bool) -> usiz
 
 // MB/s
 #[inline]
-pub fn budget2bandwidth(budget: u32, period: u64) -> u32 {
-    use crate::kernel::timer::timer_tick_ms;
-    64 * budget / timer_tick_ms() as u32 / 1000 / period as u32
+pub fn budget2bandwidth(budget: u32, period: core::time::Duration) -> usize {
+    64 * budget as usize / period.as_micros() as usize
 }
