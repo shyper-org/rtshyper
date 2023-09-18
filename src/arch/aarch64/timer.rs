@@ -2,7 +2,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use tock_registers::interfaces::*;
 
-const CTL_IMASK: usize = 1 << 1;
+use super::regs::CNTHP_CTL_EL2;
 
 static TIMER_FREQ: AtomicUsize = AtomicUsize::new(0);
 static TIMER_MS_TICKS: AtomicUsize = AtomicUsize::new(0); // ms
@@ -15,13 +15,11 @@ pub fn timer_arch_set(num: usize) {
 }
 
 pub fn timer_arch_enable_irq() {
-    let val = 1;
-    msr!(CNTHP_CTL_EL2, val, "x");
+    CNTHP_CTL_EL2.write(CNTHP_CTL_EL2::ENABLE::SET);
 }
 
 pub fn timer_arch_disable_irq() {
-    let val = 2;
-    msr!(CNTHP_CTL_EL2, val, "x");
+    CNTHP_CTL_EL2.write(CNTHP_CTL_EL2::IMASK::SET);
 }
 
 pub fn timer_arch_get_counter() -> usize {
@@ -44,9 +42,8 @@ pub fn timer_arch_init() {
     TIMER_MS_TICKS.store(ticks_per_ms, Ordering::Relaxed);
     TIMER_TICK_NS.store(10usize.pow(9) / freq, Ordering::Relaxed);
 
-    let ctl = 0x3 & (1 | !CTL_IMASK);
+    CNTHP_CTL_EL2.write(CNTHP_CTL_EL2::ENABLE::SET);
     let tval = ticks_per_ms * 10;
-    msr!(CNTHP_CTL_EL2, ctl);
     msr!(CNTHP_TVAL_EL2, tval);
 }
 

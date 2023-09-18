@@ -9,7 +9,8 @@ use super::exception::{
     exception_fault_addr, exception_iss, exception_next_instruction_step,
 };
 
-pub const HVC_RETURN_REG: usize = 0;
+const HVC_RETURN_REG: usize = 0;
+const SMC_RETURN_REG: usize = 0;
 
 pub fn data_abort_handler() {
     // let time0 = time_current_us();
@@ -88,7 +89,7 @@ pub fn smc_handler() {
 
     if !smc_guest_handler(fid, x1, x2, x3) {
         warn!("smc_handler: unknown fid {:#x}", fid);
-        current_cpu().set_gpr(0, 0);
+        current_cpu().set_gpr(SMC_RETURN_REG, usize::MAX);
     }
 
     let elr = current_cpu().get_elr();

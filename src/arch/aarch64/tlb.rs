@@ -1,7 +1,6 @@
 use core::arch::asm;
 
 use crate::arch::TlbInvalidate;
-use crate::arch::PAGE_SHIFT;
 
 use super::Aarch64Arch;
 
@@ -13,7 +12,7 @@ impl TlbInvalidate for Aarch64Arch {
                 "tlbi vae2is, {0}",
                 "dsb ish",
                 "isb",
-                in(reg) va >> PAGE_SHIFT,
+                in(reg) va >> 12,
                 options(nostack)
             );
         }
@@ -33,7 +32,7 @@ impl TlbInvalidate for Aarch64Arch {
                 "tlbi ipas2e1is, {0}",
                 "dsb ish",
                 "isb",
-                in(reg) ipa >> PAGE_SHIFT,
+                in(reg) ipa >> 12,
                 options(nostack)
             );
         }

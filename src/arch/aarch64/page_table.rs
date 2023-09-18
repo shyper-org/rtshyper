@@ -9,8 +9,8 @@ use crate::arch::TlbInvalidate;
 use crate::kernel::mem_page_alloc;
 use crate::kernel::Cpu;
 use crate::mm::PageFrame;
+use crate::util::memcpy_safe;
 use crate::util::round_up;
-use crate::util::{memcpy_safe, memset_safe};
 
 use super::{Arch, PAGE_SIZE, PTE_PER_PAGE};
 
@@ -128,8 +128,8 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     let addr = unsafe { &super::mmu::LVL1_PAGE_TABLE as *const _ } as usize;
 
     memcpy_safe(cpu.cpu_pt.lvl1.as_ptr() as *const _, addr as *mut _, PAGE_SIZE);
-    memset_safe(cpu.cpu_pt.lvl2.as_ptr() as *mut _, 0, PAGE_SIZE);
-    memset_safe(cpu.cpu_pt.lvl3.as_ptr() as *mut _, 0, PAGE_SIZE);
+    cpu.cpu_pt.lvl2.fill(0);
+    cpu.cpu_pt.lvl3.fill(0);
 
     use core::mem::size_of;
     const_assert!(size_of::<Cpu>() <= (1 << LVL2_SHIFT));

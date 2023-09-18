@@ -12,7 +12,7 @@ use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
 use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
-use crate::util::{barrier, memcpy_safe, reset_barrier, round_up};
+use crate::util::{barrier, reset_barrier, round_up};
 
 use super::{current_cpu, CPU_MASTER};
 
@@ -358,19 +358,20 @@ fn cpu_map_va2color_regions(cpu: &Cpu, cpu_va_region: RangeInclusive<usize>, col
 
 fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> (&'static mut T, Vec<ColorMemRegion>) {
     // alloc mem pages
-    let color_regions =
-        mem_region_alloc_colors(len, color_bitmap).unwrap_or_else(|_| panic!("mem_region_alloc_colors() error"));
+    let color_regions = mem_region_alloc_colors(len, color_bitmap).expect("mem_region_alloc_colors() error");
     debug!("space_remapping: color_regions {:x?}", color_regions);
     // alloc va space
-    let va_pages = vpage_alloc(len, None).unwrap_or_else(|err| panic!("vpage_alloc: {err:?}"));
+    let va_pages = vpage_alloc(len, None).expect("vpage_alloc");
     debug!("space_remapping: va pages {:?}", va_pages);
-    let dest_va = va_pages.start().start_address().as_ptr();
+    let dest_va = va_pages.start().start_address().as_mut_ptr() as *mut u8;
     let range = va_pages.as_range_incluesive();
     debug!("space_remapping: dest va {:x?}", range);
     // map va with pa
     cpu_map_va2color_regions(current_cpu(), range, &color_regions);
     // copy src to va
-    memcpy_safe(dest_va, src as *const u8, len);
+    unsafe {
+        core::ptr::copy_nonoverlapping(src as *const u8, dest_va, len);
+    }
     Arch::dcache_clean_flush(dest_va as usize, len);
     (unsafe { &mut *(dest_va as *mut T) }, color_regions)
 }
@@ -401,9 +402,7 @@ unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
     let length = current_cpu().stack_top() - current_sp;
 
     let dst_sp = cpu_new.stack_top() - length;
-    unsafe {
-        crate::util::memcpy(dst_sp as *const _, current_sp as *const _, length);
-    }
+    core::ptr::copy_nonoverlapping(current_sp as *const u8, dst_sp as *mut u8, length);
 
     crate::arch::Arch::invalid_hypervisor_all();
     // switch to page table
@@ -481,9 +480,9 @@ pub fn hypervisor_self_coloring() {
     // copy again: for heap space in bss segment
     if current_cpu().id == CPU_MASTER {
         unsafe {
-            crate::util::memcpy(
-                *NEW_IMAGE_START.get().unwrap() as *const _,
-                image_start as *const _,
+            core::ptr::copy_nonoverlapping(
+                image_start as *const u8,
+                *NEW_IMAGE_START.get().unwrap() as *mut u8,
                 image_size,
             )
         };

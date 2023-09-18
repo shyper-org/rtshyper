@@ -383,7 +383,7 @@ impl Vm {
         let config = self.config();
         for region in config.memory_region().iter() {
             let hva = self.ipa2hva(region.ipa_start);
-            memset_safe(hva as *mut _, 0, region.length);
+            unsafe { core::slice::from_raw_parts_mut(hva as *mut u8, region.length) }.fill(0);
         }
     }
 

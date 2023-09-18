@@ -78,7 +78,9 @@ impl SchedUnit {
         debug_assert!(!self.period.is_zero());
         assert!(now >= self.current_deadline.get());
 
-        let count = ((now.as_micros() - self.current_deadline.get().as_micros()) / self.period.as_micros() + 1) as u32;
+        let count = ((now.as_micros() - self.current_deadline.get().as_micros()) as usize
+            / self.period.as_micros() as usize
+            + 1) as u32;
         self.current_deadline
             .set(self.current_deadline.get() + count * self.period);
 

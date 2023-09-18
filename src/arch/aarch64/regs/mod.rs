@@ -9,3 +9,6 @@ mod pmuserenr_el0;
 
 pub use pmccfiltr_el0::PMCCFILTR_EL0;
 mod pmccfiltr_el0;
+
+pub use cnthp_ctl_el2::CNTHP_CTL_EL2;
+mod cnthp_ctl_el2;

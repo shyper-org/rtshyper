@@ -14,13 +14,10 @@ pub fn c_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let func = syn::parse_macro_input!(item as ItemFn);
-    match func.vis {
-        Visibility::Public(_) => {}
-        _ => {
-            return Error::new(Span::call_site(), "`must decorate a public function")
-                .to_compile_error()
-                .into();
-        }
+    if !matches!(func.vis, Visibility::Public(_)) {
+        return Error::new(Span::call_site(), "must decorate a public function")
+            .to_compile_error()
+            .into();
     }
     let func_block = &func.block; // { some statement or expression here }
 

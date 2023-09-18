@@ -2,7 +2,6 @@ use core::alloc::{GlobalAlloc, Layout};
 
 use crate::arch::PAGE_SIZE;
 use crate::kernel::{current_cpu, AllocError};
-use crate::util::memset_safe;
 
 use super::HEAP_ALLOCATOR;
 
@@ -35,7 +34,6 @@ impl PageFrame {
                 if hva.is_null() || hva as usize & (PAGE_SIZE - 1) != 0 {
                     panic!("alloc_pages: get wrong ptr {hva:#p}, layout = {:?}", layout);
                 }
-                memset_safe(hva, 0, PAGE_SIZE);
                 let hva = hva as usize;
                 Ok(Self::new(hva, page_num))
             }
@@ -52,10 +50,6 @@ impl PageFrame {
 
     pub fn hva(&self) -> usize {
         self.hva
-    }
-
-    pub fn zero(&self) {
-        memset_safe(self.hva as *mut u8, 0, PAGE_SIZE);
     }
 }
 
