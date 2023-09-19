@@ -14,7 +14,7 @@ use crate::device::{EmuContext, EmuDev, EmuDeviceType};
 use crate::kernel::{active_vcpu_id, active_vm, current_cpu};
 use crate::kernel::{ipi_intra_broadcast_msg, ipi_send_msg, IpiInitcMessage, IpiInnerMsg, IpiMessage, IpiType};
 use crate::kernel::{InitcEvent, Vcpu, Vm};
-use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth};
+use crate::util::{bit_extract, bit_get, bit_set, bitmap_find_nth, self_ref_cell::SelfRefCell};
 
 use super::gic::*;
 
@@ -33,26 +33,26 @@ struct VgicIntInnerConst {
 unsafe impl Sync for VgicIntInnerConst {}
 
 impl VgicInt {
-    fn new(id: usize) -> Arc<Self> {
-        Arc::new(Self {
+    fn new(id: usize) -> Self {
+        Self {
             inner_const: VgicIntInnerConst {
                 id: (id + GIC_PRIVINT_NUM) as u16,
                 hw: Cell::new(false),
             },
             inner: Mutex::new(VgicIntInnerMut::new()),
             lock: Mutex::new(()),
-        })
+        }
     }
 
-    fn priv_new(id: usize, owner: Vcpu, targets: usize, enabled: bool) -> Arc<Self> {
-        Arc::new(Self {
+    fn priv_new(id: usize, owner: Vcpu, targets: usize, enabled: bool) -> Self {
+        Self {
             inner_const: VgicIntInnerConst {
                 id: id as u16,
                 hw: Cell::new(false),
             },
             inner: Mutex::new(VgicIntInnerMut::priv_new(owner, targets, enabled)),
             lock: Mutex::new(()),
-        })
+        }
     }
 
     fn set_in_pend_state(&self, is_pend: bool) {
@@ -258,15 +258,16 @@ struct Vgicd {
     ctlr: AtomicU32,
     typer: u32,
     iidr: u32,
-    interrupts: Vec<Arc<VgicInt>>,
+    interrupts: Vec<VgicInt>,
 }
 
 impl Vgicd {
-    fn default() -> Vgicd {
-        Vgicd {
+    fn new(cpu_num: usize) -> Self {
+        Self {
             ctlr: AtomicU32::new(0),
-            typer: 0,
-            iidr: 0,
+            typer: (GICD.typer() & GICD_TYPER_ITLINESNUM_MSK)
+                | (((cpu_num as u32 - 1) << GICD_TYPER_CPUNUM_OFF) & GICD_TYPER_CPUNUM_MSK),
+            iidr: GICD.iidr(),
             interrupts: Vec::new(),
         }
     }
@@ -279,19 +280,20 @@ pub struct Sgis {
 }
 
 struct VgicCpuPriv {
-    interrupts: Vec<Arc<VgicInt>>,
+    interrupts: Vec<VgicInt>,
     inner_mut: RefCell<VgicCpuPrivMut>,
 }
 
 // SAFETY: VgicCpuPriv is only accessed on one core
+unsafe impl Send for VgicCpuPriv {}
 unsafe impl Sync for VgicCpuPriv {}
 
 struct VgicCpuPrivMut {
     curr_lrs: [u16; GIC_LIST_REGS_NUM],
     sgis: [Sgis; GIC_SGIS_NUM],
 
-    pend_list: VecDeque<Arc<VgicInt>>,
-    act_list: VecDeque<Arc<VgicInt>>,
+    pend_list: VecDeque<SelfRefCell<VgicInt>>,
+    act_list: VecDeque<SelfRefCell<VgicInt>>,
 }
 
 impl Default for VgicCpuPriv {
@@ -315,10 +317,10 @@ pub struct Vgic {
 }
 
 impl Vgic {
-    fn new(base: usize, length: usize) -> Self {
+    fn new(base: usize, length: usize, cpu_num: usize) -> Self {
         Self {
             address_range: base..base + length,
-            vgicd: Vgicd::default(),
+            vgicd: Vgicd::new(cpu_num),
             cpu_priv: Vec::new(),
         }
     }
@@ -353,31 +355,31 @@ impl Vgic {
         };
     }
 
-    fn add_int_list(&self, vcpu: &Vcpu, interrupt: Arc<VgicInt>, is_pend: bool) {
+    fn add_int_list(&self, vcpu: &Vcpu, interrupt: &VgicInt, is_pend: bool) {
         let vcpu_id = vcpu.id();
         let mut cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow_mut();
         if is_pend {
             interrupt.set_in_pend_state(true);
-            cpu_priv.pend_list.push_back(interrupt);
+            cpu_priv.pend_list.push_back(SelfRefCell::new(interrupt));
         } else {
             interrupt.set_in_act_state(true);
-            cpu_priv.act_list.push_back(interrupt);
+            cpu_priv.act_list.push_back(SelfRefCell::new(interrupt));
         }
     }
 
-    fn update_int_list(&self, vcpu: &Vcpu, interrupt: Arc<VgicInt>) {
+    fn update_int_list(&self, vcpu: &Vcpu, interrupt: &VgicInt) {
         let state = interrupt.state();
 
         if state.is_pend() && !interrupt.in_pend() {
             self.add_int_list(vcpu, interrupt.clone(), true);
         } else if !state.is_pend() {
-            self.remove_int_list(vcpu, &interrupt, true);
+            self.remove_int_list(vcpu, interrupt, true);
         }
 
         if state.is_active() && !interrupt.in_act() {
             self.add_int_list(vcpu, interrupt.clone(), false);
         } else if !state.is_active() {
-            self.remove_int_list(vcpu, &interrupt, false);
+            self.remove_int_list(vcpu, interrupt, false);
         }
 
         if interrupt.id() < GIC_SGIS_NUM as u16
@@ -388,13 +390,13 @@ impl Vgic {
         }
     }
 
-    fn int_list_head(&self, vcpu: &Vcpu, is_pend: bool) -> Option<Arc<VgicInt>> {
+    fn int_list_head(&self, vcpu: &Vcpu, is_pend: bool) -> Option<&VgicInt> {
         let vcpu_id = vcpu.id();
         let cpu_priv = self.cpu_priv[vcpu_id].inner_mut.borrow();
         if is_pend {
-            cpu_priv.pend_list.front().cloned()
+            cpu_priv.pend_list.front().cloned().map(|i| i.as_ref())
         } else {
-            cpu_priv.act_list.front().cloned()
+            cpu_priv.act_list.front().cloned().map(|i| i.as_ref())
         }
     }
 
@@ -414,7 +416,7 @@ impl Vgic {
         self.vgicd.iidr
     }
 
-    fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> Option<&Arc<VgicInt>> {
+    fn cpu_priv_interrupt(&self, cpu_id: usize, idx: usize) -> Option<&VgicInt> {
         self.cpu_priv[cpu_id].interrupts.get(idx)
     }
 
@@ -448,11 +450,11 @@ impl Vgic {
         cpu_priv.sgis[idx].act = act;
     }
 
-    fn vgicd_interrupt(&self, idx: usize) -> Option<&Arc<VgicInt>> {
+    fn vgicd_interrupt(&self, idx: usize) -> Option<&VgicInt> {
         self.vgicd.interrupts.get(idx)
     }
 
-    fn get_int(&self, vcpu: &Vcpu, int_id: usize) -> Option<&Arc<VgicInt>> {
+    fn get_int(&self, vcpu: &Vcpu, int_id: usize) -> Option<&VgicInt> {
         if int_id < GIC_PRIVINT_NUM {
             let vcpu_id = vcpu.id();
             self.cpu_priv_interrupt(vcpu_id, int_id)
@@ -463,7 +465,7 @@ impl Vgic {
         }
     }
 
-    fn remove_lr(&self, vcpu: &Vcpu, interrupt: &Arc<VgicInt>) -> bool {
+    fn remove_lr(&self, vcpu: &Vcpu, interrupt: &VgicInt) -> bool {
         if !vgic_owns(vcpu, interrupt) {
             return false;
         }
@@ -507,7 +509,7 @@ impl Vgic {
         false
     }
 
-    fn add_lr(&self, vcpu: &Vcpu, interrupt: Arc<VgicInt>) -> bool {
+    fn add_lr(&self, vcpu: &Vcpu, interrupt: &VgicInt) -> bool {
         if !interrupt.enabled() || interrupt.in_lr() {
             return false;
         }
@@ -578,7 +580,7 @@ impl Vgic {
             }
             None => {
                 // turn on maintenance interrupts
-                if vgic_get_state(&interrupt).is_pend() {
+                if vgic_get_state(interrupt).is_pend() {
                     let hcr = GICH.hcr();
                     GICH.set_hcr(hcr | (1 << 3)); // List registers contain no interrupts in the pending state
                 }
@@ -588,7 +590,7 @@ impl Vgic {
         false
     }
 
-    fn write_lr(&self, vcpu: &Vcpu, interrupt: Arc<VgicInt>, lr_ind: usize) {
+    fn write_lr(&self, vcpu: &Vcpu, interrupt: &VgicInt, lr_ind: usize) {
         let vcpu_id = vcpu.id();
         let int_id = interrupt.id() as usize;
         let int_prio = interrupt.prio();
@@ -613,10 +615,10 @@ impl Vgic {
             }
         }
 
-        let state = vgic_get_state(&interrupt);
+        let state = vgic_get_state(interrupt);
         let mut lr = (int_id & 0b1111111111) | (((int_prio as usize >> 3) & 0b11111) << 23);
 
-        if vgic_int_is_hw(&interrupt) {
+        if vgic_int_is_hw(interrupt) {
             lr |= 1 << 31;
             lr |= (0b1111111111 & int_id) << 10;
             if state == IrqState::PendActive {
@@ -651,7 +653,7 @@ impl Vgic {
                 lr |= 1 << 19;
             }
         } else {
-            if !gic_is_priv(int_id) && !vgic_int_is_hw(&interrupt) {
+            if !gic_is_priv(int_id) && !vgic_int_is_hw(interrupt) {
                 lr |= 1 << 19;
             }
 
@@ -671,7 +673,7 @@ impl Vgic {
         self.update_int_list(vcpu, interrupt);
     }
 
-    fn route(&self, vcpu: &Vcpu, interrupt: &Arc<VgicInt>) {
+    fn route(&self, vcpu: &Vcpu, interrupt: &VgicInt) {
         let cpu_id = current_cpu().id;
         if IrqState::Inactive == interrupt.state() {
             return;
@@ -1576,7 +1578,7 @@ impl Vgic {
             match interrupt_opt {
                 Some(interrupt) => {
                     // println!("refill int {}", interrupt.id());
-                    vgic_int_get_owner(vcpu.clone(), &interrupt);
+                    vgic_int_get_owner(vcpu.clone(), interrupt);
                     self.write_lr(vcpu, interrupt, lr_idx);
                     has_pending = has_pending || prev_pend;
                 }
@@ -1594,13 +1596,13 @@ impl Vgic {
     fn eoir_highest_spilled_active(&self, vcpu: &Vcpu) {
         let interrupt = self.int_list_head(vcpu, false);
         if let Some(int) = interrupt {
-            vgic_int_get_owner(vcpu.clone(), &int);
+            vgic_int_get_owner(vcpu.clone(), int);
 
             let state = int.state();
             int.set_state(state.clear_active());
             self.update_int_list(vcpu, int.clone());
 
-            if vgic_int_is_hw(&int) {
+            if vgic_int_is_hw(int) {
                 GICD.set_act(int.id() as usize, false);
             } else {
                 if int.state().is_pend() {
@@ -2061,13 +2063,9 @@ pub fn emu_intc_init(emu_cfg: &VmEmulatedDeviceConfig, vcpu_list: &[Vcpu]) -> Re
     if emu_cfg.emu_type != EmuDeviceType::EmuDeviceTGicd {
         return Err(());
     }
-    let mut vgic = Vgic::new(emu_cfg.base_ipa, emu_cfg.length);
+    let mut vgic = Vgic::new(emu_cfg.base_ipa, emu_cfg.length, vcpu_list.len());
 
-    let cpu_num = vcpu_list.len();
     let vgicd = &mut vgic.vgicd;
-    vgicd.typer = (GICD.typer() & GICD_TYPER_CPUNUM_MSK as u32)
-        | (((cpu_num - 1) << GICD_TYPER_CPUNUM_OFF) & GICD_TYPER_CPUNUM_MSK) as u32;
-    vgicd.iidr = GICD.iidr();
 
     for i in 0..GIC_SPI_MAX {
         vgicd.interrupts.push(VgicInt::new(i));

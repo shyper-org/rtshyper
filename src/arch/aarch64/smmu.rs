@@ -81,12 +81,6 @@ const S2CR_IMPL_LEN: usize = 2;
 
 const S2CR_DFLT: usize = 0;
 
-macro_rules! bit_mask {
-    ($off: expr, $len: expr) => {
-        ((1 << ($off + $len)) - 1) & !((1 << $off) - 1)
-    };
-}
-
 register_structs! {
     #[allow(non_snake_case)]
     SmmuGlobalRegisterSpace0 {

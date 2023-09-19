@@ -58,3 +58,10 @@ macro_rules! min {
         }
     };
 }
+
+#[macro_export]
+macro_rules! bit_mask {
+    ($off: expr, $len: expr) => {
+        ((1 << ($off + $len)) - 1) & !((1 << $off) - 1)
+    };
+}

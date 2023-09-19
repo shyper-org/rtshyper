@@ -9,6 +9,7 @@ mod bitmap;
 pub mod downcast;
 pub mod logger;
 mod print;
+pub mod self_ref_cell;
 mod time;
 pub mod timer_list;
 #[cfg(feature = "unilib")]

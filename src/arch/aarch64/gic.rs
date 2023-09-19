@@ -39,9 +39,10 @@ const GIC_SGI_REGS_NUM: usize = GIC_SGIS_NUM * 8 / 32;
 
 pub const GIC_LIST_REGS_NUM: usize = 64;
 
-pub const GICD_TYPER_CPUNUM_OFF: usize = 5;
-// pub const GICD_TYPER_CPUNUM_LEN: usize = 3;
-pub const GICD_TYPER_CPUNUM_MSK: usize = 0b11111;
+pub const GICD_TYPER_CPUNUM_OFF: u32 = 5;
+pub const GICD_TYPER_CPUNUM_LEN: u32 = 3;
+pub const GICD_TYPER_CPUNUM_MSK: u32 = bit_mask!(GICD_TYPER_CPUNUM_OFF, GICD_TYPER_CPUNUM_LEN);
+pub const GICD_TYPER_ITLINESNUM_MSK: u32 = 0b11111;
 
 static GIC_LRS_NUM: AtomicUsize = AtomicUsize::new(0);
 
