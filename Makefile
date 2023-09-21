@@ -28,6 +28,7 @@ define tftp_upload
 	@mkimage -n ${IMAGE} -A arm64 -O linux -T kernel -C none -a $(1) -e $(1) -d ${TARGET_DIR}/${IMAGE}.bin ${TARGET_DIR}/${UBOOT_IMAGE}
 	@echo "*** Upload Image ${UBOOT_IMAGE} ***"
 	@scp ${TARGET_DIR}/${UBOOT_IMAGE} ${TFTP_SERVER}/${UBOOT_IMAGE}
+	@echo "tftp 0x8a000000 \$${serverip}:${UBOOT_IMAGE}; bootm start 0x8a000000 - 0x80000000; bootm loados; bootm go"
 endef
 
 # Cargo flags.

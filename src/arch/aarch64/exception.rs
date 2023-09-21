@@ -227,29 +227,29 @@ pub fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
 fn interrupt_enter() {
     use super::{cpu_interrupt_disable, cpu_interrupt_enable};
     let level = cpu_interrupt_disable();
-    current_cpu().interrupt_nested += 1;
+    // current_cpu().interrupt_nested += 1;
     cpu_interrupt_enable(level);
-    if current_cpu().interrupt_nested > 1 {
-        trace!(
-            "irq has come, core {} interrupt_nested {}",
-            current_cpu().id,
-            current_cpu().interrupt_nested,
-        );
-    }
+    // if current_cpu().interrupt_nested > 1 {
+    //     trace!(
+    //         "irq has come, core {} interrupt_nested {}",
+    //         current_cpu().id,
+    //         current_cpu().interrupt_nested,
+    //     );
+    // }
 }
 
 #[cfg(feature = "preempt")]
 fn interrupt_leave() {
     use super::{cpu_interrupt_disable, cpu_interrupt_enable};
-    if current_cpu().interrupt_nested > 1 {
-        trace!(
-            "irq is going to leave, core {} interrupt_nested {}",
-            current_cpu().id,
-            current_cpu().interrupt_nested,
-        );
-    }
+    // if current_cpu().interrupt_nested > 1 {
+    //     trace!(
+    //         "irq is going to leave, core {} interrupt_nested {}",
+    //         current_cpu().id,
+    //         current_cpu().interrupt_nested,
+    //     );
+    // }
     let level = cpu_interrupt_disable();
-    current_cpu().interrupt_nested -= 1;
+    // current_cpu().interrupt_nested -= 1;
     cpu_interrupt_enable(level);
 }
 
