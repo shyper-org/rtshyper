@@ -136,12 +136,13 @@ pub struct VPage {
     inner: PageRange,
 }
 
+#[derive(raii::RAII)]
 pub struct AllocatedPages {
     pages: PageRange,
 }
 
 // AllocatedPages must not be Cloneable, and it must not expose its inner pages as mutable.
-assert_not_impl_any!(AllocatedPages: DerefMut, Clone);
+assert_not_impl_any!(AllocatedPages: DerefMut);
 
 impl Deref for AllocatedPages {
     type Target = PageRange;
@@ -195,23 +196,23 @@ impl AllocatedPages {
     }
 }
 
-// impl Drop for AllocatedPages {
-//     fn drop(&mut self) {
-//         if self.size_in_pages() == 0 {
-//             return;
-//         }
-//         info!("page_allocator: deallocating {:?}", self);
-//         // Simply add the newly-deallocated chunk to the free pages list.
-//         let mut locked_list = FREE_PAGE_LIST.lock();
-//         let res = locked_list.insert(Chunk {
-//             pages: self.pages.clone(),
-//         });
-//         match res {
-//             Ok(_inserted_free_chunk) => return,
-//             Err(c) => error!("BUG: couldn't insert deallocated chunk {:?} into free page list", c),
-//         }
-//     }
-// }
+impl Drop for AllocatedPages {
+    fn drop(&mut self) {
+        // if self.size_in_pages() == 0 {
+        //     return;
+        // }
+        // info!("page_allocator: deallocating {:?}", self);
+        // // Simply add the newly-deallocated chunk to the free pages list.
+        // let mut locked_list = FREE_PAGE_LIST.lock();
+        // let res = locked_list.insert(Chunk {
+        //     pages: self.pages.clone(),
+        // });
+        // match res {
+        //     Ok(_inserted_free_chunk) => return,
+        //     Err(c) => error!("BUG: couldn't insert deallocated chunk {:?} into free page list", c),
+        // }
+    }
+}
 
 struct DeferredAllocAction {
     free1: Chunk,

@@ -521,7 +521,7 @@ impl Vm {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, raii::RAII)]
 struct VmColorPaInfo {
     region_list: Vec<ColorMemRegion>,
 }

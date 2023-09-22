@@ -26,6 +26,8 @@ members = [
     "deps/libshyper",
     "deps/spin",
     "deps/ffi_interface",
+    "deps/raii",
+    "deps/raii-derive"
 ]
 
 [dependencies]
@@ -48,6 +50,7 @@ memoffset = { version = "0.9", default-features = false, features = [
     "unstable_const",
 ] }
 ffi_interface = { path = "deps/ffi_interface" }
+raii = { path = "deps/raii" }
 
 # optional dependencies
 fastrand = { version = "2.0.0", default-features = false, features = [

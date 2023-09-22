@@ -5,14 +5,12 @@ use crate::kernel::{current_cpu, AllocError};
 
 use super::HEAP_ALLOCATOR;
 
-#[derive(Debug)]
+#[derive(Debug, raii::RAII)]
 pub struct PageFrame {
     pub hva: usize,
     pub page_num: usize,
     pub pa: usize,
 }
-
-assert_not_impl_any!(PageFrame: Clone);
 
 #[allow(dead_code)]
 impl PageFrame {
