@@ -60,6 +60,14 @@ pub fn vmm_unmap_ipa2hva(vm: Arc<Vm>) {
     info!("vmm_unmap_ipa2hva: VM[{}] is ok", vm.id());
 }
 
+fn vm_flush_ipa(vm: &Vm) {
+    for region in vm.config().memory_region().iter() {
+        let hva = vm.ipa2hva(region.ipa_start);
+        use crate::arch::{Arch, CacheInvalidate};
+        Arch::dcache_clean_flush(hva, region.length);
+    }
+}
+
 pub fn vmm_map_ipa_percore(vm: &Vm, is_master: bool) {
     static SHARED_PTE: RwLock<Vec<(usize, usize)>> = RwLock::new(Vec::new());
     static FINISH: AtomicBool = AtomicBool::new(false);
@@ -94,6 +102,7 @@ pub fn vmm_map_ipa_percore(vm: &Vm, is_master: bool) {
         }
     }
     barrier();
+    vm_flush_ipa(vm);
     if is_master {
         FINISH.store(false, Ordering::Relaxed);
     }

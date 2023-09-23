@@ -15,7 +15,7 @@ use super::sched::get_scheduler;
 use super::vcpu_array::VcpuArray;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 128;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 64;
 const CONTEXT_GPR_NUM: usize = 31;
 
 #[repr(C, align(4096))]

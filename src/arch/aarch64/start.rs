@@ -3,8 +3,23 @@ use tock_registers::interfaces::{ReadWriteable, Writeable};
 use crate::arch::PAGE_SIZE;
 use crate::kernel::{cpu_map_self, CPU_STACK_OFFSET, CPU_STACK_SIZE};
 
+#[repr(C, align(8))]
+struct CoreBootStack([u8; PAGE_SIZE * 2]);
+
+struct BootStack<const NUM: usize>([CoreBootStack; NUM]);
+
+impl<const NUM: usize> BootStack<NUM> {
+    const fn new() -> Self {
+        Self([const { CoreBootStack([0; PAGE_SIZE * 2]) }; NUM])
+    }
+}
+
+mod static_config {
+    include!(concat!(env!("OUT_DIR"), "/config.rs")); // CORE_NUM defined here
+}
+
 #[link_section = ".bss.stack"]
-static mut BOOT_STACK: [u8; PAGE_SIZE * 8] = [0; PAGE_SIZE * 8];
+static mut BOOT_STACK: BootStack<{ static_config::CORE_NUM }> = BootStack::new();
 
 extern "C" {
     fn _bss_begin();
