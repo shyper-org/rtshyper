@@ -82,7 +82,7 @@ debug: qemu
 		-s -S
 
 gdb:
-	${GDB} -x gdb/aarch64.gdb
+	${GDB} -x gdb/${ARCH}.gdb
 
 clean:
 	cargo clean

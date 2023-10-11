@@ -103,16 +103,15 @@ impl CacheInfoTrait for Aarch64CacheInfo {
         };
 
         let indexed = if level == 1 {
-            const CTR_L1LP_OFF: usize = 14;
-            const CTR_L1LP_LEN: usize = 2;
-            const CTR_L1LP_VPIPT: usize = 0b00 << CTR_L1LP_OFF;
-            const CTR_L1LP_AIVIVT: usize = 0b01 << CTR_L1LP_OFF;
-            const CTR_L1LP_VIPT: usize = 0b10 << CTR_L1LP_OFF;
-            const CTR_L1LP_PIPT: usize = 0b11 << CTR_L1LP_OFF;
-            const CTR_L1LP_MASK: usize = ((1 << CTR_L1LP_LEN) - 1) << CTR_L1LP_OFF;
+            const CTR_L1LP_OFF: u64 = 14;
+            const CTR_L1LP_LEN: u64 = 2;
+            const CTR_L1LP_VPIPT: u64 = 0b00 << CTR_L1LP_OFF;
+            const CTR_L1LP_AIVIVT: u64 = 0b01 << CTR_L1LP_OFF;
+            const CTR_L1LP_VIPT: u64 = 0b10 << CTR_L1LP_OFF;
+            const CTR_L1LP_PIPT: u64 = 0b11 << CTR_L1LP_OFF;
+            const CTR_L1LP_MASK: u64 = bit_mask!(CTR_L1LP_OFF, CTR_L1LP_LEN);
 
-            let mut ctr: usize;
-            mrs!(ctr, CTR_EL0);
+            let ctr = mrs!(CTR_EL0);
             if ctr & CTR_L1LP_MASK == CTR_L1LP_PIPT {
                 CacheIndexed::Pipt
             } else {

@@ -148,8 +148,8 @@ pub struct VmContext {
 
     // hypervisor context
     pub hcr_el2: u64,
-    cptr_el2: u64,
-    hstr_el2: u64,
+    // cptr_el2: u64,
+    // hstr_el2: u64,
     #[cfg(not(feature = "memory-reservation"))]
     pub pmcr_el0: u64,
     // pub vtcr_el2: u64,

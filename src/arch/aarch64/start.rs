@@ -1,6 +1,7 @@
 use tock_registers::interfaces::{ReadWriteable, Writeable};
 
 use crate::arch::PAGE_SIZE;
+use crate::board::{PlatOperation, Platform};
 use crate::kernel::{cpu_map_self, CPU_STACK_OFFSET, CPU_STACK_SIZE};
 
 #[repr(C, align(8))]
@@ -27,35 +28,6 @@ extern "C" {
     fn vectors();
 }
 
-#[cfg(feature = "tx2")]
-macro_rules! mpidr2cpuid {
-    () => {
-        r#"
-        mrs x0, mpidr_el1
-        and x1, x0, #0x100
-        cbz x1, 1f
-        and x0, x0, #3
-        b   2f
-    1:  wfe
-        b   1b
-
-    2:  /*
-        * only cluster 1 cpu 0,1,2,3 reach here
-        * x0 holds core_id (indexed from zero)
-        */"#
-    };
-}
-
-#[cfg(any(feature = "pi4", feature = "qemu"))]
-macro_rules! mpidr2cpuid {
-    () => {
-        r#"
-        mrs x0, mpidr_el1
-        and x0, x0, #7
-        "#
-    };
-}
-
 #[naked]
 #[no_mangle]
 #[link_section = ".text.boot"]
@@ -63,9 +35,8 @@ unsafe extern "C" fn _start() -> ! {
     core::arch::asm!(
         r#"
         mov x20, x0 // save fdt pointer to x20
-        "#,
-        mpidr2cpuid!(),
-        r#"
+        mrs x0, mpidr_el1
+        bl {mpidr2cpuid}
         mov x19, x0 // save core_id
 
         // disable cache and MMU
@@ -111,10 +82,9 @@ unsafe extern "C" fn _start() -> ! {
 
         msr ttbr0_el2, x0
 
-        mov x1, 1
-        msr spsel, x1
+        msr spsel, #1
         ldr x1, ={CPU}
-        add x1, x1, #({CPU_STACK_OFFSET} + {CPU_STACK_SIZE})
+        add x1, x1, #{CPU_STACK_OFFSET}
         sub	sp, x1, #{CONTEXT_SIZE}
 
         bl {init_sysregs}
@@ -127,6 +97,7 @@ unsafe extern "C" fn _start() -> ! {
         mov x1, x20
         bl  {init}
         "#,
+        mpidr2cpuid = sym Platform::mpidr2cpuid,
         cache_invalidate = sym cache_invalidate,
         boot_stack = sym BOOT_STACK,
         lvl1_page_table = sym super::mmu::LVL1_PAGE_TABLE,
@@ -135,8 +106,7 @@ unsafe extern "C" fn _start() -> ! {
         mmu_init = sym super::mmu::mmu_init,
         cpu_map_self = sym cpu_map_self,
         CPU = sym crate::kernel::CPU,
-        CPU_STACK_OFFSET = const CPU_STACK_OFFSET,
-        CPU_STACK_SIZE = const CPU_STACK_SIZE,
+        CPU_STACK_OFFSET = const CPU_STACK_OFFSET + CPU_STACK_SIZE,
         CONTEXT_SIZE = const core::mem::size_of::<crate::arch::ContextFrame>(),
         clear_bss = sym clear_bss,
         init_sysregs = sym init_sysregs,

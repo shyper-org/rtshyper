@@ -9,7 +9,7 @@ use crate::kernel::access::copy_segment_to_vm;
 use crate::kernel::interrupt_vm_register;
 use crate::kernel::{
     count_missing_num, current_cpu, iommmu_vm_init, iommu_add_device, ipi_send_msg, mem_region_alloc_colors,
-    ColorMemRegion, IpiInnerMsg, IpiType, IpiVmmPercoreMsg, Vm, VmType,
+    ColorMemRegion, IpiInnerMsg, IpiType, IpiVmmPercoreMsg, Vm,
 };
 use crate::vmm::address::vmm_setup_ipa2hva;
 use crate::vmm::VmmPercoreEvent;
@@ -94,36 +94,34 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
 
     // Only load MVM kernel image "L4T" from binding.
     // Load GVM kernel image from shyper-cli, you may check it for more information.
-    if config.os_type == VmType::VmTOs {
-        match vm.config().kernel_img_name() {
-            Some(name) => {
-                if name == env!("VM0_IMAGE_PATH") {
-                    trace!("MVM {} loading Image", vm.id());
-                    vmm_load_image(vm, include_bytes!(env!("VM0_IMAGE_PATH")));
-                } else {
-                    cfg_if::cfg_if! {
-                        if #[cfg(feature = "static-config")] {
-                            if name == "Image_vanilla" {
-                                trace!("VM {} loading default Linux Image", vm.id());
-                                vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
-                            } else {
-                                warn!("Image {} is not supported", name);
-                            }
-                        } else if #[cfg(feature = "unishyper")] {
-                            if name == "Image_Unishyper" {
-                                vmm_load_image(vm, include_bytes!("../../image/Image_Unishyper"));
-                            } else {
-                                warn!("Image {} is not supported", name);
-                            }
+    match vm.config().kernel_img_name() {
+        Some(name) => {
+            if name == env!("VM0_IMAGE_PATH") {
+                trace!("MVM {} loading Image", vm.id());
+                vmm_load_image(vm, include_bytes!(env!("VM0_IMAGE_PATH")));
+            } else {
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "static-config")] {
+                        if name == "Image_vanilla" {
+                            trace!("VM {} loading default Linux Image", vm.id());
+                            vmm_load_image(vm, include_bytes!("../../image/Image_vanilla"));
                         } else {
-                            panic!("Image {} is not supported", name);
+                            warn!("Image {} is not supported", name);
                         }
+                    } else if #[cfg(feature = "unishyper")] {
+                        if name == "Image_Unishyper" {
+                            vmm_load_image(vm, include_bytes!("../../image/Image_Unishyper"));
+                        } else {
+                            warn!("Image {} is not supported", name);
+                        }
+                    } else {
+                        panic!("Image {} is not supported", name);
                     }
                 }
             }
-            None => {
-                info!("VM[{}] is a dynamic configuration", vm_id);
-            }
+        }
+        None => {
+            info!("VM[{}] is a dynamic configuration", vm_id);
         }
     }
 

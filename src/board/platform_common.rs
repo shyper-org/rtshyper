@@ -100,4 +100,9 @@ pub trait PlatOperation {
     fn device_regions() -> &'static [Range<usize>];
 
     fn pmu_irq_list() -> &'static [usize];
+
+    #[inline]
+    fn mpidr2cpuid(mpidr: usize) -> usize {
+        mpidr & 0xff
+    }
 }

@@ -1,3 +1,4 @@
+use crate::arch::ArchTrait;
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 use crate::board::Platform;
@@ -51,6 +52,21 @@ impl PlatOperation for Tx2Platform {
         //      interrupt-affinity = <0x2 0x3 0x4 0x5 0x6 0x7>;
         // };
         &[32 + 0x128, 32 + 0x129, 32 + 0x12a, 32 + 0x12b]
+    }
+
+    #[inline]
+    fn mpidr2cpuid(mpidr: usize) -> usize {
+        if mpidr & 0x100 == 0 {
+            loop {
+                crate::arch::Arch::wait_for_interrupt();
+            }
+        } else {
+            /*
+             * only cluster 1 cpu 0,1,2,3 reach here
+             * x0 holds core_id (indexed from zero)
+             */
+            mpidr & 0xff
+        }
     }
 }
 
