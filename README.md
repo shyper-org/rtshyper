@@ -5,7 +5,8 @@ forked form [Rust-Shyper](https://gitee.com/openeuler/rust_shyper)
 An embedded hypervisor for mixed-critical system.
 - Fully based on Rust.
 - High performance and reliability.
-- Supporting strong memory isolation (cache isolation and memory bandwidth control).
+- Virtio (blk, net and console) support.
+- Supporting strong memory isolation (LLC isolation based on coloring and memory bandwidth control).
 
 ## Supported Platform
 
@@ -27,7 +28,7 @@ Install clang. Install u-boot-tools to use `mkimage`
 sudo apt install -y gcc-multilib u-boot-tools clang
 ```
 
-Download [aarch64-none-elf toolchain](https://developer.arm.com/downloads/-/gnu-a), and add it to PATH.
+Download [aarch64-none-elf toolchain](https://developer.arm.com/downloads/-/gnu-a), and add it to **PATH**.
 
 Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils) to use `rust-objcopy` and `rust-objdump` tools:
 
@@ -40,3 +41,11 @@ Simply run `make`
 ```bash
 make <platform> [PROFILE=debug|release] [FEATURES=...]
 ```
+
+## Rust FFI programming with C
+only freestanding C headers are available: <float.h>, <iso646.h>, <limits.h>, <stdarg.h>, <stdbool.h>, <stddef.h>, and <stdint.h>
+
+see http://cs107e.github.io/guides/gcc/
+
+## See more
+[Unishyper](https://gitee.com/unishyper/unishyper): A reliable Rust-based unikernel for embedded scenarios.
