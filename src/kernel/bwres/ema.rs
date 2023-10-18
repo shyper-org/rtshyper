@@ -15,8 +15,8 @@ pub enum TaError {
 #[derive(Debug)]
 pub struct ExponentialMovingAverage {
     period: usize,
-    k: (usize, usize),
-    current: usize,
+    k: f32,
+    current: f32,
     is_new: bool,
 }
 
@@ -26,20 +26,20 @@ impl ExponentialMovingAverage {
             0 => Err(TaError::InvalidParameter),
             _ => Ok(Self {
                 period,
-                k: (2, period + 1),
-                current: 0,
+                k: 2.0 / (period + 1) as f32,
+                current: 0.0,
                 is_new: true,
             }),
         }
     }
 
     // EMA_t = alpha * p_t + (1 - alpha) * EMA_(t-1)
-    pub fn next(&mut self, input: usize) -> usize {
+    pub fn next(&mut self, input: f32) -> f32 {
         self.current = if self.is_new {
             self.is_new = false;
             input
         } else {
-            (self.k.0 * input + (self.k.1 - self.k.0) * self.current) / self.k.1
+            self.k * input + (1.0 - self.k) * self.current
         };
         self.current
     }
@@ -51,7 +51,7 @@ impl ExponentialMovingAverage {
 
     #[allow(dead_code)]
     pub fn reset(&mut self) {
-        self.current = 0;
+        self.current = 0.0;
         self.is_new = true;
     }
 }

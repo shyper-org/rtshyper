@@ -30,7 +30,7 @@ impl BudgetPredictor {
     }
 
     pub fn predict(&mut self, consume: u32) -> u32 {
-        self.inner.next(consume as usize) as u32
+        self.inner.next(consume as f32) as u32
     }
 }
 
@@ -76,15 +76,8 @@ fn apply_budget(budget: usize) -> usize {
         apply
     } else {
         // vcpu apply budget that it donate at this period
-        let apply = if *val >= budget {
-            *val -= budget;
-            budget
-        } else {
-            // `*val < budget`: remain budget is not enough
-            let apply = *val;
-            *val = 0;
-            apply
-        };
+        let apply = usize::min(budget, *val);
+        *val -= apply;
         // At least apply MIN_BUDGET to reduce frequent interrupt overhead
         usize::max(apply, MIN_BUDGET)
     }

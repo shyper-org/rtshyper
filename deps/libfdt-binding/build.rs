@@ -26,6 +26,7 @@ fn main() {
         .includes(fdt_dirs)
         .files(c_files)
         .flag("-w")
+        .flag("-mgeneral-regs-only")
         .compile("fdt-binding");
 
     let bindings = bindgen::Builder::default()

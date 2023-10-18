@@ -8,7 +8,7 @@
   "linker": "rust-lld",
   "linker-flavor": "ld.lld",
   "linker-is-gnu": true,
-  "llvm-target": "aarch64-unknown-none",
+  "llvm-target": "aarch64-unknown-none-softfloat",
   "max-atomic-width": 128,
   "os": "none",
   "panic-strategy": "abort",
