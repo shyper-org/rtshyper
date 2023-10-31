@@ -1,9 +1,8 @@
-use core::alloc::{GlobalAlloc, Layout};
+use alloc::alloc;
+use core::alloc::Layout;
 
 use crate::arch::PAGE_SIZE;
 use crate::kernel::{current_cpu, AllocError};
-
-use super::HEAP_ALLOCATOR;
 
 #[derive(Debug, raii::RAII)]
 pub struct PageFrame {
@@ -28,7 +27,7 @@ impl PageFrame {
         }
         match Layout::from_size_align(page_num * PAGE_SIZE, PAGE_SIZE) {
             Ok(layout) => {
-                let hva = unsafe { HEAP_ALLOCATOR.alloc_zeroed(layout) };
+                let hva = unsafe { alloc::alloc_zeroed(layout) };
                 if hva.is_null() || hva as usize & (PAGE_SIZE - 1) != 0 {
                     panic!("alloc_pages: get wrong ptr {hva:#p}, layout = {:?}", layout);
                 }
@@ -55,6 +54,6 @@ impl Drop for PageFrame {
     fn drop(&mut self) {
         trace!("<<< free page frame {:#x}, {}", self.pa, self.page_num);
         let layout = Layout::from_size_align(self.page_num * PAGE_SIZE, PAGE_SIZE).unwrap();
-        unsafe { HEAP_ALLOCATOR.dealloc(self.hva as *mut _, layout) }
+        unsafe { alloc::dealloc(self.hva as *mut _, layout) }
     }
 }

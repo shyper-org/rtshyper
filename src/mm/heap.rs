@@ -2,7 +2,7 @@ use buddy_system_allocator::Heap;
 use core::ops::RangeInclusive;
 use spin::Mutex;
 
-pub struct LockedHeap<const ORDER: usize>(Mutex<Heap<ORDER>>);
+struct LockedHeap<const ORDER: usize>(Mutex<Heap<ORDER>>);
 
 impl<const ORDER: usize> LockedHeap<ORDER> {
     /// Creates an empty heap
@@ -34,7 +34,7 @@ unsafe impl<const ORDER: usize> alloc::alloc::GlobalAlloc for LockedHeap<ORDER> 
 }
 
 #[global_allocator]
-pub static HEAP_ALLOCATOR: LockedHeap<{ usize::BITS as usize }> = LockedHeap::empty();
+static HEAP_ALLOCATOR: LockedHeap<{ usize::BITS as usize }> = LockedHeap::empty();
 
 pub fn heap_init() {
     #[repr(align(4096))]

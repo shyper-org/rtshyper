@@ -1,4 +1,4 @@
-pub use self::heap::{heap_expansion, HEAP_ALLOCATOR};
+pub use self::heap::heap_expansion;
 pub use self::page_frame::*;
 
 mod heap;
@@ -7,7 +7,7 @@ mod page_frame;
 mod util;
 pub mod vpage_allocator;
 
-// Note: link-time label, see aarch64.lds
+// Note: link-time label, see <arch>.lds
 extern "C" {
     pub fn _image_start();
     pub fn _image_end();
