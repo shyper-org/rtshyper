@@ -24,6 +24,12 @@ impl Vm {
             ),
         };
         // hcr |= 1 << 17; // set HCR_EL2.TID2=1, trap for cache id sysregs
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "trap-wfi")] {
+                const HCR_EL2_TWI: u64 = 1 << 13;
+                let hcr = hcr | HCR_EL2_TWI;
+            }
+        }
         for vcpu in self.vcpu_list() {
             debug!("vm {} vcpu {} set {:?} hcr", self.id(), vcpu.id(), intc_type);
             vcpu.set_gich_ctlr(gich_ctlr);

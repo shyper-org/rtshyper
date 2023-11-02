@@ -105,7 +105,7 @@ impl Cpu {
         }
     }
 
-    pub fn get_elr(&self) -> usize {
+    pub fn exception_pc(&self) -> usize {
         if let Some(ctx) = unsafe { self.ctx.as_ref() } {
             ctx.exception_pc()
         } else {
@@ -113,7 +113,7 @@ impl Cpu {
         }
     }
 
-    pub fn set_elr(&mut self, val: usize) {
+    pub fn set_exception_pc(&mut self, val: usize) {
         if let Some(ctx) = unsafe { self.ctx.as_mut() } {
             ctx.set_exception_pc(val)
         }

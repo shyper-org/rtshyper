@@ -22,7 +22,7 @@ pub fn data_abort_handler() {
         reg: exception_data_abort_access_reg(),
         reg_width: exception_data_abort_access_reg_width(),
     };
-    let elr = current_cpu().get_elr();
+    let elr = current_cpu().exception_pc();
 
     if !exception_data_abort_handleable() {
         panic!(
@@ -78,7 +78,7 @@ pub fn data_abort_handler() {
         );
     }
     let val = elr + exception_next_instruction_step();
-    current_cpu().set_elr(val);
+    current_cpu().set_exception_pc(val);
 }
 
 pub fn smc_handler() {
@@ -92,9 +92,9 @@ pub fn smc_handler() {
         current_cpu().set_gpr(SMC_RETURN_REG, usize::MAX);
     }
 
-    let elr = current_cpu().get_elr();
+    let elr = current_cpu().exception_pc();
     let val = elr + exception_next_instruction_step();
-    current_cpu().set_elr(val);
+    current_cpu().set_exception_pc(val);
 }
 
 pub fn hvc_handler() {
@@ -130,6 +130,49 @@ pub fn hvc_handler() {
     // );
 }
 
+#[cfg(feature = "trap-wfi")]
+fn condition_check(iss: u32) -> bool {
+    const ISS_CV_MASK: u32 = 0x01000000;
+    // const ISS_CV_SHIFT: u32 = 24;
+    const ISS_COND_MASK: u32 = 0x00F00000;
+    const ISS_COND_SHIFT: u32 = 20;
+    let cond = if iss & ISS_CV_MASK != 0 {
+        (iss & ISS_COND_MASK) >> ISS_COND_SHIFT
+    } else {
+        /* This can happen in Thumb mode: examine IT state. */
+        unimplemented!();
+    };
+    // TODO: check condition
+    if cond < 8 {
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(feature = "trap-wfi")]
+pub fn wfi_wfe_handler(iss: u32) {
+    // see xvisor/arch/arm/cpu/arm64/cpu_vcpu_emulate.c:152
+    // cpu_vcpu_emulate_wfi_wfe()
+    trace!("trap wfi wfe");
+    if condition_check(iss) {
+        const ISS_WFI_WFE_TI_MASK: u32 = 1;
+        /* If WFE trapped then only yield */
+        if iss & ISS_WFI_WFE_TI_MASK != 0 {
+            trace!("wfe");
+            current_cpu().vcpu_array.resched();
+        } else {
+            trace!("wfi");
+            /* Wait for irq with default timeout */
+            // vmm_vcpu_irq_wait_timeout(vcpu, 0);
+        }
+    }
+
+    let elr = current_cpu().exception_pc();
+    let val = elr + exception_next_instruction_step();
+    current_cpu().set_exception_pc(val);
+}
+
 #[inline(always)]
 fn exception_sysreg_addr(iss: u32) -> u32 {
     // (Op0[21..20] + Op2[19..17] + Op1[16..14] + CRn[13..10]) + CRm[4..1]
@@ -163,7 +206,7 @@ pub fn sysreg_handler(iss: u32) {
         reg_width: 8,
     };
 
-    let elr = current_cpu().get_elr();
+    let elr = current_cpu().exception_pc();
     if !emu_reg_handler(&emu_ctx) {
         panic!(
             "sysreg_handler: Failed to handler emu reg request, ({:#x} at {:#x})",
@@ -172,5 +215,5 @@ pub fn sysreg_handler(iss: u32) {
     }
 
     let val = elr + exception_next_instruction_step();
-    current_cpu().set_elr(val);
+    current_cpu().set_exception_pc(val);
 }

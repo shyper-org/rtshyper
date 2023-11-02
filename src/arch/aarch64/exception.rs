@@ -22,11 +22,6 @@ pub fn exception_esr() -> usize {
 }
 
 #[inline(always)]
-fn exception_class() -> usize {
-    ESR_EL2.read(ESR_EL2::EC) as usize
-}
-
-#[inline(always)]
 fn exception_far() -> usize {
     aarch64_cpu::registers::FAR_EL2.get() as usize
 }
@@ -191,18 +186,21 @@ pub fn current_el_spx_serror(ctx: *mut ContextFrame) {
 pub fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
     trace!("lower_aarch64_synchronous");
     let prev_ctx = current_cpu().set_ctx(ctx);
-    match exception_class() {
-        0x24 => {
+    let esr = ESR_EL2.extract();
+    match esr.read_as_enum(ESR_EL2::EC) {
+        Some(ESR_EL2::EC::Value::DataAbortLowerEL) => {
             trace!("Core[{}] data_abort_handler", current_cpu().id);
             data_abort_handler();
         }
-        0x17 => {
+        Some(ESR_EL2::EC::Value::SMC64) => {
             smc_handler();
         }
-        0x16 => {
+        Some(ESR_EL2::EC::Value::HVC64) => {
             hvc_handler();
         }
-        0x18 => sysreg_handler(exception_iss() as u32),
+        Some(ESR_EL2::EC::Value::TrappedMsrMrs) => sysreg_handler(exception_iss() as u32),
+        #[cfg(feature = "trap-wfi")]
+        Some(ESR_EL2::EC::Value::TrappedWFIorWFE) => super::sync::wfi_wfe_handler(exception_iss() as u32),
         _ => unsafe {
             info!(
                 "x0 {:x}, x1 {:x}, x29 {:x}",
@@ -214,7 +212,7 @@ pub fn lower_aarch64_synchronous(ctx: *mut ContextFrame) {
                 "core {} vm {}: handler not presents for EC_{} @ipa {:#x}, @pc {:#x}",
                 current_cpu().id,
                 active_vm().unwrap().id(),
-                exception_class(),
+                esr.read(ESR_EL2::EC),
                 exception_fault_addr(),
                 (*ctx).exception_pc()
             );
