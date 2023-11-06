@@ -1,6 +1,6 @@
 use crate::{
     arch::ArchTrait,
-    kernel::{current_cpu, Vcpu, CONFIG_VM_NUM_MAX},
+    kernel::{current_cpu, CpuState, Vcpu, CONFIG_VM_NUM_MAX},
 };
 use alloc::{
     boxed::Box,
@@ -96,6 +96,7 @@ impl VcpuArray {
                     }
                 }
             }
+            current_cpu().cpu_state = CpuState::Run;
             // set vcpu state
             vcpu.set_state(VcpuState::Runnable);
             // determine the timer

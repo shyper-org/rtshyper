@@ -1,6 +1,5 @@
 use crate::arch::{gic_cpu_init, interrupt_arch_deactive_irq};
 use crate::board::PlatOperation;
-use crate::kernel::CpuState;
 use crate::kernel::IpiMessage;
 use crate::kernel::{active_vm, ipi_send_msg, IpiInnerMsg, IpiPowerMessage, IpiType, PowerEvent};
 use crate::kernel::{current_cpu, ipi_intra_broadcast_msg, Vcpu, VcpuState, Vm};
@@ -114,7 +113,6 @@ fn psci_vcpu_on(vcpu: &Vcpu, entry: usize, ctx: usize) {
             current_cpu().id
         );
     }
-    current_cpu().cpu_state = CpuState::Run;
     vcpu.set_gpr(0, ctx);
     vcpu.set_exception_pc(entry);
     // Just wake up the vcpu

@@ -36,32 +36,35 @@ impl core::fmt::Display for Aarch64ContextFrame {
 }
 
 impl crate::arch::ContextFrameTrait for Aarch64ContextFrame {
+    #[inline]
     fn exception_pc(&self) -> usize {
         self.elr as usize
     }
 
+    #[inline]
     fn set_exception_pc(&mut self, pc: usize) {
         self.elr = pc as u64;
     }
 
-    fn stack_pointer(&self) -> usize {
-        self.sp as usize
-    }
-
-    fn set_stack_pointer(&mut self, sp: usize) {
-        self.sp = sp as u64;
-    }
-
+    #[inline]
     fn set_argument(&mut self, arg: usize) {
-        self.gpr[0] = arg as u64;
+        self.set_gpr(0, arg)
     }
 
+    #[inline]
     fn set_gpr(&mut self, index: usize, val: usize) {
-        self.gpr[index] = val as u64;
+        if let Some(gpr) = self.gpr.get_mut(index) {
+            *gpr = val as u64;
+        }
     }
 
+    #[inline]
     fn gpr(&self, index: usize) -> usize {
-        self.gpr[index] as usize
+        if let Some(gpr) = self.gpr.get(index) {
+            *gpr as usize
+        } else {
+            0
+        }
     }
 }
 

@@ -11,7 +11,7 @@ use crate::kernel::{
     active_vcpu_id, active_vm, current_cpu, push_vm, vm_if_get_state, vm_if_set_ivc_arg, vm_if_set_ivc_arg_ptr,
     vm_list_walker, Vm,
 };
-use crate::kernel::{hvc_send_msg_to_vm, vcpu_run, HvcGuestMsg, HvcManageMsg};
+use crate::kernel::{hvc_send_msg_to_vm, HvcGuestMsg, HvcManageMsg};
 use crate::kernel::{ipi_send_msg, vm_if_get_cpu_id, IpiInnerMsg, IpiMessage, IpiType, IpiVmmMsg};
 use crate::util::bit_extract;
 use crate::vmm::{vmm_assign_vcpu_percore, vmm_init_image, vmm_remove_vcpu_percore, vmm_setup_config};
@@ -107,9 +107,7 @@ pub fn vmm_boot_vm(vm_id: usize) {
                     interrupt_arch_deactive_irq(true);
                     current_cpu().vcpu_array.wakeup_vcpu(vcpu);
                     if current_cpu().assigned() && active_vcpu_id() == 0 {
-                        // active_vm().unwrap().set_migration_state(false);
                         info!("Core {} start running", current_cpu().id);
-                        vcpu_run(false);
                     }
                 }
             };

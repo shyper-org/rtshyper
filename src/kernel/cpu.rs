@@ -15,8 +15,7 @@ use super::sched::get_scheduler;
 use super::vcpu_array::VcpuArray;
 
 pub const CPU_MASTER: usize = 0;
-pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 64;
-const CONTEXT_GPR_NUM: usize = 31;
+pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 32;
 
 #[repr(C, align(4096))]
 pub struct CpuPt {
@@ -86,18 +85,12 @@ impl Cpu {
     }
 
     pub fn set_gpr(&mut self, idx: usize, val: usize) {
-        if idx >= CONTEXT_GPR_NUM {
-            return;
-        }
         if let Some(ctx) = unsafe { self.ctx.as_mut() } {
             ctx.set_gpr(idx, val);
         }
     }
 
     pub fn get_gpr(&self, idx: usize) -> usize {
-        if idx >= CONTEXT_GPR_NUM {
-            return 0;
-        }
         if let Some(ctx) = unsafe { self.ctx.as_ref() } {
             ctx.gpr(idx)
         } else {

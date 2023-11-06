@@ -297,22 +297,6 @@ impl VcpuInnerMut {
     }
 }
 
-// WARNING: No Auto `drop` in this function
-pub fn vcpu_run(announce: bool) {
-    let vcpu = current_cpu().active_vcpu.clone().unwrap();
-    let vm = vcpu.vm().unwrap();
-
-    if announce {
-        crate::device::virtio_net_announce(vm);
-    }
-    // if the cpu is already running (a vcpu in scheduling queue), just return
-    if current_cpu().cpu_state == CpuState::Run {
-        return;
-    }
-    current_cpu().cpu_state = CpuState::Run;
-    // tlb_invalidate_guest_all();
-}
-
 fn idle_thread() -> ! {
     loop {
         use crate::arch::ArchTrait;
