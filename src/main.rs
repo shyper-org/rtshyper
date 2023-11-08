@@ -19,6 +19,9 @@ extern crate memoffset;
 #[macro_use]
 extern crate derive_more;
 
+#[cfg(feature = "preempt")]
+extern crate spin_irqsave as spin;
+
 #[macro_use]
 mod macros;
 
