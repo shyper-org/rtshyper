@@ -65,3 +65,10 @@ macro_rules! bit_mask {
         ((1 << ($off + $len)) - 1) & !((1 << $off) - 1)
     };
 }
+
+#[macro_export]
+macro_rules! static_assert {
+    ($($tt:tt)*) => {
+        const _: () = core::assert!($($tt)*);
+    }
+}

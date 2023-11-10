@@ -200,7 +200,7 @@ fn latency_bench(repeat_time: usize) -> usize {
     let g_mem_size = crate::kernel::get_llc_size() * 4;
     let workingset_size = g_mem_size / CACHE_LINE_SIZE;
 
-    const_assert_eq!(core::mem::size_of::<ListNode<usize>>(), CACHE_LINE_SIZE);
+    static_assert!(core::mem::size_of::<ListNode<usize>>() == CACHE_LINE_SIZE);
 
     // initialize
     let mut item_buffer = (0..workingset_size)

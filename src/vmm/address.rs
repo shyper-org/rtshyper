@@ -97,8 +97,8 @@ pub fn vmm_map_ipa_percore(vm: &Vm, is_master: bool) {
         while !FINISH.load(Ordering::Relaxed) {
             core::hint::spin_loop();
         }
-        for (hva, pte) in SHARED_PTE.read().iter() {
-            current_cpu().pt().set_pte(*hva, 1, *pte);
+        for &(hva, pte) in SHARED_PTE.read().iter() {
+            current_cpu().pt().set_pte(hva, 1, pte);
         }
     }
     barrier();

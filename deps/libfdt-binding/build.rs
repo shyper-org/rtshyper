@@ -9,7 +9,6 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     // compile libfdt-bingding
-    let c_compiler = "aarch64-none-elf-gcc";
     let fdt_dirs = ["./", "./libfdt"];
     let c_files = fdt_dirs.iter().flat_map(|path| {
         std::fs::read_dir(path).unwrap().filter_map(|f| {
@@ -22,7 +21,6 @@ fn main() {
         })
     });
     cc::Build::new()
-        .compiler(c_compiler)
         .includes(fdt_dirs)
         .files(c_files)
         .flag("-w")

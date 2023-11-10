@@ -132,7 +132,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     cpu.cpu_pt.lvl3.fill(0);
 
     use core::mem::size_of;
-    const_assert!(size_of::<Cpu>() <= (1 << LVL2_SHIFT));
+    static_assert!(size_of::<Cpu>() <= (1 << LVL2_SHIFT));
 
     let cpu_addr = cpu as *const _ as usize;
     let lvl2_addr = cpu.cpu_pt.lvl2.as_ptr() as usize;

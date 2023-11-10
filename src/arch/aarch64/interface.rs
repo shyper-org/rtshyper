@@ -91,7 +91,10 @@ impl ArchTrait for Aarch64Arch {
 }
 
 const PA2HVA: usize = 0b11 << 34; // 34 is pa limit 16GB
-const_assert!(PA2HVA < 1 << VM_IPA_SIZE); // if not, the va will ocuppy the ipa2hva space, which is very dangerous
+static_assert!(
+    PA2HVA < 1 << VM_IPA_SIZE,
+    "the va will ocuppy the ipa2hva space, which is very dangerous"
+);
 
 impl Address for usize {
     #[inline]

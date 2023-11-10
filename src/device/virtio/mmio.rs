@@ -571,7 +571,7 @@ pub fn emu_virtio_mmio_init(vm: Weak<Vm>, emu_cfg: &VmEmulatedDeviceConfig) -> R
     });
     if emu_cfg.emu_type == EmuDeviceType::EmuDeviceTVirtioNet {
         let nic = mmio.clone();
-        let mac = emu_cfg.cfg_list.iter().take(6).map(|x| *x as u8).collect::<Vec<_>>();
+        let mac = emu_cfg.cfg_list.iter().take(6).map(|&x| x as u8).collect::<Vec<_>>();
         super::mac::set_mac_info(&mac, nic);
     }
     Ok(mmio)
