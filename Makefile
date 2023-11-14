@@ -16,6 +16,7 @@ OBJCOPY = rust-objcopy
 QEMU = qemu-system-aarch64
 # used for C-library cross compiling
 export CROSS_COMPILE ?= ${TOOLCHAIN}-
+export CFLAGS := -mgeneral-regs-only
 
 IMAGE=rtshyper_rs
 

@@ -96,8 +96,9 @@ pub enum VmState {
     Active = 2,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub enum VmType {
+    #[default]
     VmTOs = 0,
     VmTBma = 1,
 }
@@ -404,7 +405,7 @@ impl Vm {
     }
 
     pub fn ncpu(&self) -> usize {
-        self.inner_const.config.cpu_allocated_bitmap() as usize
+        self.inner_const.config.cpu_allocated_bitmap()
     }
 
     pub fn has_interrupt(&self, int_id: usize) -> bool {

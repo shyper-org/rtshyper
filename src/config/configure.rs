@@ -121,7 +121,7 @@ impl VmMemoryConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct VmImageConfig {
     pub kernel_img_name: Option<&'static str>,
     pub kernel_load_ipa: usize,
@@ -149,8 +149,36 @@ impl VmImageConfig {
 #[derive(Clone, Default)]
 pub struct VmCpuConfig {
     pub num: usize,
-    pub allocate_bitmap: u32,
+    pub allocate_bitmap: usize,
     pub master: Option<usize>,
+}
+
+impl VmCpuConfig {
+    fn new(num: usize, allocate_bitmap: usize, master: usize) -> Self {
+        let num = usize::min(num, allocate_bitmap.count_ones() as usize);
+        let allocate_bitmap = {
+            // only accept the lower bitmap by given cpu num
+            let mut index = 1 << allocate_bitmap.trailing_zeros();
+            let mut remain = num;
+            while remain > 0 && index <= allocate_bitmap {
+                if allocate_bitmap & index != 0 {
+                    remain -= 1;
+                }
+                index <<= 1;
+            }
+            allocate_bitmap & (index - 1)
+        };
+        let master = if allocate_bitmap & (1 << master) != 0 {
+            Some(master)
+        } else {
+            None
+        };
+        Self {
+            num,
+            allocate_bitmap,
+            master,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -166,7 +194,7 @@ pub struct VMDtbDevConfigList {
     pub dtb_device_list: Vec<VmDtbDevConfig>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct VmConfigEntry {
     // VM id, generate inside hypervisor.
     pub id: usize,
@@ -260,7 +288,7 @@ impl VmConfigEntry {
         self.cpu.num
     }
 
-    pub fn cpu_allocated_bitmap(&self) -> u32 {
+    pub fn cpu_allocated_bitmap(&self) -> usize {
         self.cpu.allocate_bitmap
     }
 
@@ -269,13 +297,7 @@ impl VmConfigEntry {
     }
 
     fn set_cpu_cfg(&mut self, num: usize, allocate_bitmap: usize, master: usize) {
-        self.cpu.num = usize::min(num, allocate_bitmap.count_ones() as usize);
-        self.cpu.allocate_bitmap = allocate_bitmap as u32;
-        self.cpu.master = if allocate_bitmap & (1 << master) != 0 {
-            Some(master)
-        } else {
-            None
-        };
+        self.cpu = VmCpuConfig::new(num, allocate_bitmap, master);
     }
 
     pub fn emulated_device_list(&self) -> &[VmEmulatedDeviceConfig] {
