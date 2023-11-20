@@ -17,18 +17,19 @@ The list of supported (and work in progress) platforms is presented below:
 - [ ] (work-in-progress) Raspberry Pi 4 Model B
 - [ ] (work-in-progress) QEMU
 
-## How to Build
+## Build Dependencies
+
 First, install the [Rust](https://www.rust-lang.org/tools/install) toolchain. 
 
 For cross-compiling, install the gcc-multilib (on Ubuntu)
 
-Install clang. Install u-boot-tools to use `mkimage`
+Install **clang** and **LLVM** toolchain. 
+
+Install u-boot-tools to use `mkimage`
 
 ```bash
 sudo apt install -y gcc-multilib u-boot-tools clang
 ```
-
-Download [aarch64-none-elf toolchain](https://developer.arm.com/downloads/-/gnu-a), and add it to **PATH**.
 
 Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils) to use `rust-objcopy` and `rust-objdump` tools:
 
@@ -36,10 +37,14 @@ Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils) to use
 cargo install cargo-binutils
 ```
 
+If you want to build the C library with other cross compiling toolchain, for example, [aarch64-none-elf toolchain](https://developer.arm.com/downloads/-/gnu-a), you can add it to **PATH** and set the **CROSS_COMPILE** on the command line.
+
+## How to Build
+
 Simply run `make`
 
 ```bash
-make <platform> [PROFILE=debug|release] [FEATURES=...]
+make [LLVM=1] [CARGO_ACTION=build|clippy|fix|...] [PROFILE=release|debug] [FEATURES=...] <platform>
 ```
 
 ## Rust FFI programming with C

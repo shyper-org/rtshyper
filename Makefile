@@ -1,4 +1,5 @@
-# Path
+# DISK is the path to the ROOTFS for VM0 when `make run` on QEMU
+# DISK can be set on the command line
 DISK = ../rust_hypervisor/vm0.img
 
 # Compile
@@ -8,15 +9,32 @@ BOARD ?= tx2
 # features, seperate with comma `,`
 FEATURES =
 
-# Toolchain
-TOOLCHAIN=aarch64-none-elf
-GDB = ${TOOLCHAIN}-gdb
+# CROSS_COMPILE can be set on the command line
+export CROSS_COMPILE ?= aarch64-none-elf-
+export CFLAGS := -mgeneral-regs-only
+
+# export CC for C-library cross compiling
+ifneq ($(LLVM),)
+unexport CROSS_COMPILE
+export CC	= clang
+LD			= ld.lld
+AR			= llvm-ar
+NM			= llvm-nm
+READEL		= llvm-readelf
+STRIP		= llvm-strip
+GDB			= lldb
+else
+export CC	= $(CROSS_COMPILE)gcc
+LD			= $(CROSS_COMPILE)ld
+AR			= $(CROSS_COMPILE)ar
+NM			= $(CROSS_COMPILE)nm
+READELF		= $(CROSS_COMPILE)readelf
+STRIP		= $(CROSS_COMPILE)strip
+GDB			= ${CROSS_COMPILE}gdb
+endif
 OBJDUMP = rust-objdump
 OBJCOPY = rust-objcopy
-QEMU = qemu-system-aarch64
-# used for C-library cross compiling
-export CROSS_COMPILE ?= ${TOOLCHAIN}-
-export CFLAGS := -mgeneral-regs-only
+QEMU = qemu-system-$(ARCH)
 
 IMAGE=rtshyper_rs
 
@@ -34,16 +52,19 @@ define tftp_upload
 	@echo "tftp 0x8a000000 \$${serverip}:${UBOOT_IMAGE}; bootm start 0x8a000000 - 0x80000000; bootm loados; bootm go"
 endef
 
+CARGO_ACTION ?= build
+
 # Cargo flags.
 CARGO_FLAGS ?= -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
 ifeq (${PROFILE}, release)
 CARGO_FLAGS := ${CARGO_FLAGS} --release
 endif
 
-.PHONY: build qemu tx2 pi4 clippy fmt run debug clean gdb
+.PHONY: build qemu tx2 pi4 run debug clean gdb
 
 build:
-	cargo build ${CARGO_FLAGS}
+	cargo fmt
+	cargo ${CARGO_ACTION} ${CARGO_FLAGS}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 
 qemu:
@@ -58,13 +79,6 @@ pi4:
 	$(MAKE) build BOARD=pi4
 	$(call tftp_upload,0xF0080000)
 	scp ./image/pi4_fin.dtb ${TFTP_SERVER}/pi4_dtb
-
-clippy:
-	cargo fmt
-	cargo clippy --no-deps ${CARGO_FLAGS} # --allow-dirty --allow-staged --fix -- -A clippy::all -W clippy::<xxx>
-
-fmt:
-	cargo fmt
 
 QEMU_COMMON_OPTIONS = -machine virt,virtualization=on,gic-version=2 \
 	-m 8g -cpu cortex-a57 -smp 4 -display none -global virtio-mmio.force-legacy=false \

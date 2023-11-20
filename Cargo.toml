@@ -68,7 +68,6 @@ tx2 = [
     "iommu",
     "vtimer",
     "ns16550",
-    "preempt",
     "self-coloring",
     "memory-reservation",
 ]

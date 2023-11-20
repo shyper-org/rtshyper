@@ -12,12 +12,12 @@ macro_rules! println {
 #[macro_export]
 macro_rules! declare_enum_with_handler {
     (
+        $(#[$attr:meta])*
         $enum_vis:vis enum $enum_name:ident [$array_vis:vis $array:ident => $handler_type:ty] {
             $($vis:vis $variant:ident => $handler:expr, )*
         }
     ) => {
-        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-        #[repr(usize)]
+        $(#[$attr])*
         $enum_vis enum $enum_name {
             $($vis $variant, )*
         }

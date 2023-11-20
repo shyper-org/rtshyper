@@ -8,7 +8,9 @@ fn panic(info: &PanicInfo) -> ! {
         current_cpu().id,
         info
     );
-    println!("{}", unsafe { &*current_cpu().current_ctx() });
+    if let Some(ctx) = unsafe { current_cpu().current_ctx().as_ref() } {
+        println!("{}", ctx);
+    }
     loop {
         core::hint::spin_loop();
     }
