@@ -363,7 +363,7 @@ fn space_remapping<T: Sized>(src: *const T, len: usize, color_bitmap: usize) -> 
     // alloc va space
     let va_pages = vpage_alloc(len, None).expect("vpage_alloc");
     debug!("space_remapping: va pages {:?}", va_pages);
-    let dest_va = va_pages.start().start_address().as_mut_ptr() as *mut u8;
+    let dest_va = va_pages.start().start_address().as_mut_ptr();
     let range = va_pages.as_range_incluesive();
     debug!("space_remapping: dest va {:x?}", range);
     // map va with pa

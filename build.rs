@@ -6,7 +6,6 @@ use std::path::Path;
 struct ConfigPlatform {
     platform: &'static str,
     vm0_image_path: &'static str,
-    text_start: usize,
     max_core_num: usize,
 }
 
@@ -29,21 +28,18 @@ const fn get_config() -> ConfigPlatform {
         ConfigPlatform {
             platform: "tx2",
             vm0_image_path: "image/L4T",
-            text_start: 0x83000000,
             max_core_num: 6,
         }
     } else if cfg!(feature = "pi4") {
         ConfigPlatform {
             platform: "pi4",
             vm0_image_path: "image/Image_pi4_5.4.83_tlb",
-            text_start: 0xf0080000,
             max_core_num: 4,
         }
     } else if cfg!(feature = "qemu") {
         ConfigPlatform {
             platform: "qemu",
             vm0_image_path: "image/Image_vanilla",
-            text_start: 0x40080000,
             max_core_num: 8,
         }
     } else {
@@ -56,7 +52,7 @@ fn main() -> Result<()> {
     let arch = var("CARGO_CFG_TARGET_ARCH").unwrap();
     println!("cargo:rustc-link-arg=-Tlinkers/{arch}.ld");
     let config = get_config();
-    println!("cargo:rustc-link-arg=--defsym=TEXT_START={}", config.text_start);
+    println!("cargo:rustc-link-arg=--defsym=TEXT_START={}", env!("TEXT_START"));
     // set config file
     let out_dir = var("OUT_DIR").unwrap();
     let out_path = Path::new(&out_dir).join("config.rs");

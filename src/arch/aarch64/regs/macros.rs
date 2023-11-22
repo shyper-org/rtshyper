@@ -2,13 +2,13 @@
 // MRS Xd, sysreg "Xd = sysreg"
 macro_rules! mrs {
     ($reg: expr) => {
-        {
+        ({
             let r: u64;
             unsafe {
                 core::arch::asm!(concat!("mrs {0}, ", stringify!($reg)), out(reg) r, options(nomem, nostack));
             }
             r
-        }
+        })
     };
     ($val: expr, $reg: expr, $asm_width:tt) => {
         unsafe {

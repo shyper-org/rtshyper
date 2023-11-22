@@ -19,7 +19,7 @@ struct TimerEventWrapper {
 
 impl PartialOrd for TimerEventWrapper {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.timeout.partial_cmp(&other.timeout)
+        Some(self.cmp(other))
     }
 }
 

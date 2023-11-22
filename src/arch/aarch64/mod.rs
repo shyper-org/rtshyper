@@ -1,6 +1,5 @@
 pub use self::cache::*;
 pub use self::context_frame::*;
-pub use self::cpu::*;
 pub use self::gic::*;
 pub use self::interface::*;
 pub use self::interrupt::*;
@@ -9,9 +8,8 @@ pub use self::page_table::*;
 pub use self::psci::*;
 #[cfg(feature = "smmuv2")]
 pub use self::smmu::*;
-pub use self::vcpu::*;
 pub use self::vgic::*;
-pub use pmuv3::{arch_pmu_init, cpu_cycle_count};
+pub use pmuv3::arch_pmu_init;
 #[cfg(feature = "memory-reservation")]
 pub use pmuv3::{vcpu_start_pmu, vcpu_stop_pmu, PmuTimerEvent};
 

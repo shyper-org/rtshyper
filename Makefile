@@ -8,6 +8,7 @@ PROFILE ?= release
 BOARD ?= tx2
 # features, seperate with comma `,`
 FEATURES =
+TEXT_START ?= 0x83000000
 
 # CROSS_COMPILE can be set on the command line
 export CROSS_COMPILE ?= aarch64-none-elf-
@@ -44,40 +45,36 @@ TFTP_SERVER ?= root@192.168.106.153:/tftp
 
 UBOOT_IMAGE ?= RTShyperImage
 
-define tftp_upload
-	@${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
-	@mkimage -n ${IMAGE} -A arm64 -O linux -T kernel -C none -a $(1) -e $(1) -d ${TARGET_DIR}/${IMAGE}.bin ${TARGET_DIR}/${UBOOT_IMAGE}
-	@echo "*** Upload Image ${UBOOT_IMAGE} ***"
-	@scp ${TARGET_DIR}/${UBOOT_IMAGE} ${TFTP_SERVER}/${UBOOT_IMAGE}
-	@echo "tftp 0x8a000000 \$${serverip}:${UBOOT_IMAGE}; bootm start 0x8a000000 - 0x80000000; bootm loados; bootm go"
-endef
-
 CARGO_ACTION ?= build
 
 # Cargo flags.
 CARGO_FLAGS ?= -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
 ifeq (${PROFILE}, release)
-CARGO_FLAGS := ${CARGO_FLAGS} --release
+CARGO_FLAGS += --release
 endif
 
-.PHONY: build qemu tx2 pi4 run debug clean gdb
+.PHONY: build upload qemu tx2 pi4 run debug clean gdb
 
 build:
 	cargo fmt
 	cargo ${CARGO_ACTION} ${CARGO_FLAGS}
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
-
-qemu:
-	$(MAKE) build BOARD=qemu
 	${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
 
+upload: build
+	@mkimage -n ${IMAGE} -A arm64 -O linux -T kernel -C none -a $(TEXT_START) -e $(TEXT_START) -d ${TARGET_DIR}/${IMAGE}.bin ${TARGET_DIR}/${UBOOT_IMAGE}
+	@echo "*** Upload Image ${UBOOT_IMAGE} ***"
+	@scp ${TARGET_DIR}/${UBOOT_IMAGE} ${TFTP_SERVER}/${UBOOT_IMAGE}
+	@echo "tftp 0x8a000000 \$${serverip}:${UBOOT_IMAGE}; bootm start 0x8a000000 - 0x80000000; bootm loados; bootm go"
+
+qemu:
+	$(MAKE) build BOARD=qemu TEXT_START=0x40080000
+
 tx2:
-	$(MAKE) build BOARD=tx2
-	$(call tftp_upload,0x83000000) 
+	$(MAKE) upload BOARD=tx2 TEXT_START=0x83000000
 
 pi4:
-	$(MAKE) build BOARD=pi4
-	$(call tftp_upload,0xF0080000)
+	$(MAKE) upload BOARD=pi4 TEXT_START=0xF0080000
 	scp ./image/pi4_fin.dtb ${TFTP_SERVER}/pi4_dtb
 
 QEMU_COMMON_OPTIONS = -machine virt,virtualization=on,gic-version=2 \
