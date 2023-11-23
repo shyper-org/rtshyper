@@ -22,7 +22,7 @@ pub trait ArchPageTableEntryTrait {
     fn make_table(frame_pa: usize) -> Self;
 }
 
-pub trait ArchTrait {
+pub trait ArchTrait: TlbInvalidate + CacheInvalidate {
     fn exception_init();
     fn wait_for_interrupt();
     fn nop();

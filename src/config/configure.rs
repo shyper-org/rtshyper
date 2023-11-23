@@ -448,16 +448,8 @@ pub fn vm_cfg_add_vm_entry(mut vm_cfg_entry: VmConfigEntry) -> Result<usize, ()>
 pub fn add_vm(config_ipa: usize) -> Result<usize, ()> {
     let vm = active_vm().unwrap();
     let config_pa = vm.ipa2hva(config_ipa);
-    let (
-        vm_name_ipa,
-        _vm_name_length,
-        vm_type,
-        cmdline_ipa,
-        _cmdline_length,
-        kernel_load_ipa,
-        device_tree_load_ipa,
-        ramdisk_load_ipa,
-    ): (usize, usize, usize, usize, usize, usize, usize, usize) = unsafe { *(config_pa as *const _) };
+    let [vm_name_ipa, _vm_name_length, vm_type, cmdline_ipa, _cmdline_length, kernel_load_ipa, device_tree_load_ipa, ramdisk_load_ipa] =
+        unsafe { *(config_pa as *const _) };
     info!("\nStart to prepare configuration for new VM");
 
     // Copy VM name from user ipa.

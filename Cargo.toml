@@ -33,7 +33,6 @@ members = [
 [dependencies]
 shyper = { path = "deps/libshyper" }
 fdt = { path = "deps/libfdt-binding" }
-spin-irqsave = { package = "spin", path = "deps/spin", optional = true }
 spin = { version = "0.9.8" }
 buddy_system_allocator = { version = "0.9.0", default-features = false }
 vm-fdt = { git = "https://github.com/migu4917/vm-fdt", features = ["alloc"] }
@@ -53,6 +52,7 @@ ffi_interface = { path = "deps/ffi_interface" }
 raii = { path = "deps/raii" }
 
 # optional dependencies
+spin-irqsave = { package = "spin", path = "deps/spin", optional = true }
 fastrand = { version = "2.0.0", default-features = false, features = [
     "alloc",
 ], optional = true }

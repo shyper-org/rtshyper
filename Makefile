@@ -48,7 +48,7 @@ UBOOT_IMAGE ?= RTShyperImage
 CARGO_ACTION ?= build
 
 # Cargo flags.
-CARGO_FLAGS ?= -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target ${ARCH}.json --no-default-features --features ${BOARD},${FEATURES}
+CARGO_FLAGS ?= -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target ${ARCH}.json --no-default-features --features "${BOARD},${FEATURES}"
 ifeq (${PROFILE}, release)
 CARGO_FLAGS += --release
 endif

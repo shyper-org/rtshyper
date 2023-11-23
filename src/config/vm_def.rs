@@ -1,8 +1,5 @@
 use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
-
-use spin::Mutex;
 
 use crate::arch::INTERRUPT_IRQ_GUEST_TIMER;
 use crate::board::*;
@@ -69,29 +66,30 @@ pub fn init_tmp_config_for_bma1() {
         id: 0,
         name: String::from("guest-bma-0"),
         os_type: VmType::VmTBma,
-        memory: Arc::new(Mutex::new(VmMemoryConfig {
+        memory: VmMemoryConfig {
             region: vm_region,
             colors: vec![],
-        })),
-        image: Arc::new(Mutex::new(VmImageConfig {
+            ..Default::default()
+        },
+        image: VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
-        })),
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
+        },
+        cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
             master: Some(1),
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+        },
+        vm_emu_dev_confg: VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
-        })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
+        },
+        vm_pt_dev_confg: pt_dev_config,
+        vm_dtb_devs: VMDtbDevConfigList::default(),
         cmdline: String::from(""),
-        mediated_block_index: Arc::new(Mutex::new(None)),
+        mediated_block_index: None,
     };
     let _ = vm_cfg_add_vm_entry(bma_config);
 }
@@ -149,29 +147,30 @@ pub fn init_tmp_config_for_bma2() {
         id: 0,
         name: String::from("guest-bma-1"),
         os_type: VmType::VmTBma,
-        memory: Arc::new(Mutex::new(VmMemoryConfig {
+        memory: VmMemoryConfig {
             region: vm_region,
             colors: vec![],
-        })),
-        image: Arc::new(Mutex::new(VmImageConfig {
+            ..Default::default()
+        },
+        image: VmImageConfig {
             kernel_img_name: None,
             kernel_load_ipa: 0x40080000,
             kernel_entry_point: 0x40080000,
             device_tree_load_ipa: 0,
             ramdisk_load_ipa: 0,
-        })),
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
+        },
+        cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0100,
             master: Some(2),
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+        },
+        vm_emu_dev_confg: VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
-        })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList::default())),
+        },
+        vm_pt_dev_confg: pt_dev_config,
+        vm_dtb_devs: VMDtbDevConfigList::default(),
         cmdline: String::from(""),
-        mediated_block_index: Arc::new(Mutex::new(None)),
+        mediated_block_index: None,
     };
     let _ = vm_cfg_add_vm_entry(bma_config);
 }
@@ -293,30 +292,31 @@ pub fn init_tmp_config_for_vm1() {
         // cmdline: "root=/dev/vda rw audit=0",
         cmdline: String::from("earlycon console=hvc0,115200n8 root=/dev/vda rw audit=0"),
 
-        image: Arc::new(Mutex::new(VmImageConfig {
+        image: VmImageConfig {
             kernel_img_name: Some("Image_vanilla"),
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
-        })),
-        memory: Arc::new(Mutex::new(VmMemoryConfig {
+        },
+        memory: VmMemoryConfig {
             region: vm_region,
             colors: vec![],
-        })),
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
+            ..Default::default()
+        },
+        cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0010,
             master: Some(1),
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+        },
+        vm_emu_dev_confg: VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
-        })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
+        },
+        vm_pt_dev_confg: pt_dev_config,
+        vm_dtb_devs: VMDtbDevConfigList {
             dtb_device_list: vm_dtb_devs,
-        })),
-        mediated_block_index: Arc::new(Mutex::new(Some(0))),
+        },
+        mediated_block_index: Some(0),
     };
     info!("generate tmp_config for vm1");
     let _ = vm_cfg_add_vm_entry(vm1_config);
@@ -427,30 +427,31 @@ pub fn init_tmp_config_for_vm2() {
         // cmdline: "root=/dev/vda rw audit=0",
         cmdline: String::from("earlycon console=ttyS0,115200n8 root=/dev/vda rw audit=0"),
 
-        image: Arc::new(Mutex::new(VmImageConfig {
+        image: VmImageConfig {
             kernel_img_name: Some("Image_vanilla"),
             kernel_load_ipa: 0x80080000,
             kernel_entry_point: 0x80080000,
             device_tree_load_ipa: 0x80000000,
             ramdisk_load_ipa: 0, //0x83000000,
-        })),
-        memory: Arc::new(Mutex::new(VmMemoryConfig {
+        },
+        memory: VmMemoryConfig {
             region: vm_region,
             colors: vec![],
-        })),
-        cpu: Arc::new(Mutex::new(VmCpuConfig {
+            ..Default::default()
+        },
+        cpu: VmCpuConfig {
             num: 1,
             allocate_bitmap: 0b0100,
             master: Some(2),
-        })),
-        vm_emu_dev_confg: Arc::new(Mutex::new(VmEmulatedDeviceConfigList {
+        },
+        vm_emu_dev_confg: VmEmulatedDeviceConfigList {
             emu_dev_list: emu_dev_config,
-        })),
-        vm_pt_dev_confg: Arc::new(Mutex::new(pt_dev_config)),
-        vm_dtb_devs: Arc::new(Mutex::new(VMDtbDevConfigList {
+        },
+        vm_pt_dev_confg: pt_dev_config,
+        vm_dtb_devs: VMDtbDevConfigList {
             dtb_device_list: vm_dtb_devs,
-        })),
-        mediated_block_index: Arc::new(Mutex::new(Some(1))),
+        },
+        mediated_block_index: Some(1),
     };
     let _ = vm_cfg_add_vm_entry(vm2_config);
 }
