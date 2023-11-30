@@ -7,8 +7,8 @@ use super::timer::GenericTimerContext;
 global_asm!(include_str!("fpsimd.S"));
 
 extern "C" {
-    fn fpsimd_save_ctx(fpsimd_addr: usize);
-    fn fpsimd_restore_ctx(fpsimd_addr: usize);
+    fn fpsimd_save_ctx(fpsimd_addr: *mut FpsimdState);
+    fn fpsimd_restore_ctx(fpsimd_addr: *const FpsimdState);
 }
 
 #[repr(C)]
@@ -211,7 +211,7 @@ impl VmContext {
         mrs!(self.actlr_el1, ACTLR_EL1);
         self.generic_timer.save();
         unsafe {
-            fpsimd_save_ctx(&self.fpsimd as *const _ as usize);
+            fpsimd_save_ctx(&mut self.fpsimd);
         }
     }
 
@@ -251,7 +251,7 @@ impl VmContext {
         // MSR!(HPFAR_EL2, self.hpfar_el2);
         msr!(ACTLR_EL1, self.actlr_el1);
         unsafe {
-            fpsimd_restore_ctx(&self.fpsimd as *const _ as usize);
+            fpsimd_restore_ctx(&self.fpsimd);
         }
     }
 }

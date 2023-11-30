@@ -1,5 +1,5 @@
 .macro VECTOR handler
-    sub	sp, sp, #(0x110)
+    sub sp, sp, #{CONTEXT_SIZE}
     stp x0, x1,  [sp, #(0 * 16)]
     stp x2, x3,  [sp, #(1 * 16)]
     stp x4, x5,  [sp, #(2 * 16)]
@@ -19,7 +19,7 @@
     stp x30, x1, [sp, #(15 * 16)]
     mrs x0, elr_el2
     mov x1, sp
-    add x1, x1, #(0x110)
+    add x1, x1, #{CONTEXT_SIZE}
     stp x0, x1, [sp, #(16 * 16)]
     mov x0, sp
     bl  \handler
@@ -55,7 +55,7 @@ context_pop:
     ldp x26,x27, [sp, #(13 * 16)]
     ldp x28,x29, [sp, #(14 * 16)]
     ldr x30,     [sp, #(15 * 16)]
-    add	sp, sp, #(0x110)
+    add sp, sp, #{CONTEXT_SIZE}
     eret
 
 .section .text.vectors

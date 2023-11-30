@@ -14,7 +14,10 @@ use crate::kernel::{active_vm, current_cpu};
 use super::sync::{data_abort_handler, hvc_handler, smc_handler, sysreg_handler};
 use super::{interrupt_arch_deactive_irq, IntCtrl};
 
-global_asm!(include_str!("exception.S"));
+global_asm!(
+    include_str!("exception.S"),
+    CONTEXT_SIZE = const core::mem::size_of::<crate::arch::ContextFrame>(),
+);
 
 #[inline(always)]
 pub fn exception_esr() -> usize {
