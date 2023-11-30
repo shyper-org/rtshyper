@@ -520,8 +520,8 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
         let value = match offset {
             VIRTIO_MMIO_CONFIG_GENERATION => mmio.dev().generation() as u32,
             VIRTIO_MMIO_CONFIG..=0x1ff => match mmio.dev().desc() {
-                super::dev::DevDesc::BlkDesc(blk_desc) => blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
-                super::dev::DevDesc::NetDesc(net_desc) => net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
+                super::dev::DevDesc::Blk(blk_desc) => blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
+                super::dev::DevDesc::Net(net_desc) => net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
                 #[cfg(feature = "balloon")]
                 super::dev::DevDesc::Balloon(config) => config.read_config(offset - VIRTIO_MMIO_CONFIG),
                 _ => {

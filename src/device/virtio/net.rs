@@ -184,7 +184,7 @@ pub fn virtio_net_handle_ctrl(vq: Arc<Virtq>, nic: Arc<VirtioMmio>, vm: Arc<Vm>)
             VIRTIO_NET_CTRL_ANNOUNCE => {
                 let status: u8 = if ctrl.command == VIRTIO_NET_CTRL_ANNOUNCE_ACK {
                     match nic.dev().desc() {
-                        DevDesc::NetDesc(desc) => {
+                        DevDesc::Net(desc) => {
                             desc.set_status(VIRTIO_NET_S_LINK_UP);
                             VIRTIO_NET_OK
                         }

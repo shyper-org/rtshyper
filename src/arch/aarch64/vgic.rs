@@ -422,7 +422,7 @@ impl Vgic {
         if int_id < GIC_PRIVINT_NUM {
             let vcpu_id = vcpu.id();
             self.cpu_priv_interrupt(vcpu_id, int_id)
-        } else if int_id >= GIC_PRIVINT_NUM && int_id < GIC_INTS_MAX {
+        } else if (GIC_PRIVINT_NUM..GIC_INTS_MAX).contains(&int_id) {
             self.vgicd_interrupt(int_id - GIC_PRIVINT_NUM)
         } else {
             None
@@ -1553,10 +1553,8 @@ impl Vgic {
 
             if vgic_int_is_hw(int) {
                 GICD.set_act(int.id() as usize, false);
-            } else {
-                if int.state().is_pend() {
-                    self.add_lr(vcpu, int);
-                }
+            } else if int.state().is_pend() {
+                self.add_lr(vcpu, int);
             }
         }
     }
@@ -2051,9 +2049,7 @@ pub fn vgic_set_hw_int(vm: &Vm, int_id: usize) {
                 interrupt.set_hw(true);
             }
         }
-    } else {
-        if let Some(interrupt) = vgic.get_int(vm.vcpu(0).unwrap(), int_id) {
-            interrupt.set_hw(true);
-        }
+    } else if let Some(interrupt) = vgic.get_int(vm.vcpu(0).unwrap(), int_id) {
+        interrupt.set_hw(true);
     }
 }

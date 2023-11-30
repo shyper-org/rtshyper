@@ -739,12 +739,10 @@ impl EmuDev for EmuSmmu {
         } else {
             let val = if address == &smmu_v2.glb_rs0.IDR1 as *const _ as usize {
                 smmu_v2.emu_rs0_idr1 as usize
+            } else if emu_ctx.width > 4 {
+                unsafe { ptr::read_volatile(address as *const usize) }
             } else {
-                if emu_ctx.width > 4 {
-                    unsafe { ptr::read_volatile(address as *const usize) }
-                } else {
-                    unsafe { ptr::read_volatile(address as *const u32) as usize }
-                }
+                unsafe { ptr::read_volatile(address as *const u32) as usize }
             };
             current_cpu().set_gpr(emu_ctx.reg, val);
         }

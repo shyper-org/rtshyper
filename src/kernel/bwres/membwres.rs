@@ -49,6 +49,10 @@ struct ReclaimManagerRef {
     manager: NonNull<ReclaimManager>,
 }
 
+// SAFETY: `ReclaimManagerRef` is only accessed on a single core
+unsafe impl Sync for ReclaimManagerRef {}
+unsafe impl Send for ReclaimManagerRef {}
+
 impl TimerEvent for ReclaimManagerRef {
     fn callback(self: alloc::sync::Arc<Self>, _now: crate::util::timer_list::TimerValue) {
         let mut val = unsafe { self.manager.as_ref() }.val.lock();

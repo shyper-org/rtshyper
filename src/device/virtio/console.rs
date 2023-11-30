@@ -108,7 +108,7 @@ pub fn virtio_console_notify_handler(vq: Arc<Virtq>, console: Arc<VirtioMmio>, v
     let dev = console.dev();
 
     let (trgt_vmid, trgt_console_ipa) = match dev.desc() {
-        DevDesc::ConsoleDesc(desc) => desc.target_console(),
+        DevDesc::Console(desc) => desc.target_console(),
         _ => {
             println!("virtio_console_notify_handler: console desc should not be None");
             return false;

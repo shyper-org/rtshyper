@@ -7,6 +7,8 @@
 #![feature(asm_const)]
 #![feature(extract_if)]
 #![allow(unused_doc_comments)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::modulo_one)]
 
 #[macro_use]
 extern crate alloc;

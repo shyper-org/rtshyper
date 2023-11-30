@@ -32,6 +32,10 @@ pub struct SchedulerRT {
 #[repr(transparent)]
 struct SchedulerRTRef(NonNull<SchedulerRT>);
 
+// SAFETY: `SchedulerRTRef` is only accessed on a single core
+unsafe impl Sync for SchedulerRTRef {}
+unsafe impl Send for SchedulerRTRef {}
+
 impl TimerEvent for SchedulerRTRef {
     fn callback(self: Arc<Self>, now: TimerValue) {
         // SAFETY: Scheduler is a core-private data, and the raw pointer is on heap
@@ -57,6 +61,10 @@ struct SchedUnit {
 
     priority: Cell<usize>,
 }
+
+// SAFETY: `SchedUnit` is only accessed on a single core
+unsafe impl Sync for SchedUnit {}
+unsafe impl Send for SchedUnit {}
 
 impl SchedUnit {
     fn new(item: SchedItemInner) -> Self {

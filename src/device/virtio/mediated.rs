@@ -73,7 +73,7 @@ pub struct MediatedBlk {
 }
 
 impl MediatedBlk {
-    pub fn content(&self) -> &mut MediatedBlkContent {
+    fn content(&self) -> &'static mut MediatedBlkContent {
         if self.base_addr < 0x1000 {
             panic!("illeagal addr {:x}", self.base_addr);
         }

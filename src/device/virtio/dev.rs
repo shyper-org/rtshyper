@@ -20,9 +20,9 @@ pub enum VirtioDeviceType {
 }
 
 pub enum DevDesc {
-    BlkDesc(BlkDesc),
-    NetDesc(NetDesc),
-    ConsoleDesc(ConsoleDesc),
+    Blk(BlkDesc),
+    Net(NetDesc),
+    Console(ConsoleDesc),
     #[cfg(feature = "balloon")]
     Balloon(VirtioBallonConfig),
 }
@@ -41,7 +41,7 @@ impl VirtDev {
     pub fn new(dev_type: VirtioDeviceType, config: &VmEmulatedDeviceConfig) -> Self {
         let (desc, features, req) = match dev_type {
             VirtioDeviceType::Block => {
-                let desc = DevDesc::BlkDesc(BlkDesc::new(config.cfg_list[1]));
+                let desc = DevDesc::Blk(BlkDesc::new(config.cfg_list[1]));
 
                 // TODO: blk_features_init & cache init
                 let features = blk_features();
@@ -53,14 +53,14 @@ impl VirtDev {
                 (desc, features, Some(blk_req))
             }
             VirtioDeviceType::Net => {
-                let desc = DevDesc::NetDesc(NetDesc::new(&config.cfg_list));
+                let desc = DevDesc::Net(NetDesc::new(&config.cfg_list));
 
                 let features = net_features();
 
                 (desc, features, None)
             }
             VirtioDeviceType::Console => {
-                let desc = DevDesc::ConsoleDesc(ConsoleDesc::new(config.cfg_list[0] as u16, config.cfg_list[1] as u64));
+                let desc = DevDesc::Console(ConsoleDesc::new(config.cfg_list[0] as u16, config.cfg_list[1] as u64));
                 let features = console_features();
 
                 (desc, features, None)
