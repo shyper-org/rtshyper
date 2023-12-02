@@ -6,6 +6,7 @@ pub use self::utility::*;
 
 mod barrier;
 mod bitmap;
+pub mod device_ref;
 pub mod downcast;
 pub mod logger;
 mod print;

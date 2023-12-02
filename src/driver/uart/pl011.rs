@@ -7,7 +7,7 @@ const UART_FR_TXFF: u32 = 1 << 5;
 
 register_structs! {
   #[allow(non_snake_case)]
-  pub Pl011MmioBlock {
+  pub Pl011Mmio {
     (0x000 => pub Data: ReadWrite<u32>),
     (0x004 => pub RecvStatusErrClr: ReadWrite<u32>),
     (0x008 => _reserved_1),
@@ -29,17 +29,7 @@ register_structs! {
   }
 }
 
-pub struct Pl011Mmio<const BASE_ADDR: usize>;
-
-impl<const BASE_ADDR: usize> core::ops::Deref for Pl011Mmio<BASE_ADDR> {
-    type Target = Pl011MmioBlock;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(BASE_ADDR as *const _) }
-    }
-}
-
-impl<const BASE_ADDR: usize> super::UartOperation for Pl011Mmio<BASE_ADDR> {
+impl super::UartOperation for Pl011Mmio {
     #[inline]
     fn init(&self) {}
 

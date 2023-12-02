@@ -8,7 +8,7 @@ PROFILE ?= release
 BOARD ?= tx2
 # features, seperate with comma `,`
 FEATURES =
-TEXT_START ?= 0x83000000
+export TEXT_START ?= 0x83000000
 
 # CROSS_COMPILE can be set on the command line
 export CROSS_COMPILE ?= aarch64-none-elf-
@@ -53,11 +53,16 @@ ifeq (${PROFILE}, release)
 CARGO_FLAGS += --release
 endif
 
-.PHONY: build upload qemu tx2 pi4 run debug clean gdb
+.PHONY: build cargo clippy upload qemu tx2 pi4 run debug clean gdb
 
-build:
+cargo:
 	cargo fmt
 	cargo ${CARGO_ACTION} ${CARGO_FLAGS}
+
+clippy:
+	$(MAKE) cargo CARGO_ACTION=clippy
+
+build: cargo
 	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
 	${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
 

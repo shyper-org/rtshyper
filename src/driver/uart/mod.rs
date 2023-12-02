@@ -1,3 +1,5 @@
+use crate::util::device_ref::DeviceRef;
+
 #[cfg(feature = "ns16550")]
 mod ns16550;
 #[cfg(feature = "pl011")]
@@ -18,7 +20,7 @@ use crate::board::{PlatOperation, Platform};
 
 const UART_BASE: usize = Platform::HYPERVISOR_UART_BASE;
 
-const UART: &dyn UartOperation = &Uart::<UART_BASE>;
+const UART: DeviceRef<Uart> = unsafe { DeviceRef::new(UART_BASE as *const _) };
 
 pub fn putc(byte: u8) {
     if byte == b'\n' {

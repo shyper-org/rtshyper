@@ -8,7 +8,7 @@ use tock_registers::*;
 use crate::arch::INTERRUPT_NUM_MAX;
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::current_cpu;
-use crate::util::bit_extract;
+use crate::util::{bit_extract, device_ref::DeviceRef};
 
 // GICD BITS
 const GICD_CTLR_EN_BIT: usize = 0x1;
@@ -49,7 +49,7 @@ static GIC_LRS_NUM: AtomicUsize = AtomicUsize::new(0);
 static GICD_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub(super) enum IrqState {
+pub enum IrqState {
     Inactive = 0b00,
     Pend = 0b01,
     Active = 0b10,
@@ -118,7 +118,7 @@ pub struct GicDesc {
 
 register_structs! {
     #[allow(non_snake_case)]
-    pub GicDistributorBlock {
+    pub GicDistributor {
         (0x0000 => CTLR: ReadWrite<u32>),   // Distributor Control Register
         (0x0004 => TYPER: ReadOnly<u32>),   // Interrupt Controller Type Register
         (0x0008 => IIDR: ReadOnly<u32>),    // Distributor Implementer Identification Register
@@ -144,22 +144,9 @@ register_structs! {
     }
 }
 
-pub(super) struct GicDistributor {
-    base_addr: usize,
-}
-
-impl core::ops::Deref for GicDistributor {
-    type Target = GicDistributorBlock;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.base_addr as *const Self::Target) }
-    }
-}
+unsafe impl Sync for GicDistributor {}
 
 impl GicDistributor {
-    const fn new(base_addr: usize) -> GicDistributor {
-        GicDistributor { base_addr }
-    }
-
     pub fn is_enabler(&self, idx: usize) -> u32 {
         self.ISENABLER[idx].get()
     }
@@ -370,7 +357,7 @@ impl GicDistributor {
 
 register_structs! {
   #[allow(non_snake_case)]
-  pub GicCpuInterfaceBlock {
+  pub GicCpuInterface {
     (0x0000 => CTLR: ReadWrite<u32>),   // CPU Interface Control Register
     (0x0004 => PMR: ReadWrite<u32>),    // Interrupt Priority Mask Register
     (0x0008 => BPR: ReadWrite<u32>),    // Binary Point Register
@@ -394,22 +381,11 @@ register_structs! {
   }
 }
 
-pub struct GicCpuInterface {
-    base_addr: usize,
-}
-
-impl core::ops::Deref for GicCpuInterface {
-    type Target = GicCpuInterfaceBlock;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.base_addr as *const Self::Target) }
-    }
-}
+// SAFETY: GicCpuInterface is private to each core
+unsafe impl Send for GicCpuInterface {}
+unsafe impl Sync for GicCpuInterface {}
 
 impl GicCpuInterface {
-    pub const fn new(base_addr: usize) -> GicCpuInterface {
-        GicCpuInterface { base_addr }
-    }
-
     fn init(&self) {
         for i in 0..gic_lrs() {
             GICH.LR[i].set(0);
@@ -451,7 +427,7 @@ impl GicCpuInterface {
 
 register_structs! {
     #[allow(non_snake_case)]
-    pub GicHypervisorInterfaceBlock {
+    pub GicHypervisorInterface {
         (0x0000 => HCR: ReadWrite<u32>),    // Hypervisor Control Register
         (0x0004 => VTR: ReadOnly<u32>),     // VGIC Type Register
         (0x0008 => VMCR: ReadWrite<u32>),   // Virtual Machine Control Register
@@ -470,22 +446,11 @@ register_structs! {
     }
 }
 
-pub struct GicHypervisorInterface {
-    base_addr: usize,
-}
-
-impl core::ops::Deref for GicHypervisorInterface {
-    type Target = GicHypervisorInterfaceBlock;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.base_addr as *const Self::Target) }
-    }
-}
+// SAFETY: GicCpuInterface is private to each core
+unsafe impl Send for GicHypervisorInterface {}
+unsafe impl Sync for GicHypervisorInterface {}
 
 impl GicHypervisorInterface {
-    const fn new(base_addr: usize) -> GicHypervisorInterface {
-        GicHypervisorInterface { base_addr }
-    }
-
     pub fn hcr(&self) -> u32 {
         self.HCR.get()
     }
@@ -590,9 +555,10 @@ impl crate::arch::InterruptContextTriat for GicState {
     }
 }
 
-pub(super) static GICD: GicDistributor = GicDistributor::new(Platform::GICD_BASE);
-pub(super) static GICC: GicCpuInterface = GicCpuInterface::new(Platform::GICC_BASE);
-pub(super) static GICH: GicHypervisorInterface = GicHypervisorInterface::new(Platform::GICH_BASE);
+// SAFETY: they are GICv2 mmio device regions
+pub(super) static GICD: DeviceRef<GicDistributor> = unsafe { DeviceRef::new(Platform::GICD_BASE as *const _) };
+pub(super) static GICC: DeviceRef<GicCpuInterface> = unsafe { DeviceRef::new(Platform::GICC_BASE as *const _) };
+pub(super) static GICH: DeviceRef<GicHypervisorInterface> = unsafe { DeviceRef::new(Platform::GICH_BASE as *const _) };
 
 #[inline(always)]
 fn gic_max_spi() -> usize {

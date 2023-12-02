@@ -283,7 +283,7 @@ register_bitfields! {
 register_structs! {
     /// Representation of the UART registers.
     #[allow(non_snake_case)]
-    pub Ns16550Mmio32Block {
+    pub Ns16550Mmio32 {
         (0x00 => pub RHR_THR_DLL: ReadWrite<u8, RHR_THR_DLL::Register>),
         (0x01 => _reserved_0),
         (0x04 => pub IER_DLM: ReadWrite<u8, IER_DLM::Register>),
@@ -304,27 +304,7 @@ register_structs! {
     }
 }
 
-// pub struct Ns16550Mmio<const BASE_ADDR: usize>;
-
-// impl<const BASE_ADDR: usize> core::ops::Deref for Ns16550Mmio<BASE_ADDR> {
-//     type Target = Ns16550MmioBlock;
-
-//     fn deref(&self) -> &Self::Target {
-//         unsafe { &*(BASE_ADDR as *const _) }
-//     }
-// }
-
-pub struct Ns16550Mmio32<const BASE_ADDR: usize>;
-
-impl<const BASE_ADDR: usize> core::ops::Deref for Ns16550Mmio32<BASE_ADDR> {
-    type Target = Ns16550Mmio32Block;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*(BASE_ADDR as *const _) }
-    }
-}
-
-impl<const BASE_ADDR: usize> super::UartOperation for Ns16550Mmio32<BASE_ADDR> {
+impl super::UartOperation for Ns16550Mmio32 {
     #[inline]
     fn init(&self) {
         self.ISR_FCR.write(ISR_FCR::EN_FIFO::Mode16550);
