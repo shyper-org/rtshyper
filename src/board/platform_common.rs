@@ -12,6 +12,7 @@ pub const ARM_CORTEX_A57: u8 = 0;
 #[derive(Clone, Copy, Debug)]
 pub enum SchedRule {
     RoundRobin,
+    #[cfg(feature = "rt-sched")]
     RealTime,
 }
 

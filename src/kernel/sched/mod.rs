@@ -1,4 +1,5 @@
 mod sched_rr;
+#[cfg(feature = "rt-sched")]
 mod sched_rt;
 
 use alloc::boxed::Box;
@@ -25,6 +26,7 @@ pub trait Scheduler {
 pub fn get_scheduler(rule: SchedRule) -> Box<dyn Scheduler<SchedItem = Vcpu>> {
     match rule {
         SchedRule::RoundRobin => Box::new(sched_rr::SchedulerRR::new(1)),
+        #[cfg(feature = "rt-sched")]
         SchedRule::RealTime => Box::new(sched_rt::SchedulerRT::new()),
     }
 }

@@ -89,6 +89,7 @@ iommu = ["smmuv2"]
 smmuv2 = []
 self-coloring = []
 trap-wfi = []
+rt-sched = [] # real-time scheduling
 
 memory-reservation = ["fastrand", "dynamic-budget"]
 # This feature "dynamic-budget" belongs to "memory-reservation"
