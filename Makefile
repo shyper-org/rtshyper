@@ -12,7 +12,7 @@ export TEXT_START ?= 0x83000000
 
 # CROSS_COMPILE can be set on the command line
 export CROSS_COMPILE ?= aarch64-none-elf-
-export CFLAGS := -mgeneral-regs-only
+export CFLAGS := -ffreestanding -mgeneral-regs-only
 
 # export CC for C-library cross compiling
 ifneq ($(LLVM),)

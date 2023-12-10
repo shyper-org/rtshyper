@@ -43,11 +43,7 @@ pub fn heap_init() {
     static mut HEAP_REGION: HeapRegion = HeapRegion([0; HEAP_SIZE]);
 
     unsafe {
-        info!(
-            "init buddy system: {:#p}..{:#p}",
-            HEAP_REGION.0.as_ptr_range().start,
-            HEAP_REGION.0.as_ptr_range().end
-        );
+        info!("init buddy system: {:?}", HEAP_REGION.0.as_ptr_range());
         HEAP_ALLOCATOR.lock().init(HEAP_REGION.0.as_ptr() as usize, HEAP_SIZE);
     }
 }

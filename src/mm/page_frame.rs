@@ -9,15 +9,17 @@ pub struct PageFrame {
     pub hva: usize,
     pub page_num: usize,
     pub pa: usize,
+    layout: Layout,
 }
 
 #[allow(dead_code)]
 impl PageFrame {
-    pub fn new(hva: usize, page_num: usize) -> Self {
+    fn new(hva: usize, page_num: usize, layout: Layout) -> Self {
         Self {
             hva,
             page_num,
             pa: current_cpu().pt().ipa2pa(hva).unwrap(),
+            layout,
         }
     }
 
@@ -32,7 +34,7 @@ impl PageFrame {
                     panic!("alloc_pages: get wrong ptr {hva:#p}, layout = {:?}", layout);
                 }
                 let hva = hva as usize;
-                Ok(Self::new(hva, page_num))
+                Ok(Self::new(hva, page_num, layout))
             }
             Err(err) => {
                 error!("alloc_pages: Layout error {}", err);
@@ -53,7 +55,6 @@ impl PageFrame {
 impl Drop for PageFrame {
     fn drop(&mut self) {
         trace!("<<< free page frame {:#x}, {}", self.pa, self.page_num);
-        let layout = Layout::from_size_align(self.page_num * PAGE_SIZE, PAGE_SIZE).unwrap();
-        unsafe { alloc::dealloc(self.hva as *mut _, layout) }
+        unsafe { alloc::dealloc(self.hva as *mut _, self.layout) }
     }
 }
