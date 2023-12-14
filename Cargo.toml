@@ -23,7 +23,6 @@ gethostname = "0.4.3"
 [workspace]
 members = [
     "deps/libfdt-binding",
-    "deps/libshyper",
     "deps/spin",
     "deps/ffi_interface",
     "deps/raii",
@@ -31,7 +30,7 @@ members = [
 ]
 
 [dependencies]
-shyper = { path = "deps/libshyper" }
+shyper = { git = "https://github.com/tsemo4917/libshyper" }
 fdt = { path = "deps/libfdt-binding" }
 spin = { version = "0.9.8" }
 buddy_system_allocator = { version = "0.9.0", default-features = false }
