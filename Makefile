@@ -1,6 +1,6 @@
 # DISK is the path to the ROOTFS for VM0 when `make run` on QEMU
 # DISK can be set on the command line
-DISK = ../rust_hypervisor/vm0.img
+DISK :=
 
 # Compile
 ARCH ?= aarch64
@@ -51,6 +51,8 @@ CARGO_ACTION ?= build
 CARGO_FLAGS ?= -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target ${ARCH}.json --no-default-features --features "${BOARD},${FEATURES}"
 ifeq (${PROFILE}, release)
 CARGO_FLAGS += --release
+else ifneq (${PROFILE}, debug)
+$(error bad PROFILE: ${PROFILE})
 endif
 
 .PHONY: build cargo clippy upload qemu tx2 pi4 run debug clean gdb
@@ -82,23 +84,33 @@ pi4:
 	$(MAKE) upload BOARD=pi4 TEXT_START=0xF0080000
 	scp ./image/pi4_fin.dtb ${TFTP_SERVER}/pi4_dtb
 
-QEMU_COMMON_OPTIONS = -machine virt,virtualization=on,gic-version=2 \
-	-m 8g -cpu cortex-a57 -smp 4 -display none -global virtio-mmio.force-legacy=false \
-	-kernel ${TARGET_DIR}/${IMAGE}.bin
+ifeq ($(ARCH),aarch64)
+QEMU_OPTIONS = -machine virt,virtualization=on,gic-version=2 -m 8g -cpu cortex-a57 -smp 4
+else
+$(error bad arch: $(ARCH))
+endif
+
+QEMU_OPTIONS += -display none -global virtio-mmio.force-legacy=false -kernel ${TARGET_DIR}/${IMAGE}.bin
 
 QEMU_SERIAL_OPTIONS = -serial mon:stdio #\
 	-serial telnet:localhost:12345,server
+QEMU_OPTIONS += $(QEMU_SERIAL_OPTIONS)
 
 QEMU_NETWORK_OPTIONS = -netdev user,id=n0,hostfwd=tcp::5555-:22 -device virtio-net-device,bus=virtio-mmio-bus.24,netdev=n0
+QEMU_OPTIONS += $(QEMU_NETWORK_OPTIONS)
 
 QEMU_DISK_OPTIONS = -drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.25
+QEMU_OPTIONS += $(QEMU_DISK_OPTIONS)
 
 run: qemu
-	${QEMU} ${QEMU_COMMON_OPTIONS} ${QEMU_SERIAL_OPTIONS} ${QEMU_NETWORK_OPTIONS} ${QEMU_DISK_OPTIONS}
+ifeq ($(DISK),)
+	$(error please offer DISK)
+else
+	${QEMU} ${QEMU_OPTIONS}
+endif
 
-debug: qemu
-	${QEMU} ${QEMU_COMMON_OPTIONS} ${QEMU_SERIAL_OPTIONS} ${QEMU_NETWORK_OPTIONS} ${QEMU_DISK_OPTIONS} \
-		-s -S
+debug: QEMU_OPTIONS += -s -S
+debug: run
 
 gdb:
 	${GDB} -x gdb/${ARCH}.gdb

@@ -8,13 +8,8 @@ use crate::vmm::vmm_reboot;
 use super::smc::smc_call;
 use smccc::psci::*;
 
-const PSCI_E_SUCCESS: usize = 0;
-const PSCI_E_NOT_SUPPORTED: usize = usize::MAX;
-
 #[cfg(feature = "tx2")]
 const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: u32 = 0xC2FFFE02;
-
-const PSCI_TOS_NOT_PRESENT_MP: usize = 2;
 
 pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
     let m = IpiPowerMessage {
@@ -30,7 +25,12 @@ pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
 }
 
 pub fn power_arch_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
-    smc_call(PSCI_CPU_ON_64, mpidr, entry, ctx).0
+    info!("power on cpu {mpidr:x}");
+    let ret = smc_call(PSCI_CPU_ON_64, mpidr, entry, ctx).0;
+    if ret != smccc::error::SUCCESS as usize {
+        error!("power on cpu {mpidr:x} failed");
+    }
+    ret
 }
 
 #[allow(dead_code)]
@@ -72,14 +72,14 @@ pub fn smc_guest_handler(fid: usize, x1: usize, x2: usize, x3: usize) -> bool {
     );
     let r = match fid as u32 {
         PSCI_FEATURES => match x1 as u32 {
-            PSCI_VERSION | PSCI_CPU_ON_64 | PSCI_FEATURES => PSCI_E_SUCCESS,
-            _ => PSCI_E_NOT_SUPPORTED,
+            PSCI_VERSION | PSCI_CPU_ON_64 | PSCI_FEATURES => smccc::error::SUCCESS as usize,
+            _ => error::NOT_SUPPORTED as usize,
         },
         PSCI_VERSION => smc_call(PSCI_VERSION, 0, 0, 0).0,
         PSCI_CPU_ON_64 => psci_guest_cpu_on(x1, x2, x3),
         PSCI_SYSTEM_RESET => psci_guest_sys_reset(),
         PSCI_SYSTEM_OFF => psci_guest_sys_off(),
-        PSCI_MIGRATE_INFO_TYPE => PSCI_TOS_NOT_PRESENT_MP,
+        PSCI_MIGRATE_INFO_TYPE => MigrateType::MigrationNotRequired as usize,
         PSCI_AFFINITY_INFO_64 => 0,
         #[cfg(feature = "tx2")]
         TEGRA_SIP_GET_ACTMON_CLK_COUNTERS => {
@@ -180,7 +180,7 @@ fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
             let cluster = (mpidr >> 8) & 0xff;
             if vm.id() == 0 && cluster != 1 {
                 warn!("psci_guest_cpu_on: L4T only support cluster #1");
-                return usize::MAX - 1;
+                return error::NOT_PRESENT as usize;
             }
         }
 
@@ -193,12 +193,12 @@ fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
 
         if !ipi_send_msg(phys_id, IpiType::Power, IpiInnerMsg::Power(m)) {
             warn!("psci_guest_cpu_on: fail to send msg");
-            return usize::MAX - 1;
+            return error::NOT_PRESENT as usize;
         }
 
         0
     } else {
         warn!("psci_guest_cpu_on: VM {} target vcpu {} not exist", vm.id(), vcpu_id);
-        usize::MAX - 1
+        error::NOT_PRESENT as usize
     }
 }

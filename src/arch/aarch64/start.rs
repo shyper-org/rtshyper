@@ -35,6 +35,11 @@ unsafe extern "C" fn _start() -> ! {
     core::arch::asm!(
         r#"
         mov x20, x0 // save fdt pointer to x20
+
+        // setup stack sp per core
+        ldr x1, ={boot_stack}
+        add sp, x1, #{CORE_BOOT_STACK_SIZE}
+
         mrs x0, mpidr_el1
         bl {mpidr2cpuid}
         mov x19, x0 // save core_id
@@ -49,27 +54,17 @@ unsafe extern "C" fn _start() -> ! {
         bl  {cache_invalidate}
 
         // if (core_id == 0) cache_invalidate(2): clear l2$
-        cbnz x19, 3f
         mov x0, #2
         bl  {cache_invalidate}
-    3:
-        mov x0, x19 // restore core_id
+
         ic  iallu // clear icache
 
-        // setup stack sp per core
-        ldr x1, ={boot_stack}
-        mov x2, (4096 * 2)
-        mul x3, x0, x2
-        add x1, x1, x2
-        add sp, x1, x3
-
         // if core_id is not zero, skip bss clearing and pt_populate
-        cbnz x0, 5f
         bl {clear_bss}
         adrp x0, {lvl1_page_table}
         adrp x1, {lvl2_page_table}
         bl  {pt_populate}
-    5:
+
         // Trap nothing from EL1 to El2
         mov x3, xzr
         msr cptr_el2, x3
@@ -82,33 +77,94 @@ unsafe extern "C" fn _start() -> ! {
 
         msr ttbr0_el2, x0
 
+        bl {init_sysregs} // here, enable MMU and cache, then switch the stack
+
         msr spsel, #1
         ldr x1, ={CPU}
         add x1, x1, #{CPU_STACK_OFFSET}
         sub	sp, x1, #{CONTEXT_SIZE}
 
-        bl {init_sysregs}
-
-        tlbi	alle2
-        dsb	nsh
-        isb
-
         mov x0, x19
         mov x1, x20
         bl  {init}
         "#,
+        boot_stack = sym BOOT_STACK,
+        CORE_BOOT_STACK_SIZE = const core::mem::size_of::<CoreBootStack>(),
         mpidr2cpuid = sym Platform::mpidr2cpuid,
         cache_invalidate = sym cache_invalidate,
-        boot_stack = sym BOOT_STACK,
+        clear_bss = sym clear_bss,
         lvl1_page_table = sym super::mmu::LVL1_PAGE_TABLE,
         lvl2_page_table = sym super::mmu::LVL2_PAGE_TABLE,
         pt_populate = sym super::mmu::pt_populate,
         mmu_init = sym super::mmu::mmu_init,
         cpu_map_self = sym cpu_map_self,
+        init_sysregs = sym init_sysregs,
         CPU = sym crate::kernel::CPU,
         CPU_STACK_OFFSET = const CPU_STACK_OFFSET + CPU_STACK_SIZE,
         CONTEXT_SIZE = const core::mem::size_of::<crate::arch::ContextFrame>(),
-        clear_bss = sym clear_bss,
+        init = sym crate::init,
+        options(noreturn)
+    );
+}
+
+#[naked]
+#[no_mangle]
+#[link_section = ".text.boot"]
+unsafe extern "C" fn _secondary_start() -> ! {
+    core::arch::asm!(
+        r#"
+        mov x19, x0 // save core id to x19
+
+        // setup stack sp per core
+        ldr x1, ={boot_stack}
+        mov x2, #{CORE_BOOT_STACK_SIZE}
+        mul x3, x0, x2
+        add x1, x1, x2
+        add sp, x1, x3
+
+        // disable cache and MMU
+        mrs x1, sctlr_el2
+        bic x1, x1, #0xf
+        msr sctlr_el2, x1
+
+        // cache_invalidate(0): clear dl1$
+        // mov x0, #0
+        // bl  {cache_invalidate}
+
+        ic  iallu
+
+        // Trap nothing from EL1 to El2
+        mov x3, xzr
+        msr cptr_el2, x3
+
+        adrp x0, {lvl1_page_table}
+        bl  {mmu_init}
+
+        mov x0, x19
+        bl  {cpu_map_self}
+
+        msr ttbr0_el2, x0
+
+        bl {init_sysregs}
+
+        msr spsel, #1
+        ldr x1, ={CPU}
+        add x1, x1, #{CPU_STACK_OFFSET}
+        sub	sp, x1, #{CONTEXT_SIZE}
+
+        mov x0, x19
+        mov x1, x20
+        bl  {init}
+        "#,
+        boot_stack = sym BOOT_STACK,
+        CORE_BOOT_STACK_SIZE = const core::mem::size_of::<CoreBootStack>(),
+        cache_invalidate = sym cache_invalidate,
+        lvl1_page_table = sym super::mmu::LVL1_PAGE_TABLE,
+        mmu_init = sym super::mmu::mmu_init,
+        cpu_map_self = sym cpu_map_self,
+        CPU = sym crate::kernel::CPU,
+        CPU_STACK_OFFSET = const CPU_STACK_OFFSET + CPU_STACK_SIZE,
+        CONTEXT_SIZE = const core::mem::size_of::<crate::arch::ContextFrame>(),
         init_sysregs = sym init_sysregs,
         init = sym crate::init,
         options(noreturn)
@@ -116,10 +172,7 @@ unsafe extern "C" fn _start() -> ! {
 }
 
 fn init_sysregs() {
-    use aarch64_cpu::{
-        asm::barrier,
-        registers::{HCR_EL2, SCTLR_EL2, VBAR_EL2},
-    };
+    use aarch64_cpu::registers::{HCR_EL2, SCTLR_EL2, VBAR_EL2};
     HCR_EL2.write(
         HCR_EL2::VM::Enable
             + HCR_EL2::RW::EL1IsAarch64
@@ -127,9 +180,10 @@ fn init_sysregs() {
             + HCR_EL2::FMO::EnableVirtualFIQ
             + HCR_EL2::TSC::EnableTrapEl1SmcToEl2,
     );
-    VBAR_EL2.set(vectors as usize as u64);
+    VBAR_EL2.set(vectors as u64);
     SCTLR_EL2.modify(SCTLR_EL2::M::Enable + SCTLR_EL2::C::Cacheable + SCTLR_EL2::I::Cacheable);
-    barrier::isb(barrier::SY);
+    use crate::arch::traits::TlbInvalidate;
+    crate::arch::Arch::invalid_hypervisor_all();
 }
 
 unsafe fn clear_bss() {
