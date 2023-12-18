@@ -128,8 +128,8 @@ unsafe extern "C" fn _secondary_start() -> ! {
         msr sctlr_el2, x1
 
         // cache_invalidate(0): clear dl1$
-        // mov x0, #0
-        // bl  {cache_invalidate}
+        mov x0, #0
+        bl  {cache_invalidate}
 
         ic  iallu
 
