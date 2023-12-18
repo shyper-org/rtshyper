@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::arch::PAGE_SIZE;
-use crate::device::{mediated_blk_list_get, ReadAsyncMsg, UsedInfo, VirtioMmio, Virtq, WriteAsyncMsg};
+use crate::device::{mediated_blk_list_get, EmuContext, ReadAsyncMsg, UsedInfo, VirtioMmio, Virtq, WriteAsyncMsg};
 use crate::kernel::{async_blk_io_req, async_ipi_req, AsyncTask, IpiMediatedMsg, Vm, EXECUTOR};
 use crate::util::memcpy_safe;
 
@@ -76,13 +76,15 @@ impl BlkDesc {
         &self.inner.capacity as *const _ as usize
     }
 
-    pub fn offset_data(&self, offset: usize) -> u32 {
+    pub fn offset_data(&self, emu_ctx: &EmuContext, offset: usize) -> u64 {
         let start_addr = self.start_addr();
-        if start_addr + offset < 0x1000 {
-            panic!("illegal addr {:x}", start_addr + offset);
+        match emu_ctx.width {
+            1 => unsafe { *((start_addr + offset) as *const u8) as u64 },
+            2 => unsafe { *((start_addr + offset) as *const u16) as u64 },
+            4 => unsafe { *((start_addr + offset) as *const u32) as u64 },
+            8 => unsafe { *((start_addr + offset) as *const u64) },
+            _ => 0,
         }
-
-        unsafe { *((start_addr + offset) as *const u32) }
     }
 }
 

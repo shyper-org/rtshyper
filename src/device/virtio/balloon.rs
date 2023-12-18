@@ -3,6 +3,7 @@
 use alloc::sync::Arc;
 use core::{mem::size_of, ops::Deref};
 
+use crate::device::EmuContext;
 use crate::kernel::Vm;
 
 use super::{iov::VirtioIov, mmio::VIRTIO_F_VERSION_1, VirtioMmio, Virtq};
@@ -48,18 +49,30 @@ impl VirtioBallonConfig {
         }
     }
 
-    pub fn read_config(&self, offset: usize) -> u32 {
+    pub fn read_config(&self, emu_ctx: &EmuContext, offset: usize) -> u64 {
         if offset < size_of::<Self>() {
-            unsafe { *((self as *const _ as usize + offset) as *const _) }
+            match emu_ctx.width {
+                1 => unsafe { *((self as *const _ as usize + offset) as *const u8) as u64 },
+                2 => unsafe { *((self as *const _ as usize + offset) as *const u16) as u64 },
+                4 => unsafe { *((self as *const _ as usize + offset) as *const u32) as u64 },
+                8 => unsafe { *((self as *const _ as usize + offset) as *const u64) },
+                _ => 0,
+            }
         } else {
             0
         }
     }
 
-    pub fn write_config(&self, offset: usize, val: u32) {
+    pub fn write_config(&self, emu_ctx: &EmuContext, offset: usize, val: u64) {
         if offset < size_of::<Self>() {
             debug!("before: VirtioBallonConfig {:x?}", self);
-            unsafe { *((self as *const _ as usize + offset) as *mut _) = val };
+            match emu_ctx.width {
+                1 => unsafe { *((self as *const _ as usize + offset) as *mut u8) = val as u8 },
+                2 => unsafe { *((self as *const _ as usize + offset) as *mut u16) = val as u16 },
+                4 => unsafe { *((self as *const _ as usize + offset) as *mut u32) = val as u32 },
+                8 => unsafe { *((self as *const _ as usize + offset) as *mut u64) = val },
+                _ => {}
+            }
             debug!("after: VirtioBallonConfig {:x?}", self);
         }
     }

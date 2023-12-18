@@ -518,12 +518,12 @@ fn virtio_mmio_queue_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usi
 fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize, write: bool) {
     if !write {
         let value = match offset {
-            VIRTIO_MMIO_CONFIG_GENERATION => mmio.dev().generation() as u32,
+            VIRTIO_MMIO_CONFIG_GENERATION => mmio.dev().generation() as u64,
             VIRTIO_MMIO_CONFIG..=0x1ff => match mmio.dev().desc() {
-                super::dev::DevDesc::Blk(blk_desc) => blk_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
-                super::dev::DevDesc::Net(net_desc) => net_desc.offset_data(offset - VIRTIO_MMIO_CONFIG),
+                super::dev::DevDesc::Blk(blk_desc) => blk_desc.offset_data(emu_ctx, offset - VIRTIO_MMIO_CONFIG),
+                super::dev::DevDesc::Net(net_desc) => net_desc.offset_data(emu_ctx, offset - VIRTIO_MMIO_CONFIG),
                 #[cfg(feature = "balloon")]
-                super::dev::DevDesc::Balloon(config) => config.read_config(offset - VIRTIO_MMIO_CONFIG),
+                super::dev::DevDesc::Balloon(config) => config.read_config(emu_ctx, offset - VIRTIO_MMIO_CONFIG),
                 _ => {
                     error!("unknow desc type");
                     return;
@@ -540,9 +540,9 @@ fn virtio_mmio_cfg_access(mmio: &VirtioMmio, emu_ctx: &EmuContext, offset: usize
     } else {
         #[cfg(feature = "balloon")]
         if (VIRTIO_MMIO_CONFIG..=0x1ff).contains(&offset) {
-            let val = current_cpu().get_gpr(emu_ctx.reg) as u32;
+            let val = current_cpu().get_gpr(emu_ctx.reg) as u64;
             match mmio.dev().desc() {
-                super::dev::DevDesc::Balloon(config) => config.write_config(offset - VIRTIO_MMIO_CONFIG, val),
+                super::dev::DevDesc::Balloon(config) => config.write_config(emu_ctx, offset - VIRTIO_MMIO_CONFIG, val),
                 _ => {
                     error!("unknow desc type");
                 }
