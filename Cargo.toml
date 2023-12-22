@@ -44,9 +44,6 @@ static_assertions = "1.1.0"
 derive_more = "0.99.17"
 intrusive-collections = "0.9"
 cfg-if = "1.0.0"
-memoffset = { version = "0.9", default-features = false, features = [
-    "unstable_const",
-] }
 ffi_interface = { path = "deps/ffi_interface" }
 raii = { path = "deps/raii" }
 

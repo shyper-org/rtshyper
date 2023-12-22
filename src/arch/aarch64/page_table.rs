@@ -141,7 +141,7 @@ pub fn pt_map_banked_cpu(cpu: &mut Cpu) -> usize {
     cpu.cpu_pt.lvl2[pt_lvl2_idx(CPU_BANKED_ADDRESS)] = lvl3_addr | PTE_S1_NORMAL | PTE_TABLE;
 
     let page_num = round_up(size_of::<Cpu>(), PAGE_SIZE) / PAGE_SIZE;
-    let guard_page_index = offset_of!(Cpu, _guard_page) / PAGE_SIZE;
+    let guard_page_index = crate::kernel::CPU_STACK_OFFSET / PAGE_SIZE;
     for i in 0..page_num {
         let pte = if i == guard_page_index {
             PTE_S1_RO

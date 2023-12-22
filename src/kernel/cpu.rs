@@ -17,6 +17,23 @@ use super::vcpu_array::VcpuArray;
 pub const CPU_MASTER: usize = 0;
 pub const CPU_STACK_SIZE: usize = PAGE_SIZE * 32;
 
+// NOTE: the first page of CpuStack is the guard page
+struct CpuStack([u8; CPU_STACK_SIZE + PAGE_SIZE]);
+
+impl CpuStack {
+    const fn new() -> Self {
+        Self([0; CPU_STACK_SIZE + PAGE_SIZE])
+    }
+}
+
+impl core::ops::Deref for CpuStack {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[repr(C, align(4096))]
 pub struct CpuPt {
     pub lvl1: [usize; PTE_PER_PAGE],
@@ -46,11 +63,10 @@ pub struct Cpu {
     global_pt: Once<PageTable>,
     pub interrupt_nested: usize,
     pub cpu_pt: CpuPt,
-    pub _guard_page: [u8; PAGE_SIZE],
-    stack: [u8; CPU_STACK_SIZE],
+    stack: CpuStack,
 }
 
-pub const CPU_STACK_OFFSET: usize = offset_of!(Cpu, stack);
+pub const CPU_STACK_OFFSET: usize = core::mem::offset_of!(Cpu, stack);
 
 impl Cpu {
     const fn default() -> Cpu {
@@ -69,8 +85,7 @@ impl Cpu {
                 lvl2: [0; PTE_PER_PAGE],
                 lvl3: [0; PTE_PER_PAGE],
             },
-            _guard_page: [0; PAGE_SIZE],
-            stack: [0; CPU_STACK_SIZE],
+            stack: CpuStack::new(),
         }
     }
 

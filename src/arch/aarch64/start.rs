@@ -4,9 +4,10 @@ use crate::arch::PAGE_SIZE;
 use crate::board::{PlatOperation, Platform};
 use crate::kernel::{cpu_map_self, CPU_STACK_OFFSET, CPU_STACK_SIZE};
 
-#[repr(C, align(8))]
+#[repr(C, align(16))]
 struct CoreBootStack([u8; PAGE_SIZE * 2]);
 
+#[repr(transparent)]
 struct BootStack<const NUM: usize>([CoreBootStack; NUM]);
 
 impl<const NUM: usize> BootStack<NUM> {

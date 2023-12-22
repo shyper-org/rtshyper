@@ -2,10 +2,10 @@
 #![cfg_attr(not(test), no_main)]
 #![feature(alloc_error_handler)]
 #![feature(inline_const)]
-#![feature(const_refs_to_cell)]
 #![feature(naked_functions)]
 #![feature(asm_const)]
 #![feature(extract_if)]
+#![feature(offset_of)]
 #![allow(unused_doc_comments)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::modulo_one)]
@@ -16,8 +16,6 @@ extern crate alloc;
 extern crate log;
 #[macro_use]
 extern crate static_assertions;
-#[macro_use]
-extern crate memoffset;
 #[macro_use]
 extern crate derive_more;
 

@@ -768,7 +768,6 @@ dependencies = [
  "gethostname",
  "intrusive-collections",
  "log",
- "memoffset",
  "raii",
  "shyper",
  "smccc",
