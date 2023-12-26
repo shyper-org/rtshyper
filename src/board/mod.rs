@@ -1,16 +1,13 @@
-pub use platform_common::{PlatOperation, SchedRule, PLATFORM_CPU_NUM_MAX};
+pub use dev_board::{Platform, PLAT_DESC};
+pub use platform_common::{PlatOperation, SchedRule};
 
 mod platform_common;
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "pi4")] {
-        pub use self::pi4::{Pi4Platform as Platform, PLAT_DESC};
-        mod pi4;
-    } else if #[cfg(feature = "qemu")] {
-        pub use self::qemu::{QemuPlatform as Platform, PLAT_DESC};
-        mod qemu;
-    } else if #[cfg(feature = "tx2")] {
-        pub use self::tx2::{Tx2Platform as Platform, PLAT_DESC};
-        mod tx2;
-    }
+#[cfg_attr(all(target_arch = "aarch64", feature = "tx2"), path = "./tx2.rs")]
+#[cfg_attr(all(target_arch = "aarch64", feature = "qemu"), path = "./qemu.rs")]
+#[cfg_attr(all(target_arch = "aarch64", feature = "pi4"), path = "./pi4.rs")]
+mod dev_board;
+
+pub mod static_config {
+    include!(concat!(env!("OUT_DIR"), "/config.rs")); // CORE_NUM defined here
 }

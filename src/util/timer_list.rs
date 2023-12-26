@@ -44,7 +44,7 @@ pub struct TimerList {
 
 #[allow(dead_code)]
 impl TimerList {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             events: BinaryHeap::new(),
         }

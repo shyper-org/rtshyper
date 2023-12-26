@@ -41,7 +41,7 @@ fn timer_notify_after(ms: usize) {
 }
 
 fn check_timer_event(current_time: TimerValue) {
-    while let Some((_timeout, event)) = current_cpu().timer_list.get_mut().unwrap().pop(current_time) {
+    while let Some((_timeout, event)) = current_cpu().timer_list.pop(current_time) {
         event.callback(current_time);
     }
 }
@@ -61,7 +61,7 @@ pub fn timer_irq_handler() {
 #[allow(dead_code)]
 pub fn start_timer_event(period: TimerValue, event: Arc<dyn TimerEvent>) {
     let timeout = now() + period;
-    current_cpu().timer_list.get_mut().unwrap().push(timeout, event);
+    current_cpu().timer_list.push(timeout, event);
 }
 
 #[allow(dead_code)]
@@ -69,5 +69,5 @@ pub fn remove_timer_event<F>(condition: F)
 where
     F: Fn(&Arc<dyn TimerEvent>) -> bool,
 {
-    current_cpu().timer_list.get_mut().unwrap().remove_all(condition);
+    current_cpu().timer_list.remove_all(condition);
 }

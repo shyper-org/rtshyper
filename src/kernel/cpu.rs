@@ -7,7 +7,7 @@ use crate::arch::ContextFrame;
 use crate::arch::ContextFrameTrait;
 use crate::arch::PageTable;
 use crate::arch::{pt_map_banked_cpu, TlbInvalidate, PAGE_SIZE, PTE_PER_PAGE};
-use crate::board::{PLATFORM_CPU_NUM_MAX, PLAT_DESC};
+use crate::board::{static_config, PLAT_DESC};
 use crate::kernel::{Vcpu, Vm};
 use crate::util::timer_list::TimerList;
 
@@ -57,7 +57,7 @@ pub struct Cpu {
 
     pub vcpu_array: VcpuArray,
     // timer
-    pub(super) timer_list: Once<TimerList>,
+    pub(super) timer_list: TimerList,
 
     pub current_irq: usize,
     global_pt: Once<PageTable>,
@@ -76,7 +76,7 @@ impl Cpu {
             active_vcpu: None,
             ctx: ptr::null_mut(),
             vcpu_array: VcpuArray::new(),
-            timer_list: Once::new(),
+            timer_list: TimerList::new(),
             current_irq: 0,
             interrupt_nested: 0,
             global_pt: Once::new(),
@@ -208,7 +208,6 @@ pub fn cpu_init() {
     crate::arch::arch_pmu_init();
     cpu_init_pt();
     cpu_sched_init();
-    current_cpu().timer_list.call_once(TimerList::new);
     current_cpu().cpu_state = CpuState::Idle;
     let sp = current_cpu().stack.as_ptr() as usize + CPU_STACK_SIZE;
     let size = core::mem::size_of::<ContextFrame>();
@@ -221,7 +220,7 @@ pub fn cpu_init() {
     }
 }
 
-static mut CPU_LIST: [Cpu; PLATFORM_CPU_NUM_MAX] = [const { Cpu::default() }; PLATFORM_CPU_NUM_MAX];
+static mut CPU_LIST: [Cpu; static_config::CORE_NUM] = [const { Cpu::default() }; static_config::CORE_NUM];
 
 pub fn cpu_map_self(cpu_id: usize) -> usize {
     let cpu = unsafe { &mut CPU_LIST[cpu_id] };

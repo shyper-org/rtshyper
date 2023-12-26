@@ -1,16 +1,14 @@
 use crate::arch::ArchTrait;
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::Platform;
 
 use super::platform_common::{
     ArchDesc, PlatCpuConfig, PlatCpuCoreConfig, PlatMemoryConfig, PlatOperation, PlatformConfig, SchedRule,
-    ARM_CORTEX_A57,
 };
 
-pub struct Tx2Platform;
+pub struct Platform;
 
-impl PlatOperation for Tx2Platform {
+impl PlatOperation for Platform {
     const UART_0_ADDR: usize = 0x3100000;
     const UART_1_ADDR: usize = 0xc280000;
 
@@ -75,22 +73,18 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         num: 4,
         core_list: &[
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000100,
                 sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000101,
                 sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000102,
                 sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000103,
                 sched: SchedRule::RoundRobin,
             },

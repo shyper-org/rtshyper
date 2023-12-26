@@ -1,15 +1,13 @@
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
-use crate::board::Platform;
 
 use super::platform_common::{
     ArchDesc, PlatCpuConfig, PlatCpuCoreConfig, PlatMemoryConfig, PlatOperation, PlatformConfig, SchedRule,
-    ARM_CORTEX_A57,
 };
 
-pub struct Pi4Platform;
+pub struct Platform;
 
-impl PlatOperation for Pi4Platform {
+impl PlatOperation for Platform {
     const UART_0_ADDR: usize = 0xFE201000;
     const UART_1_ADDR: usize = 0xFE201400;
 
@@ -48,22 +46,18 @@ pub static PLAT_DESC: PlatformConfig = PlatformConfig {
         num: 4,
         core_list: &[
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000000,
                 sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000001,
                 sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000002,
                 sched: SchedRule::RoundRobin,
             },
             PlatCpuCoreConfig {
-                name: ARM_CORTEX_A57,
                 mpidr: 0x80000003,
                 sched: SchedRule::RoundRobin,
             },

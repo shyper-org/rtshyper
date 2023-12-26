@@ -28,7 +28,7 @@ const fn get_config() -> ConfigPlatform {
         ConfigPlatform {
             platform: "tx2",
             vm0_image_path: "image/L4T",
-            max_core_num: 6,
+            max_core_num: 4,
         }
     } else if cfg!(feature = "pi4") {
         ConfigPlatform {

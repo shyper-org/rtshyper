@@ -652,7 +652,7 @@ impl Vgic {
             let vcpu_vm_id = vcpu.vm_id();
 
             let ipi_msg = IpiInitcMessage {
-                event: InitcEvent::VgicdRoute,
+                event: InitcEvent::Route,
                 vm_id: vcpu_vm_id,
                 int_id: interrupt.id(),
                 val: 0,
@@ -686,7 +686,7 @@ impl Vgic {
                     let int_phys_id = interrupt.owner_phys_id().unwrap();
                     let vcpu_vm_id = vcpu.vm_id();
                     let ipi_msg = IpiInitcMessage {
-                        event: InitcEvent::VgicdSetEn,
+                        event: InitcEvent::SetEn,
                         vm_id: vcpu_vm_id,
                         int_id: interrupt.id(),
                         val: en as u8,
@@ -741,7 +741,7 @@ impl Vgic {
                 let vm_id = vcpu.vm_id();
 
                 let m = IpiInitcMessage {
-                    event: InitcEvent::VgicdSetPend,
+                    event: InitcEvent::SetPend,
                     vm_id,
                     int_id: interrupt.id(),
                     val: pend as u8,
@@ -794,7 +794,7 @@ impl Vgic {
                 let vm_id = vcpu.vm_id();
 
                 let m = IpiInitcMessage {
-                    event: InitcEvent::VgicdSetPend,
+                    event: InitcEvent::SetPend,
                     vm_id,
                     int_id: interrupt.id(),
                     val: act as u8,
@@ -822,7 +822,7 @@ impl Vgic {
                 vgic_int_yield_owner(vcpu, interrupt);
             } else {
                 let m = IpiInitcMessage {
-                    event: InitcEvent::VgicdSetCfg,
+                    event: InitcEvent::SetCfg,
                     vm_id: vcpu.vm_id(),
                     int_id: interrupt.id(),
                     val: cfg,
@@ -913,7 +913,7 @@ impl Vgic {
                 let vm_id = vcpu.vm_id();
 
                 let m = IpiInitcMessage {
-                    event: InitcEvent::VgicdSetPrio,
+                    event: InitcEvent::SetPrio,
                     vm_id,
                     int_id: interrupt.id(),
                     val: prio,
@@ -957,7 +957,7 @@ impl Vgic {
             } else {
                 let vm_id = vcpu.vm_id();
                 let m = IpiInitcMessage {
-                    event: InitcEvent::VgicdSetTrgt,
+                    event: InitcEvent::SetTrgt,
                     vm_id,
                     int_id: interrupt.id(),
                     val: trgt,
@@ -1015,7 +1015,7 @@ impl Vgic {
                 }
                 let vm = active_vm().unwrap();
                 let m = IpiInitcMessage {
-                    event: InitcEvent::VgicdGichEn,
+                    event: InitcEvent::GichEn,
                     vm_id: vm.id(),
                     int_id: 0,
                     val: enable as u8,
@@ -1348,7 +1348,7 @@ impl Vgic {
                 for i in 0..8 {
                     if trgtlist & (1 << i) != 0 {
                         let m = IpiInitcMessage {
-                            event: InitcEvent::VgicdSetPend,
+                            event: InitcEvent::SetPend,
                             vm_id: active_vm().unwrap().id(),
                             int_id: (bit_extract(val, 0, 8) | (active_vcpu_id() << 10)) as u16,
                             val: true as u8,
@@ -1879,7 +1879,7 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
         //     val
         // );
         match intc.event {
-            InitcEvent::VgicdGichEn => {
+            InitcEvent::GichEn => {
                 let hcr = GICH.hcr();
                 if val != 0 {
                     GICH.set_hcr(hcr | 0b1);
@@ -1887,19 +1887,19 @@ pub fn vgic_ipi_handler(msg: IpiMessage) {
                     GICH.set_hcr(hcr & !0b1);
                 }
             }
-            InitcEvent::VgicdSetEn => {
+            InitcEvent::SetEn => {
                 vgic.set_enable(trgt_vcpu, int_id as usize, val != 0);
             }
-            InitcEvent::VgicdSetPend => {
+            InitcEvent::SetPend => {
                 vgic.set_pend(trgt_vcpu, int_id as usize, val != 0);
             }
-            InitcEvent::VgicdSetPrio => {
+            InitcEvent::SetPrio => {
                 vgic.set_prio(trgt_vcpu, int_id as usize, val);
             }
-            InitcEvent::VgicdSetTrgt => {
+            InitcEvent::SetTrgt => {
                 vgic.set_trgt(trgt_vcpu, int_id as usize, val);
             }
-            InitcEvent::VgicdRoute => {
+            InitcEvent::Route => {
                 if let Some(interrupt) = vgic.get_int(trgt_vcpu, bit_extract(int_id as usize, 0, 10)) {
                     let interrupt_lock = interrupt.lock.lock();
                     if vgic_int_get_owner(trgt_vcpu.clone(), interrupt) {

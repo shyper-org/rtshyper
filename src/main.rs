@@ -6,6 +6,7 @@
 #![feature(asm_const)]
 #![feature(extract_if)]
 #![feature(offset_of)]
+#![feature(const_binary_heap_constructor)]
 #![allow(unused_doc_comments)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::modulo_one)]

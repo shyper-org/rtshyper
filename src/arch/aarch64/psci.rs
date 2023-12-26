@@ -14,7 +14,7 @@ const TEGRA_SIP_GET_ACTMON_CLK_COUNTERS: u32 = 0xC2FFFE02;
 pub fn power_arch_vm_shutdown_secondary_cores(vm: &Vm) {
     let m = IpiPowerMessage {
         src: vm.id(),
-        event: PowerEvent::PsciIpiCpuReset,
+        event: PowerEvent::Reset,
         entry: 0,
         context: 0,
     };
@@ -135,7 +135,7 @@ pub fn psci_ipi_handler(msg: IpiMessage) {
                 Some(vcpu) => vcpu,
             };
             match power_msg.event {
-                PowerEvent::PsciIpiCpuOn => {
+                PowerEvent::CpuOn => {
                     if trgt_vcpu.state() != VcpuState::Inv {
                         warn!(
                             "psci_ipi_handler: target VCPU {} in VM {} is already running",
@@ -152,13 +152,13 @@ pub fn psci_ipi_handler(msg: IpiMessage) {
                     );
                     psci_vcpu_on(trgt_vcpu, power_msg.entry, power_msg.context);
                 }
-                PowerEvent::PsciIpiCpuOff => {
+                PowerEvent::CpuOff => {
                     // TODO: 为什么ipi cpu off是当前vcpu shutdown，而vcpu shutdown 最后是把平台的物理核心shutdown
                     // 没有用到。不用管
                     // current_cpu().active_vcpu.clone().unwrap().shutdown();
                     unimplemented!("PowerEvent::PsciIpiCpuOff")
                 }
-                PowerEvent::PsciIpiCpuReset => {
+                PowerEvent::Reset => {
                     let vcpu = current_cpu().active_vcpu.as_ref().unwrap();
                     vcpu.init_boot_info(active_vm().unwrap().config());
                 }
@@ -186,7 +186,7 @@ fn psci_guest_cpu_on(mpidr: usize, entry: usize, ctx: usize) -> usize {
 
         let m = IpiPowerMessage {
             src: vm.id(),
-            event: PowerEvent::PsciIpiCpuOn,
+            event: PowerEvent::CpuOn,
             entry,
             context: ctx,
         };

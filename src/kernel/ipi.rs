@@ -4,7 +4,7 @@ use alloc::sync::Arc;
 use spin::Mutex;
 
 use crate::arch::INTERRUPT_IRQ_IPI;
-use crate::board::PLATFORM_CPU_NUM_MAX;
+use crate::board::static_config;
 use crate::board::PLAT_DESC;
 use crate::device::{VirtioMmio, Virtq};
 use crate::kernel::{current_cpu, interrupt_cpu_ipi_send};
@@ -14,25 +14,23 @@ use crate::vmm::{VmmEvent, VmmPercoreEvent};
 use super::interrupt_cpu_enable;
 use super::Vm;
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Copy, Clone, Debug)]
 pub enum InitcEvent {
-    VgicdGichEn,
-    VgicdSetEn,
-    VgicdSetAct,
-    VgicdSetPend,
-    VgicdSetPrio,
-    VgicdSetTrgt,
-    VgicdSetCfg,
-    VgicdRoute,
+    GichEn,
+    SetEn,
+    SetAct,
+    SetPend,
+    SetPrio,
+    SetTrgt,
+    SetCfg,
+    Route,
 }
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Copy, Clone)]
 pub enum PowerEvent {
-    PsciIpiCpuOn,
-    PsciIpiCpuOff,
-    PsciIpiCpuReset,
+    CpuOn,
+    CpuOff,
+    Reset,
 }
 
 #[derive(Clone)]
@@ -194,7 +192,8 @@ fn interrupt_inject_ipi_handler(msg: IpiMessage) {
     }
 }
 
-static CPU_IF_LIST: [Mutex<CpuIf>; PLATFORM_CPU_NUM_MAX] = [const { Mutex::new(CpuIf::new()) }; PLATFORM_CPU_NUM_MAX];
+static CPU_IF_LIST: [Mutex<CpuIf>; static_config::CORE_NUM] =
+    [const { Mutex::new(CpuIf::new()) }; static_config::CORE_NUM];
 
 fn ipi_pop_message(cpu_id: usize) -> Option<IpiMessage> {
     let mut cpu_if = CPU_IF_LIST[cpu_id].lock();

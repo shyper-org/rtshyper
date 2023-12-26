@@ -3,11 +3,6 @@ use core::ops::Range;
 use crate::arch::GicDesc;
 use crate::arch::SmmuDesc;
 
-pub const PLATFORM_CPU_NUM_MAX: usize = 8;
-
-pub const ARM_CORTEX_A57: u8 = 0;
-// pub const ARM_NVIDIA_DENVER: u8 = 1;
-
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub enum SchedRule {
@@ -22,7 +17,6 @@ pub struct PlatMemoryConfig {
 }
 
 pub struct PlatCpuCoreConfig {
-    pub name: u8,
     pub mpidr: usize,
     pub sched: SchedRule,
 }
