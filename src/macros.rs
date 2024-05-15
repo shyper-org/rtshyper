@@ -13,7 +13,7 @@ macro_rules! println {
 macro_rules! declare_enum_with_handler {
     (
         $(#[$attr:meta])*
-        $enum_vis:vis enum $enum_name:ident [$array_vis:vis $array:ident => $handler_type:ty] {
+        $enum_vis:vis enum $enum_name:ident => $array_vis:vis static $array:ident: &[$handler_type:ty] {
             $($vis:vis $variant:ident => $handler:expr, )*
         }
     ) => {
