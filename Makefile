@@ -1,13 +1,15 @@
-# DISK is the path to the ROOTFS for VM0 when `make run` on QEMU
-# DISK can be set on the command line
-DISK :=
-
 # Compile
 ARCH ?= aarch64
 PROFILE ?= release
+ifeq (${PROFILE}, release)
+CARGO_FLAGS += --release
+else ifneq (${PROFILE}, debug)
+$(error bad PROFILE: ${PROFILE})
+endif
+
 BOARD ?= tx2
 # features, seperate with comma `,`
-FEATURES =
+FEATURES ?=
 export TEXT_START ?= 0x83000000
 
 # CROSS_COMPILE can be set on the command line
@@ -35,41 +37,43 @@ GDB			= ${CROSS_COMPILE}gdb
 endif
 OBJDUMP = rust-objdump
 OBJCOPY = rust-objcopy
-QEMU = qemu-system-$(ARCH)
 
 IMAGE=rtshyper_rs
 
-TARGET_DIR=target/${ARCH}/${PROFILE}
+export EFISTUB
+ifeq ($(EFISTUB),)
+unexport EFISTUB
+CARGO_TARGET = ${ARCH}.json
+else
+CARGO_TARGET = ${ARCH}-unknown-uefi
+IMAGE := $(IMAGE).efi
+FEATURES := $(FEATURES),efi-stub
+endif
+
+TARGET_DIR=target/$(basename $(CARGO_TARGET))/${PROFILE}
+
+APP = ${TARGET_DIR}/${IMAGE}
 
 TFTP_SERVER ?= root@192.168.106.153:/tftp
 
 UBOOT_IMAGE ?= RTShyperImage
 
-CARGO_ACTION ?= build
-
 # Cargo flags.
-CARGO_FLAGS ?= -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target ${ARCH}.json --no-default-features --features "${BOARD},${FEATURES}"
-ifeq (${PROFILE}, release)
-CARGO_FLAGS += --release
-else ifneq (${PROFILE}, debug)
-$(error bad PROFILE: ${PROFILE})
-endif
+CARGO_FLAGS += -Z build-std=core,alloc -Z build-std-features=compiler-builtins-mem --target $(CARGO_TARGET) --no-default-features --features "${BOARD},${FEATURES}"
 
-.PHONY: build cargo clippy upload qemu tx2 pi4 run debug clean gdb
-
-cargo:
-	cargo fmt
-	cargo ${CARGO_ACTION} ${CARGO_FLAGS}
+.PHONY: build clippy upload qemu tx2 pi4 run debug clean gdb
 
 clippy:
-	$(MAKE) cargo CARGO_ACTION=clippy
+	cargo clippy ${CARGO_FLAGS}
 
-build: cargo
-	${OBJDUMP} --demangle -d ${TARGET_DIR}/${IMAGE} > ${TARGET_DIR}/t.asm
-	${OBJCOPY} ${TARGET_DIR}/${IMAGE} -O binary ${TARGET_DIR}/${IMAGE}.bin
+build:
+	cargo fmt
+	cargo build ${CARGO_FLAGS}
+	${OBJDUMP} --demangle -d $(APP) > ${TARGET_DIR}/t.asm
+	${OBJCOPY} $(APP) -O binary $(APP).bin
 
 upload: build
-	@mkimage -n ${IMAGE} -A arm64 -O linux -T kernel -C none -a $(TEXT_START) -e $(TEXT_START) -d ${TARGET_DIR}/${IMAGE}.bin ${TARGET_DIR}/${UBOOT_IMAGE}
+	@mkimage -n ${IMAGE} -A arm64 -O linux -T kernel -C none -a $(TEXT_START) -e $(TEXT_START) -d $(APP).bin ${TARGET_DIR}/${UBOOT_IMAGE}
 	@echo "*** Upload Image ${UBOOT_IMAGE} ***"
 	@scp ${TARGET_DIR}/${UBOOT_IMAGE} ${TFTP_SERVER}/${UBOOT_IMAGE}
 	@echo "tftp 0x8a000000 \$${serverip}:${UBOOT_IMAGE}; bootm start 0x8a000000 - 0x80000000; bootm loados; bootm go"
@@ -84,29 +88,53 @@ pi4:
 	$(MAKE) upload BOARD=pi4 TEXT_START=0xF0080000
 	scp ./image/pi4_fin.dtb ${TFTP_SERVER}/pi4_dtb
 
+clean:
+	cargo clean
+
+###########################
+# QEMU setup
+###########################
+
+# DISK is the path to the ROOTFS for VM0 when `make run` on QEMU
+# DISK can be set on the command line
+DISK ?= vm0.img
+
+BIOS ?= QEMU_EFI.fd
+
 ifeq ($(ARCH),aarch64)
-QEMU_OPTIONS = -machine virt,virtualization=on,gic-version=2 -m 8g -cpu cortex-a57 -smp 4
+QEMU_OPTIONS += -machine virt,virtualization=on,gic-version=2 -m 8g -cpu cortex-a57 -smp 4
+PARTITION = bootaa64.efi
 else
 $(error bad arch: $(ARCH))
 endif
 
-QEMU_OPTIONS += -display none -global virtio-mmio.force-legacy=false -kernel ${TARGET_DIR}/${IMAGE}.bin
-
-QEMU_SERIAL_OPTIONS = -serial mon:stdio #\
-	-serial telnet:localhost:12345,server
-QEMU_OPTIONS += $(QEMU_SERIAL_OPTIONS)
-
-QEMU_NETWORK_OPTIONS = -netdev user,id=n0,hostfwd=tcp::5555-:22 -device virtio-net-device,bus=virtio-mmio-bus.24,netdev=n0
-QEMU_OPTIONS += $(QEMU_NETWORK_OPTIONS)
-
-QEMU_DISK_OPTIONS = -drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.25
-QEMU_OPTIONS += $(QEMU_DISK_OPTIONS)
-
-run: qemu
-ifeq ($(DISK),)
-	$(error please offer DISK)
+QEMU_OPTIONS += -global virtio-mmio.force-legacy=false
+# serial
+QEMU_OPTIONS += -display none -serial mon:stdio #-serial telnet:localhost:12345,server
+# net
+QEMU_OPTIONS += -netdev user,id=n0,hostfwd=tcp::5555-:22 -device virtio-net-device,bus=virtio-mmio-bus.24,netdev=n0
+# disk
+QEMU_OPTIONS += -drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.25
+ifeq ($(EFISTUB),)
+QEMU_OPTIONS += -kernel $(APP).bin
 else
-	${QEMU} ${QEMU_OPTIONS}
+# bios
+QEMU_OPTIONS += -bios $(BIOS)
+QEMU_OPTIONS += -drive format=raw,file=fat:rw:esp
+endif
+
+QEMU_EFI.fd:
+	@wget https://releases.linaro.org/components/kernel/uefi-linaro/latest/release/qemu64/QEMU_EFI.fd -O $@
+
+run: qemu $(BIOS)
+ifeq ($(wildcard $(DISK)),)
+	$(error $(DISK) not found)
+else
+ifneq ($(EFISTUB),)
+	mkdir -p esp/boot
+	cp $(APP) esp/boot/$(PARTITION)
+endif
+	qemu-system-$(ARCH) ${QEMU_OPTIONS}
 endif
 
 debug: QEMU_OPTIONS += -s -S
@@ -114,6 +142,3 @@ debug: run
 
 gdb:
 	${GDB} -x gdb/${ARCH}.gdb
-
-clean:
-	cargo clean

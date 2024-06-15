@@ -20,6 +20,8 @@ mod regs;
 mod cache;
 mod context_frame;
 mod cpu;
+#[cfg(feature = "efi-stub")]
+mod efi_stub;
 #[allow(dead_code)]
 mod exception;
 #[allow(dead_code)]

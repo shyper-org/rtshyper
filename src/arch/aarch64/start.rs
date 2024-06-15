@@ -25,6 +25,7 @@ extern "C" {
     fn vectors();
 }
 
+#[cfg(not(feature = "efi-stub"))]
 #[naked]
 #[no_mangle]
 #[link_section = ".text.boot"]
