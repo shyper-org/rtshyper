@@ -4,6 +4,7 @@ use tock_registers::*;
 use crate::arch::{pt_lvl1_idx, pt_lvl2_idx, Address};
 use crate::arch::{LVL1_SHIFT, LVL2_SHIFT};
 use crate::board::PLAT_DESC;
+#[cfg(target_os = "none")]
 use crate::mm::_image_end;
 use crate::util::round_up;
 
@@ -98,6 +99,7 @@ pub static mut LVL2_PAGE_TABLE: PageTables = PageTables {
     entry: [BlockDescriptor(0); ENTRY_PER_PAGE],
 };
 
+#[cfg(target_os = "none")]
 pub fn pt_populate(lvl1_pt: &mut PageTables, lvl2_pt: &mut PageTables) {
     let lvl2_base = lvl2_pt as *const _ as usize;
     let image_end_align_gb = round_up(_image_end as usize, 1 << LVL1_SHIFT);

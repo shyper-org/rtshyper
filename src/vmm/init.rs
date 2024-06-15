@@ -98,7 +98,13 @@ pub(super) fn vmm_init_image(vm: &Vm) -> bool {
         Some(name) => {
             if name == env!("VM0_IMAGE_PATH") {
                 trace!("MVM {} loading Image", vm.id());
-                vmm_load_image(vm, include_bytes!(env!("VM0_IMAGE_PATH")));
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "efi-stub")] {
+                        vmm_load_image(vm, include_bytes!(env!("VM0_IMAGE_PATH")));
+                    } else {
+                        vmm_load_image(vm, &[]);
+                    }
+                }
             } else {
                 cfg_if::cfg_if! {
                     if #[cfg(feature = "static-config")] {

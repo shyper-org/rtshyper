@@ -49,14 +49,19 @@ const fn get_config() -> ConfigPlatform {
 
 fn main() -> Result<()> {
     // set the linker script
-    let arch = var("CARGO_CFG_TARGET_ARCH").unwrap();
-    println!("cargo:rustc-link-arg=-Tlinkers/{arch}.ld");
-    let config = get_config();
-    println!("cargo:rustc-link-arg=--defsym=TEXT_START={}", env!("TEXT_START"));
+    if var("EFISTUB").is_err() {
+        let arch = var("CARGO_CFG_TARGET_ARCH").unwrap();
+        println!("cargo:rustc-link-arg=-Tlinkers/{arch}.ld");
+        println!(
+            "cargo:rustc-link-arg=--defsym=TEXT_START={}",
+            var("TEXT_START").unwrap()
+        );
+    }
     // set config file
     let out_dir = var("OUT_DIR").unwrap();
     let out_path = Path::new(&out_dir).join("config.rs");
     println!("Generating config file: {}", out_path.display());
+    let config = get_config();
     let config_rs = config.gen_config_rs()?;
     fs::write(out_path, config_rs)?;
 

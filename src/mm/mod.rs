@@ -8,6 +8,7 @@ mod util;
 pub mod vpage_allocator;
 
 // Note: link-time label, see <arch>.lds
+#[cfg(target_os = "none")]
 extern "C" {
     pub fn _image_start();
     pub fn _image_end();
@@ -15,5 +16,6 @@ extern "C" {
 
 pub fn init() {
     heap::heap_init();
+    #[cfg(target_os = "none")]
     vpage_allocator::init();
 }

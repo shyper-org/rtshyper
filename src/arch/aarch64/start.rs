@@ -19,12 +19,14 @@ impl<const NUM: usize> BootStack<NUM> {
 #[link_section = ".bss.stack"]
 static mut BOOT_STACK: BootStack<{ crate::board::static_config::CORE_NUM }> = BootStack::new();
 
+#[cfg(target_os = "none")]
 extern "C" {
     fn _bss_begin();
     fn _bss_end();
     fn vectors();
 }
 
+#[cfg(target_os = "none")]
 #[naked]
 #[no_mangle]
 #[link_section = ".text.boot"]
@@ -107,7 +109,7 @@ unsafe extern "C" fn _start() -> ! {
 #[naked]
 #[no_mangle]
 #[link_section = ".text.boot"]
-unsafe extern "C" fn _secondary_start() -> ! {
+pub unsafe extern "C" fn _secondary_start() -> ! {
     core::arch::asm!(
         r#"
         mov x19, x0 // save core id to x19
@@ -177,12 +179,14 @@ fn init_sysregs() {
             + HCR_EL2::FMO::EnableVirtualFIQ
             + HCR_EL2::TSC::EnableTrapEl1SmcToEl2,
     );
+    #[cfg(target_os = "none")]
     VBAR_EL2.set(vectors as usize as u64); // clippy: casting a function pointer to usize/isize is portable
     SCTLR_EL2.modify(SCTLR_EL2::M::Enable + SCTLR_EL2::C::Cacheable + SCTLR_EL2::I::Cacheable);
     use crate::arch::traits::TlbInvalidate;
     crate::arch::Arch::invalid_hypervisor_all();
 }
 
+#[cfg(target_os = "none")]
 unsafe fn clear_bss() {
     core::slice::from_raw_parts_mut(_bss_begin as usize as *mut u8, _bss_end as usize - _bss_begin as usize).fill(0)
 }

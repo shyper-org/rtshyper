@@ -12,6 +12,7 @@ pub use self::vgic::*;
 pub use pmuv3::arch_pmu_init;
 #[cfg(feature = "memory-reservation")]
 pub use pmuv3::{vcpu_start_pmu, vcpu_stop_pmu, PmuTimerEvent};
+pub use start::_secondary_start;
 
 #[macro_use]
 mod regs;
@@ -20,6 +21,8 @@ mod regs;
 mod cache;
 mod context_frame;
 mod cpu;
+#[cfg(feature = "efi-stub")]
+mod efi_stub;
 #[allow(dead_code)]
 mod exception;
 #[allow(dead_code)]

@@ -57,6 +57,12 @@ fastrand = { version = "2.0.0", default-features = false, features = [
 aarch64-cpu = "10.0.0"
 smccc = "0.1.1"
 
+[target.'cfg(target_os = "uefi")'.dependencies]
+uefi = { version = "0.28.0", features = [
+    "panic_handler",
+    "logger",
+], optional = true }
+
 [features]
 default = ["tx2"]
 tx2 = [
@@ -86,6 +92,7 @@ smmuv2 = []
 self-coloring = []
 trap-wfi = []
 rt-sched = [] # real-time scheduling
+efi-stub = ["uefi"]
 
 memory-reservation = ["fastrand", "dynamic-budget"]
 # This feature "dynamic-budget" belongs to "memory-reservation"

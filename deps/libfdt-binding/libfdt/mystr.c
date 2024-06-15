@@ -17,4 +17,11 @@ static void *memrchr(const void *m, int c, unsigned long n) {
     return 0;
 }
 
+unsigned long strnlen(const char *s, unsigned long n) {
+    unsigned long i;
+    for (i = 0; i < n && s[i]; i++)
+        ;
+    return i;
+}
+
 char *strrchr(const char *s, int c) { return memrchr(s, c, strlen(s) + 1); }
