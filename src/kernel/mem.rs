@@ -11,7 +11,9 @@ use crate::arch::{
 use crate::board::*;
 use crate::kernel::Cpu;
 use crate::mm::vpage_allocator::{vpage_alloc, AllocatedPages, CPU_BANKED_ADDRESS};
-use crate::mm::{PageFrame, _image_end, _image_start, heap_expansion};
+#[cfg(target_os = "none")]
+use crate::mm::{_image_end, _image_start};
+use crate::mm::{heap_expansion, PageFrame};
 use crate::util::{barrier, reset_barrier, round_up};
 
 use super::{current_cpu, CPU_MASTER};
@@ -20,6 +22,7 @@ pub static HYPERVISOR_COLORS: Once<Vec<usize>> = Once::new();
 
 pub fn physical_mem_init() {
     cache_init();
+    #[cfg(target_os = "none")]
     mem_region_init_by_colors();
     info!("Mem init ok");
 }
@@ -265,6 +268,7 @@ pub fn get_llc_size() -> usize {
     cpu_cache_info.info_list[last_level - 1].size()
 }
 
+#[cfg(target_os = "none")]
 fn mem_region_init_by_colors() {
     if PLAT_DESC.mem_desc.regions.is_empty() {
         panic!("Platform Vm Memory Regions Overrun!");
@@ -411,6 +415,7 @@ unsafe fn relocate_space(cpu_new: &Cpu, root_pt: usize) {
 }
 
 #[allow(clippy::forget_non_drop)]
+#[cfg(target_os = "none")]
 pub fn hypervisor_self_coloring() {
     let cpu_cache_info = CPU_CACHE.get().unwrap();
     let last_level = cpu_cache_info.min_share_level;

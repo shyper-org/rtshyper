@@ -10,6 +10,7 @@ use crate::arch::{LVL1_SHIFT, PAGE_SIZE};
 use crate::kernel::AllocError;
 use crate::util::round_up;
 
+#[cfg(target_os = "none")]
 use super::_image_end;
 use super::page::{Page, VAddr};
 use super::util::static_array_rb_tree::{Inner, StaticArrayRBTree, ValueRefMut};
@@ -26,6 +27,7 @@ static PAGES_UPPER_BOUND: Page = Page::containing_address(VAddr::new(MAX_VIRTUAL
 
 static FREE_PAGE_LIST: Mutex<StaticArrayRBTree<Chunk>> = Mutex::new(StaticArrayRBTree::empty());
 
+#[cfg(target_os = "none")]
 pub fn init() {
     extern "C" {
         fn CPU_BASE();

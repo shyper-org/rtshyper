@@ -101,9 +101,11 @@ DISK ?= vm0.img
 
 BIOS ?= QEMU_EFI.fd
 
+PARTITION_PREFIX = esp/efi/boot/
+
 ifeq ($(ARCH),aarch64)
 QEMU_OPTIONS += -machine virt,virtualization=on,gic-version=2 -m 8g -cpu cortex-a57 -smp 4
-PARTITION = bootaa64.efi
+PARTITION = $(PARTITION_PREFIX)/bootaa64.efi
 else
 $(error bad arch: $(ARCH))
 endif
@@ -126,14 +128,18 @@ endif
 QEMU_EFI.fd:
 	@wget https://releases.linaro.org/components/kernel/uefi-linaro/latest/release/qemu64/QEMU_EFI.fd -O $@
 
-run: qemu $(BIOS)
+ifneq ($(EFISTUB),)
+$(PARTITION): qemu
+	mkdir -p $(dir $@)
+	cp $(APP) $@
+
+run: $(BIOS) $(PARTITION)
+else
+run: qemu
+endif
 ifeq ($(wildcard $(DISK)),)
 	$(error $(DISK) not found)
 else
-ifneq ($(EFISTUB),)
-	mkdir -p esp/boot
-	cp $(APP) esp/boot/$(PARTITION)
-endif
 	qemu-system-$(ARCH) ${QEMU_OPTIONS}
 endif
 

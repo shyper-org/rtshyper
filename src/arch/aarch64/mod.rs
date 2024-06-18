@@ -12,6 +12,7 @@ pub use self::vgic::*;
 pub use pmuv3::arch_pmu_init;
 #[cfg(feature = "memory-reservation")]
 pub use pmuv3::{vcpu_start_pmu, vcpu_stop_pmu, PmuTimerEvent};
+pub use start::_secondary_start;
 
 #[macro_use]
 mod regs;

@@ -77,6 +77,7 @@ pub fn init(cpu_id: usize, dtb: *mut core::ffi::c_void) -> ! {
     kernel::cpu_init();
     kernel::timer_init();
     util::barrier();
+    #[cfg(target_os = "none")]
     kernel::hypervisor_self_coloring();
     if cpu_id == 0 {
         kernel::subinit();
