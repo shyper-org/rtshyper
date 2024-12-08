@@ -23,6 +23,8 @@ AR			= llvm-ar
 NM			= llvm-nm
 READEL		= llvm-readelf
 STRIP		= llvm-strip
+OBJDUMP		= llvm-objdump
+OBJCOPY		= llvm-objcopy
 GDB			= lldb
 else
 export CC	= $(CROSS_COMPILE)gcc
@@ -31,10 +33,10 @@ AR			= $(CROSS_COMPILE)ar
 NM			= $(CROSS_COMPILE)nm
 READELF		= $(CROSS_COMPILE)readelf
 STRIP		= $(CROSS_COMPILE)strip
+OBJDUMP		= $(CROSS_COMPILE)objdump
+OBJCOPY		= $(CROSS_COMPILE)objcopy
 GDB			= ${CROSS_COMPILE}gdb
 endif
-OBJDUMP = rust-objdump
-OBJCOPY = rust-objcopy
 QEMU = qemu-system-$(ARCH)
 
 IMAGE=rtshyper_rs
