@@ -28,13 +28,7 @@ Install **clang** and **LLVM** toolchain.
 Install u-boot-tools to use `mkimage`
 
 ```bash
-sudo apt install -y gcc-multilib u-boot-tools clang
-```
-
-Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils) to use `rust-objcopy` and `rust-objdump` tools:
-
-```bash
-cargo install cargo-binutils
+sudo apt install gcc-multilib u-boot-tools clang llvm
 ```
 
 If you want to build the C library with other cross compiling toolchain, for example, [aarch64-none-elf toolchain](https://developer.arm.com/downloads/-/gnu-a), you can add it to **PATH** and set the **CROSS_COMPILE** on the command line.
