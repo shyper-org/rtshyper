@@ -1,8 +1,6 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use tock_registers::interfaces::*;
-
-use super::regs::CNTHP_CTL_EL2;
+use aarch64_cpu::registers::{Readable, Writeable, CNTHP_CTL_EL2};
 
 static TIMER_FREQ: AtomicUsize = AtomicUsize::new(0);
 static TIMER_MS_TICKS: AtomicUsize = AtomicUsize::new(0); // ms
