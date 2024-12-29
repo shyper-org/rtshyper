@@ -150,9 +150,14 @@ impl Vcpu {
         let vtimer_offset = self.vm().unwrap().update_vtimer_offset();
         self.restore_cpu_ctx();
 
-        let mut inner = self.0.inner_mut.lock();
-        #[cfg(feature = "vtimer")]
-        inner.vm_ctx.generic_timer.set_offset(vtimer_offset as u64);
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "vtimer")] {
+                let mut inner = self.0.inner_mut.lock();
+                inner.vm_ctx.generic_timer.set_offset(vtimer_offset as u64);
+            } else {
+                let inner = self.0.inner_mut.lock();
+            }
+        }
         inner.vm_ctx.ext_regs_restore();
         drop(inner);
         self.intc_restore_context();

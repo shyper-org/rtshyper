@@ -101,7 +101,7 @@ QEMU_OPTIONS += $(QEMU_SERIAL_OPTIONS)
 QEMU_NETWORK_OPTIONS = -netdev user,id=n0,hostfwd=tcp::5555-:22 -device virtio-net-device,bus=virtio-mmio-bus.24,netdev=n0
 QEMU_OPTIONS += $(QEMU_NETWORK_OPTIONS)
 
-QEMU_DISK_OPTIONS = -drive file=${DISK},if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.25
+QEMU_DISK_OPTIONS = -drive file=${DISK},if=none,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.25
 QEMU_OPTIONS += $(QEMU_DISK_OPTIONS)
 
 run: qemu
